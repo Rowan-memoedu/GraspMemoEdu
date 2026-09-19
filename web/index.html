@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <meta name="referrer" content="no-referrer">
+    <meta name="description" content="按自己的进度阅读、练习和回看数学课程。">
+    <title>数学学习</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="./styles.css">
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <a class="skipLink" href="#lessonContent">跳到学习内容</a>
+    <div class="pageShell">
+      <header class="appHeader">
+        <span class="appName">数学学习</span>
+        <button class="textButton settingsButton" id="settingsButton" type="button" aria-haspopup="dialog">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14"/><path d="M7 3v4M13 8v4M8 13v4"/></svg>
+          连接设置
+        </button>
+      </header>
+
+      <main class="lesson" id="lessonContent" tabindex="-1">
+        <div class="lessonHeading">
+          <p class="eyebrow">TOPIC</p>
+          <h1 class="lessonTitle" id="lessonTitle">数学学习</h1>
+          <div class="progressCaption" id="progressCaption" hidden></div>
+          <div class="lessonProgress" id="lessonProgress" role="progressbar" aria-label="模块完成进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden></div>
+        </div>
+
+        <section id="connectionNotice" class="notice" aria-live="polite" hidden></section>
+        <section id="pageNotice" class="notice" role="status" aria-live="polite" hidden></section>
+
+        <section class="emptyState" id="loadingState" aria-live="polite">
+          <span class="spinner" aria-hidden="true"></span>
+          <h2>正在读取学习进度</h2>
+          <p>稍等片刻，课程将在这里打开。</p>
+        </section>
+
+        <div id="courseShell" hidden>
+          <section id="pauseNotice" class="pauseNotice" role="status" hidden></section>
+          <div class="lessonToolbar">
+            <button id="historyButton" class="textButton historyButton" type="button" aria-expanded="false" aria-controls="historyPanel">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 4h12M5 10h12M5 16h12"/><path d="M2 4h.01M2 10h.01M2 16h.01"/></svg>
+              学习记录
+              <span class="chevron" aria-hidden="true"></span>
+            </button>
+            <button id="pauseButton" class="textButton pauseButton" type="button" title="对当前内容掌握不佳，暂停整个 Topic，等待管理者解锁">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4v12M13 4v12"/></svg>
+              暂停学习
+            </button>
+          </div>
+          <nav id="historyPanel" class="historyPanel" aria-label="已学内容与模块进度" hidden></nav>
+          <div id="reviewNotice" class="reviewNotice" hidden></div>
+          <article id="stepCard" class="step" aria-labelledby="stepTitle"></article>
+          <section id="moduleResult" class="moduleResult" aria-label="模块学习结果" hidden></section>
+          <footer class="lessonFooter">
+            <span id="saveStatus">学习进度自动保存</span>
+            <span id="footerPosition"></span>
+          </footer>
+        </div>
+      </main>
+    </div>
+
+    <dialog id="settingsDialog" class="settingsDialog" aria-labelledby="settingsTitle">
+      <form id="settingsForm">
+        <div class="dialogHeading">
+          <h2 id="settingsTitle">连接学习服务</h2>
+          <button id="closeSettingsButton" class="iconButton" type="button" aria-label="关闭连接设置">×</button>
+        </div>
+        <p class="dialogIntro">课程和学习进度保存在这台电脑的学习服务中。</p>
+        <label for="apiAddress">学习服务地址</label>
+        <input id="apiAddress" type="url" inputmode="url" placeholder="留空使用当前页面的服务" autocomplete="off" spellcheck="false">
+        <p class="fieldHint">本机页面可留空；从 GitHub Pages 打开时，填写本机服务地址，例如 http://127.0.0.1:8767。</p>
+        <label for="pairingCredential">配对凭据</label>
+        <input id="pairingCredential" type="password" autocomplete="off" spellcheck="false" placeholder="跨站连接时填写">
+        <p class="fieldHint">仅在当前标签页的会话中保存，不会写入网页或公开站点。</p>
+        <p id="settingsError" class="fieldError" role="alert" hidden></p>
+        <div class="dialogActions">
+          <button id="cancelSettingsButton" class="secondaryButton" type="button">取消</button>
+          <button class="primaryButton" type="submit">连接并保存</button>
+        </div>
+      </form>
+    </dialog>
+    <div id="announcer" class="srOnly" aria-live="polite" aria-atomic="true"></div>
+    <noscript><p class="noScript">请启用浏览器的 JavaScript，以加载课程、保存进度和提交答案。</p></noscript>
+  </body>
+</html>

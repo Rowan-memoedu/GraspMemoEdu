@@ -1,0 +1,805 @@
+const $ = (id) => document.getElementById(id);
+const STORAGE_PREFIX = "math-learning-web:";
+const REQUEST_TIMEOUT = 18000;
+const STATE_TIMEOUT = 9000;
+
+function storageRead(storage, key, fallback = null) {
+  try { return storage.getItem(STORAGE_PREFIX + key) ?? fallback; } catch { return fallback; }
+}
+function storageWrite(storage, key, value) {
+  try {
+    if (value === null) storage.removeItem(STORAGE_PREFIX + key);
+    else storage.setItem(STORAGE_PREFIX + key, value);
+  } catch { /* The server remains the source of saved learning progress. */ }
+}
+function readJSON(key) {
+  try { return JSON.parse(storageRead(sessionStorage, key)); } catch { return null; }
+}
+function uuid() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 15) | 64;
+  bytes[8] = (bytes[8] & 63) | 128;
+  const value = [...bytes].map((n) => n.toString(16).padStart(2, "0")).join("");
+  return `${value.slice(0, 8)}-${value.slice(8, 12)}-${value.slice(12, 16)}-${value.slice(16, 20)}-${value.slice(20)}`;
+}
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined && text !== null) node.textContent = text;
+  return node;
+}
+function button(text, className, action, disabled = false) {
+  const node = el("button", className, text);
+  node.type = "button";
+  node.disabled = disabled;
+  node.addEventListener("click", action);
+  return node;
+}
+function content(html) {
+  const node = el("div", "courseContent");
+  // Course HTML is generated and sanitized by the trusted local course importer.
+  node.innerHTML = html || "";
+  return node;
+}
+
+let apiBase = storageRead(localStorage, "api-base", "");
+let sessionToken = null;
+let sessionPromise = null;
+let state = null;
+let actionBusy = false;
+let pauseBusy = false;
+let stateBusy = false;
+let connectionGeneration = 0;
+let pollTimer = null;
+let pollBusy = false;
+let pollTarget = null;
+let connectionIssue = null;
+let submissionError = null;
+let retryAction = null;
+let pageMessage = null;
+let renderedKey = null;
+let mathStyleVersion = null;
+let channel = null;
+const drafts = new Map();
+
+const scope = () => apiBase || window.location.origin;
+const recordKey = () => `submission:${scope()}`;
+const credentialKey = () => `pairing:${scope()}`;
+const draftKey = (step) => `draft:${scope()}:${state.course_version}:${step.attempt_id || state.attempt_id}:${step.id}`;
+const sameOrigin = () => !apiBase || new URL(apiBase).origin === window.location.origin;
+const selectedStep = () => state?.steps?.find((step) => step.id === state.current_step_id)
+  || state?.steps?.find((step) => step.current)
+  || state?.steps?.find((step) => step.id === state.active_step_id);
+const activeStep = () => state?.steps?.find((step) => step.id === state.active_step_id);
+const mutationPayload = (extra = {}) => ({
+  request_id: uuid(),
+  expected_revision: state.revision,
+  attempt_id: state.attempt_id,
+  step_id: state.active_step_id,
+  ...extra,
+});
+
+class ApiError extends Error {
+  constructor(message, status = 0, code = "network_error") {
+    super(message);
+    this.status = status;
+    this.code = code;
+  }
+}
+
+async function request(path, { method = "GET", body, bootstrap = false, timeout = REQUEST_TIMEOUT, reauthenticated = false } = {}) {
+  const generation = connectionGeneration;
+  const base = apiBase;
+  const local = sameOrigin();
+  if (!bootstrap && local && !sessionToken) await ensureSession();
+  if (generation !== connectionGeneration) throw new ApiError("连接设置已更新，请重试。", 0, "connection_changed");
+  const headers = { Accept: "application/json" };
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (!bootstrap) {
+    if (local) headers["X-Learning-Session"] = sessionToken;
+    else {
+      const credential = storageRead(sessionStorage, credentialKey(), "");
+      if (!credential) throw new ApiError("请先在连接设置中填写本机服务的配对凭据。", 401, "pairing_required");
+      headers.Authorization = `Bearer ${credential}`;
+    }
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
+  try {
+    const response = await fetch(`${base}/api/${path}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: controller.signal,
+      credentials: local ? "same-origin" : "omit",
+      cache: "no-store",
+      redirect: "error",
+    });
+    let result;
+    try { result = await response.json(); } catch {
+      throw new ApiError("此地址没有返回学习服务的数据，请检查连接设置。", response.status, "invalid_response");
+    }
+    if (!response.ok) {
+      if (local && !bootstrap && !reauthenticated && [401, 403].includes(response.status)) {
+        sessionToken = null;
+        await ensureSession();
+        return request(path, { method, body, timeout, reauthenticated: true });
+      }
+      const detail = result?.detail;
+      throw new ApiError(typeof detail === "string" ? detail : detail?.message || "操作未完成，请刷新学习进度后重试。", response.status, detail?.code || "request_error");
+    }
+    if (generation !== connectionGeneration) throw new ApiError("连接设置已更新。", 0, "connection_changed");
+    return result;
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    if (error.name === "AbortError") throw new ApiError("等待服务响应超时。已保存的进度不会丢失，请重试。", 0, "timeout");
+    throw new ApiError("暂时无法连接学习服务。请确认本机服务已启动，再重新连接。", 0, "network_error");
+  } finally { clearTimeout(timer); }
+}
+
+async function ensureSession() {
+  if (sessionToken) return;
+  if (!sessionPromise) {
+    sessionPromise = request("session", { bootstrap: true, timeout: STATE_TIMEOUT })
+      .then((result) => {
+        if (!result.session_token) throw new ApiError("服务未提供有效的会话信息。", 0, "invalid_session");
+        sessionToken = result.session_token;
+      })
+      .finally(() => { sessionPromise = null; });
+  }
+  await sessionPromise;
+}
+
+function persistSubmission(record) {
+  storageWrite(sessionStorage, recordKey(), record ? JSON.stringify(record) : null);
+}
+function draftValue(step) {
+  const key = draftKey(step);
+  return drafts.get(key) ?? storageRead(sessionStorage, key, "");
+}
+function saveDraft(step, answer) {
+  const key = draftKey(step);
+  drafts.set(key, answer);
+  storageWrite(sessionStorage, key, answer);
+}
+function announce(message) { $("announcer").textContent = message; }
+function notifyOtherTabs() {
+  channel?.postMessage({ type: "state-changed", scope: scope(), revision: state?.revision });
+}
+
+function applyState(next, { force = false, announceChange = false } = {}) {
+  if (!next || !Array.isArray(next.steps) || !Array.isArray(next.modules)) throw new ApiError("课程数据不完整，请重新连接。", 0, "invalid_state");
+  if (state && next.course_version === state.course_version && next.revision < state.revision) return;
+  const changed = !state || next.course_version !== state.course_version || next.revision !== state.revision || next.current_step_id !== state.current_step_id;
+  const previousStep = state?.current_step_id;
+  state = next;
+  connectionIssue = null;
+  if (state.status === "paused" || state.status === "completed") {
+    submissionError = null;
+    stopPolling();
+    persistSubmission(null);
+  }
+  if (submissionError && (submissionError.step_id !== state.active_step_id || submissionError.attempt_id !== state.attempt_id)) submissionError = null;
+  if (state.pending_submission_id) schedulePoll(state.pending_submission_id);
+  else if (!pollBusy) stopPolling();
+  if (changed || force) render();
+  else renderConnectionNotice();
+  if (announceChange && changed && previousStep !== state.current_step_id) announce(selectedStep()?.title || "学习进度已更新");
+}
+
+async function refreshState({ quiet = true, force = false } = {}) {
+  if (stateBusy) return;
+  const generation = connectionGeneration;
+  stateBusy = true;
+  try {
+    const next = await request("state", { timeout: STATE_TIMEOUT });
+    if (!quiet) pageMessage = null;
+    applyState(next, { force });
+    renderConnectionNotice();
+  } catch (error) {
+    if (error.code !== "connection_changed") {
+      connectionIssue = error;
+      renderConnectionNotice();
+      if (!state) renderUnavailable();
+    }
+  } finally { if (generation === connectionGeneration) stateBusy = false; }
+}
+
+function renderConnectionNotice() {
+  const notice = $("connectionNotice");
+  notice.replaceChildren();
+  notice.hidden = !connectionIssue;
+  if (state && !connectionIssue) $("saveStatus").textContent = state.pending_submission_id ? "答案已提交，正在判题" : "学习进度已保存";
+  if (!connectionIssue) return;
+  const title = [401, 403].includes(connectionIssue.status) ? "需要重新确认连接" : "学习服务连接中断";
+  const p = el("p");
+  p.append(el("strong", "", title));
+  notice.append(p, el("p", "", connectionIssue.message));
+  if (state) notice.append(el("p", "", "已显示的内容仍可阅读；重新连接后会同步已保存的进度。"));
+  const actions = el("div", "noticeActions");
+  actions.append(button("重新连接", "textButton", () => refreshState({ quiet: false, force: true })), button("连接设置", "textButton", openSettings));
+  notice.append(actions);
+  if (state) $("saveStatus").textContent = "等待重新连接";
+}
+
+function renderUnavailable() {
+  const target = $("loadingState");
+  target.replaceChildren(el("h2", "", "学习服务尚未连接"), el("p", "", "启动本机学习服务后，重新连接即可继续。"));
+  target.append(button("重新连接", "primaryButton", () => refreshState({ quiet: false, force: true })));
+  target.hidden = false;
+}
+
+async function mutate(path, payload, { pause = false } = {}) {
+  if ((pause ? pauseBusy : actionBusy) || !state) return;
+  const generation = connectionGeneration;
+  if (pause) pauseBusy = true;
+  else actionBusy = true;
+  retryAction = null;
+  pageMessage = null;
+  renderBusy();
+  try {
+    const next = await request(path, { method: "POST", body: payload });
+    applyState(next, { force: true, announceChange: true });
+    notifyOtherTabs();
+    if (path === "pause") announce("已暂停学习，等待管理者解锁。");
+    if (["continue", "select"].includes(path)) focusStep();
+  } catch (error) {
+    if (generation !== connectionGeneration) return;
+    if (error.status === 409) {
+      pageMessage = "学习进度已在另一个窗口更新，已同步到最新步骤。";
+      await refreshState({ force: true });
+    } else {
+      pageMessage = error.message;
+      retryAction = { path, payload, pause };
+      if (!error.status || [401, 403].includes(error.status)) connectionIssue = error;
+    }
+  } finally {
+    if (generation === connectionGeneration) {
+      if (pause) pauseBusy = false;
+      else actionBusy = false;
+      render();
+    }
+  }
+}
+
+async function submitAnswer(event) {
+  event?.preventDefault();
+  const step = selectedStep();
+  if (actionBusy || !step?.actions?.includes("submit") || state.status !== "in_progress") return;
+  const input = $("answerInput");
+  const answer = input.value.trim();
+  if (!answer) {
+    $("answerError").hidden = false;
+    input.setAttribute("aria-invalid", "true");
+    input.focus();
+    return;
+  }
+  saveDraft(step, input.value);
+  const existing = readJSON(recordKey());
+  const payload = existing?.payload?.step_id === step.id && existing.payload.attempt_id === state.attempt_id && existing.payload.answer === answer
+    ? existing.payload : mutationPayload({ answer });
+  await sendSubmission(payload);
+}
+
+async function sendSubmission(payload) {
+  if (actionBusy || !state || state.status !== "in_progress") return;
+  const generation = connectionGeneration;
+  actionBusy = true;
+  submissionError = null;
+  pageMessage = null;
+  retryAction = null;
+  const record = { payload, submission_id: null, status: "sending" };
+  persistSubmission(record);
+  renderBusy();
+  try {
+    const result = await request("submit", { method: "POST", body: payload });
+    if (generation !== connectionGeneration) return;
+    handleSubmission(result, record);
+    notifyOtherTabs();
+  } catch (error) {
+    if (generation !== connectionGeneration) return;
+    if (error.status === 409) {
+      persistSubmission(null);
+      pageMessage = "作答状态已更新，请以当前页面为准。";
+      await refreshState({ force: true });
+    } else {
+      submissionError = { ...payload, reason: error.message, uncertain: true };
+      persistSubmission({ ...record, status: "error", reason: error.message });
+      if (!error.status || [401, 403].includes(error.status)) connectionIssue = error;
+      await refreshState();
+    }
+  } finally {
+    if (generation === connectionGeneration) {
+      actionBusy = false;
+      render();
+    }
+  }
+}
+
+function handleSubmission(result, record = readJSON(recordKey())) {
+  if (result.state) applyState(result.state);
+  if (state?.status === "paused" || state?.status === "completed") return;
+  // A late response from an older attempt must not replace polling for a newer one.
+  if (state?.pending_submission_id && state.pending_submission_id !== result.submission_id) {
+    schedulePoll(state.pending_submission_id);
+    return;
+  }
+  if (result.state && state && result.state.revision < state.revision) return;
+  const latestRecord = readJSON(recordKey());
+  if (record?.payload && latestRecord?.payload && record.payload.request_id !== latestRecord.payload.request_id) return;
+  if (result.status === "pending") {
+    if (record) persistSubmission({ ...record, status: "pending", submission_id: result.submission_id });
+    submissionError = null;
+    schedulePoll(result.submission_id);
+  } else if (result.status === "error") {
+    stopPolling();
+    if (record?.payload && record.payload.step_id === state?.active_step_id && record.payload.attempt_id === state?.attempt_id) {
+      submissionError = { ...record.payload, reason: result.reason || "判题暂时没有完成，请重试。" };
+      persistSubmission({ ...record, status: "error", submission_id: result.submission_id, reason: submissionError.reason });
+    } else {
+      pageMessage = "判题服务暂时没有完成，当前作答未计错，可以重新提交。";
+    }
+    announce("判题服务暂时不可用，本次未计错。可以重试。");
+  } else {
+    stopPolling();
+    persistSubmission(null);
+    submissionError = null;
+    if (result.status === "judged") announce(result.correct ? "回答正确，请阅读反馈后继续。" : "本题回答有误，请阅读反馈后继续。");
+  }
+  render();
+}
+
+function schedulePoll(id, delay = 1000) {
+  if (!id || state?.status !== "in_progress") return;
+  if (pollTarget === id && (pollTimer || pollBusy)) return;
+  if (pollTimer) clearTimeout(pollTimer);
+  pollTarget = id;
+  pollTimer = setTimeout(() => pollSubmission(id), delay);
+}
+function stopPolling() {
+  if (pollTimer) clearTimeout(pollTimer);
+  pollTimer = null;
+  pollTarget = null;
+}
+async function pollSubmission(id) {
+  if (pollBusy || pollTarget !== id) return;
+  pollTimer = null;
+  pollBusy = true;
+  const generation = connectionGeneration;
+  let delay = 1000;
+  try {
+    const result = await request(`submissions/${encodeURIComponent(id)}`, { timeout: STATE_TIMEOUT });
+    if (generation !== connectionGeneration) return;
+    handleSubmission(result);
+  } catch (error) {
+    if (generation !== connectionGeneration) return;
+    if (error.status === 404) {
+      stopPolling();
+      persistSubmission(null);
+      pageMessage = "未找到刚才的判题记录，已重新读取学习进度。";
+      await refreshState({ force: true });
+    } else {
+      connectionIssue = error;
+      renderConnectionNotice();
+      delay = 4000;
+    }
+  } finally {
+    if (generation === connectionGeneration) {
+      pollBusy = false;
+      if (pollTarget === id && state?.status === "in_progress") schedulePoll(id, delay);
+    }
+  }
+}
+
+function render() {
+  renderConnectionNotice();
+  renderPageNotice();
+  if (!state) return;
+  if (mathStyleVersion !== state.course_version) {
+    let style = $("courseMathStyle");
+    if (!style) {
+      style = document.createElement("style");
+      style.id = "courseMathStyle";
+      document.head.append(style);
+    }
+    style.textContent = state.math_css || "";
+    mathStyleVersion = state.course_version;
+  }
+  $("loadingState").hidden = true;
+  $("courseShell").hidden = false;
+  $("lessonTitle").textContent = state.title;
+  document.title = `${state.title} · 数学学习`;
+  renderProgress();
+  renderPause();
+  renderHistory();
+  const step = selectedStep();
+  renderReview(step);
+  renderStep(step);
+  renderResult(step);
+  renderBusy();
+  $("saveStatus").textContent = connectionIssue ? "等待重新连接" : state.pending_submission_id ? "答案已提交，正在判题" : "学习进度已保存";
+  const module = state.modules.find((item) => item.id === step?.module_id);
+  const moduleIndex = state.modules.indexOf(module);
+  $("footerPosition").textContent = moduleIndex >= 0 ? `模块 ${moduleIndex + 1} / ${state.modules.length}` : "";
+}
+
+function renderPageNotice() {
+  const target = $("pageNotice");
+  target.replaceChildren();
+  target.hidden = !pageMessage;
+  if (!pageMessage) return;
+  target.append(el("p", "", pageMessage));
+  const actions = el("div", "noticeActions");
+  if (retryAction) {
+    const saved = retryAction;
+    actions.append(button("重试刚才的操作", "textButton", () => mutate(saved.path, saved.payload, { pause: saved.pause })));
+  }
+  actions.append(button("关闭提示", "textButton", () => { pageMessage = null; retryAction = null; renderPageNotice(); }));
+  target.append(actions);
+}
+
+function renderProgress() {
+  const completed = state.modules.filter((module) => module.status === "completed").length;
+  const caption = $("progressCaption");
+  caption.hidden = false;
+  caption.replaceChildren(el("span", "", `已完成 ${completed} / ${state.modules.length} 个模块`), el("span", "", state.status === "paused" ? "已暂停" : state.status === "completed" ? "学习完成" : "学习中"));
+  const target = $("lessonProgress");
+  target.hidden = false;
+  target.setAttribute("aria-valuenow", String(Math.round(100 * completed / (state.modules.length || 1))));
+  target.setAttribute("aria-valuetext", `已完成 ${completed} / ${state.modules.length} 个模块`);
+  target.replaceChildren(...state.modules.map((module) => {
+    const segment = el("span", `progressSegment ${module.status}`);
+    segment.title = module.title;
+    return segment;
+  }));
+}
+
+function renderPause() {
+  const target = $("pauseNotice");
+  target.hidden = state.status !== "paused";
+  if (target.hidden) return;
+  const automatic = state.pause?.reason === "practice_error_limit";
+  target.replaceChildren(
+    el("h2", "", automatic ? "检测到状态不佳，已暂停作答" : "已手动暂停学习"),
+    el("p", "", "请等待管理者解锁。已完成模块的评分和学习记录已保留，仍可回看已学内容。"),
+  );
+}
+
+function renderHistory() {
+  const target = $("historyPanel");
+  const nodes = [];
+  const visited = state.steps.filter((step) => step.visited && step.unlocked);
+  const introductions = visited.filter((step) => step.kind === "introduction");
+  if (introductions.length) nodes.push(historyGroup("Introduction", state.introduction_read ? "已读" : "阅读中", introductions));
+  for (const module of state.modules) {
+    const steps = visited.filter((step) => step.module_id === module.id && step.kind !== "introduction");
+    const status = module.status === "completed" ? `已完成 · 熟练度 ${module.mastery}`
+      : module.status === "paused" ? "已暂停" : steps.length ? "学习中" : "尚未学习";
+    nodes.push(historyGroup(module.title, status, steps, module.status, module.attempt_id));
+  }
+  const completion = visited.filter((step) => step.kind === "completion");
+  if (completion.length) nodes.push(historyGroup("Topic 完成", "已完成", completion, "completed"));
+  nodes.push(el("p", "historyHint", "已学内容可以随时回看。后续内容随学习进度开放。"));
+  target.replaceChildren(...nodes);
+}
+function historyGroup(title, status, steps, className = "", currentAttempt = null) {
+  const group = el("section", "historyGroup");
+  const heading = el("div", "historyGroupHeader");
+  heading.append(el("span", "moduleName", title), el("span", `historyStatus ${className}`, status));
+  group.append(heading);
+  if (steps.length) {
+    const items = el("div", "historyItems");
+    for (const step of steps) {
+      let label = step.kind === "introduction" ? "Introduction" : step.kind === "completion" ? "学习结果" : step.kind === "example" ? "Example" : step.title;
+      if (step.kind === "example" && step.phase === "reading") label += " · 讲解";
+      const item = button(label, "historyItem", () => selectStep(step.id), actionBusy);
+      if (step.id === state.current_step_id) item.setAttribute("aria-current", "step");
+      if (step.id === state.active_step_id && state.status !== "completed") item.append(el("span", "historyMark", "当前"));
+      else if (currentAttempt && step.attempt_id !== currentAttempt && step.kind !== "introduction") item.append(el("span", "historyMark", "历史"));
+      items.append(item);
+    }
+    group.append(items);
+  }
+  return group;
+}
+function selectStep(id) {
+  if (id === state.current_step_id || actionBusy) return;
+  mutate("select", mutationPayload({ step_id: id }));
+}
+
+function renderReview(step) {
+  const target = $("reviewNotice");
+  target.hidden = !step || step.id === state.active_step_id;
+  target.replaceChildren();
+  if (!target.hidden) target.append(el("span", "", "正在回看已学内容"), button("返回当前步骤", "textButton", () => selectStep(state.active_step_id), actionBusy));
+}
+
+function renderStep(step) {
+  const key = JSON.stringify([state.course_version, state.revision, state.current_step_id, state.pending_submission_id, submissionError?.request_id, submissionError?.reason]);
+  if (key === renderedKey) return;
+  renderedKey = key;
+  const target = $("stepCard");
+  const oldInput = $("answerInput");
+  const focus = oldInput && document.activeElement === oldInput ? { start: oldInput.selectionStart, end: oldInput.selectionEnd, scroll: oldInput.scrollTop } : null;
+  const previousId = target.dataset.stepId;
+  target.dataset.stepId = step?.id || "";
+  target.replaceChildren();
+  if (!step) {
+    const title = el("h2", "stepTitle", "正在同步学习内容");
+    title.id = "stepTitle";
+    target.append(title);
+    return;
+  }
+  if (step.kind === "completion") {
+    renderCompletion(target);
+    return;
+  }
+  const heading = el("div", "stepHeader");
+  const title = el("h2", "stepTitle", step.title);
+  title.id = "stepTitle";
+  title.tabIndex = -1;
+  heading.append(title);
+  const module = state.modules.find((item) => item.id === step.module_id);
+  if (step.kind === "practice" && module) heading.append(el("span", "stepCounter", module.attempt_id && module.attempt_id !== step.attempt_id ? "历史作答" : `已完成 ${module.practice_answered_count} / ${module.practice_target_count} 道练习`));
+  else if (step.kind === "introduction") heading.append(el("span", "stepCounter", state.introduction_read ? "已读" : "阅读"));
+  target.append(heading, content(step.html));
+  if (step.answer !== null && step.answer !== undefined && step.answer !== "") {
+    const answer = el("details", "submittedAnswer");
+    answer.append(el("summary", "", "查看已提交答案"), el("pre", "", step.answer));
+    target.append(answer);
+  }
+  if (step.feedback) {
+    const feedback = el("div", `feedback ${step.feedback.correct ? "correct" : "incorrect"}`);
+    feedback.setAttribute("role", "status");
+    feedback.append(el("span", "feedbackIcon", step.feedback.correct ? "✓" : "!"));
+    const body = el("div");
+    body.append(el("span", "feedbackTitle", step.feedback.correct ? "回答正确" : "本题回答有误"));
+    if (step.feedback.reason) body.append(el("div", "feedbackReason", step.feedback.reason));
+    feedback.append(body);
+    target.append(feedback);
+  }
+  if (step.explanation_html) {
+    target.append(el("h3", "exampleExplanationHeader", "Explanation · 解析"), content(step.explanation_html));
+  }
+  const actions = Array.isArray(step.actions) ? step.actions : [];
+  if (actions.includes("mastered") || actions.includes("unmastered")) {
+    const area = el("div", "learningActions");
+    area.append(el("p", "choicePrompt", "这道题，你已经掌握了吗？"));
+    const choices = el("div", "choiceActions");
+    if (actions.includes("mastered")) choices.append(button("已掌握，试着作答", "primaryButton", () => mutate("choose", mutationPayload({ choice: "mastered" }))));
+    if (actions.includes("unmastered")) choices.append(button("未掌握，先学习", "secondaryButton", () => mutate("choose", mutationPayload({ choice: "unmastered" }))));
+    area.append(choices);
+    target.append(area);
+  }
+  if (step.phase === "unmastered") {
+    const area = el("div", "learningActions");
+    area.append(el("p", "choiceNotice", "已选择未掌握。点击 Continue，开始阅读相关讲解。"));
+    target.append(area);
+  }
+  if (actions.includes("submit")) target.append(answerForm(step));
+  if (state.pending_submission_id && step.id === state.active_step_id) {
+    const wait = el("div", "waiting");
+    wait.setAttribute("role", "status");
+    wait.append(el("span", "spinner"), el("span", "", "正在判题，请稍候。你仍可暂停学习或回看已学内容。"));
+    target.append(wait);
+  }
+  if (actions.includes("continue")) {
+    const area = el("div", "continueRow");
+    const next = button("Continue", "primaryButton", () => mutate("continue", mutationPayload()));
+    next.setAttribute("aria-label", "Continue，继续学习");
+    area.append(next);
+    target.append(area);
+  }
+  if (focus && previousId === step.id && $("answerInput")) {
+    const input = $("answerInput");
+    input.focus({ preventScroll: true });
+    input.setSelectionRange(focus.start, focus.end);
+    input.scrollTop = focus.scroll;
+  }
+}
+
+function answerForm(step) {
+  const form = el("form", "learningActions answerForm");
+  form.addEventListener("submit", submitAnswer);
+  const label = el("label", "", "你的答案");
+  label.htmlFor = "answerInput";
+  const input = el("textarea", "answerInput");
+  input.id = "answerInput";
+  input.name = "answer";
+  input.rows = 3;
+  input.maxLength = 2000;
+  input.spellcheck = false;
+  input.autocomplete = "off";
+  input.setAttribute("aria-describedby", "answerHint answerError");
+  input.value = draftValue(step);
+  input.addEventListener("input", () => {
+    saveDraft(step, input.value);
+    $("answerError").hidden = true;
+    input.removeAttribute("aria-invalid");
+    $("submitButton").disabled = !input.value.trim() || actionBusy || pauseBusy;
+    if (submissionError && input.value.trim() !== submissionError.answer) $("submitButton").textContent = "Submit";
+    else if (submissionError) $("submitButton").textContent = "重试判题";
+  });
+  input.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && !event.isComposing) {
+      event.preventDefault();
+      form.requestSubmit();
+    }
+  });
+  const error = el("p", "inputError", "请先填写答案。");
+  error.id = "answerError";
+  error.hidden = true;
+  const bottom = el("div", "answerBottom");
+  const hint = el("p", "inputHint", "可输入数值、分数或数学表达式，例如 3/4、x^2。Ctrl + Enter 提交。");
+  hint.id = "answerHint";
+  const submit = el("button", "primaryButton", submissionError && input.value.trim() === submissionError.answer ? "重试判题" : "Submit");
+  submit.id = "submitButton";
+  submit.type = "submit";
+  submit.disabled = !input.value.trim();
+  bottom.append(hint, submit);
+  form.append(label, input, error);
+  if (submissionError && submissionError.step_id === step.id) {
+    const failed = el("div", "feedback incorrect");
+    failed.setAttribute("role", "alert");
+    const text = el("div");
+    text.append(el("span", "feedbackTitle", "判题未完成，本次未计错"), el("div", "feedbackReason", submissionError.reason));
+    failed.append(el("span", "feedbackIcon", "!"), text);
+    form.append(failed);
+  }
+  form.append(bottom);
+  return form;
+}
+
+function masteryBadge(score) {
+  const badge = el("div", "mastery");
+  badge.setAttribute("aria-label", `熟练度 ${score}，满分 4`);
+  badge.append(el("span", "", "熟练度"), el("strong", "", score), el("span", "", "/ 4"));
+  const bars = el("span", "masteryBars");
+  bars.setAttribute("aria-hidden", "true");
+  for (let i = 1; i <= 4; i += 1) bars.append(el("i", i <= score ? "filled" : ""));
+  badge.append(bars);
+  return badge;
+}
+function renderResult(step) {
+  const target = $("moduleResult");
+  const module = state.modules.find((item) => item.id === step?.module_id);
+  target.hidden = !["example", "practice"].includes(step?.kind) || !module || module.status !== "completed" || module.mastery == null || (module.attempt_id && module.attempt_id !== step.attempt_id);
+  target.replaceChildren();
+  if (target.hidden) return;
+  const text = el("div");
+  text.append(el("p", "resultTitle", "本模块已完成"), el("p", "resultDetail", module.practice_answered_count === 0 ? "Example 作答正确，已跳过本模块练习。" : `已完成 ${module.practice_answered_count} 道练习，其中 ${module.practice_error_count} 道有误。`));
+  target.append(text, masteryBadge(module.mastery));
+}
+function renderCompletion(target) {
+  const heading = el("h2", "completionHeading", "本 Topic 已完成");
+  heading.id = "stepTitle";
+  heading.tabIndex = -1;
+  target.append(heading, el("p", "completionIntro", "各模块的学习结果已保存。你可以通过学习记录回看题目与讲解。"));
+  const list = el("div", "completionList");
+  for (const module of state.modules) {
+    const row = el("div", "completionRow");
+    row.append(el("span", "completionRowTitle", module.title), masteryBadge(module.mastery));
+    list.append(row);
+  }
+  target.append(list);
+}
+
+function renderBusy() {
+  if (!state) return;
+  const disabled = actionBusy || pauseBusy;
+  for (const element of $("stepCard").querySelectorAll("button, textarea")) element.disabled = disabled;
+  if ($("submitButton") && !disabled) $("submitButton").disabled = !$("answerInput").value.trim();
+  for (const element of $("historyPanel").querySelectorAll("button")) element.disabled = disabled;
+  for (const element of $("reviewNotice").querySelectorAll("button")) element.disabled = disabled;
+  $("pauseButton").hidden = state.status !== "in_progress";
+  $("pauseButton").disabled = pauseBusy;
+  $("pauseButton").setAttribute("aria-busy", String(pauseBusy));
+  $("stepCard").setAttribute("aria-busy", String(actionBusy));
+}
+function focusStep() {
+  requestAnimationFrame(() => {
+    $("stepTitle")?.focus({ preventScroll: true });
+    const top = $("stepCard").getBoundingClientRect().top;
+    if (top < 0 || top > window.innerHeight * .5) $("stepCard").scrollIntoView({ block: "start", behavior: "auto" });
+  });
+}
+
+function openSettings() {
+  $("apiAddress").value = apiBase;
+  $("pairingCredential").value = storageRead(sessionStorage, credentialKey(), "");
+  $("settingsError").hidden = true;
+  $("settingsDialog").showModal();
+}
+function normalizeAddress(value) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  let url;
+  try { url = new URL(trimmed); } catch { throw new Error("请输入完整地址，例如 http://127.0.0.1:8767。"); }
+  if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error("请填写不含账号、参数或片段的 HTTP / HTTPS 地址。");
+  if (!["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) && url.origin !== window.location.origin) throw new Error("当前版本仅连接这台电脑的本机学习服务。");
+  if (!["/", "/api", "/api/"].includes(url.pathname)) throw new Error("只需填写服务地址和端口，例如 http://127.0.0.1:8767。");
+  return url.origin === window.location.origin ? "" : url.origin;
+}
+async function saveSettings(event) {
+  event.preventDefault();
+  let address;
+  try { address = normalizeAddress($("apiAddress").value); } catch (error) {
+    $("settingsError").textContent = error.message;
+    $("settingsError").hidden = false;
+    return;
+  }
+  const credential = $("pairingCredential").value.trim();
+  if (address && !credential) {
+    $("settingsError").textContent = "跨站连接需要填写本机服务提供的配对凭据。";
+    $("settingsError").hidden = false;
+    return;
+  }
+  connectionGeneration += 1;
+  stopPolling();
+  apiBase = address;
+  storageWrite(localStorage, "api-base", address || null);
+  storageWrite(sessionStorage, credentialKey(), credential || null);
+  sessionToken = null;
+  sessionPromise = null;
+  state = null;
+  renderedKey = null;
+  submissionError = null;
+  retryAction = null;
+  connectionIssue = null;
+  pageMessage = null;
+  actionBusy = false;
+  pauseBusy = false;
+  stateBusy = false;
+  pollBusy = false;
+  $("courseShell").hidden = true;
+  $("lessonTitle").textContent = "数学学习";
+  $("lessonProgress").hidden = true;
+  $("progressCaption").hidden = true;
+  $("loadingState").replaceChildren(el("span", "spinner"), el("h2", "", "正在读取学习进度"), el("p", "", "稍等片刻，课程将在这里打开。"));
+  $("loadingState").hidden = false;
+  $("settingsDialog").close();
+  await start();
+}
+
+async function start() {
+  await refreshState({ quiet: false, force: true });
+  if (!state) return;
+  const record = readJSON(recordKey());
+  if (record?.payload && record.payload.step_id === state.active_step_id && record.payload.attempt_id === state.attempt_id && state.status === "in_progress") {
+    if (record.status === "error" && !state.pending_submission_id && activeStep()?.actions?.includes("submit")) {
+      submissionError = { ...record.payload, reason: record.reason || "上次判题未完成，可以重试。" };
+      render();
+    } else if (record.submission_id && state.pending_submission_id) schedulePoll(record.submission_id);
+    else if (record.status === "sending" && activeStep()?.actions?.includes("submit")) {
+      submissionError = { ...record.payload, reason: "上次提交尚未确认，请点击重试。重复提交不会重复计分。", uncertain: true };
+      render();
+    }
+  }
+}
+
+$("settingsButton").addEventListener("click", openSettings);
+$("settingsForm").addEventListener("submit", saveSettings);
+$("closeSettingsButton").addEventListener("click", () => $("settingsDialog").close());
+$("cancelSettingsButton").addEventListener("click", () => $("settingsDialog").close());
+$("historyButton").addEventListener("click", () => {
+  const expanded = $("historyButton").getAttribute("aria-expanded") === "true";
+  $("historyButton").setAttribute("aria-expanded", String(!expanded));
+  $("historyPanel").hidden = expanded;
+});
+$("pauseButton").addEventListener("click", () => {
+  if (state?.status === "in_progress" && !pauseBusy) mutate("pause", { request_id: uuid() }, { pause: true });
+});
+window.addEventListener("focus", () => { if (!actionBusy && !pauseBusy) refreshState(); });
+window.addEventListener("online", () => refreshState({ force: true }));
+document.addEventListener("visibilitychange", () => { if (!document.hidden && !actionBusy && !pauseBusy) refreshState(); });
+try {
+  channel = new BroadcastChannel("math-learning-web-progress");
+  channel.onmessage = (event) => {
+    if (event.data?.type === "state-changed" && event.data.scope === scope() && event.data.revision > (state?.revision ?? -1) && !actionBusy && !pauseBusy) refreshState();
+  };
+} catch { /* Periodic state reads also keep separate windows synchronized. */ }
+setInterval(() => {
+  if (!document.hidden && !actionBusy && !pauseBusy && !state?.pending_submission_id) refreshState();
+}, 5000);
+start();

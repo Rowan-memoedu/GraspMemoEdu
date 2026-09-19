@@ -1,0 +1,7 @@
+# Reused components and references
+
+- FastAPI (MIT), Starlette (BSD-3-Clause), Uvicorn (BSD-3-Clause), Pydantic (MIT), HTTPX (BSD-3-Clause); exact dependency versions in requirements.txt. Dependencies are installed outside this repository.
+- MathJax 3.2.2 (Apache-2.0) generates offline SVG, using the existing `D:/Caches/MathTopicPdf/node_modules/mathjax-full` installation. Marked 17.0.5 (MIT) is supplied by the existing Codex runtime. Neither dependency nor generated course content is committed here.
+- The course outline parser and SVG-rendering approach adapt the user's existing `D:/Projects/MathTopicPipeline/templates/mathacademy/render.mjs`. The layout follows the measured geometry documented in that project's template README: 732px reading width, white cards, navy headings, blue segmented progress, and Chinese font fallback. Third-party Math Academy application JavaScript, account assets, logos and course text are not copied into this repository.
+- MathAnswerJudge is imported from the existing local project through an adapter. Its prompts, model, thinking mode and core implementation remain unchanged. See `D:/Projects/MathAnswerJudge/THIRD_PARTY.md` for its upstream provenance.
+- The only external API use in the local lesson is the existing judge, which sends the current question, independent reference answer and submitted answer. Keys remain in the existing backend environment configuration.
