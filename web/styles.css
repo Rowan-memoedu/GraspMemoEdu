@@ -28,7 +28,7 @@ button, a, input, textarea, summary { -webkit-tap-highlight-color: transparent; 
 :focus-visible { outline: 3px solid #98c6e9; outline-offset: 3px; }
 button { transition: background-color .12s, border-color .12s; }
 button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
-.appLayout { display: grid; grid-template-columns: 232px minmax(0, 1fr); column-gap: 36px; padding: 0 28px; }
+.appLayout { display: grid; grid-template-columns: calc(232px * 4 / 3) minmax(0, 1fr); column-gap: 36px; padding: 0 28px; }
 .pageShell { width: 100%; max-width: 732px; margin: 0 auto; min-width: 0; }
 .historySidebar { position: sticky; top: 24px; align-self: start; display: flex; flex-direction: column; min-width: 0; max-height: calc(100dvh - 48px); margin-top: 24px; background: #fff; }
 .historySidebar > .historyButton { flex: 0 0 auto; justify-content: flex-start; width: 100%; padding: 7px 10px 15px; color: var(--ma-navy); font-weight: 700; border-bottom: 1px solid #ececec; border-radius: 0; }
@@ -194,7 +194,7 @@ mjx-container[jax="SVG"] text { font-family: "Microsoft YaHei", sans-serif; }
 @media (max-width: 1000px) {
   .appLayout, .appLayout.historyCollapsed { display: block; padding: 0 20px 0 58px; }
   .appLayout::before { content: ""; position: fixed; inset: 0 auto 0 0; width: 42px; background: #fafbfc; border-right: 1px solid #eceff1; z-index: 1; }
-  .historySidebar { position: fixed; inset: 0 auto 0 0; width: min(280px, calc(100vw - 48px)); max-height: 100dvh; margin: 0; padding: 18px 12px; border-right: 1px solid #dce3e8; z-index: 20; box-shadow: 5px 0 20px #14263513; }
+  .historySidebar { position: fixed; inset: 0 auto 0 0; width: min(calc(280px * 4 / 3), calc(100vw - 48px)); max-height: 100dvh; margin: 0; padding: 18px 12px; border-right: 1px solid #dce3e8; z-index: 20; box-shadow: 5px 0 20px #14263513; }
   .historySidebar > .historyButton { padding: 10px 8px 17px; }
   .historyCollapsed .historySidebar { transform: translateX(-105%); visibility: hidden; }
   .historyCollapsed .historyLabel, .historyCollapsed .chevron { display: initial; }

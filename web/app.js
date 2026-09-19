@@ -898,26 +898,37 @@ function renderStepNavigation(target, step, actions) {
   const footer = el("div", "stepNavigation");
   const navigation = el("nav", "historyPagination");
   navigation.setAttribute("aria-label", "已学内容翻页");
-  for (const [label, id, page] of [["上一页", "previousPageButton", previous], ["下一页", "nextPageButton", next]]) {
-    const control = button(label, "secondaryButton pageButton", () => { if (page) selectStep(page.id); }, !page);
+  function pageControl(label, id, page) {
+    const control = button(label, "secondaryButton pageButton", () => selectStep(page.id));
     control.id = id;
-    control.dataset.navAvailable = String(Boolean(page));
-    control.title = page ? `${label}：${page.title}` : `${label}尚无已学内容`;
-    navigation.append(control);
+    control.dataset.navAvailable = "true";
+    control.title = `${label}：${page.title}`;
+    return control;
   }
-  footer.append(navigation);
+  if (previous && can("review_history")) {
+    navigation.append(pageControl("上一页", "previousPageButton", previous));
+    footer.append(navigation);
+  }
+  const area = el("div", "continueRow");
   if (actions.includes("continue")) {
-    const area = el("div", "continueRow");
     const continueButton = button("Continue", "primaryButton", () => mutate("continue", mutationPayload()));
     continueButton.setAttribute("aria-label", "Continue，继续学习");
     area.append(continueButton);
-    footer.append(area);
+  } else if (actions.includes("submit")) {
+    area.append(target.querySelector("#submitButton"));
+  } else if (next && can("review_history")) {
+    const forward = el("nav", "historyPagination");
+    forward.setAttribute("aria-label", "已学内容翻页");
+    forward.append(pageControl("下一页", "nextPageButton", next));
+    area.append(forward);
   }
-  target.append(footer);
+  if (area.childElementCount) footer.append(area);
+  if (footer.childElementCount) target.append(footer);
 }
 
 function answerForm(step) {
   const form = el("form", "learningActions answerForm");
+  form.id = "answerForm";
   form.addEventListener("submit", submitAnswer);
   const label = el("label", "", "你的答案");
   label.htmlFor = "answerInput";
@@ -953,6 +964,7 @@ function answerForm(step) {
   const submit = el("button", "primaryButton", submissionError && input.value.trim() === submissionError.answer ? "重试判题" : "Submit");
   submit.id = "submitButton";
   submit.type = "submit";
+  submit.setAttribute("form", "answerForm");
   submit.disabled = !input.value.trim();
   bottom.append(hint, submit);
   form.append(label, input, error);
@@ -1006,7 +1018,7 @@ function renderBusy() {
   if (!state) return;
   const disabled = actionBusy || pauseBusy;
   for (const element of $("stepCard").querySelectorAll("button, textarea")) {
-    const feature = element.closest(".historyPagination") ? "review_history" : element.closest(".answerForm") ? "submit_answer" : "learn";
+    const feature = element.closest(".historyPagination") ? "review_history" : element.id === "submitButton" || element.closest(".answerForm") ? "submit_answer" : "learn";
     element.disabled = disabled || element.dataset.navAvailable === "false" || !can(feature);
     if (!can(feature)) element.title = featureMessage(feature);
   }

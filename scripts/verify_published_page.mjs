@@ -67,8 +67,8 @@ try {
   await screenshot('01-connected');
   if (mode !== 'read-only') {
     assert.equal(initial.steps.length, 1, 'Exercise mode requires pristine QA data');
-    assert.equal(await page.locator('#previousPageButton').isDisabled(), true);
-    assert.equal(await page.locator('#nextPageButton').isDisabled(), true);
+    assert.equal(await page.locator('#previousPageButton').count(), 0);
+    assert.equal(await page.locator('#nextPageButton').count(), 0);
     await page.locator('#pauseButton').click();
     await page.getByText('该功能需注册账号才能使用', { exact: true }).first().waitFor();
     assert.equal((await state()).revision, initial.revision);
@@ -92,7 +92,7 @@ try {
     const next = await action('button[aria-label="Continue，继续学习"]', 'continue');
     assert.notEqual(next.active_step_id, initial.active_step_id);
     await page.locator('#previousPageButton:not([disabled])').waitFor();
-    assert.equal(await page.locator('#nextPageButton').isDisabled(), true);
+    assert.equal(await page.locator('#nextPageButton').count(), 0);
     const previous = await action('#previousPageButton', 'select');
     assert.equal(previous.current_step_id, initial.active_step_id);
     await page.locator('#nextPageButton:not([disabled])').waitFor();
