@@ -7,7 +7,7 @@ const require=createRequire(path.join(os.homedir(),'.cache/codex-runtimes/codex-
 const {chromium}=require('playwright');
 await fs.mkdir(out,{recursive:true});
 const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_EXECUTABLE||path.join(os.homedir(),'AppData/Local/Google/Chrome/Application/chrome.exe')});
-const report={browser:browser.version(),url:base,read_only:true,errors:[],views:[]};
+const report={browser:browser.version(),url:base,learning_actions:false,may_initialize_guest:true,errors:[],views:[]};
 try {
   const page=await browser.newPage();
   page.on('pageerror',e=>report.errors.push(String(e)));

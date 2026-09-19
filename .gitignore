@@ -24,4 +24,6 @@ credentials*
 cookies*
 tokens*
 secrets*
-
+pairing*.json
+pairing*.txt
+invitation*.txt

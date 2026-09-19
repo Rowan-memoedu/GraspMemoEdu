@@ -2,7 +2,9 @@
 
 本机数学学习网站。已完成并验收逐块学习、真实 MathAnswerJudge 判题、练习补题、模块评分、暂停、管理解锁和进度恢复。当前导入「数字化为字母」：6 个 Example、每模块 15 道 Practice，合计 96 道题。
 
-**当前状态（2026-09-19）：本机阶段通过验收。GitHub Pages 的静态前端与配对接口已准备，尚未公开发布，真实 GitHub HTTPS 页面访问本机服务的 Chrome 权限流程仍待发布后实测。**
+公开入口：[数学学习](https://amymiller76717-sudo.github.io/MathLearningWeb-Pages/)。页面连接当前电脑的本机服务；课程、答案、学习记录和邀请码资料仍保存在本机，源码主仓库保持私有。
+
+游客模式默认可学习、提交答案和回看内容；主动暂停会提示「该功能需注册账号才能使用」。邀请码账号和按账号开放 Topic、功能的框架已接入；本轮按要求只验收游客使用，不进行账号登录使用验收。
 
 ## 打开与启动
 
@@ -26,21 +28,44 @@ pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Stop-Learning.ps1'
 1. Example 先选「已掌握」或「未掌握」。已掌握才出现答案框，支持分数、数值和等价表达式。
 2. Example 答对立即得到熟练度 4，点击 Continue 进入下个模块。首次答错或选择未掌握，经 Continue 插入 Introduction，然后返回该题解析。
 3. 练习初始 2 道；错误量 1、2、3 时总量扩为 3、5、7 道。完成后熟练度为 3、2、1；两道全对为 4。每题判定后必须点击 Continue。
-4. 第 4 次练习错误暂停整个 Topic。页面「暂停学习」表示当前掌握不佳，需要管理者解锁；它与关闭页面休息不同。
-5. 学习记录可回看已访问内容。刷新、多个窗口、重复点击都以数据库中的进度为准。
+4. 第 4 次练习错误暂停整个 Topic。具有对应权限的账号也可点击「暂时终止学习」，下方说明为「未掌握前置知识，感到困难，可选择后延该模块」。游客点击时提示注册，不会提交暂停请求；后端同样禁止游客主动暂停。自动暂停规则保持有效。
+5. 学习记录默认在页面左侧展开，手机上可收起左侧抽屉。内容右下角的上一页、下一页仅回看已开启页面，Continue 用于继续学习和开启新内容。
+6. 游客进度按浏览器身份分开保存，刷新后恢复；切换账号时使用独立进度。清除浏览器本地存储会失去原游客入口，管理员仍可通过学习者 ID 查看本机记录。
+
+## 邀请码与账号权限
+
+管理员在本机管理入口创建账号并生成专属邀请码。邀请码只显示一次，数据库仅保存哈希；网页输入邀请码后取得独立登录身份。当前框架支持已导入 Topic 的白名单，当前可用 Topic 为 `digits-to-letters`。
+
+```powershell
+pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' account-list
+pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' account-create --name '<显示名>' --topics digits-to-letters --features learn,submit_answer,review_history,pause_topic
+pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' account-permissions --learner '<account-id>' --topics digits-to-letters --features learn,submit_answer,review_history
+```
+
+`account-create` 省略 Topic 和功能参数时默认全部开放；`account-permissions` 省略的字段保持原值，传空字符串可清空该项授权。权限在下一次请求时生效，由后端强制校验。
+
+| 功能标识 | 开放内容 |
+|---|---|
+| `learn` | 选择掌握情况、Continue 推进 |
+| `submit_answer` | 提交答案判题 |
+| `review_history` | 学习记录、上一页和下一页 |
+| `pause_topic` | 主动暂时终止学习 |
+
+游客固定开放前三项及所有已配置 Topic。网页可从邀请码登录切回原游客身份，两个身份的进度独立。本轮没有创建实际账号，也没有执行邀请码登录验收。
 
 ## 管理解锁
 
 先查看当前暂停对象：
 
 ```powershell
-pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' status --learner local
+pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' status --list-learners
+pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' status --learner '<guest-id 或 account-id>'
 ```
 
 按输出的 `pause.module_id` 与 `pause.event_id` 精确解锁：
 
 ```powershell
-pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' unlock --learner local --topic digits-to-letters --module example-1 --pause-event '<实际暂停事件 ID>'
+pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' unlock --learner '<实际学习者 ID>' --topic digits-to-letters --module example-1 --pause-event '<实际暂停事件 ID>'
 ```
 
 解锁新开当前未完成模块的一轮；保留旧作答、暂停记录、已完成评分和 Introduction 状态。若暂停时当前模块已经结算，解锁进入下一个未完成模块。页面没有解锁接口。
@@ -51,7 +76,7 @@ pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' unlock -
 |---|---|
 | 唯一活动源码 | `D:/Projects/MathLearningWeb` |
 | 课程、独立答案表、勘误及导入来源索引 | `D:/AppData/MathLearningWeb/courses` |
-| 权威学习状态、作答与事件 | `D:/AppData/MathLearningWeb/learning.sqlite3` |
+| 学习状态、作答、事件、身份与账号权限 | `D:/AppData/MathLearningWeb/learning.sqlite3` |
 | 可读事件日志 | `D:/AppData/MathLearningWeb/logs/events.jsonl` |
 | 默认备份 | `D:/AppData/MathLearningWeb/backups` |
 | 验收结果与截图 | `D:/Artifacts/MathLearningWeb` |
@@ -62,7 +87,7 @@ pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' backup
 pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' restore --backup '<备份 ZIP 的绝对路径>' --destination 'D:\AppData\MathLearningWeb-Restored'
 ```
 
-备份包含一致的 SQLite 快照、结构化课程、原稿、独立答案/勘误表和 SHA-256 清单。恢复只接受**尚不存在的新目录**，校验后重建可读日志；原目录不会被覆盖。配对凭据不进入备份。可用 `Start-Learning.ps1 -DataDirectory 'D:\AppData\MathLearningWeb-Restored' -Port 8768` 检查恢复结果。
+备份包含一致的 SQLite 快照（含身份和权限表）、结构化课程、原稿、独立答案/勘误表和 SHA-256 清单。邀请码和身份凭据只保存哈希。恢复只接受**尚不存在的新目录**，校验后重建可读日志；原目录不会被覆盖。连接网页用的配对凭据不进入备份。可用 `Start-Learning.ps1 -DataDirectory 'D:\AppData\MathLearningWeb-Restored' -Port 8768` 检查恢复结果。
 
 课程版本变化时拒绝沿用旧进度，不会静默覆盖；当前不提供自动内容迁移。日志写入失败不丢数据库事件，下一次读取或启动时可恢复补写。
 
@@ -94,14 +119,21 @@ node scripts/inspect_page.mjs
 
 真实全流程复现需在**单独的、未开始的验收数据目录**启动服务，再运行 `node scripts/live_browser_acceptance.mjs <本机验收网址> <新结果目录> <课程JSON路径>`。该脚本真实调用判题，会消耗测试进度及 API 用量，不能对学习者正式进度运行。
 
-详细结果：[本机验收报告](D:/Artifacts/MathLearningWeb/验收报告.md)。已通过 57 项规则/内容/API 测试、14 项隔离页面检查，以及真实课程中的 8 次判题和完整学习流程。测试框架仍提示 HTTPX 接口弃用警告；当前固定版本正常通过，不影响服务运行。
+详细结果：[验收报告](D:/Artifacts/MathLearningWeb/验收报告.md)。71 项规则、内容、安全和游客测试全部通过；另通过 13 项游客页面检查。真实游客完成了 8 次实际判题及完整课程路径；公开 HTTPS 页面另行验证连接、判题、翻页和断线恢复。账号只进行语法、命令帮助与代码检查，未创建或登录账号。测试框架仍提示 HTTPX 接口弃用警告；当前固定版本正常通过，不影响服务运行。
 
-## GitHub Pages 准备状态
+## 打开公开页面
 
-静态页面在 `D:/Artifacts/MathLearningWeb/pages-ready`，只有页面代码、样式、图标及 `.nojekyll`，不含课程、记录、数据库、标准答案或凭据。浏览器连接设置可指定回环地址，配对码只存当前标签页会话。
+公开页面仅含 HTML、JS、CSS、图标和 `.nojekyll`。初次使用，在页面「连接设置」中填入 `http://127.0.0.1:8767`，配对凭据读取本机 `D:/AppData/MathLearningWeb/pairing-code.txt`。Chrome 询问本地网络访问权限时选择允许。配对码仅存当前标签页会话；它用于连接本机服务，与账号登录的邀请码分开。
 
-公开发布前需单独确认。当前 GitHub 账户为 Free；[GitHub 官方说明](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages)要求 Free 账户的 Pages 来自公开仓库，预定使用单独公开的 Pages 发布仓库，源码主仓库保持私有。授权发布后才对实际页面来源执行 `Manage-Learning.ps1 pair --origin '<HTTPS origin，无路径>'`，重启本机学习服务并在网页输入本机配对码。不要把配对码写进公开页面或网址。
+前端发布仓库为 `amymiller76717-sudo/MathLearningWeb-Pages`，与私有源码仓库独立。正式服务已允许来源 `https://amymiller76717-sudo.github.io`。需要轮换配对码时执行 `Manage-Learning.ps1 pair --origin 'https://amymiller76717-sudo.github.io'` 并保存命令返回值；新增来源须重启本机学习服务。
 
-后端校验精确 Host、来源和凭据，CORS 预检仅开放已配置来源；普通页面不能自行建立本机会话或解除暂停。Chrome 的本地网络访问权限必须在真正的 HTTPS 页面上验证；不通过关闭浏览器安全功能来验收。参见 [Chrome 官方说明](https://developer.chrome.com/blog/local-network-access/) 和 [FastAPI CORS 文档](https://fastapi.tiangolo.com/tutorial/cors/)。
+发布更新时，先导出到新的构建目录，再传给发布脚本。脚本验证导出与源码一致、检查远端完整文件清单，遇到额外文件会停止：
 
-当前不提供学生公网访问、账号管理、复习调度、XP 或管理员网页。手机、其他电脑的 localhost 不会连接到本机。
+```powershell
+pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' export-web --output '<新的构建目录>'
+pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Publish-Frontend.ps1' -ExportDirectory '<新的构建目录>'
+```
+
+后端校验精确 Host、来源、传输凭据和学习者身份；CORS 只开放已配置来源，管理解锁与账号授权仅在本机命令入口执行。真实 GitHub HTTPS 页面到本机服务的 Chrome 流程已通过，使用正常本地网络权限，没有关闭浏览器安全检查。参见 [Chrome 官方说明](https://developer.chrome.com/blog/local-network-access/) 和 [FastAPI CORS 文档](https://fastapi.tiangolo.com/tutorial/cors/)。
+
+当前部署仍依赖这台电脑的本机后端，手机或其他电脑的 localhost 不会连接到这里。复习调度、XP、云后端和管理员网页不在本轮范围内。

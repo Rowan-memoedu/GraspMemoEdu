@@ -28,9 +28,21 @@ button, a, input, textarea, summary { -webkit-tap-highlight-color: transparent; 
 :focus-visible { outline: 3px solid #98c6e9; outline-offset: 3px; }
 button { transition: background-color .12s, border-color .12s; }
 button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
-.pageShell { max-width: 732px; margin: 0 auto; }
+.appLayout { display: grid; grid-template-columns: 232px minmax(0, 1fr); column-gap: 36px; padding: 0 28px; }
+.pageShell { width: 100%; max-width: 732px; margin: 0 auto; min-width: 0; }
+.historySidebar { position: sticky; top: 24px; align-self: start; display: flex; flex-direction: column; min-width: 0; max-height: calc(100dvh - 48px); margin-top: 24px; background: #fff; }
+.historySidebar > .historyButton { flex: 0 0 auto; justify-content: flex-start; width: 100%; padding: 7px 10px 15px; color: var(--ma-navy); font-weight: 700; border-bottom: 1px solid #ececec; border-radius: 0; }
+.historySidebar .chevron { margin-left: auto; transform: rotate(135deg); }
+.appLayout.historyCollapsed { grid-template-columns: 40px minmax(0, 1fr); }
+.historyCollapsed .historyLabel, .historyCollapsed .chevron { display: none; }
+.historyCollapsed .historySidebar > .historyButton { padding-inline: 10px; }
+.historyDrawerToggle, .historyScrim { display: none; }
 .appHeader { display: flex; justify-content: space-between; align-items: center; min-height: 72px; border-bottom: 1px solid #ececec; }
 .appName { color: var(--ma-navy); font-size: 14px; font-weight: 700; letter-spacing: .04em; }
+.headerActions { display: flex; align-items: center; gap: 20px; min-width: 0; }
+.identityButton { min-width: 0; font-size: 12px !important; }
+#identityName { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #6a6a6a; }
+.identityAction { color: var(--ma-blue); white-space: nowrap; }
 .textButton { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 3px; background: transparent; color: var(--ma-blue); padding: 8px 2px; font-size: 13px; line-height: 1.5; }
 .textButton:hover { color: #084f85; text-decoration: underline; text-underline-offset: 3px; }
 .settingsButton { color: #747474; font-size: 12px; }
@@ -42,18 +54,21 @@ button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke
 .progressSegment { flex: 1; background: #e7edf2; border-radius: 3px; }
 .progressSegment.completed { background: var(--ma-blue); }
 .progressSegment.in_progress, .progressSegment.paused { background: #a8cae4; }
-.lessonToolbar { display: flex; justify-content: space-between; align-items: center; margin: 0 0 12px; }
+.lessonToolbar { display: flex; justify-content: flex-end; align-items: center; margin: 0 0 17px; }
 .historyButton { color: #626262; }
 .chevron { width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); margin: -3px 2px 0 6px; }
 [aria-expanded="true"] .chevron { transform: rotate(225deg); margin-top: 3px; }
+.historySidebar [aria-expanded="true"] .chevron { transform: rotate(135deg); margin-top: 0; }
 .pauseButton { color: #777; }
-.historyPanel { border: 1px solid var(--ma-border); border-radius: 3px; margin-bottom: 20px; padding: 4px 14px 8px; background: #fff; }
+.pauseControl { text-align: right; }
+.pauseHint { margin: -1px 0 0; font-size: 11px; line-height: 1.65; color: #898989; }
+.historyPanel { overflow-y: auto; overscroll-behavior: contain; min-height: 0; padding: 4px 8px 12px; background: #fff; scrollbar-width: thin; }
 .historyGroup + .historyGroup { border-top: 1px solid #ededed; }
-.historyGroupHeader { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 0 8px; font-size: 13px; color: var(--ma-navy); }
+.historyGroupHeader { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 14px 0 8px; font-size: 13px; color: var(--ma-navy); }
 .historyGroupHeader .moduleName { overflow-wrap: anywhere; }
 .historyStatus { color: var(--muted); white-space: nowrap; font-size: 11px; }
 .historyStatus.completed { color: var(--green); }
-.historyItems { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px 8px; padding-bottom: 11px; }
+.historyItems { display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; padding-bottom: 12px; }
 .historyItem { padding: 7px 9px; border: 1px solid transparent; border-radius: 3px; text-align: left; background: #f8f8f8; font-size: 12px; color: #666; overflow-wrap: anywhere; }
 .historyItem:hover { border-color: #c4d9e8; background: #f3f8fc; }
 .historyItem[aria-current="step"] { border-color: #a8cae4; background: var(--soft-blue); color: var(--ma-blue); }
@@ -108,9 +123,14 @@ mjx-container[jax="SVG"] text { font-family: "Microsoft YaHei", sans-serif; }
 .answerBottom { display: flex; justify-content: space-between; align-items: center; gap: 18px; margin-top: 13px; }
 .inputHint { color: #7c7c7c; font-size: 11px; margin: 0 !important; max-width: 410px; }
 .inputError { font-size: 12px; color: #a44735; margin: 8px 0 0 !important; }
-.continueRow { display: flex; justify-content: flex-end; margin-top: 22px; }
+.stepNavigation { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 14px 20px; border-top: 1px solid #ededed; margin-top: 26px; padding-top: 18px; }
+.historyPagination { display: flex; gap: 8px; }
+.pageButton { min-height: 37px; padding: 7px 15px; font-size: 13px; }
+.pageButton:disabled { opacity: .4; }
+.continueRow { display: flex; justify-content: flex-end; }
 .continueRow .primaryButton { min-width: 123px; }
 .choiceNotice { color: #686868; font-size: 13px; }
+.featureNotice { margin-top: 22px !important; padding: 12px 14px; border: 1px solid #e6e9ec; border-radius: 3px; color: #767676; background: #fafbfc; font-size: 12px; }
 .feedback { display: flex; align-items: flex-start; gap: 10px; border-radius: 3px; padding: 14px; margin-top: 23px; font-size: 13px; }
 .feedback.correct { background: #f0f7f2; color: var(--green); border: 1px solid #dcecdf; }
 .feedback.incorrect { background: #fcf8ef; color: var(--amber); border: 1px solid #f0e5cc; }
@@ -172,19 +192,31 @@ mjx-container[jax="SVG"] text { font-family: "Microsoft YaHei", sans-serif; }
 .srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .noScript { max-width: 732px; margin: 20px auto; border: 1px solid #e8d9ce; padding: 15px; }
 @keyframes spin { to { transform: rotate(360deg); } }
-@media (max-width: 790px) {
-  .pageShell { margin: 0 24px; }
+@media (max-width: 1000px) {
+  .appLayout, .appLayout.historyCollapsed { display: block; padding: 0 20px 0 58px; }
+  .appLayout::before { content: ""; position: fixed; inset: 0 auto 0 0; width: 42px; background: #fafbfc; border-right: 1px solid #eceff1; z-index: 1; }
+  .historySidebar { position: fixed; inset: 0 auto 0 0; width: min(280px, calc(100vw - 48px)); max-height: 100dvh; margin: 0; padding: 18px 12px; border-right: 1px solid #dce3e8; z-index: 20; box-shadow: 5px 0 20px #14263513; }
+  .historySidebar > .historyButton { padding: 10px 8px 17px; }
+  .historyCollapsed .historySidebar { transform: translateX(-105%); visibility: hidden; }
+  .historyCollapsed .historyLabel, .historyCollapsed .chevron { display: initial; }
+  .historyDrawerToggle { position: fixed; left: 6px; top: 99px; display: inline-flex; flex-direction: column; align-items: center; gap: 12px; width: 30px; padding: 10px 5px; border: 1px solid #dce3e8; border-radius: 3px; background: #fff; color: #64778a; z-index: 5; }
+  .historyDrawerToggle span { writing-mode: vertical-rl; font-size: 12px; letter-spacing: .1em; }
+  .appLayout:not(.historyCollapsed) .historyDrawerToggle { visibility: hidden; }
+  .historyScrim { display: block; position: fixed; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: #142d4426; z-index: 15; }
+  body.historyDrawerOpen { overflow: hidden; }
 }
 @media (max-width: 520px) {
-  .pageShell { margin: 0 16px; }
+  .appLayout, .appLayout.historyCollapsed { padding-right: 13px; padding-left: 52px; }
   .appHeader { min-height: 61px; }
+  .headerActions { gap: 12px; }
+  .identityButton { gap: 5px; }
+  #identityName { max-width: 58px; }
   .lesson { margin-top: 27px; }
   .lessonTitle { font-size: 24px; }
   .step { padding: 18px 16px 20px; }
   .stepHeader { display: block; margin-bottom: 23px; }
   .stepCounter { display: block; margin-top: 5px; }
   .stepTitle { font-size: 17px; }
-  .historyItems { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .answerBottom { flex-wrap: wrap; justify-content: flex-end; gap: 13px; }
   .inputHint { flex-basis: 100%; }
   .choiceActions > button { flex: 1; padding: 9px 10px; font-size: 13px; white-space: nowrap; }
@@ -192,12 +224,17 @@ mjx-container[jax="SVG"] text { font-family: "Microsoft YaHei", sans-serif; }
   .moduleResult { padding: 12px; }
   .settingsDialog { padding: 22px; }
   .reviewNotice { align-items: flex-start; }
+  .pauseHint { font-size: 10px; }
+  .pageButton { padding: 7px 12px; }
+  .stepNavigation { gap: 12px; }
+  .mathDisplay mjx-container[jax="SVG"] > svg, mjx-container[jax="SVG"][display="true"] > svg { max-width: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 1.7s !important; transition: none !important; scroll-behavior: auto !important; }
 }
 @media print {
-  .appHeader, .lessonToolbar, .historyPanel, .reviewNotice, .learningActions, .continueRow, .lessonFooter, .notice, .settingsDialog, .waiting { display: none !important; }
+  .appHeader, .lessonToolbar, .historySidebar, .historyDrawerToggle, .historyScrim, .appLayout::before, .reviewNotice, .learningActions, .stepNavigation, .lessonFooter, .notice, .settingsDialog, .waiting { display: none !important; }
+  .appLayout, .appLayout.historyCollapsed { display: block; padding: 0; }
   .pageShell { max-width: none; margin: 0; }
   .lesson { margin: 0; }
   .step { border: 0; padding: 0; }

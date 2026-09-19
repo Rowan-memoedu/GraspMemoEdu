@@ -14,6 +14,7 @@ import zipfile
 
 from .config import Settings
 from .service import DomainError, LearningService
+from .access import AccessStore, FEATURES
 
 
 def output(data):
@@ -23,6 +24,35 @@ def output(data):
 def make_service(settings, learner='local'):
     course = json.loads(settings.course_path.read_text(encoding='utf-8'))
     return LearningService(course, settings.data_dir, learner_id=learner)
+
+
+def make_access_store(settings):
+    course = json.loads(settings.course_path.read_text(encoding='utf-8'))
+    return AccessStore(settings.data_dir, [{'id': course['id'], 'title': course['title']}])
+
+
+def split_permissions(value):
+    return None if value is None else [item.strip() for item in value.split(',') if item.strip()]
+
+
+def learner_statuses(settings):
+    store = make_access_store(settings)
+    with closing(sqlite3.connect(store.db_path)) as con:
+        con.row_factory = sqlite3.Row
+        has_topics = con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='topics'").fetchone()
+        records = con.execute('SELECT learner,topic,version,body FROM topics ORDER BY learner,topic').fetchall() if has_topics else []
+    principals = {item['learner_id']: item for item in store.list_principals()}
+    result = []
+    seen = set()
+    for row in records:
+        state = json.loads(row['body'])
+        identity = principals.get(row['learner'], {'learner_id': row['learner'], 'role': 'legacy', 'display_name': row['learner']})
+        result.append({**identity, 'topic_id': row['topic'], 'course_version': row['version'],
+                       'status': state['status'], 'revision': state['revision'], 'pause': state['pause']})
+        seen.add(row['learner'])
+    result.extend({**identity, 'status': 'not_started', 'pause': None}
+                  for learner_id, identity in principals.items() if learner_id not in seen)
+    return result
 
 
 @contextmanager
@@ -156,6 +186,7 @@ def main():
     serve.add_argument('--instance-id')
     status = sub.add_parser('status')
     status.add_argument('--learner', default='local')
+    status.add_argument('--list-learners', action='store_true', help='列出游客/账号标识和进度，供精确解锁使用')
     unlock = sub.add_parser('unlock')
     unlock.add_argument('--learner', required=True)
     unlock.add_argument('--topic', required=True)
@@ -170,6 +201,15 @@ def main():
     pair.add_argument('--origin', required=True, help='Exact HTTPS origin, without a path')
     export = sub.add_parser('export-web')
     export.add_argument('--output', type=Path, required=True)
+    account_create = sub.add_parser('account-create', help='由本机管理者创建账号，并仅显示一次邀请码')
+    account_create.add_argument('--name', required=True, help='账号显示名称')
+    account_create.add_argument('--topics', help='逗号分隔的 Topic 标识；默认当前已配置的全部 Topic')
+    account_create.add_argument('--features', help='逗号分隔的功能权限；默认 ' + ','.join(FEATURES))
+    sub.add_parser('account-list', help='查看账号及当前 Topic/功能权限，不显示邀请码')
+    permissions = sub.add_parser('account-permissions', help='设置账号权限；下一次 API 请求生效')
+    permissions.add_argument('--learner', required=True, help='account-list 返回的账号 learner_id')
+    permissions.add_argument('--topics', help='逗号分隔 Topic 标识；空字符串清空；省略则保留')
+    permissions.add_argument('--features', help='逗号分隔功能权限；空字符串清空；省略则保留')
     args = parser.parse_args()
     try:
         if args.command == 'restore':
@@ -187,13 +227,26 @@ def main():
             with server_lock(settings.data_dir):
                 uvicorn.run(create_app(settings), host='127.0.0.1', port=settings.port, access_log=False, proxy_headers=False)
         elif args.command == 'status':
-            state = make_service(settings, args.learner).state()
-            output({k: state[k] for k in ['topic_id', 'learner_id', 'status', 'revision', 'pause', 'modules']})
+            if args.list_learners:
+                output({'learners': learner_statuses(settings)})
+            else:
+                state = make_service(settings, args.learner).state()
+                output({k: state[k] for k in ['topic_id', 'learner_id', 'status', 'revision', 'pause', 'modules']})
         elif args.command == 'unlock':
             state = make_service(settings, args.learner).unlock(args.topic, args.module, args.pause_event)
             output({'status': state['status'], 'attempt_id': state['attempt_id'], 'pause': state['pause']})
         elif args.command == 'backup':
             output(backup_bundle(settings, args.output))
+        elif args.command == 'account-create':
+            output(make_access_store(settings).create_account(
+                args.name, split_permissions(args.topics), split_permissions(args.features)))
+        elif args.command == 'account-list':
+            output({'accounts': make_access_store(settings).list_principals(accounts_only=True)})
+        elif args.command == 'account-permissions':
+            if args.topics is None and args.features is None:
+                raise DomainError('permissions_required', '请指定 --topics 或 --features；空字符串表示清空。', 422)
+            output(make_access_store(settings).set_permissions(
+                args.learner, split_permissions(args.topics), split_permissions(args.features)))
         elif args.command == 'pair':
             # An exact origin and a local, manually supplied credential are both required.
             origins = tuple(dict.fromkeys([*settings.allowed_origins, args.origin]))

@@ -6,6 +6,9 @@ import hmac
 import json
 from pathlib import Path
 import secrets
+import sqlite3
+import threading
+from contextlib import closing
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -16,6 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .config import Settings
 from .judge import ExistingJudge
 from .service import DomainError, LearningService
+from .access import AccessStore
 
 
 class Action(BaseModel):
@@ -39,6 +43,15 @@ class Pause(BaseModel):
     request_id: str = Field(min_length=1, max_length=128)
 
 
+class GuestAccess(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+
+class InvitationLogin(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    invitation_code: str = Field(min_length=1, max_length=256)
+
+
 def create_app(settings: Settings | None = None, service: LearningService | None = None):
     settings = settings or Settings.load()
     if service is None:
@@ -48,16 +61,56 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     # Store only a salted cryptographic hash of the remote pairing credential.
     pairing_file = settings.data_dir / 'pairing.json'
     executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='answer-judge')
+    access_store = AccessStore(settings.data_dir, [{'id': service.topic_id, 'title': service.course['title']}])
+    learning_services = {service.learner_id: service}
+    services_lock = threading.Lock()
+
+    def service_for(learner_id):
+        with services_lock:
+            if learner_id not in learning_services:
+                learning_services[learner_id] = LearningService(
+                    service.course, settings.data_dir, service.judge, learner_id=learner_id)
+            return learning_services[learner_id]
+
+    def identity(request, feature=None):
+        access = access_store.resolve(request.headers.get('x-learning-identity'))
+        access_store.authorize(access, service.topic_id, feature)
+        return access, service_for(access['learner_id'])
+
+    def public_state(state, access):
+        state['access'] = access
+        features = set(access['features'])
+        action_feature = {'mastered': 'learn', 'unmastered': 'learn', 'continue': 'learn', 'submit': 'submit_answer'}
+        if 'review_history' not in features:
+            state['steps'] = [step for step in state['steps'] if step['id'] == state['active_step_id']]
+            state['current_step_id'] = state['active_step_id']
+            for step in state['steps']:
+                step['current'] = True
+                if state['status'] == 'in_progress' and not state['pending_submission_id']:
+                    step['actions'] = (['mastered', 'unmastered'] if step['phase'] == 'choice'
+                                       else ['submit'] if step['phase'] == 'answer' else ['continue'])
+        for step in state['steps']:
+            step['actions'] = [action for action in step['actions'] if action_feature.get(action) in features]
+        return state
+
+    def public_submission(result, access):
+        result['state'] = public_state(result['state'], access)
+        return result
 
     @asynccontextmanager
     async def lifespan(app):
-        service.recover_interrupted()
+        with closing(sqlite3.connect(service.db_path)) as con:
+            learners = [row[0] for row in con.execute('SELECT learner FROM topics WHERE topic=?', (service.topic_id,))]
+        for learner in learners:
+            service_for(learner).recover_interrupted()
         yield
         executor.shutdown(wait=False, cancel_futures=True)
 
     app = FastAPI(title='MathLearningWeb', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.service = service
     app.state.settings = settings
+    app.state.access_store = access_store
+    app.state.learning_services = learning_services
 
     def error(code, message, status=403):
         return JSONResponse({'detail': {'code': code, 'message': message}}, status_code=status)
@@ -101,12 +154,12 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                 return error('origin_forbidden', '此网页来源未获授权。')
             requested_method = request.headers.get('access-control-request-method', '').upper()
             requested_headers = {h.strip().lower() for h in request.headers.get('access-control-request-headers', '').split(',') if h.strip()}
-            if requested_method not in ('GET', 'POST') or requested_headers - {'authorization', 'content-type', 'x-learning-session'}:
+            if requested_method not in ('GET', 'POST') or requested_headers - {'authorization', 'content-type', 'x-learning-session', 'x-learning-identity'}:
                 return deny('preflight_forbidden', '此请求方式未获授权。')
             response = JSONResponse({})
             response.headers.update({'Access-Control-Allow-Origin': origin,
                                      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-                                     'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-Learning-Session',
+                                     'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-Learning-Session, X-Learning-Identity',
                                      'Access-Control-Max-Age': '300', 'Vary': 'Origin'})
             if request.headers.get('access-control-request-private-network') == 'true':
                 response.headers['Access-Control-Allow-Private-Network'] = 'true'
@@ -126,6 +179,18 @@ def create_app(settings: Settings | None = None, service: LearningService | None
             size = request.headers.get('content-length', '0')
             if not size.isdigit() or int(size) > 16384:
                 return deny('request_too_large', '请求过大。', 413)
+            # Enforce permissions before parsing a mutation body; hiding controls is not authorization.
+            action_features = {'/api/choose': 'learn', '/api/continue': 'learn',
+                               '/api/submit': 'submit_answer', '/api/select': 'review_history', '/api/pause': 'pause_topic'}
+            if path in action_features or path == '/api/state' or path.startswith('/api/submissions/'):
+                try:
+                    access = access_store.resolve(request.headers.get('x-learning-identity'))
+                    feature = action_features.get(path)
+                    if path.startswith('/api/submissions/'):
+                        feature = 'submit_answer'
+                    access_store.authorize(access, service.topic_id, feature)
+                except DomainError as exc:
+                    return deny(exc.code, exc.message, exc.status_code)
         response = await call_next(request)
         response.headers['Cache-Control'] = 'no-store'
         response.headers['X-Content-Type-Options'] = 'nosniff'
@@ -152,36 +217,62 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     def session():
         return {'session_token': session_token}
 
+    @app.get('/api/access')
+    def access(request: Request):
+        return access_store.resolve(request.headers.get('x-learning-identity'))
+
+    @app.post('/api/access/guest')
+    def guest(payload: GuestAccess):
+        return access_store.create_guest()
+
+    @app.post('/api/access/login')
+    def login(payload: InvitationLogin):
+        return access_store.login(payload.invitation_code)
+
     @app.get('/api/state')
-    def state():
-        return service.state()
+    def state(request: Request):
+        access, learner = identity(request)
+        return public_state(learner.state(), access)
 
     @app.post('/api/choose')
-    def choose(payload: Choice):
-        return service.choose(payload.model_dump())
+    def choose(payload: Choice, request: Request):
+        access, learner = identity(request, 'learn')
+        return public_state(learner.choose(payload.model_dump()), access)
 
     @app.post('/api/continue')
-    def advance(payload: Action):
-        return service.advance(payload.model_dump())
+    def advance(payload: Action, request: Request):
+        access, learner = identity(request, 'learn')
+        return public_state(learner.advance(payload.model_dump()), access)
 
     @app.post('/api/select')
-    def select(payload: Action):
-        return service.select(payload.model_dump())
+    def select(payload: Action, request: Request):
+        access, learner = identity(request, 'review_history')
+        return public_state(learner.select(payload.model_dump()), access)
 
     @app.post('/api/pause')
-    def pause(payload: Pause):
-        return service.pause(payload.model_dump())
+    def pause(payload: Pause, request: Request):
+        access, learner = identity(request, 'pause_topic')
+        return public_state(learner.pause(payload.model_dump()), access)
 
     @app.post('/api/submit')
-    def submit(payload: Answer):
-        result = service.submit(payload.model_dump())
+    def submit(payload: Answer, request: Request):
+        access, learner = identity(request, 'submit_answer')
+        result = learner.submit(payload.model_dump())
         if result['status'] == 'pending':
-            executor.submit(service.process_submission, result['submission_id'])
-        return result
+            executor.submit(learner.process_submission, result['submission_id'])
+        return public_submission(result, access)
 
     @app.get('/api/submissions/{submission_id}')
-    def submission(submission_id: str):
-        return service.submission(submission_id)
+    def submission(submission_id: str, request: Request):
+        access, learner = identity(request, 'submit_answer')
+        result = learner.submission(submission_id)
+        if 'review_history' not in access['features']:
+            with closing(learner._connect()) as con:
+                row = con.execute('SELECT step FROM submissions WHERE id=? AND learner=? AND topic=?',
+                                  (submission_id, learner.learner_id, learner.topic_id)).fetchone()
+            if not row or row['step'] != result['state']['active_step_id']:
+                raise DomainError('feature_forbidden', '当前账号没有使用此功能的权限。', 403)
+        return public_submission(result, access)
 
     app.mount('/', StaticFiles(directory=Path(__file__).resolve().parent.parent / 'web', html=True), name='web')
     return app

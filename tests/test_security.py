@@ -42,10 +42,16 @@ class APISecurityAcceptanceTests(unittest.TestCase):
         response = self.client.get("/api/session", headers={"Origin": self.origin})
         self.assertEqual(response.status_code, 200)
         self.token = response.json()["session_token"]
+        response = self.client.post("/api/access/guest", json={}, headers={
+            "Origin": self.origin, "X-Learning-Session": self.token,
+        })
+        self.assertEqual(response.status_code, 200)
+        self.identity_token = response.json()["identity_token"]
 
     @property
     def local_headers(self):
-        return {"Origin": self.origin, "X-Learning-Session": self.token}
+        return {"Origin": self.origin, "X-Learning-Session": self.token,
+                "X-Learning-Identity": self.identity_token}
 
     def state(self):
         response = self.client.get("/api/state", headers=self.local_headers)
@@ -123,6 +129,7 @@ class APISecurityAcceptanceTests(unittest.TestCase):
             self.assertNotIn(self.token, response.text)
         response = self.client.get("/api/state", headers={
             "Origin": self.allowed_origin, "Authorization": f"Bearer {self.credential}",
+            "X-Learning-Identity": self.identity_token,
         })
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers["access-control-allow-origin"], self.allowed_origin)
@@ -189,15 +196,16 @@ class APISecurityAcceptanceTests(unittest.TestCase):
 
     def test_http_has_no_unlock_endpoint(self):
         response = self.client.post("/api/pause", json={"request_id": str(uuid.uuid4())}, headers=self.local_headers)
-        self.assertEqual(response.status_code, 200)
-        paused = response.json()
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["detail"]["message"], "该功能需注册账号才能使用")
+        baseline = self.state()
         for path in ["/api/unlock", "/api/admin/unlock", "/api/resume"]:
             with self.subTest(path=path):
                 response = self.client.post(path, json={"request_id": str(uuid.uuid4())}, headers=self.local_headers)
                 self.assertIn(response.status_code, {404, 405})
-        self.assertEqual(self.state(), paused)
+        self.assertEqual(self.state(), baseline)
 
-    def test_api_schedules_judge_without_blocking_pause_or_reapplying_late_result(self):
+    def test_api_judging_keeps_guest_pause_denial_responsive(self):
         started, release = threading.Event(), threading.Event()
 
         def blocking_judge(*args):
@@ -219,8 +227,9 @@ class APISecurityAcceptanceTests(unittest.TestCase):
             began = time.monotonic()
             response = self.client.post("/api/pause", json={"request_id": str(uuid.uuid4())}, headers=self.local_headers)
             self.assertLess(time.monotonic() - began, 2)
-            self.assertEqual(response.status_code, 200)
-            self.assertEqual(response.json()["status"], "paused")
+            self.assertEqual(response.status_code, 403)
+            self.assertEqual(response.json()["detail"]["message"], "该功能需注册账号才能使用")
+            self.assertEqual(self.state()["pending_submission_id"], submitted["submission_id"])
         finally:
             release.set()
         deadline = time.monotonic() + 3
@@ -229,9 +238,9 @@ class APISecurityAcceptanceTests(unittest.TestCase):
             if result["status"] != "pending":
                 break
             time.sleep(0.02)
-        self.assertEqual(result["status"], "discarded")
-        self.assertEqual(self.state()["status"], "paused")
-        self.assertIsNone(self.state()["modules"][0]["mastery"])
+        self.assertEqual(result["status"], "judged")
+        self.assertEqual(self.state()["status"], "in_progress")
+        self.assertEqual(self.state()["modules"][0]["mastery"], 4)
 
     def test_static_page_has_security_headers_and_no_course_or_pairing_secrets(self):
         response = self.client.get("/")

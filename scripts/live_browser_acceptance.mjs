@@ -14,13 +14,18 @@ await fs.mkdir(destination, {recursive:true});
 const chrome = process.env.CHROME_EXECUTABLE || path.join(os.homedir(), 'AppData/Local/Google/Chrome/Application/chrome.exe');
 const browser = await chromium.launch({executablePath:chrome, headless:true});
 const page = await browser.newPage({viewport:{width:1100,height:1000}, deviceScaleFactor:1});
+let identityToken = null;
+page.on('request', request => {
+  if (request.url().startsWith(base)) identityToken = request.headers()['x-learning-identity'] || identityToken;
+});
 page.on('pageerror', error => report.errors.push(String(error)));
 page.setDefaultTimeout(20000);
 async function state() {
-  return page.evaluate(async () => {
+  assert.ok(identityToken, 'Guest identity must be established by the page');
+  return page.evaluate(async identityToken => {
     const {session_token} = await (await fetch('/api/session')).json();
-    return (await fetch('/api/state', {headers:{'X-Learning-Session':session_token}})).json();
-  });
+    return (await fetch('/api/state', {headers:{'X-Learning-Session':session_token, 'X-Learning-Identity':identityToken}})).json();
+  }, identityToken);
 }
 function active(s) {return s.steps.find(x=>x.id===s.active_step_id);}
 async function shot(name) {
@@ -69,6 +74,11 @@ try {
   assert.equal(await page.locator('.exampleExplanation').count(),0);
   const initial = await state();
   assert.equal(initial.steps.length,1,'QA data must be pristine');
+  assert.equal(initial.access.role, 'guest');
+  assert.equal(initial.access.features.includes('pause_topic'), false);
+  await page.locator('#pauseButton').click();
+  await page.getByText('该功能需注册账号才能使用', {exact:true}).first().waitFor();
+  assert.equal((await state()).revision, initial.revision);
   assert.equal(await page.locator('mjx-container svg').count()>0,true);
   await shot('01-example');
   await page.getByRole('button',{name:'已掌握，试着作答',exact:true}).click();
