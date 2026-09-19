@@ -5,14 +5,21 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 if ($Repository -notmatch '^[A-Za-z0-9-]+/[A-Za-z0-9_.-]+$') { throw 'Invalid repository name.' }
-$expected = @('.nojekyll','app.js','favicon.svg','index.html','styles.css')
+$expected = @('.nojekyll','app.js','deployment.json','favicon.svg','index.html','styles.css')
 $files = @(Get-ChildItem -LiteralPath $ExportDirectory -File -Force)
 if (@(Compare-Object ($expected | Sort-Object) ($files.Name | Sort-Object)).Count -ne 0) { throw 'Unexpected files in static publication directory.' }
-foreach ($name in $expected | Where-Object { $_ -ne '.nojekyll' }) {
+foreach ($name in $expected | Where-Object { $_ -notin @('.nojekyll', 'deployment.json') }) {
     $sourceHash = (Get-FileHash -LiteralPath (Join-Path $PSScriptRoot ('web\' + $name)) -Algorithm SHA256).Hash
     $exportHash = (Get-FileHash -LiteralPath (Join-Path $ExportDirectory $name) -Algorithm SHA256).Hash
     if ($sourceHash -ne $exportHash) { throw ('Static export is stale: ' + $name) }
 }
+$deployment = Get-Content -LiteralPath (Join-Path $ExportDirectory 'deployment.json') -Raw | ConvertFrom-Json -AsHashtable
+if (@(Compare-Object @('api_origin') @($deployment.Keys)).Count -ne 0) { throw 'Deployment configuration must contain only api_origin.' }
+$apiUri = $null
+if (-not [uri]::TryCreate($deployment.api_origin, [UriKind]::Absolute, [ref]$apiUri) -or
+    $apiUri.Scheme -ne 'https' -or $apiUri.UserInfo -or $apiUri.Query -or $apiUri.Fragment -or
+    $deployment.api_origin -ne $apiUri.GetLeftPart([UriPartial]::Authority) -or
+    $deployment.api_origin -match '[\s*\\]') { throw 'Publication requires one exact HTTPS API origin without credentials or a path.' }
 New-Item -Path $EvidenceDirectory -ItemType Directory -Force | Out-Null
 function Invoke-Api([string]$Method, [string]$Endpoint, $Body = $null) {
     $arguments = @('api','--method',$Method,$Endpoint,'-H','Accept: application/vnd.github+json','-H','X-GitHub-Api-Version: 2022-11-28')
@@ -67,6 +74,6 @@ if ($pageExit -eq 0) {
     if (($pageRaw -join '') -notmatch '"status"\s*:\s*"404"|"message"\s*:\s*"Not Found"') { throw 'Unable to inspect Pages state.' }
     $pages = Invoke-Api POST ('repos/' + $Repository + '/pages') @{source=@{branch=$branch;path='/'};build_type='legacy'}
 }
-$receipt = @{repository=$Repository;visibility='public';branch=$branch;commit=$published.sha;url=$pages.html_url;status='submitted';files=$expected;includes_course_data=$false}
+$receipt = @{repository=$Repository;visibility='public';branch=$branch;commit=$published.sha;url=$pages.html_url;api_origin=$deployment.api_origin;status='submitted';files=$expected;includes_course_data=$false}
 $receipt | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $EvidenceDirectory 'deployment.json') -Encoding utf8
 $receipt | ConvertTo-Json -Depth 5

@@ -45,7 +45,6 @@ button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke
 .identityAction { color: var(--ma-blue); white-space: nowrap; }
 .textButton { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 3px; background: transparent; color: var(--ma-blue); padding: 8px 2px; font-size: 13px; line-height: 1.5; }
 .textButton:hover { color: #084f85; text-decoration: underline; text-underline-offset: 3px; }
-.settingsButton { color: #747474; font-size: 12px; }
 .lesson { margin: 35px 0 70px; outline: 0; }
 .eyebrow { margin: 0 0 5px; font-size: 10px; font-weight: 700; letter-spacing: .14em; color: #868686; }
 .lessonTitle { margin: 0 0 13px; color: var(--ma-navy); font-size: 26px; line-height: 1.35; font-weight: 700; }
@@ -175,14 +174,14 @@ mjx-container[jax="SVG"] text { font-family: "Microsoft YaHei", sans-serif; }
 .completionRow { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 13px 0; border-top: 1px solid #ededed; }
 .completionRowTitle { font-size: 13px; color: var(--ma-navy); }
 .completionRow .mastery strong { font-size: 21px; }
-.settingsDialog { width: min(480px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); border: 1px solid #d4d9de; border-radius: 5px; padding: 27px; color: var(--ma-ink); box-shadow: 0 12px 44px #182b3c26; }
-.settingsDialog::backdrop { background: #10243638; }
+.identityDialog { width: min(480px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); border: 1px solid #d4d9de; border-radius: 5px; padding: 27px; color: var(--ma-ink); box-shadow: 0 12px 44px #182b3c26; }
+.identityDialog::backdrop { background: #10243638; }
 .dialogHeading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 13px; }
 .dialogHeading h2 { font-size: 18px; color: var(--ma-navy); margin: 0; }
 .iconButton { padding: 0; border: 0; background: transparent; font-size: 25px; color: #878787; line-height: 1; width: 28px; height: 28px; }
 .dialogIntro { font-size: 13px; color: #777; margin: 0 0 23px; }
-.settingsDialog label { display: block; font-size: 13px; font-weight: 700; color: var(--ma-navy); margin: 19px 0 7px; }
-.settingsDialog input { width: 100%; border: 1px solid #bdc7cf; border-radius: 3px; padding: 9px 11px; background: #fff; font-size: 13px; color: var(--ma-ink); }
+.identityDialog label { display: block; font-size: 13px; font-weight: 700; color: var(--ma-navy); margin: 19px 0 7px; }
+.identityDialog input { width: 100%; border: 1px solid #bdc7cf; border-radius: 3px; padding: 9px 11px; background: #fff; font-size: 13px; color: var(--ma-ink); }
 .fieldHint { font-size: 11px; color: #828282; margin: 7px 0 0; line-height: 1.65; }
 .fieldError { font-size: 12px; color: #a44735; margin: 15px 0 0; }
 .dialogActions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 26px; }
@@ -222,7 +221,7 @@ mjx-container[jax="SVG"] text { font-family: "Microsoft YaHei", sans-serif; }
   .choiceActions > button { flex: 1; padding: 9px 10px; font-size: 13px; white-space: nowrap; }
   .lessonFooter { font-size: 10px; }
   .moduleResult { padding: 12px; }
-  .settingsDialog { padding: 22px; }
+  .identityDialog { padding: 22px; }
   .reviewNotice { align-items: flex-start; }
   .pauseHint { font-size: 10px; }
   .pageButton { padding: 7px 12px; }
@@ -233,7 +232,7 @@ mjx-container[jax="SVG"] text { font-family: "Microsoft YaHei", sans-serif; }
   *, *::before, *::after { animation-duration: 1.7s !important; transition: none !important; scroll-behavior: auto !important; }
 }
 @media print {
-  .appHeader, .lessonToolbar, .historySidebar, .historyDrawerToggle, .historyScrim, .appLayout::before, .reviewNotice, .learningActions, .stepNavigation, .lessonFooter, .notice, .settingsDialog, .waiting { display: none !important; }
+  .appHeader, .lessonToolbar, .historySidebar, .historyDrawerToggle, .historyScrim, .appLayout::before, .reviewNotice, .learningActions, .stepNavigation, .lessonFooter, .notice, .identityDialog, .waiting { display: none !important; }
   .appLayout, .appLayout.historyCollapsed { display: block; padding: 0; }
   .pageShell { max-width: none; margin: 0; }
   .lesson { margin: 0; }

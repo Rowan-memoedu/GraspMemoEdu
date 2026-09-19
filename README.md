@@ -2,13 +2,21 @@
 
 本机数学学习网站。已完成并验收逐块学习、真实 MathAnswerJudge 判题、练习补题、模块评分、暂停、管理解锁和进度恢复。当前导入「数字化为字母」：6 个 Example、每模块 15 道 Practice，合计 96 道题。
 
-公开入口：[数学学习](https://amymiller76717-sudo.github.io/MathLearningWeb-Pages/)。页面连接当前电脑的本机服务；课程、答案、学习记录和邀请码资料仍保存在本机，源码主仓库保持私有。
+公开入口：[数学学习](https://amymiller76717-sudo.github.io/MathLearningWeb-Pages/)。其他电脑、手机可直接打开，自动进入游客模式，无需填写服务地址、配对码或授予本地网络权限。后端仍运行在当前电脑，通过免费 Cloudflare 临时隧道接入；课程、答案、学习记录和邀请码资料仍保存在本机，源码主仓库保持私有。
 
 游客模式默认可学习、提交答案和回看内容；主动暂停会提示「该功能需注册账号才能使用」。邀请码账号和按账号开放 Topic、功能的框架已接入；本轮按要求只验收游客使用，不进行账号登录使用验收。
 
 ## 打开与启动
 
 网址：[http://127.0.0.1:8767](http://127.0.0.1:8767)。只在本机可用，判题需要联网。本机 8765 已由 AnkiConnect 使用，本项目使用 8767。
+
+公开服务使用下面的入口。它复用已有隧道；隧道失效后取得新地址、更新本机配置并发布到同一个学习网址。整个过程在本机完成：
+
+```powershell
+pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Start-PublicLearning.ps1'
+```
+
+电脑须保持联网且不休眠。隧道工具位于 `D:/Applications/cloudflared/cloudflared.exe`；日志和运行记录位于 `D:/AppData/MathLearningWeb/runtime/tunnel`。仅停止公开入口可运行 `Stop-PublicLearning.ps1`，不会停止本机服务或删除记录。更新后端代码时，可使用 `Start-PublicLearning.ps1 -RestartBackend`。
 
 ```powershell
 pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Start-Learning.ps1'
@@ -119,21 +127,23 @@ node scripts/inspect_page.mjs
 
 真实全流程复现需在**单独的、未开始的验收数据目录**启动服务，再运行 `node scripts/live_browser_acceptance.mjs <本机验收网址> <新结果目录> <课程JSON路径>`。该脚本真实调用判题，会消耗测试进度及 API 用量，不能对学习者正式进度运行。
 
-详细结果：[验收报告](D:/Artifacts/MathLearningWeb/验收报告.md)。71 项规则、内容、安全和游客测试全部通过；另通过 13 项游客页面检查。真实游客完成了 8 次实际判题及完整课程路径；公开 HTTPS 页面另行验证连接、判题、翻页和断线恢复。账号只进行语法、命令帮助与代码检查，未创建或登录账号。测试框架仍提示 HTTPX 接口弃用警告；当前固定版本正常通过，不影响服务运行。
+公网流程使用 `Start-PublicLearning.ps1 -DataDirectory '<独立验收目录>' -Port 8768 -SkipPublish`，然后运行 `node scripts/verify_published_page.mjs <HTTPS页面> <HTTPS接口origin> <新结果目录> <课程JSON路径>`。该检查不模拟网络、不授予本地网络权限、不关闭浏览器安全限制。最后可加 `read-only`，仅新建独立游客、读取与刷新，不提交学习操作。
+
+既有结果：[验收报告](D:/Artifacts/MathLearningWeb/验收报告.md)。本次公网验收记录位于 `D:/Artifacts/MathLearningWeb/public-internet`。浏览器验收使用独立 Chrome 上下文，不修改用户浏览器的学习记录；真实判题仅在独立验收数据目录执行。账号只进行语法、命令帮助与代码检查，未创建或登录账号。测试框架仍提示 HTTPX 接口弃用警告；当前固定版本正常通过，不影响服务运行。
 
 ## 打开公开页面
 
-公开页面仅含 HTML、JS、CSS、图标和 `.nojekyll`。初次使用，在页面「连接设置」中填入 `http://127.0.0.1:8767`，配对凭据读取本机 `D:/AppData/MathLearningWeb/pairing-code.txt`。Chrome 询问本地网络访问权限时选择允许。配对码仅存当前标签页会话；它用于连接本机服务，与账号登录的邀请码分开。
+公开页面仅含 HTML、JS、CSS、图标、`.nojekyll` 和只含 `api_origin` 的 `deployment.json`。连接配置由发布时写入，网页没有配置入口。服务不可用时只显示提示和重试。游客身份在切换后端网址时会先到新后端验证，成功后迁移；连接错误不会清除旧身份或悄悄创建替代身份。
 
-前端发布仓库为 `amymiller76717-sudo/MathLearningWeb-Pages`，与私有源码仓库独立。正式服务已允许来源 `https://amymiller76717-sudo.github.io`。需要轮换配对码时执行 `Manage-Learning.ps1 pair --origin 'https://amymiller76717-sudo.github.io'` 并保存命令返回值；新增来源须重启本机学习服务。
+前端发布仓库为 `amymiller76717-sudo/MathLearningWeb-Pages`，与私有源码仓库独立。正式服务只允许已配置网页来源及自身公开来源。`settings.json` 的 `public_api_origin` 指定精确公开 HTTPS 地址；隧道默认保留 Host，后端据此识别公开请求。本机仍只监听 `127.0.0.1`，不开放路由器或局域网入站端口。
 
 发布更新时，先导出到新的构建目录，再传给发布脚本。脚本验证导出与源码一致、检查远端完整文件清单，遇到额外文件会停止：
 
 ```powershell
-pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' export-web --output '<新的构建目录>'
+pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' export-web --output '<新的构建目录>' --api-origin '<本机配置中的公开HTTPS地址>'
 pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Publish-Frontend.ps1' -ExportDirectory '<新的构建目录>'
 ```
 
-后端校验精确 Host、来源、传输凭据和学习者身份；CORS 只开放已配置来源，管理解锁与账号授权仅在本机命令入口执行。真实 GitHub HTTPS 页面到本机服务的 Chrome 流程已通过，使用正常本地网络权限，没有关闭浏览器安全检查。参见 [Chrome 官方说明](https://developer.chrome.com/blog/local-network-access/) 和 [FastAPI CORS 文档](https://fastapi.tiangolo.com/tutorial/cors/)。
+公开后端校验精确 Host、来源和学习者身份，不再要求访客共享配对码。每位访客仍按身份隔离进度，Topic 和功能授权由后端执行；管理解锁与账号授权仅在本机命令入口。请求正文上限 16 KiB，游客创建每分钟最多 20 次、邀请码请求每分钟最多 10 次、新判题每位学习者每分钟最多 12 次；全局最多 8 个在途判题。达到限制返回 429，未接受的请求不计入作答。公开健康检查不返回本机实例标识，公开入口不提供本机会话或管理接口。
 
-当前部署仍依赖这台电脑的本机后端，手机或其他电脑的 localhost 不会连接到这里。复习调度、XP、云后端和管理员网页不在本轮范围内。
+免费入口用于测试，无需 Cloudflare 账号或自有域名；临时隧道重建会更换后端地址，重新运行公开启动入口可更新网页配置。Cloudflare 不为 Quick Tunnel 提供可用性保证，后续可替换为独立服务器，保持前端学习网址。参见 [Cloudflare 官方 Quick Tunnel 说明](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/)。复习调度、XP、云服务器迁移和管理员网页不在本轮范围内。

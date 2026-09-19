@@ -35,10 +35,6 @@
           <span id="identityName">游客</span>
           <span class="identityAction" id="identityAction">邀请码登录</span>
         </button>
-        <button class="textButton settingsButton" id="settingsButton" type="button" aria-haspopup="dialog">
-          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14"/><path d="M7 3v4M13 8v4M8 13v4"/></svg>
-          连接设置
-        </button>
         </div>
       </header>
 
@@ -82,7 +78,7 @@
       </div>
     </div>
 
-    <dialog id="identityDialog" class="settingsDialog identityDialog" aria-labelledby="identityTitle">
+    <dialog id="identityDialog" class="identityDialog" aria-labelledby="identityTitle">
       <form id="identityForm">
         <div class="dialogHeading">
           <h2 id="identityTitle">邀请码登录</h2>
@@ -101,26 +97,6 @@
       </form>
     </dialog>
 
-    <dialog id="settingsDialog" class="settingsDialog" aria-labelledby="settingsTitle">
-      <form id="settingsForm">
-        <div class="dialogHeading">
-          <h2 id="settingsTitle">连接学习服务</h2>
-          <button id="closeSettingsButton" class="iconButton" type="button" aria-label="关闭连接设置">×</button>
-        </div>
-        <p class="dialogIntro">课程和学习进度保存在这台电脑的学习服务中。</p>
-        <label for="apiAddress">学习服务地址</label>
-        <input id="apiAddress" type="url" inputmode="url" placeholder="留空使用当前页面的服务" autocomplete="off" spellcheck="false">
-        <p class="fieldHint">本机页面可留空；从 GitHub Pages 打开时，填写本机服务地址，例如 http://127.0.0.1:8767。</p>
-        <label for="pairingCredential">配对凭据</label>
-        <input id="pairingCredential" type="password" autocomplete="off" spellcheck="false" placeholder="跨站连接时填写">
-        <p class="fieldHint">仅在当前标签页的会话中保存，不会写入网页或公开站点。</p>
-        <p id="settingsError" class="fieldError" role="alert" hidden></p>
-        <div class="dialogActions">
-          <button id="cancelSettingsButton" class="secondaryButton" type="button">取消</button>
-          <button class="primaryButton" type="submit">连接并保存</button>
-        </div>
-      </form>
-    </dialog>
     <div id="announcer" class="srOnly" aria-live="polite" aria-atomic="true"></div>
     <noscript><p class="noScript">请启用浏览器的 JavaScript，以加载课程、保存进度和提交答案。</p></noscript>
   </body>

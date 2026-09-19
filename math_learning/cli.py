@@ -201,6 +201,7 @@ def main():
     pair.add_argument('--origin', required=True, help='Exact HTTPS origin, without a path')
     export = sub.add_parser('export-web')
     export.add_argument('--output', type=Path, required=True)
+    export.add_argument('--api-origin', default='', help='固定 HTTPS 后端地址；留空用于本机同源页面')
     account_create = sub.add_parser('account-create', help='由本机管理者创建账号，并仅显示一次邀请码')
     account_create.add_argument('--name', required=True, help='账号显示名称')
     account_create.add_argument('--topics', help='逗号分隔的 Topic 标识；默认当前已配置的全部 Topic')
@@ -255,14 +256,18 @@ def main():
             credential, salt = secrets.token_urlsafe(32), secrets.token_hex(16)
             (settings.data_dir / 'pairing.json').write_text(json.dumps({'salt': salt, 'digest': hashlib.sha256((salt + credential).encode()).hexdigest()}), encoding='utf-8')
             config = {'course_path': str(settings.course_path), 'judge_project': str(settings.judge_project),
-                      'port': settings.port, 'allowed_origins': origins}
+                      'port': settings.port, 'allowed_origins': origins,
+                      'public_api_origin': settings.public_api_origin}
             (settings.data_dir / 'settings.json').write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding='utf-8')
             print('请将下面的本机配对码输入你信任的学习网页；不要发给他人。新增来源需重启学习服务后生效。')
             print(credential)
         elif args.command == 'export-web':
+            if args.api_origin:
+                Settings(public_api_origin=args.api_origin)
             if args.output.exists():
                 raise DomainError('export_exists', '导出目标必须是新目录。', 422)
             shutil.copytree(Path(__file__).resolve().parent.parent / 'web', args.output)
+            (args.output / 'deployment.json').write_text(json.dumps({'api_origin': args.api_origin}, indent=2) + '\n', encoding='utf-8')
             (args.output / '.nojekyll').write_text('', encoding='utf-8')
             output({'static_export': str(args.output), 'published': False, 'contains_course_or_credentials': False})
     except (DomainError, FileNotFoundError, ValueError) as exc:

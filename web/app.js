@@ -43,7 +43,13 @@ function content(html) {
   return node;
 }
 
-let apiBase = storageRead(localStorage, "api-base", "");
+let apiBase = "";
+let publicMode = false;
+let deploymentReady = false;
+let deploymentPromise = null;
+let legacyScopes = [];
+let legacyCurrentIdentities = [];
+let legacyGuestIdentities = [];
 let sessionToken = null;
 let sessionPromise = null;
 let identityToken = "";
@@ -76,12 +82,9 @@ const identityKey = () => `identity:${scope()}`;
 const guestIdentityKey = () => `guest-identity:${scope()}`;
 const learnerScope = () => access?.learner_id || state?.learner_id || "pending";
 const recordKey = () => `submission:${scope()}:${learnerScope()}`;
-const credentialKey = () => `pairing:${scope()}`;
 const draftKey = (step) => `draft:${scope()}:${learnerScope()}:${state.course_version}:${step.attempt_id || state.attempt_id}:${step.id}`;
-identityToken = storageRead(localStorage, identityKey(), "");
 const can = (feature) => Boolean(access?.features?.includes(feature));
 const identityFailure = (error) => error.status === 401 && ["identity_required", "invalid_identity"].includes(error.code);
-const sameOrigin = () => !apiBase || new URL(apiBase).origin === window.location.origin;
 const selectedStep = () => state?.steps?.find((step) => step.id === state.current_step_id)
   || state?.steps?.find((step) => step.current)
   || state?.steps?.find((step) => step.id === state.active_step_id);
@@ -109,22 +112,72 @@ class ApiError extends Error {
   }
 }
 
+async function ensureDeployment() {
+  if (deploymentReady) return;
+  if (!deploymentPromise) {
+    const pending = (async () => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), STATE_TIMEOUT);
+      try {
+        const response = await fetch(new URL("./deployment.json", import.meta.url), { cache: "no-store", credentials: "same-origin", redirect: "error", signal: controller.signal });
+        if (!response.ok) throw new Error("deployment_unavailable");
+        const deployment = await response.json();
+        if (typeof deployment?.api_origin !== "string") throw new Error("deployment_invalid");
+        const configured = deployment.api_origin.trim();
+        let origin = "";
+        if (configured) {
+          const url = new URL(configured);
+          if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash || url.pathname !== "/") throw new Error("deployment_invalid");
+          origin = url.origin;
+        }
+        // Previous connection values are migration sources only, never API routing.
+        const oldAddress = storageRead(localStorage, "api-base", "");
+        const lastOrigin = storageRead(localStorage, "last-api-origin", "");
+        const candidates = [window.location.origin];
+        for (const source of [oldAddress, lastOrigin].filter(Boolean)) {
+          try {
+            const old = new URL(source);
+            if (["http:", "https:"].includes(old.protocol) && !old.username && !old.password) candidates.unshift(old.origin);
+          } catch { /* Invalid old configuration is never used for a request. */ }
+        }
+        legacyScopes = [...new Set(candidates)];
+        legacyCurrentIdentities = [...new Set(legacyScopes.map((source) => storageRead(localStorage, `identity:${source}`, "")).filter(Boolean))];
+        legacyGuestIdentities = [...new Set(legacyScopes.map((source) => storageRead(localStorage, `guest-identity:${source}`, "")).filter(Boolean))];
+        apiBase = origin;
+        publicMode = Boolean(configured);
+        identityToken = storageRead(localStorage, identityKey(), "");
+        deploymentReady = true;
+      } catch (error) {
+        throw new ApiError("服务暂不可用，请稍后重试。", 0, error.message === "deployment_invalid" ? "deployment_invalid" : "deployment_unavailable");
+      } finally { clearTimeout(timer); }
+    })();
+    deploymentPromise = pending;
+    pending.finally(() => { if (deploymentPromise === pending) deploymentPromise = null; }).catch(() => {});
+  }
+  await deploymentPromise;
+}
+
+function retireLegacyConnection() {
+  // Remember the scope only after this service has verified the learning identity.
+  storageWrite(localStorage, "last-api-origin", scope());
+  storageWrite(localStorage, "api-base", null);
+  for (const source of legacyScopes) storageWrite(sessionStorage, `pairing:${source}`, null);
+  legacyCurrentIdentities = [];
+  legacyGuestIdentities = [];
+}
+
 async function request(path, { method = "GET", body, bootstrap = false, timeout = REQUEST_TIMEOUT, reauthenticated = false, skipIdentity = false, suppressIdentity = false, identityOverride } = {}) {
+  if (!deploymentReady) await ensureDeployment();
   if (!bootstrap && !skipIdentity) await ensureIdentity();
   const generation = connectionGeneration;
   const base = apiBase;
-  const local = sameOrigin();
+  const local = !publicMode;
   if (!bootstrap && local && !sessionToken) await ensureSession();
-  if (generation !== connectionGeneration) throw new ApiError("连接设置已更新，请重试。", 0, "connection_changed");
+  if (generation !== connectionGeneration) throw new ApiError("服务连接已更新，请重试。", 0, "connection_changed");
   const headers = { Accept: "application/json" };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (!bootstrap) {
     if (local) headers["X-Learning-Session"] = sessionToken;
-    else {
-      const credential = storageRead(sessionStorage, credentialKey(), "");
-      if (!credential) throw new ApiError("请先在连接设置中填写本机服务的配对凭据。", 401, "pairing_required");
-      headers.Authorization = `Bearer ${credential}`;
-    }
     const currentIdentity = identityOverride ?? identityToken;
     if (!suppressIdentity && currentIdentity) headers["X-Learning-Identity"] = currentIdentity;
   }
@@ -142,7 +195,7 @@ async function request(path, { method = "GET", body, bootstrap = false, timeout 
     });
     let result;
     try { result = await response.json(); } catch {
-      throw new ApiError("此地址没有返回学习服务的数据，请检查连接设置。", response.status, "invalid_response");
+      throw new ApiError("服务暂时无法返回学习内容，请稍后重试。", response.status, "invalid_response");
     }
     if (!response.ok) {
       const detail = result?.detail;
@@ -151,14 +204,15 @@ async function request(path, { method = "GET", body, bootstrap = false, timeout 
         await ensureSession();
         return request(path, { method, body, timeout, skipIdentity, suppressIdentity, identityOverride, reauthenticated: true });
       }
-      throw new ApiError(typeof detail === "string" ? detail : detail?.message || "操作未完成，请刷新学习进度后重试。", response.status, detail?.code || "request_error");
+      const message = ["authentication_required", "invalid_session"].includes(detail?.code) ? "服务暂不可用，请稍后重试。" : typeof detail === "string" ? detail : detail?.message || "操作未完成，请刷新学习进度后重试。";
+      throw new ApiError(message, response.status, detail?.code || "request_error");
     }
-    if (generation !== connectionGeneration) throw new ApiError("连接设置已更新。", 0, "connection_changed");
+    if (generation !== connectionGeneration) throw new ApiError("服务连接已更新。", 0, "connection_changed");
     return result;
   } catch (error) {
     if (error instanceof ApiError) throw error;
     if (error.name === "AbortError") throw new ApiError("等待服务响应超时。已保存的进度不会丢失，请重试。", 0, "timeout");
-    throw new ApiError("暂时无法连接学习服务。请确认本机服务已启动，再重新连接。", 0, "network_error");
+    throw new ApiError("服务暂不可用，请稍后重试。", 0, "network_error");
   } finally { clearTimeout(timer); }
 }
 
@@ -176,7 +230,7 @@ async function ensureSession() {
 }
 
 function rememberIdentity(result) {
-  if (!result?.identity_token || !result.access?.role || !Array.isArray(result.access.features) || !Array.isArray(result.access.topics)) throw new ApiError("身份信息不完整，请重新连接。", 0, "invalid_access");
+  if (!result?.identity_token || !["guest", "account"].includes(result.access?.role) || !Array.isArray(result.access.features) || !Array.isArray(result.access.topics)) throw new ApiError("服务暂不可用，请稍后重试。", 0, "invalid_access");
   identityToken = result.identity_token;
   access = result.access;
   storageWrite(localStorage, identityKey(), identityToken);
@@ -184,36 +238,49 @@ function rememberIdentity(result) {
   renderIdentity();
 }
 
-async function obtainGuestIdentity() {
+async function obtainGuestIdentity({ createIfMissing = true } = {}) {
+  if (!deploymentReady) await ensureDeployment();
   const savedGuest = storageRead(localStorage, guestIdentityKey(), "");
-  if (savedGuest) {
+  const candidates = [...new Set([savedGuest, ...legacyGuestIdentities].filter(Boolean))];
+  for (const token of candidates) {
     try {
-      const guestAccess = await request("access", { skipIdentity: true, identityOverride: savedGuest, timeout: STATE_TIMEOUT });
-      if (guestAccess.role === "guest") return { identity_token: savedGuest, access: guestAccess };
-      storageWrite(localStorage, guestIdentityKey(), null);
+      const guestAccess = await request("access", { skipIdentity: true, identityOverride: token, timeout: STATE_TIMEOUT });
+      if (guestAccess.role === "guest") return { identity_token: token, access: guestAccess };
     } catch (error) {
       if (!identityFailure(error)) throw error;
-      storageWrite(localStorage, guestIdentityKey(), null);
     }
+    if (storageRead(localStorage, guestIdentityKey()) === token) storageWrite(localStorage, guestIdentityKey(), null);
+    legacyGuestIdentities = legacyGuestIdentities.filter((candidate) => candidate !== token);
   }
+  if (!createIfMissing) return null;
   return request("access/guest", { method: "POST", body: {}, skipIdentity: true, suppressIdentity: true });
 }
 
 async function ensureIdentity() {
+  if (!deploymentReady) await ensureDeployment();
   if (identityToken && access) return;
   if (!identityPromise) {
     const pending = (async () => {
-      if (identityToken) {
+      const candidates = [...new Set([identityToken, ...legacyCurrentIdentities].filter(Boolean))];
+      for (const token of candidates) {
         try {
-          const currentAccess = await request("access", { skipIdentity: true, timeout: STATE_TIMEOUT });
-          rememberIdentity({ identity_token: identityToken, access: currentAccess });
+          const currentAccess = await request("access", { skipIdentity: true, identityOverride: token, timeout: STATE_TIMEOUT });
+          if (currentAccess.role === "account") {
+            const guest = await obtainGuestIdentity({ createIfMissing: false });
+            if (guest) storageWrite(localStorage, guestIdentityKey(), guest.identity_token);
+          }
+          rememberIdentity({ identity_token: token, access: currentAccess });
+          retireLegacyConnection();
           return;
         } catch (error) {
           if (!identityFailure(error)) throw error;
-          forgetInvalidIdentity();
+          if (identityToken === token) forgetInvalidIdentity();
+          legacyCurrentIdentities = legacyCurrentIdentities.filter((candidate) => candidate !== token);
+          legacyGuestIdentities = legacyGuestIdentities.filter((candidate) => candidate !== token);
         }
       }
       rememberIdentity(await obtainGuestIdentity());
+      retireLegacyConnection();
     })();
     identityPromise = pending;
     pending.finally(() => { if (identityPromise === pending) identityPromise = null; }).catch(() => {});
@@ -224,6 +291,8 @@ async function ensureIdentity() {
 function forgetInvalidIdentity() {
   if (storageRead(localStorage, identityKey()) === identityToken) storageWrite(localStorage, identityKey(), null);
   if (storageRead(localStorage, guestIdentityKey()) === identityToken) storageWrite(localStorage, guestIdentityKey(), null);
+  legacyCurrentIdentities = legacyCurrentIdentities.filter((candidate) => candidate !== identityToken);
+  legacyGuestIdentities = legacyGuestIdentities.filter((candidate) => candidate !== identityToken);
   identityToken = "";
   access = null;
 }
@@ -397,24 +466,24 @@ async function refreshState({ quiet = true, force = false } = {}) {
 function renderConnectionNotice() {
   const notice = $("connectionNotice");
   notice.replaceChildren();
-  notice.hidden = !connectionIssue;
+  notice.hidden = !connectionIssue || !state;
   if (state && !connectionIssue) $("saveStatus").textContent = state.pending_submission_id ? "答案已提交，正在判题" : "学习进度已保存";
-  if (!connectionIssue) return;
-  const title = [401, 403].includes(connectionIssue.status) ? "需要重新确认连接" : "学习服务连接中断";
+  if (!connectionIssue || !state) return;
   const p = el("p");
-  p.append(el("strong", "", title));
+  p.append(el("strong", "", "服务暂不可用"));
   notice.append(p, el("p", "", connectionIssue.message));
-  if (state) notice.append(el("p", "", "已显示的内容仍可阅读；重新连接后会同步已保存的进度。"));
+  if (state) notice.append(el("p", "", "已显示的内容仍可阅读，恢复后会同步已保存的进度。"));
   const actions = el("div", "noticeActions");
-  actions.append(button("重新连接", "textButton", () => refreshState({ quiet: false, force: true })), button("连接设置", "textButton", openSettings));
+  actions.append(button("重试", "textButton", () => window.location.reload()));
   notice.append(actions);
-  if (state) $("saveStatus").textContent = "等待重新连接";
+  if (state) $("saveStatus").textContent = "等待服务恢复";
 }
 
 function renderUnavailable() {
   const target = $("loadingState");
-  target.replaceChildren(el("h2", "", "学习服务尚未连接"), el("p", "", "启动本机学习服务后，重新连接即可继续。"));
-  target.append(button("重新连接", "primaryButton", () => refreshState({ quiet: false, force: true })));
+  target.replaceChildren(el("h2", "", "服务暂不可用"), el("p", "", "请稍后重试，已保存的学习进度会为你保留。"));
+  target.append(button("重试", "primaryButton", () => window.location.reload()));
+  $("historyPanel").replaceChildren(el("p", "historyHint", "学习记录将在服务恢复后显示。"));
   target.hidden = false;
 }
 
@@ -1013,53 +1082,6 @@ async function returnToGuest() {
   }
 }
 
-function openSettings() {
-  $("apiAddress").value = apiBase;
-  $("pairingCredential").value = storageRead(sessionStorage, credentialKey(), "");
-  $("settingsError").hidden = true;
-  $("settingsDialog").showModal();
-}
-function normalizeAddress(value) {
-  const trimmed = value.trim();
-  if (!trimmed) return "";
-  let url;
-  try { url = new URL(trimmed); } catch { throw new Error("请输入完整地址，例如 http://127.0.0.1:8767。"); }
-  if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error("请填写不含账号、参数或片段的 HTTP / HTTPS 地址。");
-  if (!["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) && url.origin !== window.location.origin) throw new Error("当前版本仅连接这台电脑的本机学习服务。");
-  if (!["/", "/api", "/api/"].includes(url.pathname)) throw new Error("只需填写服务地址和端口，例如 http://127.0.0.1:8767。");
-  return url.origin === window.location.origin ? "" : url.origin;
-}
-async function saveSettings(event) {
-  event.preventDefault();
-  let address;
-  try { address = normalizeAddress($("apiAddress").value); } catch (error) {
-    $("settingsError").textContent = error.message;
-    $("settingsError").hidden = false;
-    return;
-  }
-  const credential = $("pairingCredential").value.trim();
-  if (address && !credential) {
-    $("settingsError").textContent = "跨站连接需要填写本机服务提供的配对凭据。";
-    $("settingsError").hidden = false;
-    return;
-  }
-  connectionGeneration += 1;
-  stopPolling();
-  apiBase = address;
-  storageWrite(localStorage, "api-base", address || null);
-  storageWrite(sessionStorage, credentialKey(), credential || null);
-  sessionToken = null;
-  sessionPromise = null;
-  identityToken = storageRead(localStorage, identityKey(), "");
-  access = null;
-  identityPromise = null;
-  identityRecoveryAllowed = true;
-  clearLearningView();
-  renderIdentity();
-  $("settingsDialog").close();
-  await start();
-}
-
 async function start() {
   await refreshState({ quiet: false, force: true });
   if (!state) return;
@@ -1076,16 +1098,12 @@ async function start() {
   }
 }
 
-$("settingsButton").addEventListener("click", openSettings);
 $("identityButton").addEventListener("click", openIdentity);
 $("identityForm").addEventListener("submit", loginIdentity);
 $("guestIdentityButton").addEventListener("click", returnToGuest);
 $("closeIdentityButton").addEventListener("click", () => $("identityDialog").close());
 $("cancelIdentityButton").addEventListener("click", () => $("identityDialog").close());
 $("identityDialog").addEventListener("close", () => { $("invitationCode").value = ""; });
-$("settingsForm").addEventListener("submit", saveSettings);
-$("closeSettingsButton").addEventListener("click", () => $("settingsDialog").close());
-$("cancelSettingsButton").addEventListener("click", () => $("settingsDialog").close());
 $("historyButton").addEventListener("click", () => {
   setHistoryOpen(!historyOpen, { focus: true });
 });
@@ -1093,7 +1111,7 @@ $("historyDrawerToggle").addEventListener("click", () => setHistoryOpen(true, { 
 $("historyScrim").addEventListener("click", () => setHistoryOpen(false, { focus: true }));
 narrowLayout.addEventListener("change", () => setHistoryOpen(historyOpen));
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && narrowLayout.matches && historyOpen && !$("settingsDialog").open && !$("identityDialog").open) setHistoryOpen(false, { focus: true });
+  if (event.key === "Escape" && narrowLayout.matches && historyOpen && !$("identityDialog").open) setHistoryOpen(false, { focus: true });
 });
 setHistoryOpen(true);
 $("pauseButton").addEventListener("click", () => {
