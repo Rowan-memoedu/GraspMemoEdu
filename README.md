@@ -116,7 +116,7 @@ node scripts/import_course.mjs 'D:/Artifacts/MathTopicPipeline/数字化为字�
 
 导入器依赖现有 `D:/Caches/MathTopicPdf/node_modules/mathjax-full` 和 Codex Node 运行库中的 marked。可用 `MATH_TOPIC_PDF_RUNTIME`、`CODEX_NODE_MODULES` 覆盖位置。原稿与独立答案表均保留在本机，未提交源码仓库。题面变化须重新准备并审核独立答案表，导入器拒绝旧哈希或未支持的运算结构。
 
-判题使用 `D:/Projects/MathAnswerJudge/math_answer_judge.py` 的既有接口和配置；没有改动其提示词、模型或思考模式。密钥继续从原有后端环境读取。只有当前题面、标准答案和学习者提交被发送给判题服务；网页和日志不包含 API 密钥。
+判题复用 `D:/Projects/MathAnswerJudge/math_answer_judge.py` 的既有接口与提示词，保持不思考模式。网站仅读取独立的 `MATH_JUDGE_API_KEY`、`MATH_JUDGE_BASE_URL`、`MATH_JUDGE_MODEL`，不再回退到 Codex 外包的密钥、模型或配置文件。Windows 用户环境变量优先于继承的进程变量，每次判题重新读取，保存修改后下一次提交即可生效；变量缺失时返回服务不可用，不借用外包配置。接口地址必须是 HTTPS，服务需兼容既有 Chat Completions/JSON 判题请求。只有当前题面、标准答案和学习者提交被发送给判题服务；网页和日志不包含 API 密钥。
 
 ## 验证
 
