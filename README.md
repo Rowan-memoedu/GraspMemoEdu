@@ -38,8 +38,8 @@ pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Stop-Learning.ps1'
 
 ```powershell
 pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' account-list
-pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' account-create --name '<显示名>' --topics digits-to-letters --features learn,submit_answer,review_history,pause_topic
-pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' account-permissions --learner '<account-id>' --topics digits-to-letters --features learn,submit_answer,review_history
+pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' account-create --name '<显示名>' --topics digits-to-letters --features 'learn,submit_answer,review_history,pause_topic'
+pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' account-permissions --learner '<account-id>' --topics digits-to-letters --features 'learn,submit_answer,review_history'
 ```
 
 `account-create` 省略 Topic 和功能参数时默认全部开放；`account-permissions` 省略的字段保持原值，传空字符串可清空该项授权。权限在下一次请求时生效，由后端强制校验。
