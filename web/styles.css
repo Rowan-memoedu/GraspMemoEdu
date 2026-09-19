@@ -10,6 +10,8 @@
   --amber: #86601b;
   font-synthesis: none;
 }
+.guestDemoOption { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; color: #626262; cursor: pointer; }
+.guestDemoOption input { width: 15px; height: 15px; margin: 0; accent-color: #096bb7; }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html { background: #fff; scrollbar-gutter: stable; }

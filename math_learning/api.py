@@ -11,7 +11,7 @@ import threading
 from contextlib import closing
 from urllib.parse import urlsplit
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Query
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
@@ -21,6 +21,9 @@ from .config import Settings
 from .judge import ExistingJudge
 from .service import DomainError, LearningService
 from .access import AccessStore
+from .catalog import Catalog
+from .dashboard import DashboardStore
+from .guide import register_guide_routes
 from .public_limits import BodyLimitMiddleware, PublicLimits, PublicLimitError
 
 
@@ -38,6 +41,7 @@ class Choice(Action):
 
 class Answer(Action):
     answer: str = Field(min_length=1, max_length=2000)
+    elapsed_ms: int | None = Field(default=None, strict=True, ge=0, le=86400000)
 
 
 class Pause(BaseModel):
@@ -54,17 +58,50 @@ class InvitationLogin(BaseModel):
     invitation_code: str = Field(min_length=1, max_length=256)
 
 
+class CourseSelection(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    course_id: str = Field(min_length=1, max_length=128)
+
+
+class ProfileUpdate(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    display_name: str | None = Field(default=None, min_length=1, max_length=100)
+    timezone: str | None = Field(default=None, min_length=1, max_length=100)
+
+
+class Feedback(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    message: str = Field(min_length=1, max_length=4000)
+    course_id: str | None = Field(default=None, min_length=1, max_length=128)
+    topic_id: str | None = Field(default=None, min_length=1, max_length=128)
+    task_id: str | None = Field(default=None, min_length=1, max_length=135)
+    question_id: str | None = Field(default=None, min_length=1, max_length=256)
+
+
+class ServiceCache(dict):
+    """Tuple keys, with the original default-topic lookup kept for local tools."""
+    def __init__(self, default_topic_id):
+        super().__init__()
+        self.default_topic_id = default_topic_id
+
+    def __getitem__(self, key):
+        return super().__getitem__((key, self.default_topic_id) if isinstance(key, str) else key)
+
+
 def create_app(settings: Settings | None = None, service: LearningService | None = None):
     settings = settings or Settings.load()
+    catalog = Catalog.load(settings, service.course if service else None)
     if service is None:
-        course = json.loads(settings.course_path.read_text(encoding='utf-8'))
+        course = catalog.topic(catalog.default_topic_id)
         service = LearningService(course, settings.data_dir, ExistingJudge(settings.judge_project))
     session_token = secrets.token_urlsafe(32)
     # Store only a salted cryptographic hash of the remote pairing credential.
     pairing_file = settings.data_dir / 'pairing.json'
     executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='answer-judge')
-    access_store = AccessStore(settings.data_dir, [{'id': service.topic_id, 'title': service.course['title']}])
-    learning_services = {service.learner_id: service}
+    access_store = AccessStore(settings.data_dir, [{'id': topic['id'], 'title': topic['title']} for topic in catalog.topics.values()])
+    dashboard_store = DashboardStore(catalog, access_store)
+    learning_services = ServiceCache(catalog.default_topic_id)
+    learning_services[(service.learner_id, service.topic_id)] = service
     services_lock = threading.Lock()
     public_limits = PublicLimits()
     admission_lock = threading.Lock()
@@ -73,17 +110,25 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     executor_stopping = threading.Event()
     public_host = urlsplit(settings.public_api_origin).netloc.lower() if settings.public_api_origin else None
 
-    def service_for(learner_id):
+    def service_for(learner_id, topic_id=None):
+        topic_id = topic_id or catalog.default_topic_id
+        key = (learner_id, topic_id)
         with services_lock:
-            if learner_id not in learning_services:
-                learning_services[learner_id] = LearningService(
-                    service.course, settings.data_dir, service.judge, learner_id=learner_id)
-            return learning_services[learner_id]
+            if key not in learning_services:
+                learning_services[key] = LearningService(
+                    catalog.topic(topic_id), settings.data_dir, service.judge, learner_id=learner_id)
+            return learning_services[key]
+
+    def requested_topic(request):
+        topic_id = request.query_params.get('topic_id', catalog.default_topic_id)
+        catalog.topic(topic_id)
+        return topic_id
 
     def identity(request, feature=None):
         access = access_store.resolve(request.headers.get('x-learning-identity'))
-        access_store.authorize(access, service.topic_id, feature)
-        return access, service_for(access['learner_id'])
+        topic_id = requested_topic(request)
+        access_store.authorize(access, topic_id, feature)
+        return access, service_for(access['learner_id'], topic_id)
 
     def public_state(state, access):
         state['access'] = access
@@ -139,9 +184,10 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     @asynccontextmanager
     async def lifespan(app):
         with closing(sqlite3.connect(service.db_path)) as con:
-            learners = [row[0] for row in con.execute('SELECT learner FROM topics WHERE topic=?', (service.topic_id,))]
-        for learner in learners:
-            service_for(learner).recover_interrupted()
+            pairs = con.execute('SELECT learner,topic FROM topics').fetchall()
+        for learner, topic_id in pairs:
+            if topic_id in catalog.topics:
+                service_for(learner, topic_id).recover_interrupted()
         yield
         with admission_lock:
             executor_stopping.set()
@@ -153,6 +199,8 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     app.state.service = service
     app.state.settings = settings
     app.state.access_store = access_store
+    app.state.catalog = catalog
+    app.state.dashboard_store = dashboard_store
     app.state.learning_services = learning_services
     app.state.public_limits = public_limits
 
@@ -215,8 +263,10 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                 response.headers['Vary'] = 'Origin'
             return response
         public_paths = {'/api/health', '/api/access', '/api/access/guest', '/api/access/login',
-                        '/api/state', '/api/choose', '/api/continue', '/api/select', '/api/pause', '/api/submit'}
-        if public and path.startswith('/api/') and path not in public_paths and not path.startswith('/api/submissions/'):
+                        '/api/state', '/api/demo-answer', '/api/choose', '/api/continue', '/api/select', '/api/pause', '/api/submit',
+                        '/api/catalog', '/api/catalog/select', '/api/dashboard', '/api/profile', '/api/feedback', '/api/guide'}
+        task_answers_path = path.startswith('/api/tasks/') and path.endswith('/answers') and path.count('/') == 4
+        if public and path.startswith('/api/') and path not in public_paths and not path.startswith('/api/submissions/') and not task_answers_path:
             return deny('public_endpoint_forbidden', '公网不开放管理操作。')
         if request.method == 'OPTIONS':
             if not origin or origin not in permitted_origins:
@@ -257,14 +307,19 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                     feature = action_features.get(path)
                     if path.startswith('/api/submissions/'):
                         feature = 'submit_answer'
-                    access_store.authorize(access, service.topic_id, feature)
+                    access_store.authorize(access, requested_topic(request), feature)
+                except DomainError as exc:
+                    return deny(exc.code, exc.message, exc.status_code)
+            elif path not in ('/api/access/guest', '/api/access/login'):
+                try:
+                    access_store.resolve(request.headers.get('x-learning-identity'))
                 except DomainError as exc:
                     return deny(exc.code, exc.message, exc.status_code)
         response = await call_next(request)
         response.headers['Cache-Control'] = 'no-store'
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['Referrer-Policy'] = 'no-referrer'
-        response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http://127.0.0.1:* http://localhost:*; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+        response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' http://127.0.0.1:* http://localhost:*; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
         if remote:
             response.headers['Access-Control-Allow-Origin'] = origin
             response.headers['Vary'] = 'Origin'
@@ -312,6 +367,55 @@ def create_app(settings: Settings | None = None, service: LearningService | None
             public_limits.consume('login', public_limits.login_per_minute)
         return access_store.login(payload.invitation_code)
 
+    @app.get('/api/catalog')
+    def course_catalog(request: Request):
+        access = access_store.resolve(request.headers.get('x-learning-identity'))
+        return dashboard_store.catalog_view(access)
+
+    @app.post('/api/catalog/select')
+    def select_course(payload: CourseSelection, request: Request):
+        access = access_store.resolve(request.headers.get('x-learning-identity'))
+        return dashboard_store.select_course(access, payload.course_id)
+
+    @app.get('/api/dashboard')
+    def dashboard(request: Request, course_id: str | None = None, cursor: str | None = None,
+                  limit: int = Query(default=25, ge=1, le=50)):
+        access = access_store.resolve(request.headers.get('x-learning-identity'))
+        return dashboard_store.dashboard(access, course_id, cursor, limit)
+
+    @app.get('/api/tasks/{task_id}/answers')
+    def task_answers(task_id: str, request: Request):
+        access = access_store.resolve(request.headers.get('x-learning-identity'))
+        return dashboard_store.answers(access, task_id)
+
+    @app.get('/api/profile')
+    def profile(request: Request):
+        access = access_store.resolve(request.headers.get('x-learning-identity'))
+        return dashboard_store.profile(access)
+
+    @app.post('/api/profile')
+    def update_profile(payload: ProfileUpdate, request: Request):
+        access = access_store.resolve(request.headers.get('x-learning-identity'))
+        return dashboard_store.update_profile(access, payload.model_dump(exclude_unset=True))
+
+    @app.post('/api/feedback')
+    def feedback(payload: Feedback, request: Request):
+        access = access_store.resolve(request.headers.get('x-learning-identity'))
+        return dashboard_store.save_feedback(access, payload.model_dump())
+
+    @app.get('/api/demo-answer')
+    def demo_answer(request: Request):
+        access, learner = identity(request, 'submit_answer')
+        if access['role'] != 'guest':
+            raise DomainError('feature_forbidden', '体验专用浏览版仅供游客使用。', 403)
+        state = learner.state()
+        step = next((item for item in state['steps'] if item['id'] == state['current_step_id']), None)
+        if (state['status'] != 'in_progress' or state['pending_submission_id'] or not step
+                or step['id'] != state['active_step_id'] or 'submit' not in step['actions']):
+            raise DomainError('demo_answer_unavailable', '当前页面没有可作答的题目。', 409)
+        return {'step_id': step['id'], 'question_id': step['question_id'],
+                'answer': learner.questions[step['question_id']]['reference_answer']}
+
     @app.get('/api/state')
     def state(request: Request):
         access, learner = identity(request)
@@ -340,7 +444,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     @app.post('/api/submit')
     def submit(payload: Answer, request: Request):
         access, learner = identity(request, 'submit_answer')
-        data = payload.model_dump()
+        data = payload.model_dump(exclude_none=True)
         with admission_lock:
             with closing(learner._connect()) as con:
                 old = con.execute('SELECT * FROM submissions WHERE id=?', (data['request_id'],)).fetchone()
@@ -374,5 +478,6 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                 raise DomainError('feature_forbidden', '当前账号没有使用此功能的权限。', 403)
         return public_submission(result, access)
 
+    register_guide_routes(app, settings, access_store)
     app.mount('/', StaticFiles(directory=Path(__file__).resolve().parent.parent / 'web', html=True), name='web')
     return app

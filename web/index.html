@@ -9,11 +9,34 @@
     <title>数学学习</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="./styles.css">
+    <link rel="stylesheet" href="./portal.css">
     <script type="module" src="./app.js"></script>
   </head>
   <body>
-    <a class="skipLink" href="#lessonContent">跳到学习内容</a>
-    <div class="appLayout" id="appLayout">
+    <a class="skipLink" id="skipContent" href="#portalContent">跳到主要内容</a>
+    <header class="topRibbon">
+      <div class="topBarContainer">
+        <a class="portalLogo" href="#/learn" aria-label="数学学习主页"><img src="./favicon.svg" width="34" height="34" alt=""><span>数学学习</span></a>
+        <nav class="mainNavigation" aria-label="主要导航">
+          <a href="#/learn" data-navigation="learn">LEARN</a>
+          <a href="#/courses" data-navigation="courses">COURSES</a>
+          <a href="#/guide" data-navigation="guide">GUIDE</a>
+        </nav>
+        <div class="userMenuHost" id="userMenuHost">
+          <button class="userAvatar" id="userMenuButton" type="button" aria-label="用户菜单" aria-haspopup="true" aria-expanded="false" aria-controls="userMenu">游</button>
+          <div class="userMenu" id="userMenu" hidden>
+            <div class="userMenuIdentity"><strong id="menuDisplayName">游客</strong><span id="menuRole">游客身份</span><label class="guestDemoOption" id="guestDemoOption" hidden><input id="guestDemoCheckbox" type="checkbox"><span>体验专用浏览版</span></label></div>
+            <a href="#/settings">Settings <span>个人设置</span></a>
+            <a href="#/guide">Help <span>使用指南</span></a>
+            <button id="supportButton" type="button">Support <span>站内反馈</span></button>
+            <button class="identityButton" id="identityButton" type="button" aria-haspopup="dialog"><span id="identityAction">邀请码登录</span><span id="identityName" hidden>游客</span></button>
+            <button id="logoutButton" type="button" hidden>Logout <span>切回游客</span></button>
+          </div>
+        </div>
+      </div>
+    </header>
+    <main class="portalShell" id="portalContent" tabindex="-1"><section class="portalLoading" aria-live="polite"><span class="spinner" aria-hidden="true"></span><p>正在读取课程…</p></section></main>
+    <div class="appLayout" id="appLayout" hidden>
       <aside id="historySidebar" class="historySidebar" aria-label="学习记录">
         <button id="historyButton" class="textButton historyButton" type="button" aria-label="收起学习记录" aria-expanded="true" aria-controls="historyPanel">
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 4h12M5 10h12M5 16h12"/><path d="M2 4h.01M2 10h.01M2 16h.01"/></svg>
@@ -28,15 +51,7 @@
       </button>
       <button id="historyScrim" class="historyScrim" type="button" aria-label="收起学习记录" tabindex="-1" hidden></button>
       <div class="pageShell">
-      <header class="appHeader">
-        <span class="appName">数学学习</span>
-        <div class="headerActions">
-        <button class="textButton identityButton" id="identityButton" type="button" aria-haspopup="dialog" aria-label="邀请码登录，当前游客">
-          <span id="identityName">游客</span>
-          <span class="identityAction" id="identityAction">邀请码登录</span>
-        </button>
-        </div>
-      </header>
+      <div class="topicBreadcrumb"><a href="#/learn" id="topicHomeLink">← 返回学习主页</a><button id="topicFeedbackButton" class="textButton" type="button">内容反馈</button></div>
 
       <main class="lesson" id="lessonContent" tabindex="-1">
         <div class="lessonHeading">

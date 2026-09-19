@@ -37,7 +37,7 @@ async function state() {
   }, { api, identityToken });
 }
 async function action(selector, endpoint) {
-  const response = page.waitForResponse(r => r.url() === `${api}/api/${endpoint}` && r.request().method() === 'POST');
+  const response = page.waitForResponse(r => new URL(r.url()).origin === api && new URL(r.url()).pathname === `/api/${endpoint}` && r.request().method() === 'POST');
   await page.locator(selector).click();
   const result = await response;
   assert.equal(result.status(), 200);
@@ -49,8 +49,15 @@ async function screenshot(name) {
 try {
   const response = await page.goto(url, { waitUntil: 'networkidle' });
   assert.equal(response.status(), 200);
-  assert.equal(page.url(), url);
+  assert.equal(page.url().split('#')[0], url.split('#')[0]);
   report.checks.push('Actual HTTPS document and relative assets loaded');
+  await page.locator('.courseChoice').filter({hasText:'再探小学算术'}).waitFor();
+  assert.equal(await page.locator('.mainNavigation a').count(), 3);
+  await screenshot('00-courses');
+  await page.locator('.courseChoice').filter({hasText:'再探小学算术'}).getByRole('button',{name:'Learn',exact:true}).click();
+  await page.locator('.taskToggle').filter({hasText:course.title}).click();
+  await screenshot('00-learn');
+  await page.getByRole('button',{name:'Start',exact:true}).click();
   await page.locator('#courseShell:not([hidden])').waitFor();
   assert.equal(await page.locator('#settingsDialog, #settingsButton, #apiAddress, #pairingCredential').count(), 0);
   let initial = await state();
@@ -113,7 +120,7 @@ try {
     const after = await state();
     assert.equal(after.revision, initial.revision);
     assert.equal(after.current_step_id, initial.current_step_id);
-    assert.deepEqual(report.mutations, []);
+    assert.deepEqual(report.mutations.filter(endpoint => !['/api/profile','/api/catalog/select'].includes(endpoint)), []);
     report.checks.push('Progress inspected without learning writes; revision and selected page unchanged');
   }
   await screenshot('03-final');
@@ -121,6 +128,18 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
   await screenshot('04-mobile');
   report.checks.push('Desktop and mobile layouts fit the viewport');
+  await page.locator('[data-navigation="guide"]').click();
+  await page.locator('#guideBody h2').first().waitFor();
+  assert.equal(await page.locator('#guideBody h2').count(), 2);
+  assert.equal(await page.locator('#guideBody img').count(), 3);
+  for (const picture of await page.locator('#guideBody img').all()) await picture.scrollIntoViewIfNeeded();
+  await page.waitForFunction(() => [...document.querySelectorAll('#guideBody img')].every(image => image.complete && image.naturalWidth > 0));
+  await page.evaluate(() => window.scrollTo(0,0));
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
+  await screenshot('05-mobile-guide');
+  await page.setViewportSize({ width: 1365, height: 1000 });
+  await screenshot('06-guide');
+  report.checks.push('GUIDE renders two sections and three annotated screenshots from the actual public backend');
   assert.deepEqual(report.prohibited_requests, []);
   assert.deepEqual(report.errors, []);
   report.status = 'passed';

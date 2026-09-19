@@ -34,7 +34,7 @@ async function shot(name) {
   report.screenshots.push(file);
 }
 async function next() {
-  const pending = page.waitForResponse(r=>r.url().endsWith('/api/continue') && r.request().method()==='POST');
+  const pending = page.waitForResponse(r=>new URL(r.url()).pathname==='/api/continue' && r.request().method()==='POST');
   await page.getByRole('button', {name:'Continue，继续学习',exact:true}).click();
   const response = await pending;
   assert.equal(response.status(), 200);
@@ -48,7 +48,7 @@ async function answer(value, expected, {reloadPending=false}={}) {
   const before = await state();
   const q = active(before);
   await page.locator('#answerInput').fill(value);
-  const pending = page.waitForResponse(r=>r.url().endsWith('/api/submit') && r.request().method()==='POST');
+  const pending = page.waitForResponse(r=>new URL(r.url()).pathname==='/api/submit' && r.request().method()==='POST');
   await page.locator('#submitButton').click();
   const response = await pending;
   assert.equal(response.status(),200);
@@ -68,7 +68,10 @@ async function answer(value, expected, {reloadPending=false}={}) {
   return after;
 }
 try {
-  await page.goto(base,{waitUntil:'networkidle'});
+  await page.goto(base+'#/courses',{waitUntil:'networkidle'});
+  await page.locator('.courseChoice').filter({hasText:'再探小学算术'}).getByRole('button',{name:'Learn',exact:true}).click();
+  await page.locator('.taskToggle').filter({hasText:course.title}).click();
+  await page.getByRole('button',{name:'Start',exact:true}).click();
   await page.getByRole('button',{name:'已掌握，试着作答',exact:true}).waitFor();
   assert.equal(await page.locator('#answerInput').count(),0);
   assert.equal(await page.locator('.exampleExplanation').count(),0);
@@ -128,6 +131,24 @@ try {
   const overflow = await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth+1);
   assert.equal(overflow,false,'Mobile page must not overflow horizontally');
   await shot('07-mobile-completed');
+  await page.setViewportSize({width:1365,height:1000});
+  await page.locator('[data-navigation="learn"]').click();
+  await page.locator('.coursePercent').filter({hasText:'100%'}).waitFor();
+  await page.locator('button.taskCompleted').filter({hasText:course.title}).click();
+  await page.locator('.answerRecord').first().waitFor();
+  assert.equal(await page.locator('.answerRecord').count(),report.events.length);
+  assert.equal(await page.locator('.answerOutcome.incorrect').count(),1);
+  assert.equal(await page.locator('.answerOutcome.correct').count(),report.events.length-1);
+  assert.equal(await page.locator('.answerMetadata').filter({hasText:'Elapsed —'}).count(),0);
+  assert.equal(await page.locator('.answerMetadata').filter({hasText:'Difficulty —'}).count(),report.events.length);
+  const answerUrl=page.url();
+  await shot('08-completed-answer-history');
+  await page.reload({waitUntil:'networkidle'});
+  await page.locator('.answerRecord').first().waitFor();
+  assert.equal(page.url(),answerUrl);
+  await page.locator('.taskBackButton').click();
+  await page.locator('button.taskCompleted').waitFor();
+  report.dashboard_history={progress:100,answers:report.events.length,incorrect:1,unknown_difficulty:true,elapsed_recorded:true,deep_link_refreshed:true};
   assert.deepEqual(report.errors,[]);
   report.status='passed';
   report.final_state={status:s.status,modules:s.modules,introduction_read:s.introduction_read};

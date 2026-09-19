@@ -64,6 +64,9 @@ class LearningService:
                     topic TEXT NOT NULL, module TEXT NOT NULL, attempt TEXT);
             ''')
         with self._transaction() as con:
+            columns = {item['name'] for item in con.execute('PRAGMA table_info(submissions)')}
+            if 'elapsed_ms' not in columns:
+                con.execute('ALTER TABLE submissions ADD COLUMN elapsed_ms INTEGER')
             row = con.execute('SELECT version FROM topics WHERE learner=? AND topic=?', self.key).fetchone()
             if row and row['version'] != course['version']:
                 raise DomainError('course_version_mismatch', '课程版本已变化，原进度已保留。请先由管理者处理版本迁移。')
@@ -160,6 +163,9 @@ class LearningService:
         return step
 
     def _fingerprint(self, kind, payload):
+        # Absent timing has the same fingerprint as every pre-timing client.
+        if kind == 'submit' and payload.get('elapsed_ms') is None:
+            payload = {key: value for key, value in payload.items() if key != 'elapsed_ms'}
         return hashlib.sha256(encode({'kind': kind, 'payload': payload}).encode()).hexdigest()
 
     def _request(self, con, kind, payload):
@@ -265,6 +271,7 @@ class LearningService:
                 if choice not in ('mastered', 'unmastered'):
                     raise DomainError('invalid_choice', '请选择已掌握或未掌握。', 422)
                 attempt['example_result'] = {'choice': choice, 'correct': None}
+                state.setdefault('started_at', now())
                 if choice == 'mastered':
                     step['phase'] = 'answer'
                 else:
@@ -295,6 +302,7 @@ class LearningService:
         index = next((i for i, m in enumerate(self.course['modules']) if m['id'] not in completed), None)
         if index is None:
             state['status'] = 'completed'
+            state.setdefault('completed_at', now())
             self._add_step(state, kind='completion', phase='completed')
         else:
             self._new_attempt(state, index)
@@ -383,6 +391,9 @@ class LearningService:
         submission_id = payload.get('request_id')
         if not isinstance(submission_id, str) or not submission_id.strip() or len(submission_id) > 128:
             raise DomainError('invalid_request', '缺少有效提交标识。', 422)
+        elapsed_ms = payload.get('elapsed_ms')
+        if elapsed_ms is not None and (type(elapsed_ms) is not int or not 0 <= elapsed_ms <= 86400000):
+            raise DomainError('invalid_elapsed_time', '作答用时必须为 0 至 86400000 毫秒的整数。', 422)
         fingerprint = self._fingerprint('submit', payload)
         with self._transaction() as con:
             state = self._load(con)
@@ -404,9 +415,11 @@ class LearningService:
             if old:
                 con.execute("UPDATE submissions SET status='pending',correct=NULL,reason=NULL,updated_at=? WHERE id=?", (now(), submission_id))
             else:
-                con.execute('INSERT INTO submissions VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                con.execute('''INSERT INTO submissions
+                            (id,learner,topic,attempt,step,question,answer,fingerprint,status,correct,reason,created_at,updated_at,elapsed_ms)
+                            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                             (submission_id, *self.key, state['attempt_id'], step['id'], step['question_id'],
-                             answer, fingerprint, 'pending', None, None, now(), now()))
+                             answer, fingerprint, 'pending', None, None, now(), now(), elapsed_ms))
             state['pending_submission_id'] = submission_id
             self._save(con, state)
             row = con.execute('SELECT * FROM submissions WHERE id=?', (submission_id,)).fetchone()

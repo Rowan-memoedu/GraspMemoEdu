@@ -73,6 +73,10 @@ let pageMessage = null;
 let renderedKey = null;
 let mathStyleVersion = null;
 let channel = null;
+let portal = null;
+let topicId = null;
+let pageActive = document.hasFocus();
+let answerClock = { key: null, total: 0, started: null };
 let historyOpen = true;
 const narrowLayout = window.matchMedia("(max-width: 1000px)");
 const drafts = new Map();
@@ -81,8 +85,8 @@ const scope = () => apiBase || window.location.origin;
 const identityKey = () => `identity:${scope()}`;
 const guestIdentityKey = () => `guest-identity:${scope()}`;
 const learnerScope = () => access?.learner_id || state?.learner_id || "pending";
-const recordKey = () => `submission:${scope()}:${learnerScope()}`;
-const draftKey = (step) => `draft:${scope()}:${learnerScope()}:${state.course_version}:${step.attempt_id || state.attempt_id}:${step.id}`;
+const recordKey = () => `submission:${scope()}:${learnerScope()}:${topicId}`;
+const draftKey = (step) => `draft:${scope()}:${learnerScope()}:${topicId}:${state.course_version}:${step.attempt_id || state.attempt_id}:${step.id}`;
 const can = (feature) => Boolean(access?.features?.includes(feature));
 const identityFailure = (error) => error.status === 401 && ["identity_required", "invalid_identity"].includes(error.code);
 const selectedStep = () => state?.steps?.find((step) => step.id === state.current_step_id)
@@ -326,7 +330,8 @@ async function switchIdentity(result) {
   rememberIdentity(result);
   $("identityDialog").close();
   $("invitationCode").value = "";
-  await start();
+  if (portal) await portal.identityChanged();
+  else if (topicId) await start();
 }
 
 async function recoverIdentity(error) {
@@ -366,6 +371,9 @@ function renderIdentity() {
   $("invitationCode").disabled = identityBusy;
   $("closeIdentityButton").disabled = identityBusy;
   $("cancelIdentityButton").disabled = identityBusy;
+  $("guestDemoOption").hidden = access?.role !== "guest";
+  $("guestDemoCheckbox").checked = access?.role === "guest" && storageRead(localStorage, demoPreferenceKey(), "false") === "true";
+  portal?.setIdentity(access);
 }
 
 function featureMessage(feature) {
@@ -409,9 +417,51 @@ function saveDraft(step, answer) {
   drafts.set(key, answer);
   storageWrite(sessionStorage, key, answer);
 }
+function demoPreferenceKey() { return `guest-demo:${scope()}:${learnerScope()}`; }
+let demoFillGeneration = 0;
+async function prefillDemoAnswer(step) {
+  const input = $("answerInput");
+  if (access?.role !== "guest" || !$("guestDemoCheckbox").checked || !input || !step?.actions?.includes("submit")) return;
+  const key = draftKey(step);
+  if (input.value || drafts.has(key) || storageRead(sessionStorage, key) !== null) return;
+  const generation = ++demoFillGeneration, token = identityToken, topic = topicId;
+  try {
+    const result = await topicRequest("demo-answer", { timeout: STATE_TIMEOUT });
+    if (generation !== demoFillGeneration || !input.isConnected || identityToken !== token || topicId !== topic
+        || access?.role !== "guest" || !$("guestDemoCheckbox").checked || result.step_id !== step.id
+        || result.question_id !== step.question_id || input.value || drafts.has(key)
+        || storageRead(sessionStorage, key) !== null || typeof result.answer !== "string") return;
+    input.value = result.answer;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  } catch { if (input.isConnected && generation === demoFillGeneration && $("guestDemoCheckbox").checked) announce("标准答案暂时无法填入，可重新勾选或自行作答。"); }
+}
 function announce(message) { $("announcer").textContent = message; }
 function notifyOtherTabs() {
-  channel?.postMessage({ type: "state-changed", scope: scope(), learner_id: learnerScope(), revision: state?.revision });
+  channel?.postMessage({ type: "state-changed", scope: scope(), learner_id: learnerScope(), topic_id: topicId, revision: state?.revision });
+  portal?.progressChanged();
+}
+
+function topicRequest(path, options) {
+  if (!topicId) throw new ApiError("请先选择学习内容。", 0, "topic_required");
+  return request(`${path}${path.includes("?") ? "&" : "?"}topic_id=${encodeURIComponent(topicId)}`, options);
+}
+
+function syncAnswerClock(forcePause = false) {
+  const now = performance.now();
+  if (answerClock.started !== null) answerClock.total += Math.max(0, now - answerClock.started);
+  if (answerClock.key) storageWrite(sessionStorage, answerClock.key, String(Math.round(answerClock.total)));
+  const step = selectedStep();
+  const key = topicId && step && ["example", "practice"].includes(step.kind)
+    ? `elapsed:${scope()}:${learnerScope()}:${topicId}:${step.attempt_id || state.attempt_id}:${step.id}` : null;
+  if (key !== answerClock.key) {
+    const saved = Number(key && storageRead(sessionStorage, key, "0"));
+    answerClock = { key, total: Number.isFinite(saved) ? Math.max(0, saved) : 0, started: null };
+  }
+  const running = !forcePause && key && pageActive && !document.hidden && !$("appLayout").hidden
+    && state.status === "in_progress" && step.id === state.active_step_id && ["choice", "answer"].includes(step.phase)
+    && !state.pending_submission_id && !actionBusy && !pauseBusy;
+  answerClock.started = running ? now : null;
+  return Math.min(86400000, Math.round(answerClock.total));
 }
 
 function applyState(next, { force = false, announceChange = false } = {}) {
@@ -439,11 +489,11 @@ function applyState(next, { force = false, announceChange = false } = {}) {
 }
 
 async function refreshState({ quiet = true, force = false } = {}) {
-  if (stateBusy) return;
+  if (!topicId || stateBusy) return;
   const generation = connectionGeneration;
   stateBusy = true;
   try {
-    const next = await request("state", { timeout: STATE_TIMEOUT });
+    const next = await topicRequest("state", { timeout: STATE_TIMEOUT });
     if (!quiet) pageMessage = null;
     applyState(next, { force });
     renderConnectionNotice();
@@ -497,7 +547,7 @@ async function mutate(path, payload, { pause = false } = {}) {
   pageMessage = null;
   renderBusy();
   try {
-    const next = await request(path, { method: "POST", body: payload });
+    const next = await topicRequest(path, { method: "POST", body: payload });
     applyState(next, { force: true, announceChange: true });
     notifyOtherTabs();
     if (path === "pause") announce("已暂时终止学习，等待管理者解锁。");
@@ -542,7 +592,7 @@ async function submitAnswer(event) {
   saveDraft(step, input.value);
   const existing = readJSON(recordKey());
   const payload = existing?.payload?.step_id === step.id && existing.payload.attempt_id === state.attempt_id && existing.payload.answer === answer
-    ? existing.payload : mutationPayload({ answer });
+    ? existing.payload : mutationPayload({ answer, elapsed_ms: syncAnswerClock() });
   await sendSubmission(payload);
 }
 
@@ -551,6 +601,7 @@ async function sendSubmission(payload) {
   if (!allowFeature("submit_answer")) return;
   const generation = connectionGeneration;
   actionBusy = true;
+  syncAnswerClock();
   submissionError = null;
   pageMessage = null;
   retryAction = null;
@@ -558,7 +609,7 @@ async function sendSubmission(payload) {
   persistSubmission(record);
   renderBusy();
   try {
-    const result = await request("submit", { method: "POST", body: payload });
+    const result = await topicRequest("submit", { method: "POST", body: payload });
     if (generation !== connectionGeneration) return;
     handleSubmission(result, record);
     notifyOtherTabs();
@@ -639,7 +690,7 @@ async function pollSubmission(id) {
   const generation = connectionGeneration;
   let delay = 1000;
   try {
-    const result = await request(`submissions/${encodeURIComponent(id)}`, { timeout: STATE_TIMEOUT });
+    const result = await topicRequest(`submissions/${encodeURIComponent(id)}`, { timeout: STATE_TIMEOUT });
     if (generation !== connectionGeneration) return;
     handleSubmission(result);
   } catch (error) {
@@ -694,6 +745,7 @@ function render() {
   const module = state.modules.find((item) => item.id === step?.module_id);
   const moduleIndex = state.modules.indexOf(module);
   $("footerPosition").textContent = moduleIndex >= 0 ? `模块 ${moduleIndex + 1} / ${state.modules.length}` : "";
+  syncAnswerClock();
 }
 
 function renderPageNotice() {
@@ -796,7 +848,7 @@ function setHistoryOpen(open, { focus = false } = {}) {
   $("historyDrawerToggle").setAttribute("aria-expanded", String(open));
   $("historyPanel").hidden = !open;
   $("historyScrim").hidden = !open || !narrowLayout.matches;
-  document.body.classList.toggle("historyDrawerOpen", open && narrowLayout.matches);
+  document.body.classList.toggle("historyDrawerOpen", !$("appLayout").hidden && open && narrowLayout.matches);
   if (focus && narrowLayout.matches) (open ? $("historyButton") : $("historyDrawerToggle")).focus({ preventScroll: true });
 }
 
@@ -871,7 +923,7 @@ function renderStep(step) {
   }
   if (step.phase === "unmastered") {
     const area = el("div", "learningActions");
-    area.append(el("p", "choiceNotice", "已选择未掌握。点击 Continue，开始阅读相关讲解。"));
+    area.append(el("p", "choiceNotice", "已选择未掌握。点击下一页，开始阅读相关讲解。"));
     target.append(area);
   }
   if (actions.includes("submit")) target.append(answerForm(step));
@@ -882,6 +934,7 @@ function renderStep(step) {
     target.append(wait);
   }
   renderStepNavigation(target, step, actions);
+  void prefillDemoAnswer(step);
   if (focus && previousId === step.id && $("answerInput")) {
     const input = $("answerInput");
     input.focus({ preventScroll: true });
@@ -911,7 +964,7 @@ function renderStepNavigation(target, step, actions) {
   }
   const area = el("div", "continueRow");
   if (actions.includes("continue")) {
-    const continueButton = button("Continue", "primaryButton", () => mutate("continue", mutationPayload()));
+    const continueButton = button("下一页", "primaryButton", () => mutate("continue", mutationPayload()));
     continueButton.setAttribute("aria-label", "Continue，继续学习");
     area.append(continueButton);
   } else if (actions.includes("submit")) {
@@ -1016,6 +1069,7 @@ function renderCompletion(target) {
 
 function renderBusy() {
   if (!state) return;
+  syncAnswerClock();
   const disabled = actionBusy || pauseBusy;
   for (const element of $("stepCard").querySelectorAll("button, textarea")) {
     const feature = element.closest(".historyPagination") ? "review_history" : element.id === "submitButton" || element.closest(".answerForm") ? "submit_answer" : "learn";
@@ -1111,6 +1165,12 @@ async function start() {
 }
 
 $("identityButton").addEventListener("click", openIdentity);
+$("guestDemoCheckbox").addEventListener("change", () => {
+  demoFillGeneration += 1;
+  if (access?.role !== "guest") return;
+  storageWrite(localStorage, demoPreferenceKey(), String($("guestDemoCheckbox").checked));
+  if ($("guestDemoCheckbox").checked) void prefillDemoAnswer(selectedStep());
+});
 $("identityForm").addEventListener("submit", loginIdentity);
 $("guestIdentityButton").addEventListener("click", returnToGuest);
 $("closeIdentityButton").addEventListener("click", () => $("identityDialog").close());
@@ -1123,22 +1183,58 @@ $("historyDrawerToggle").addEventListener("click", () => setHistoryOpen(true, { 
 $("historyScrim").addEventListener("click", () => setHistoryOpen(false, { focus: true }));
 narrowLayout.addEventListener("change", () => setHistoryOpen(historyOpen));
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && narrowLayout.matches && historyOpen && !$("identityDialog").open) setHistoryOpen(false, { focus: true });
+  if (event.key === "Escape" && narrowLayout.matches && historyOpen && !document.querySelector("dialog[open]")) setHistoryOpen(false, { focus: true });
 });
 setHistoryOpen(true);
 $("pauseButton").addEventListener("click", () => {
   if (state?.status === "in_progress" && !pauseBusy) mutate("pause", { request_id: uuid() }, { pause: true });
 });
-window.addEventListener("focus", () => { if (!actionBusy && !pauseBusy) refreshState(); });
+window.addEventListener("focus", () => { pageActive = true; syncAnswerClock(); if (!actionBusy && !pauseBusy) refreshState(); });
+window.addEventListener("blur", () => { pageActive = false; syncAnswerClock(); });
+window.addEventListener("pagehide", () => syncAnswerClock(true));
 window.addEventListener("online", () => refreshState({ force: true }));
-document.addEventListener("visibilitychange", () => { if (!document.hidden && !actionBusy && !pauseBusy) refreshState(); });
+document.addEventListener("visibilitychange", () => { syncAnswerClock(); if (!document.hidden && !actionBusy && !pauseBusy) refreshState(); });
 try {
   channel = new BroadcastChannel("math-learning-web-progress");
   channel.onmessage = (event) => {
-    if (event.data?.type === "state-changed" && event.data.scope === scope() && event.data.learner_id === learnerScope() && event.data.revision > (state?.revision ?? -1) && !actionBusy && !pauseBusy) refreshState();
+    if (event.data?.type === "state-changed" && event.data.scope === scope() && event.data.learner_id === learnerScope()) {
+      portal?.progressChanged();
+      if (event.data.topic_id === topicId && event.data.revision > (state?.revision ?? -1) && !actionBusy && !pauseBusy) refreshState();
+    }
   };
 } catch { /* Periodic state reads also keep separate windows synchronized. */ }
 setInterval(() => {
   if (!document.hidden && !actionBusy && !pauseBusy && !state?.pending_submission_id) refreshState();
 }, 5000);
-start();
+$("skipContent").addEventListener("click", (event) => { event.preventDefault(); (topicId ? $("lessonContent") : $("portalContent")).focus(); });
+$("topicFeedbackButton").addEventListener("click", () => portal?.showFeedback({ topic_id: topicId, question_id: selectedStep()?.question_id }));
+
+function leaveTopic() {
+  syncAnswerClock(true);
+  connectionGeneration += 1;
+  topicId = null;
+  clearLearningView();
+  $("appLayout").hidden = true;
+  document.body.classList.remove("historyDrawerOpen", "topicPage");
+}
+
+async function openTopic(id) {
+  leaveTopic();
+  topicId = id;
+  $("appLayout").hidden = false;
+  document.body.classList.add("topicPage");
+  setHistoryOpen(historyOpen);
+  await start();
+}
+
+const { initPortal } = await import("./portal.js");
+portal = initPortal({
+  request: async (path, options) => {
+    try { return await request(path, options); }
+    catch (error) { if (identityFailure(error)) await recoverIdentity(error); throw error; }
+  },
+  getAccess: () => access,
+  getApiOrigin: () => apiBase || window.location.origin,
+  openIdentity, returnToGuest, openTopic, leaveTopic,
+});
+await portal.start();

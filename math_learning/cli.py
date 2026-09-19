@@ -15,20 +15,22 @@ import zipfile
 from .config import Settings
 from .service import DomainError, LearningService
 from .access import AccessStore, FEATURES
+from .catalog import Catalog
 
 
 def output(data):
     print(json.dumps(data, ensure_ascii=False, indent=2))
 
 
-def make_service(settings, learner='local'):
-    course = json.loads(settings.course_path.read_text(encoding='utf-8'))
+def make_service(settings, learner='local', topic_id=None):
+    catalog = Catalog.load(settings)
+    course = catalog.topic(topic_id or catalog.default_topic_id)
     return LearningService(course, settings.data_dir, learner_id=learner)
 
 
 def make_access_store(settings):
-    course = json.loads(settings.course_path.read_text(encoding='utf-8'))
-    return AccessStore(settings.data_dir, [{'id': course['id'], 'title': course['title']}])
+    catalog = Catalog.load(settings)
+    return AccessStore(settings.data_dir, [{'id': topic['id'], 'title': topic['title']} for topic in catalog.topics.values()])
 
 
 def split_permissions(value):
@@ -84,6 +86,9 @@ def server_lock(root):
 
 
 def backup_bundle(settings, destination=None):
+    if settings.catalog_path.exists() or settings.guide_path.exists():
+        from .site_backup import backup_site
+        return backup_site(settings, destination)
     service = make_service(settings)
     timestamp = datetime.now().strftime('%Y%m%d-%H%M%S-%f')
     destination = Path(destination or settings.data_dir / 'backups' / f'learning-{timestamp}.zip')
@@ -140,6 +145,10 @@ def restore_bundle(backup, destination):
     if destination.exists():
         raise DomainError('restore_exists', '恢复目标必须是尚不存在的新目录，避免覆盖现有数据。', 422)
     with zipfile.ZipFile(backup) as archive:
+        if json.loads(archive.read('manifest.json')).get('format') == 2:
+            from .site_backup import restore_site
+            return restore_site(backup, destination)
+    with zipfile.ZipFile(backup) as archive:
         names = archive.namelist()
         if (len(names) != len(set(names)) or not {'course.json', 'learning.sqlite3', 'manifest.json'} <= set(names)
                 or set(names) - {'course.json', 'learning.sqlite3', 'manifest.json', 'source.md', 'answers.json'}
@@ -186,6 +195,7 @@ def main():
     serve.add_argument('--instance-id')
     status = sub.add_parser('status')
     status.add_argument('--learner', default='local')
+    status.add_argument('--topic', help='指定 Topic；默认目录中的首个 Topic')
     status.add_argument('--list-learners', action='store_true', help='列出游客/账号标识和进度，供精确解锁使用')
     unlock = sub.add_parser('unlock')
     unlock.add_argument('--learner', required=True)
@@ -207,6 +217,8 @@ def main():
     account_create.add_argument('--topics', help='逗号分隔的 Topic 标识；默认当前已配置的全部 Topic')
     account_create.add_argument('--features', help='逗号分隔的功能权限；默认 ' + ','.join(FEATURES))
     sub.add_parser('account-list', help='查看账号及当前 Topic/功能权限，不显示邀请码')
+    feedback = sub.add_parser('feedback-list', help='仅在本机查看收到的支持与内容纠错反馈')
+    feedback.add_argument('--limit', type=int, default=30)
     permissions = sub.add_parser('account-permissions', help='设置账号权限；下一次 API 请求生效')
     permissions.add_argument('--learner', required=True, help='account-list 返回的账号 learner_id')
     permissions.add_argument('--topics', help='逗号分隔 Topic 标识；空字符串清空；省略则保留')
@@ -231,10 +243,10 @@ def main():
             if args.list_learners:
                 output({'learners': learner_statuses(settings)})
             else:
-                state = make_service(settings, args.learner).state()
+                state = make_service(settings, args.learner, args.topic).state()
                 output({k: state[k] for k in ['topic_id', 'learner_id', 'status', 'revision', 'pause', 'modules']})
         elif args.command == 'unlock':
-            state = make_service(settings, args.learner).unlock(args.topic, args.module, args.pause_event)
+            state = make_service(settings, args.learner, args.topic).unlock(args.topic, args.module, args.pause_event)
             output({'status': state['status'], 'attempt_id': state['attempt_id'], 'pause': state['pause']})
         elif args.command == 'backup':
             output(backup_bundle(settings, args.output))
@@ -243,6 +255,15 @@ def main():
                 args.name, split_permissions(args.topics), split_permissions(args.features)))
         elif args.command == 'account-list':
             output({'accounts': make_access_store(settings).list_principals(accounts_only=True)})
+        elif args.command == 'feedback-list':
+            database = settings.data_dir / 'learning.sqlite3'
+            rows = []
+            if database.exists():
+                with closing(sqlite3.connect(database)) as con:
+                    con.row_factory = sqlite3.Row
+                    if con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='feedback'").fetchone():
+                        rows = [dict(row) for row in con.execute('SELECT * FROM feedback ORDER BY created_at DESC,id DESC LIMIT ?', (max(1, min(500, args.limit)),))]
+            output({'feedback': rows})
         elif args.command == 'account-permissions':
             if args.topics is None and args.features is None:
                 raise DomainError('permissions_required', '请指定 --topics 或 --features；空字符串表示清空。', 422)
@@ -257,7 +278,8 @@ def main():
             (settings.data_dir / 'pairing.json').write_text(json.dumps({'salt': salt, 'digest': hashlib.sha256((salt + credential).encode()).hexdigest()}), encoding='utf-8')
             config = {'course_path': str(settings.course_path), 'judge_project': str(settings.judge_project),
                       'port': settings.port, 'allowed_origins': origins,
-                      'public_api_origin': settings.public_api_origin}
+                      'public_api_origin': settings.public_api_origin,
+                      'catalog_path': str(settings.catalog_path), 'guide_path': str(settings.guide_path)}
             (settings.data_dir / 'settings.json').write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding='utf-8')
             print('请将下面的本机配对码输入你信任的学习网页；不要发给他人。新增来源需重启学习服务后生效。')
             print(credential)

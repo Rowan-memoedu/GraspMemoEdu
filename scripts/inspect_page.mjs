@@ -13,7 +13,7 @@ try {
   page.on('pageerror',e=>report.errors.push(String(e)));
   for(const [name,width,height] of [['desktop',1100,1000],['mobile',390,844]]){
     await page.setViewportSize({width,height});
-    await page.goto(base,{waitUntil:'networkidle'});
+    await page.goto(base.replace(/#.*$/,'')+'#/topic/digits-to-letters',{waitUntil:'networkidle'});
     await page.locator('#courseShell:not([hidden])').waitFor();
     report.views.push({name,...await page.evaluate(()=>({title:document.title,math:document.querySelectorAll('mjx-container svg').length,
       mathErrors:document.querySelectorAll('[data-mml-node="merror"]').length,overflow:document.documentElement.scrollWidth>innerWidth+1,

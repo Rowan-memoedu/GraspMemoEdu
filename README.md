@@ -1,10 +1,12 @@
 # MathLearningWeb
 
-本机数学学习网站。已完成并验收逐块学习、真实 MathAnswerJudge 判题、练习补题、模块评分、暂停、管理解锁和进度恢复。当前导入「数字化为字母」：6 个 Example、每模块 15 道 Practice，合计 96 道题。
+本机数学学习网站。顶部提供 LEARN 学习主页、COURSES 课程页和 GUIDE 使用指南。当前课程为「再探小学算术」，包含 Topic「数字化为字母」：6 个 Example、每模块 15 道 Practice，合计 96 道题。原有逐块学习、真实 MathAnswerJudge 判题、练习补题、模块评分、暂停与恢复继续使用同一份进度。
 
 公开入口：[数学学习](https://amymiller76717-sudo.github.io/MathLearningWeb-Pages/)。其他电脑、手机可直接打开，自动进入游客模式，无需填写服务地址、配对码或授予本地网络权限。后端仍运行在当前电脑，通过免费 Cloudflare 临时隧道接入；课程、答案、学习记录和邀请码资料仍保存在本机，源码主仓库保持私有。
 
 游客模式默认可学习、提交答案和回看内容；主动暂停会提示「该功能需注册账号才能使用」。邀请码账号和按账号开放 Topic、功能的框架已接入；本轮按要求只验收游客使用，不进行账号登录使用验收。
+
+游客菜单中的「体验专用浏览版」默认关闭。勾选后，后续尚未填写的答案框会预填当前题的标准答案，可修改后正常提交判题；已有草稿与手动输入不会被覆盖。它便于体验页面流程，不代替实际学习或测评。
 
 ## 打开与启动
 
@@ -34,11 +36,35 @@ pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Stop-Learning.ps1'
 ## 学习方式
 
 1. Example 先选「已掌握」或「未掌握」。已掌握才出现答案框，支持分数、数值和等价表达式。
-2. Example 答对立即得到熟练度 4，点击 Continue 进入下个模块。首次答错或选择未掌握，经 Continue 插入 Introduction，然后返回该题解析。
-3. 练习初始 2 道；错误量 1、2、3 时总量扩为 3、5、7 道。完成后熟练度为 3、2、1；两道全对为 4。每题判定后必须点击 Continue。
+2. Example 答对立即得到熟练度 4，点击右下角「下一页」进入下个模块。首次答错或选择未掌握，经下一页插入 Introduction，然后返回该题解析。
+3. 练习初始 2 道；错误量 1、2、3 时总量扩为 3、5、7 道。完成后熟练度为 3、2、1；两道全对为 4。每题判定后必须点击下一页。
 4. 第 4 次练习错误暂停整个 Topic。具有对应权限的账号也可点击「暂时终止学习」，下方说明为「未掌握前置知识，感到困难，可选择后延该模块」。游客点击时提示注册，不会提交暂停请求；后端同样禁止游客主动暂停。自动暂停规则保持有效。
-5. 学习记录默认在页面左侧展开，宽度约 309px，手机抽屉按屏幕宽度限制。右下角的 Submit、Continue、下一页共用一个位置，按当前状态显示；上一页、下一页仅回看已开启页面，没有对应页面时不显示按钮。
+5. 学习记录默认在页面左侧展开，宽度约 309px，手机抽屉按屏幕宽度限制。右下角的 Submit、下一页共用一个位置，按当前状态显示；上一页、下一页回看已开启页面，当前学习页的下一页可在满足条件后推进，没有对应操作时不显示按钮。
 6. 游客进度按浏览器身份分开保存，刷新后恢复；切换账号时使用独立进度。清除浏览器本地存储会失去原游客入口，管理员仍可通过学习者 ID 查看本机记录。
+
+## 课程主页与指南
+
+首次进入可在 COURSES 点击 Learn 选择课程；选择会随当前身份保存。LEARN 显示课程进度、章节状态、真实前置关系图、待学习任务和按日期分组的已完成任务。任务展开后点击 Start 或 Resume 进入 Topic。课程进度按模块完成数计算，缺少预计完成日期、难度或旧作答用时的数据显示「—」。目前只产生真实 Lesson 任务，不生成复习、测验、XP 或推荐分值。
+
+点击已完成任务可回看各模块的实际作答、结果和解析。新作答记录页面可见且处于答题状态的累计用时，不计判题等待；旧记录不补造用时。更早记录支持分页、失败重试和去重。页面使用 `#/learn`、`#/courses`、`#/guide`、`#/topic/<id>` 等地址，支持刷新、浏览器前进和后退，也适用于 GitHub Pages 子路径。
+
+用户菜单的 Settings 仅修改显示名和时区，Help 打开 GUIDE，Support 提交站内反馈。题目记录中的 Report a content error 会附上课程与题目位置。反馈保存于本机数据库，管理员查看：
+
+```powershell
+pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' feedback-list --limit 30
+```
+
+GUIDE 的唯一正文来源为 `D:/AppData/MathLearningWeb/guide/guide.md`，配图放在同级 `assets` 中。正文分为「极简使用流程」与「系统工作原理」，配图采用本网站真实截图与箭头、红框标注。在本机修改 Markdown 或配图后，打开的 GUIDE 约每 5 秒检查更新并保留滚动位置；重新进入或刷新同样读取最新内容。缺失、空白或渲染错误会如实提示。网页没有指南或服务器配置编辑入口。
+
+指南支持标准 Markdown、表格、代码和 `$...$`、`\(...\)`、`$$...$$`、`\[...\]` 数学公式。仅正文明确引用、位于指南目录内的图片/PDF/TXT/CSV 可通过只读资源入口访问；源文件、目录外文件、脚本和主动 TeX 不会发布。
+
+课程目录保存在 `D:/AppData/MathLearningWeb/catalog.json`。Course 只组织现有 Topic，不改变 Topic 的 ID、版本或进度；缺少目录时兼容原单 Topic 配置。新增课程应引用已审核导入的 Topic 文件，不能重复 Topic ID。示例：
+
+```json
+{"courses":[{"id":"arithmetic-revisited","title":"再探小学算术","description":"从熟悉的算术出发，用字母表达规律，重新理解计算。","topics":[{"id":"digits-to-letters","path":"courses/digits-to-letters.json","prerequisites":[]}]}]}
+```
+
+可选 `units` 组织章节，每章包含 `id`、`title` 和 `topic_ids`，必须恰好覆盖一次本课程的全部 Topic。省略时按课程生成一个章节；前置关系限于本课程且不能形成循环。账号授权仍以 Topic 和功能为边界。
 
 ## 邀请码与账号权限
 
@@ -54,7 +80,7 @@ pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' account-
 
 | 功能标识 | 开放内容 |
 |---|---|
-| `learn` | 选择掌握情况、Continue 推进 |
+| `learn` | 选择掌握情况、下一页推进 |
 | `submit_answer` | 提交答案判题 |
 | `review_history` | 学习记录、上一页和下一页 |
 | `pause_topic` | 主动暂时终止学习 |
@@ -70,7 +96,7 @@ pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' status -
 pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' status --learner '<guest-id 或 account-id>'
 ```
 
-按输出的 `pause.module_id` 与 `pause.event_id` 精确解锁：
+多 Topic 时用 `status --learner '<ID>' --topic '<Topic ID>'` 查看对应状态。按输出的 `pause.module_id` 与 `pause.event_id` 精确解锁：
 
 ```powershell
 pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' unlock --learner '<实际学习者 ID>' --topic digits-to-letters --module example-1 --pause-event '<实际暂停事件 ID>'
@@ -84,6 +110,8 @@ pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' unlock -
 |---|---|
 | 唯一活动源码 | `D:/Projects/MathLearningWeb` |
 | 课程、独立答案表、勘误及导入来源索引 | `D:/AppData/MathLearningWeb/courses` |
+| Course 与 Topic 归属、章节及前置关系 | `D:/AppData/MathLearningWeb/catalog.json` |
+| 使用指南与标注截图 | `D:/AppData/MathLearningWeb/guide` |
 | 学习状态、作答、事件、身份与账号权限 | `D:/AppData/MathLearningWeb/learning.sqlite3` |
 | 可读事件日志 | `D:/AppData/MathLearningWeb/logs/events.jsonl` |
 | 默认备份 | `D:/AppData/MathLearningWeb/backups` |
@@ -95,7 +123,7 @@ pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' backup
 pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' restore --backup '<备份 ZIP 的绝对路径>' --destination 'D:\AppData\MathLearningWeb-Restored'
 ```
 
-备份包含一致的 SQLite 快照（含身份和权限表）、结构化课程、原稿、独立答案/勘误表和 SHA-256 清单。邀请码和身份凭据只保存哈希。恢复只接受**尚不存在的新目录**，校验后重建可读日志；原目录不会被覆盖。连接网页用的配对凭据不进入备份。可用 `Start-Learning.ps1 -DataDirectory 'D:\AppData\MathLearningWeb-Restored' -Port 8768` 检查恢复结果。
+备份包含一致的 SQLite 快照（含身份、权限、选课、时区和站内反馈）、目录内全部 Topic、原稿、独立答案/勘误表、指南及实际引用附件和 SHA-256 清单。新版 format 2 支持多课程迁移，仍可恢复原 format 1 备份。邀请码和身份凭据只保存哈希。恢复只接受**尚不存在的新目录**，校验后重建可读日志；原目录不会被覆盖。连接网页用的配对凭据不进入备份。可用 `Start-Learning.ps1 -DataDirectory 'D:\AppData\MathLearningWeb-Restored' -Port 8768` 检查当前课程的恢复结果。
 
 课程版本变化时拒绝沿用旧进度，不会静默覆盖；当前不提供自动内容迁移。日志写入失败不丢数据库事件，下一次读取或启动时可恢复补写。
 
@@ -116,6 +144,12 @@ node scripts/import_course.mjs 'D:/Artifacts/MathTopicPipeline/数字化为字�
 
 导入器依赖现有 `D:/Caches/MathTopicPdf/node_modules/mathjax-full` 和 Codex Node 运行库中的 marked。可用 `MATH_TOPIC_PDF_RUNTIME`、`CODEX_NODE_MODULES` 覆盖位置。原稿与独立答案表均保留在本机，未提交源码仓库。题面变化须重新准备并审核独立答案表，导入器拒绝旧哈希或未支持的运算结构。
 
+GUIDE 复用这两个渲染依赖，并使用 sanitize-html 2.17.7 清理 HTML。依赖位于 D 盘缓存目录，可用 `MATH_LEARNING_NODE_MODULES` 覆盖：
+
+```powershell
+npm install --prefix 'D:\Caches\MathLearningWeb\node-runtime' --cache 'D:\Caches\npm' --save-exact --no-audit --no-fund sanitize-html@2.17.7
+```
+
 判题复用 `D:/Projects/MathAnswerJudge/math_answer_judge.py` 的既有接口与提示词，保持不思考模式。网站仅读取独立的 `MATH_JUDGE_API_KEY`、`MATH_JUDGE_BASE_URL`、`MATH_JUDGE_MODEL`，不再回退到 Codex 外包的密钥、模型或配置文件。Windows 用户环境变量优先于继承的进程变量，每次判题重新读取，保存修改后下一次提交即可生效；变量缺失时返回服务不可用，不借用外包配置。接口地址必须是 HTTPS，服务需兼容既有 Chat Completions/JSON 判题请求。只有当前题面、标准答案和学习者提交被发送给判题服务；网页和日志不包含 API 密钥。
 
 ## 验证
@@ -129,7 +163,7 @@ node scripts/inspect_page.mjs
 
 公网流程使用 `Start-PublicLearning.ps1 -DataDirectory '<独立验收目录>' -Port 8768 -SkipPublish`，然后运行 `node scripts/verify_published_page.mjs <HTTPS页面> <HTTPS接口origin> <新结果目录> <课程JSON路径>`。该检查不模拟网络、不授予本地网络权限、不关闭浏览器安全限制。最后可加 `read-only`，仅新建独立游客、读取与刷新，不提交学习操作。
 
-既有结果：[验收报告](D:/Artifacts/MathLearningWeb/验收报告.md)。本次公网验收记录位于 `D:/Artifacts/MathLearningWeb/public-internet`。浏览器验收使用独立 Chrome 上下文，不修改用户浏览器的学习记录；真实判题仅在独立验收数据目录执行。账号只进行语法、命令帮助与代码检查，未创建或登录账号。测试框架仍提示 HTTPX 接口弃用警告；当前固定版本正常通过，不影响服务运行。
+既有结果：[验收报告](D:/Artifacts/MathLearningWeb/验收报告.md)。公网初次接入记录位于 `D:/Artifacts/MathLearningWeb/public-internet`，主页与指南的真实判题、页面和回归证据位于 `D:/Artifacts/MathLearningWeb/homepage`。浏览器验收使用独立 Chrome 上下文，不修改用户浏览器的学习记录；真实判题仅在独立验收数据目录执行。账号只进行语法、命令帮助与代码检查，未创建或登录账号。测试框架仍提示 HTTPX 接口弃用警告；当前固定版本正常通过，不影响服务运行。
 
 ## 打开公开页面
 
