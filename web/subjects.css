@@ -22,6 +22,7 @@ body.platformTheme { background: var(--platform-paper); }
 .platformTheme .mainNavigation a.active { color: var(--subject-accent); }
 .platformTheme .mainNavigation a.active { border-bottom-color: var(--subject-accent); }
 .platformTheme .userAvatar { color: var(--subject-accent); background: #eee9df; }
+.platformTheme .guestDemoOption { color: #000; }
 .subjectHome { max-width: 1010px; margin: 0 auto; padding: 48px 0 24px; color: var(--platform-ink); }
 .subjectHomeHeading { text-align: center; margin: 0 auto 50px; }
 .subjectKicker { margin: 0 0 18px; color: var(--platform-muted); font-size: 11px; letter-spacing: .19em; }
@@ -34,6 +35,12 @@ body.platformTheme { background: var(--platform-paper); }
 .subjectCardTop { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; }
 .subjectEmblem { display: block; width: 40px; height: 40px; }
 .hasSubjectContext .portalLogo { color: var(--subject-accent); }
+/* Neutral button labels share one high-contrast treatment across all themes. */
+.userMenu > a, .userMenu > button, .answerHelpMenu button, .taskBackButton,
+.coursePercent, .historyButton, .historyDrawerToggle, .iconButton {
+  color: #000; font-weight: 700;
+}
+body[data-subject="chemistry"] .textButton { color: #000; font-weight: 700; }
 .subjectCardArrow { color: var(--card-accent, var(--subject-accent)); font: 21px/1 var(--platform-serif); opacity: .65; }
 .subjectName { margin: 0; font: 500 25px/1.35 var(--platform-serif); }
 .subjectSecondaryName { margin: 4px 0 0; color: var(--card-accent, var(--subject-accent)); font: 13px/1.4 var(--platform-serif); letter-spacing: .025em; }

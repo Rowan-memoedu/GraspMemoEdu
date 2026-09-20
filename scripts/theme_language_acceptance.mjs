@@ -20,6 +20,8 @@ try{
  const go=async route=>{await page.goto(base+'#'+route,{waitUntil:'networkidle'});};
  await go('/');await page.locator('.subjectCard').first().waitFor();
  assert.equal(await page.locator('.subjectSecondaryName').count(),6,'Keep homepage bilingual subtitles');
+ for(const selector of ['.mainNavigation a.active','.userAvatar'])assert.equal(await page.locator(selector).evaluate(node=>getComputedStyle(node).color),'rgb(0, 0, 0)','Homepage navbar uses neutral black');
+ assert.equal(await page.locator('.mainNavigation a.active').evaluate(node=>getComputedStyle(node).borderBottomColor),'rgb(0, 0, 0)');
  const homeLogos=await page.locator('.subjectCard').evaluateAll(cards=>Object.fromEntries(cards.map(card=>[card.dataset.subjectId,card.querySelector('.subjectEmblem').src])));
  await page.locator('#userMenuButton').click();await page.locator('#identityButton').click();
  await page.locator('#invitationCode').fill(account.invitation_code);await page.locator('#identitySubmitButton').click();
@@ -41,7 +43,11 @@ try{
      if(!mathStyles)mathStyles=styles;
      for(const key of ['font','size','weight','padding','border'])assert.equal(styles[key],mathStyles[key],`${id} common ${key}`);
      assert.ok(lum(styles.heading)<=lum(mathStyles.heading)+.006,`${id} heading contrast`);
-     if(id==='physics')assert.equal(styles.button,'rgb(255, 120, 0)');
+     if(id==='physics'){
+       assert.equal(styles.button,'rgb(255, 140, 0)');
+       assert.equal(styles.buttonText,'rgb(0, 0, 0)');
+       assert.equal(await page.locator('.courseLearn').first().evaluate(node=>getComputedStyle(node).fontWeight),'700');
+     }
      else assert.ok(lum(styles.button)<=lum(mathStyles.button)+.006,`${id} button contrast`);
      if(id==='english')assert.ok(Math.abs(lum(styles.button)-lum(mathStyles.button))<.006,'Approved violet brightness');
      if(id==='chemistry')assert.equal(styles.button,'rgb(17, 17, 17)','Black primary button');

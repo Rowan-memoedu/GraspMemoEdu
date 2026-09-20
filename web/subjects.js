@@ -75,9 +75,9 @@ export function subjectPalette(subjectId = 'math') {
     id === 'chemistry' && monochromeInk.has(token) ? '#111111' :
     id === 'chemistry' && ['--link-hover', '--button-hover', '--button-active'].includes(token) ? '#000000' : recolor(value, id)]));
   if (id === 'physics') Object.assign(palette, {
-    '--link-color': '#FF7800', '--ma-blue': '#FF7800', '--score-color': '#FF7800',
-    '--progress-complete': '#FF7800', '--link-hover': '#ed7000',
-    '--button-hover': '#ed7000', '--button-active': '#e06900'
+    '--link-color': '#FF8C00', '--ma-blue': '#FF8C00', '--score-color': '#FF8C00',
+    '--progress-complete': '#FF8C00', '--link-hover': '#ed8200',
+    '--button-hover': '#ed8200', '--button-active': '#e07b00'
   });
   return palette;
 }
@@ -172,10 +172,11 @@ export function renderSubjectEmpty(subject) {
 
 export function applySubjectTheme(subject, { home = false } = {}) {
   const palette = subjectPalette(subject?.id);
-  const color = palette['--link-color'];
+  const color = home ? '#000000' : palette['--link-color'];
   document.documentElement.style.setProperty('--subject-accent', color);
   document.documentElement.style.setProperty('--subject-accent-soft', color + '12');
-  document.documentElement.style.setProperty('--primary-text', subject?.id === 'physics' ? '#202020' : '#ffffff');
+  document.documentElement.style.setProperty('--primary-text', subject?.id === 'physics' ? '#000000' : '#ffffff');
+  document.documentElement.style.setProperty('--primary-weight', subject?.id === 'physics' ? '700' : '400');
   for (const [name, value] of Object.entries(palette)) document.documentElement.style.setProperty(name, value);
   document.body.classList.toggle('platformTheme', home);
   document.body.classList.toggle('subjectTemplate', Boolean(subject));
