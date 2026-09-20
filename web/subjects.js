@@ -11,11 +11,13 @@ const link = (text, href, className) => {
   const node = element('a', className, text); node.href = href; return node;
 };
 const decode = value => { try { return decodeURIComponent(value); } catch { return value; } };
-// One Math reference palette; change hue/chroma while preserving each token's
-// luminance, so every subject retains the same text/background contrast.
+// One Math reference palette, with subject hue/chroma and emphasis strength.
+// Math and violet keep matching luminance; other accents have stronger contrast.
 export const subjectHues = {math: null, physics: 26, biology: 145, english: 275, chinese: 9, chemistry: 0};
 // Violet needs less chroma to remain a restrained deep purple at the same luminance.
 const subjectChroma = {english: .55};
+const subjectEmphasis = {physics: .75, biology: .75, chinese: .75};
+const monochromeInk = new Set(['--ma-navy', '--ma-blue', '--link-color', '--score-color', '--progress-complete']);
 export const mathPalette = {
   "--ma-navy": "#1e194e",
   "--ma-blue": "#096bb7",
@@ -55,8 +57,9 @@ function recolor(hex, subjectId) {
   if (subjectId === 'math') return hex;
   const rgb = [1, 3, 5].map(index => parseInt(hex.slice(index, index + 2), 16) / 255);
   const high = Math.max(...rgb), low = Math.min(...rgb), lightness = (high + low) / 2;
-  const saturation = subjectId === 'chemistry' ? 0 : (high - low) / (1 - Math.abs(2 * lightness - 1) || 1) * (subjectChroma[subjectId] ?? 1);
-  const target = luminance(rgb);
+  const saturation = subjectId === 'chemistry' ? 0 : Math.min(1, (high - low) / (1 - Math.abs(2 * lightness - 1) || 1) * (subjectChroma[subjectId] ?? 1.15));
+  const baseLuminance = luminance(rgb);
+  const target = baseLuminance * (baseLuminance > .05 && baseLuminance < .5 ? subjectEmphasis[subjectId] ?? 1 : 1);
   let lower = 0, upper = 1;
   for (let index = 0; index < 28; index++) {
     const mid = (lower + upper) / 2;
@@ -68,7 +71,9 @@ function recolor(hex, subjectId) {
 }
 export function subjectPalette(subjectId = 'math') {
   const id = Object.hasOwn(subjectHues, subjectId) ? subjectId : 'math';
-  return Object.fromEntries(Object.entries(mathPalette).map(([token, value]) => [token, recolor(value, id)]));
+  return Object.fromEntries(Object.entries(mathPalette).map(([token, value]) => [token,
+    id === 'chemistry' && monochromeInk.has(token) ? '#111111' :
+    id === 'chemistry' && ['--link-hover', '--button-hover', '--button-active'].includes(token) ? '#000000' : recolor(value, id)]));
 }
 const accent = subject => subjectPalette(subject?.id)['--link-color'];
 const emblems = { math: '∑', physics: 'φ', english: 'Aa', chinese: '文', biology: '叶', chemistry: '⚗' };
