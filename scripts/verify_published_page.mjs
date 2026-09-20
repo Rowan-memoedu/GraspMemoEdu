@@ -57,7 +57,7 @@ try {
   await page.locator('.courseChoice').filter({hasText:'再探小学算术'}).getByRole('button',{name:/^(学习|Learn)$/}).click();
   await page.locator('.taskToggle').filter({hasText:course.title}).click();
   await screenshot('00-learn');
-  await page.getByRole('button',{name:/^(开始|Start)$/}).click();
+  await page.getByRole('button',{name:/^(开始学习|Start)$/}).click();
   await page.locator('#courseShell:not([hidden])').waitFor();
   assert.equal(await page.locator('#settingsDialog, #settingsButton, #apiAddress, #pairingCredential').count(), 0);
   let initial = await state();
