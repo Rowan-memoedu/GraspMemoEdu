@@ -1,0 +1,70 @@
+/** UI language switching with unchanged real course content, isolated QA only. */
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+const [base,out] = process.argv.slice(2);
+assert.equal(new URL(base).hostname,'127.0.0.1'); assert.notEqual(new URL(base).port,'8767');
+const require=createRequire(path.join(os.homedir(),'.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/_entry.cjs'));
+const {chromium}=require('playwright');
+const browser=await chromium.launch({headless:true,executablePath:path.join(os.homedir(),'AppData/Local/Google/Chrome/Application/chrome.exe')});
+await fs.mkdir(out,{recursive:true});
+const report={checks:[],errors:[],mocked:false};
+try {
+ const page=await browser.newPage({locale:'en-US',viewport:{width:1365,height:1000}});
+ page.on('pageerror',error=>report.errors.push(String(error))); page.setDefaultTimeout(20000);
+ await page.goto(base,{waitUntil:'networkidle'});
+ await page.locator('#guestDemoOption:not([hidden])').waitFor();
+ assert.equal(await page.locator('html').getAttribute('lang'),'zh-CN');
+ assert.deepEqual(await page.locator('.mainNavigation a').allTextContents(),['学习','课程','指南']);
+ const courseContent=await page.locator('.courseChoice h2,.courseDescription').allTextContents();
+ await page.screenshot({path:path.join(out,'chinese-default.png'),fullPage:true});
+ const changeLanguage=async value=>{
+   await page.goto(base+'#/settings',{waitUntil:'networkidle'});
+   await page.locator('#profileLanguage').selectOption(value);
+   await page.waitForFunction(value=>document.documentElement.lang===value,value==='en'?'en-US':'zh-CN');
+   await page.locator('#profileLanguage').waitFor();
+ };
+ await changeLanguage('en');
+ assert.equal(await page.locator('#profileLanguage').inputValue(),'en');
+ await page.screenshot({path:path.join(out,'english-settings.png'),fullPage:true});
+ await page.goto(base+'#/courses',{waitUntil:'networkidle'});
+ assert.deepEqual(await page.locator('.courseChoice h2,.courseDescription').allTextContents(),courseContent);
+ assert.match(await page.locator('.mainNavigation').innerText(),/Courses/i);
+ await page.locator('#userMenuButton').click();
+ assert.equal(/[\u3400-\u9fff]/.test(await page.locator('#userMenu').innerText()),false,'English menu is uniform');
+ await page.locator('#userMenu a[href="#/help"]').click();
+ await page.locator('.guideBody').waitFor();
+ assert.equal(/[\u3400-\u9fff]/.test(await page.locator('#portalContent').innerText()),false,'English help UI is uniform');
+ await page.goto(base+'#/topic/digits-to-letters',{waitUntil:'networkidle'});
+ await page.locator('#courseShell:not([hidden])').waitFor();
+ const contentEnglish=await page.locator('#stepCard .courseContent').evaluateAll(nodes=>nodes.map(node=>node.innerHTML));
+ const headingEnglish=await page.locator('#lessonTitle').textContent();
+ await page.screenshot({path:path.join(out,'english-reader.png'),fullPage:true});
+ await changeLanguage('zh-CN');
+ await page.goto(base+'#/topic/digits-to-letters',{waitUntil:'networkidle'});
+ await page.locator('#courseShell:not([hidden])').waitFor();
+ assert.deepEqual(await page.locator('#stepCard .courseContent').evaluateAll(nodes=>nodes.map(node=>node.innerHTML)),contentEnglish,'Course HTML unchanged by language');
+ assert.equal(await page.locator('#lessonTitle').textContent(),headingEnglish,'Course title unchanged');
+ assert.equal((await page.locator('#stepCard').innerText()).includes('Continue'),false);
+ await page.locator('#guestDemoCheckbox').check();
+ await page.getByRole('button',{name:'已掌握，试着作答',exact:true}).click();
+ await page.waitForFunction(()=>!!document.querySelector('#answerInput')?.value);
+ await page.locator('#answerInput').fill('保留原样 content 123');
+ await changeLanguage('en');
+ await page.goto(base+'#/topic/digits-to-letters',{waitUntil:'networkidle'});
+ await page.locator('#answerInput').waitFor();
+ assert.equal(await page.locator('#answerInput').inputValue(),'保留原样 content 123','Answer draft remains verbatim');
+ assert.equal(await page.locator('#submitButton').innerText(),'Submit');
+ for(const width of [390,320]){
+   await page.setViewportSize({width,height:844});
+   await page.goto(base+'#/settings',{waitUntil:'networkidle'});
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);
+   await page.screenshot({path:path.join(out,`english-mobile-${width}.png`),fullPage:true});
+ }
+ await page.reload({waitUntil:'networkidle'});
+ assert.equal(await page.locator('#profileLanguage').inputValue(),'en');
+ report.checks.push('Chinese default in English browser','Settings switches and persists language','English menu/help uniform','Course titles/descriptions/HTML unchanged','Answer draft unchanged','320/390px English layouts without overflow');
+ assert.deepEqual(report.errors,[]); report.status='passed';
+}finally{await fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));await browser.close();}

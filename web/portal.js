@@ -1,3 +1,5 @@
+import { t, getLanguage, setLanguage, locale, translateMessage } from "./i18n.js";
+
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
   const item = document.createElement(tag);
@@ -8,10 +10,10 @@ const node = (tag, className = "", text) => {
 const link = (text, href, className = "") => { const item = node("a", className, text); item.href = href; return item; };
 const control = (text, className, action) => { const item = node("button", className, text); item.type = "button"; item.addEventListener("click", action); return item; };
 const percent = (value) => Number.isFinite(Number(value)) && value !== null ? Math.max(0, Math.min(100, Number(value))) : null;
-const percentLabel = (value) => percent(value) === null ? "—" : `${Math.round(percent(value))}%`;
+const percentLabel = (value) => percent(value) === null ? "—" : `${Math.round(percent(value)).toLocaleString(locale())}%`;
 const encode = encodeURIComponent;
-const typeNames = { Placement: "Diagnostic", Supplemental: "Supplemental Diagnostic", Quiz: "Assessment", Exam: "Assessment" };
-const statusNames = { not_started: "尚未学习", in_progress: "学习中", paused: "已暂时终止", completed: "已完成" };
+const typeNames = { Lesson: t("portal.lesson"), Review: t("portal.review"), Placement: t("portal.diagnostic.0"), Supplemental: t("portal.supplemental.diagnostic.1"), Quiz: t("portal.assessment.2"), Exam: t("portal.assessment.2") };
+const statusNames = { not_started: t("portal.not.started.3"), in_progress: t("portal.in.progress.4"), paused: t("portal.paused.5"), completed: t("portal.completed.6") };
 const roundButton = (text, action) => control(text, "portalStart", action);
 
 export function initPortal(bridge) {
@@ -31,10 +33,10 @@ export function initPortal(bridge) {
   const learnHref = () => "#/learn";
   const apiDate = (value, withTime = false) => {
     if (!value || !Number.isFinite(Date.parse(value))) return "—";
-    return new Intl.DateTimeFormat("zh-CN", { timeZone: timezone(), year: "numeric", month: "2-digit", day: "2-digit", ...(withTime ? { hour: "2-digit", minute: "2-digit" } : {}) }).format(new Date(value));
+    return new Intl.DateTimeFormat(locale(), { timeZone: timezone(), year: "numeric", month: "2-digit", day: "2-digit", ...(withTime ? { hour: "2-digit", minute: "2-digit" } : {}) }).format(new Date(value));
   };
   const dayKey = (value) => new Intl.DateTimeFormat("en-CA", { timeZone: timezone(), year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
-  const clockTime = (value) => value && Number.isFinite(Date.parse(value)) ? new Intl.DateTimeFormat("zh-CN", { timeZone: timezone(), hour: "2-digit", minute: "2-digit" }).format(new Date(value)) : "—";
+  const clockTime = (value) => value && Number.isFinite(Date.parse(value)) ? new Intl.DateTimeFormat(locale(), { timeZone: timezone(), hour: "2-digit", minute: "2-digit" }).format(new Date(value)) : "—";
 
   function navigate(path, replace = false) {
     const hash = path.startsWith("#") ? path : `#${path}`;
@@ -47,14 +49,14 @@ export function initPortal(bridge) {
     const [path, search = ""] = raw.split("?");
     return { path, params: new URLSearchParams(search) };
   }
-  function loading(text = "正在读取学习内容…") {
+  function loading(text = t("portal.loading.learning.materials.7")) {
     const box = node("section", "portalLoading");
     box.setAttribute("aria-live", "polite"); box.append(node("span", "spinner"), node("p", "", text)); return box;
   }
-  function errorBox(message, retry, heading = "暂时无法读取") {
+  function errorBox(message, retry, heading = t("portal.unable.to.load.8")) {
     const box = node("section", "portalMessage"); box.setAttribute("role", "status");
-    box.append(node("h2", "", heading), node("p", "", message || "服务暂不可用，请稍后重试。"));
-    if (retry) box.append(control("重试", "primaryButton", retry));
+    box.append(node("h2", "", heading), node("p", "", message ? translateMessage(message) : t("portal.the.service.is.temporarily.unavailable.please.try.again.later.9")));
+    if (retry) box.append(control(t("portal.retry.10"), "primaryButton", retry));
     return box;
   }
   function emptyBox(text) { const box = node("div", "portalEmpty"); box.append(node("p", "", text)); return box; }
@@ -73,13 +75,14 @@ export function initPortal(bridge) {
   function updateUser() {
     const current = bridge.getAccess();
     const expired = bridge.getIdentityProblem();
-    const name = expired ? "未登录" : profile?.display_name || current?.display_name || "游客";
+    const rawName = profile?.display_name || current?.display_name;
+    const name = expired ? t("portal.not.signed.in.11") : current?.role === "guest" && (!rawName || rawName === "游客") ? t("portal.guest.12") : rawName || t("portal.guest.12");
     const parts = name.trim().split(/\s+/);
     const initials = /^[A-Za-z]/.test(name) ? (parts.length > 1 ? parts[0][0] + parts.at(-1)[0] : name.slice(0, 2)).toUpperCase() : [...name].slice(0, 2).join("");
-    $("userMenuButton").textContent = initials || "游";
-    $("userMenuButton").setAttribute("aria-label", `用户菜单，${name}`);
+    $("userMenuButton").textContent = initials || t("portal.g.13");
+    $("userMenuButton").setAttribute("aria-label", t("portal.userMenu", { name }));
     $("menuDisplayName").textContent = name;
-    $("menuRole").textContent = expired ? "登录已失效" : current?.role === "account" ? "学习账号" : "游客身份";
+    $("menuRole").textContent = expired ? t("portal.session.expired.14") : current?.role === "account" ? t("portal.learning.account.15") : t("portal.guest.16");
     $("menuAccountPurpose").hidden = current?.role !== "account" || current?.purpose !== "test";
     $("logoutButton").hidden = current?.role !== "account";
   }
@@ -103,7 +106,7 @@ export function initPortal(bridge) {
 
   async function basics() {
     const [nextCatalog, nextProfile] = await Promise.all([call("catalog"), call("profile")]);
-    if (!Array.isArray(nextCatalog.courses)) throw new Error("课程目录暂时无法读取。");
+    if (!Array.isArray(nextCatalog.courses)) throw new Error(t("portal.the.course.catalog.is.temporarily.unavailable.17"));
     catalog = nextCatalog; profile = nextProfile; selectedCourse = catalog.selected_course_id || null;
     if (!profile.timezone) {
       try { profile = await call("profile", { method: "POST", body: { timezone: timezone() } }); } catch { /* Use browser time while a later settings save can retry. */ }
@@ -112,7 +115,7 @@ export function initPortal(bridge) {
   }
   async function dashboard(id, cursor = null) {
     const data = await call(`dashboard?${query({ course_id: id, cursor, limit: 25 })}`);
-    if (!data.course || !Array.isArray(data.tasks) || !Array.isArray(data.history)) throw new Error("课程学习记录暂时无法读取。");
+    if (!data.course || !Array.isArray(data.tasks) || !Array.isArray(data.history)) throw new Error(t("portal.course.learning.records.are.temporarily.unavailable.18"));
     return data;
   }
   function mergeDashboard(id, data, append = false) {
@@ -150,18 +153,18 @@ export function initPortal(bridge) {
           answerCache.set(params.get("taskId"), result); viewedCourse = result.task?.course_id;
         }
         if (!viewedCourse) { navigate("/courses", true); return; }
-        document.title = "LEARN · 数学学习";
+        document.title = t("portal.learn.math.learning.19");
         const data = mergeDashboard(viewedCourse, await dashboard(viewedCourse));
         if (ticket !== sequence) return;
         renderLearn(data, params.get("taskId"), ticket);
       } else if (path === "/courses") {
-        document.title = "COURSES · 数学学习"; renderCourses();
+        document.title = t("portal.courses.math.learning.20"); renderCourses();
       } else if (path === "/guide") {
-        document.title = "GUIDE · 数学学习"; await renderGuide(ticket);
+        document.title = t("portal.guide.math.learning.21"); await renderGuide(ticket);
       } else if (path === "/help") {
-        document.title = "Q&A · 数学学习"; renderHelp();
+        document.title = t("portal.q.a.math.learning.22"); renderHelp();
       } else if (path === "/settings") {
-        document.title = "个人设置 · 数学学习"; renderSettings();
+        document.title = t("portal.settings.math.learning.23"); renderSettings();
       } else if (/^\/courses\/[^/]+\/progress$/.test(path)) {
         const id = decodeURIComponent(path.split("/")[2]);
         const data = await dashboard(id);
@@ -170,7 +173,7 @@ export function initPortal(bridge) {
       } else if (/^\/topic\/[^/]+$/.test(path)) {
         root.hidden = true;
         await bridge.openTopic(decodeURIComponent(path.split("/")[2]));
-      } else root.replaceChildren(errorBox("这个页面不存在。", () => navigate("/learn"), "未找到页面"));
+      } else root.replaceChildren(errorBox(t("portal.this.page.does.not.exist.24"), () => navigate("/learn"), t("portal.page.not.found.25")));
       if (ticket !== sequence) return;
       const target = params.get("unitId") || params.get("topicId");
       requestAnimationFrame(() => {
@@ -182,33 +185,33 @@ export function initPortal(bridge) {
       if (ticket !== sequence) return;
       if (bridge.getIdentityProblem()) { root.hidden = true; root.replaceChildren(); return; }
       const forbidden = error.status === 403 && ["feature_forbidden", "topic_forbidden", "course_forbidden"].includes(error.code);
-      root.hidden = false; root.replaceChildren(errorBox(error.message, forbidden ? () => navigate("/courses") : () => location.reload(), forbidden ? "当前内容尚未开放" : "服务暂不可用"));
+      root.hidden = false; root.replaceChildren(errorBox(translateMessage(error.message), forbidden ? () => navigate("/courses") : () => location.reload(), forbidden ? t("portal.content.unavailable.26") : t("portal.service.unavailable.27")));
     }
   }
 
   function renderCourses() {
-    const heading = node("h1", "portalPageTitle", "COURSES"), grid = node("div", "courseGrid");
+    const heading = node("h1", "portalPageTitle", t("portal.courses.28")), grid = node("div", "courseGrid");
     root.replaceChildren(heading, grid);
-    if (!catalog.courses.length) { grid.append(emptyBox(bridge.getAccess()?.role === "account" ? "管理员尚未为你的账号开放课程，请联系管理员。" : "暂时没有可学习的课程。")); return; }
-    if (bridge.getAccess()?.role === "account" && !catalog.courses.some((course) => course.available)) root.insertBefore(emptyBox("管理员尚未为你的账号开放课程，请联系管理员。"), grid);
+    if (!catalog.courses.length) { grid.append(emptyBox(bridge.getAccess()?.role === "account" ? t("portal.no.courses.are.enabled.for.your.account.please.contact.your.admin.29") : t("portal.no.courses.are.available.yet.30"))); return; }
+    if (bridge.getAccess()?.role === "account" && !catalog.courses.some((course) => course.available)) root.insertBefore(emptyBox(t("portal.no.courses.are.enabled.for.your.account.please.contact.your.admin.29")), grid);
     for (const course of catalog.courses) {
       const card = node("article", "courseChoice"); card.dataset.courseId = course.id;
       card.append(node("h2", "", course.title), node("p", "courseDescription", course.description || ""));
-      const learn = control("Learn", "primaryButton courseLearn", async () => {
+      const learn = control(t("portal.learn.31"), "primaryButton courseLearn", async () => {
         if (busyCourse) return; busyCourse = true;
         for (const item of root.querySelectorAll(".courseLearn")) item.disabled = true;
-        learn.textContent = "正在选择…"; card.querySelector(".fieldError")?.remove();
+        learn.textContent = t("portal.selecting.32"); card.querySelector(".fieldError")?.remove();
         try {
           await call("catalog/select", { method: "POST", body: { course_id: course.id } });
           selectedCourse = course.id; catalog.selected_course_id = course.id; scrolls.delete("#/learn");
           navigate("/learn");
         } catch (error) {
-          card.append(node("p", "fieldError", error.message)); learn.textContent = "Learn";
+          card.append(node("p", "fieldError", translateMessage(error.message))); learn.textContent = t("portal.learn.31");
           for (const item of root.querySelectorAll(".courseLearn")) item.disabled = item.dataset.available === "false";
         } finally { busyCourse = false; }
       });
       learn.dataset.available = String(course.available !== false); learn.disabled = course.available === false;
-      card.append(learn); if (!course.available) card.append(node("p", "courseAvailability", "当前暂无可进入的学习内容。"));
+      card.append(learn); if (!course.available) card.append(node("p", "courseAvailability", t("portal.no.learning.content.is.currently.available.33")));
       grid.append(card);
     }
   }
@@ -222,7 +225,7 @@ export function initPortal(bridge) {
     const bar = node("div", "unitProgress");
     const count = Math.max(0, Number(unit.topic_count) || 0);
     bar.style.width = `${maxTopics ? Math.max(0, Math.min(100, count / maxTopics * 100)) : 0}%`;
-    bar.setAttribute("aria-label", `${unit.title}，${percentLabel(unit.progress)}`);
+    bar.setAttribute("aria-label", `${unit.title} · ${percentLabel(unit.progress)}`);
     for (const status of ["completed", "in_progress", "paused", "not_started"]) {
       const part = node("span", status); part.style.width = `${count ? Math.max(0, Number(unit.status_counts?.[status]) || 0) / count * 100 : 0}%`;
       bar.append(part);
@@ -233,15 +236,15 @@ export function initPortal(bridge) {
     const list = node("div", "unitList"), max = Math.max(0, ...(data.units || []).map((unit) => Number(unit.topic_count) || 0));
     (data.units || []).forEach((unit, index) => {
       const row = node("div", "unitRow");
-      row.append(link(`${index + 1}. ${unit.title} (${unit.topic_count} topics)`, `#/courses/${encode(data.course.id)}/progress?unitId=${encode(unit.id)}`), unitBar(unit, max)); list.append(row);
+      row.append(link(t("portal.unitList", { index: (index + 1).toLocaleString(locale()), title: unit.title, count: Number(unit.topic_count).toLocaleString(locale()) }), `#/courses/${encode(data.course.id)}/progress?unitId=${encode(unit.id)}`), unitBar(unit, max)); list.append(row);
     });
-    if (!list.childElementCount) list.append(node("p", "", "课程单元尚未提供。"));
+    if (!list.childElementCount) list.append(node("p", "", t("portal.course.units.are.not.available.yet.34")));
     return list;
   }
   function courseSidebar(data) {
     const side = node("aside", "courseSidebar"), frame = node("section", "courseOverview"), top = node("div", "courseOverviewTop");
     const name = link(data.course.title, `#/courses/${encode(data.course.id)}/progress`, "courseNameLink");
-    const circle = control(percentLabel(data.course.progress), "coursePercent", () => openGraph(data)); circle.setAttribute("aria-label", `课程完成 ${percentLabel(data.course.progress)}，查看知识图谱`);
+    const circle = control(percentLabel(data.course.progress), "coursePercent", () => openGraph(data)); circle.setAttribute("aria-label", t("portal.graphProgress", { progress: percentLabel(data.course.progress) }));
     const unitsPopup = node("div", "coursePopover sequenceUnits"), detailsPopup = node("div", "coursePopover progressDetails");
     unitsPopup.hidden = true; detailsPopup.hidden = true;
     const tabs = node("div", "sequenceTabs"), unitContent = node("div"); unitsPopup.append(tabs, unitContent);
@@ -249,12 +252,12 @@ export function initPortal(bridge) {
     const showUnits = async (id) => {
       const tabTicket = ++tabSequence;
       for (const item of tabs.children) item.classList.toggle("selected", item.dataset.courseId === id);
-      unitContent.replaceChildren(loading("正在读取单元…"));
+      unitContent.replaceChildren(loading(t("portal.loading.units.35")));
       try {
         const chosen = dashboards.get(id) || await dashboard(id);
         if (tabTicket !== tabSequence) return; dashboards.set(id, chosen); unitContent.replaceChildren(unitList(chosen));
         const selected = tabs.querySelector(`[data-course-id="${CSS.escape(id)}"] .sequencePercent`); if (selected) selected.textContent = percentLabel(chosen.course.progress);
-      } catch (error) { if (tabTicket === tabSequence) unitContent.replaceChildren(errorBox(error.message, () => showUnits(id))); }
+      } catch (error) { if (tabTicket === tabSequence) unitContent.replaceChildren(errorBox(translateMessage(error.message), () => showUnits(id))); }
     };
     for (const course of catalog.courses) {
       const tab = control("", "sequenceTab", () => showUnits(course.id)); tab.dataset.courseId = course.id;
@@ -262,7 +265,7 @@ export function initPortal(bridge) {
       tabs.append(tab);
     }
     unitContent.append(unitList(data)); tabs.querySelector(`[data-course-id="${CSS.escape(data.course.id)}"]`)?.classList.add("selected");
-    detailsPopup.append(infoRow("Progress", percentLabel(data.course.progress)), infoRow("Start Date", apiDate(data.course.start_date)), infoRow("End Date", apiDate(data.course.end_date)));
+    detailsPopup.append(infoRow(t("portal.progress.36"), percentLabel(data.course.progress)), infoRow(t("portal.start.date.37"), apiDate(data.course.start_date)), infoRow(t("portal.end.date.38"), apiDate(data.course.end_date)));
     for (const [trigger, popup] of [[name, unitsPopup], [circle, detailsPopup]]) {
       trigger.addEventListener("mouseenter", () => showPopover(popup)); trigger.addEventListener("focus", () => showPopover(popup));
       trigger.addEventListener("mouseleave", delayPopover); trigger.addEventListener("blur", delayPopover);
@@ -270,7 +273,7 @@ export function initPortal(bridge) {
       popup.addEventListener("focusin", holdPopover); popup.addEventListener("focusout", delayPopover);
     }
     top.append(name, circle);
-    const estimate = node("div", "estimatedCompletion"); estimate.append(node("span", "", "Estimated completion"), node("span", "", apiDate(data.course.estimated_completion)));
+    const estimate = node("div", "estimatedCompletion"); estimate.append(node("span", "", t("portal.estimated.completion.39")), node("span", "", apiDate(data.course.estimated_completion)));
     frame.append(top, estimate, unitsPopup, detailsPopup); side.append(frame); return side;
   }
 
@@ -282,21 +285,21 @@ export function initPortal(bridge) {
       const path = document.createElementNS(svg.namespaceURI, "path");
       path.setAttribute("d", task.maintenance ? "M6 10V7a5 5 0 0 1 10 0v3M4 10h14v11H4zM11 14v3" : "M7 10V7a5 5 0 0 1 10 0M4 10h14v11H4zM11 14v3"); svg.append(path); icon.append(svg);
     }
-    icon.setAttribute("aria-label", history ? successful ? "已通过" : task.result === "incorrect" || task.result === "failed" ? "未通过" : "已结束" : task.maintenance ? "维护中" : "可查看"); return icon;
+    icon.setAttribute("aria-label", history ? successful ? t("portal.passed.40") : task.result === "incorrect" || task.result === "failed" ? t("portal.not.passed.41") : t("portal.finished.42") : task.maintenance ? t("portal.under.maintenance.43") : t("portal.available.44")); return icon;
   }
   function taskSummary(task, history = false) {
     const wrap = node("div", "taskSummaryContent"), heading = node("div", "taskHeading");
-    heading.append(taskIcon(task, history), node("strong", "", `${typeNames[task.type] || task.type || "Lesson"}${task.retake ? " (Retake)" : ""}`));
+    heading.append(taskIcon(task, history), node("strong", "", `${typeNames[task.type] || t("portal.lesson")}${task.retake ? t("portal.retake") : ""}`));
     if (task.reason === "gravity") {
-      const reason = node("span", "taskReason", "●"); reason.title = task.reason_message || "这项任务由课程学习安排选出。"; reason.setAttribute("aria-label", reason.title); heading.append(reason);
+      const reason = node("span", "taskReason", "●"); reason.title = task.reason_message ? translateMessage(task.reason_message) : t("portal.this.task.was.selected.by.the.course.schedule.45"); reason.setAttribute("aria-label", reason.title); heading.append(reason);
     }
     wrap.append(heading);
     if (task.course_title) wrap.append(node("div", "taskCourse", task.course_title));
     wrap.append(node("div", "taskTitle", task.title));
     const p = percent(task.progress);
     if (!history && p > 0 && p < 100) { const row = node("div", "taskProgressRow"), bar = node("div", "taskProgress"), fill = node("span"); fill.style.width = `${p}%`; bar.append(fill); row.append(bar, node("span", "", percentLabel(p))); wrap.append(row); }
-    if (task.maintenance) wrap.append(node("p", "maintenanceNote", task.maintenance_message || "此内容正在维护，暂时无法开始。"));
-    if (history) wrap.append(node("div", "taskCompletedAt", `Completed @ ${clockTime(task.completed_at)}`));
+    if (task.maintenance) wrap.append(node("p", "maintenanceNote", task.maintenance_message ? translateMessage(task.maintenance_message) : t("portal.this.content.is.under.maintenance.and.cannot.be.started.yet.46")));
+    if (history) wrap.append(node("div", "taskCompletedAt", t("portal.completedAt", { time: clockTime(task.completed_at) })));
     return wrap;
   }
   function collapseTasks() {
@@ -309,12 +312,12 @@ export function initPortal(bridge) {
     const toggle = control("", "taskToggle", () => { const was = expandedTask === task.id; collapseTasks(); if (!was) { expandedTask = task.id; details.hidden = false; toggle.setAttribute("aria-expanded", "true"); } });
     toggle.append(taskSummary(task)); toggle.setAttribute("aria-expanded", "false");
     const details = node("div", "taskDetails"); details.hidden = true;
-    if (task.status === "paused") details.append(node("p", "taskStatusNote", "学习已暂时终止，可以回看已学内容。"));
+    if (task.status === "paused") details.append(node("p", "taskStatusNote", t("portal.learning.is.paused.you.can.review.previously.studied.content.47")));
     if (["Quiz", "Exam"].includes(task.type)) {
-      const info = node("div", "taskPrerequisites"); info.append(infoRow("Time Limit", task.time_limit_minutes != null ? `${task.time_limit_minutes} min` : task.time_limit_seconds != null ? `${Math.round(task.time_limit_seconds / 60)} min` : "—"), infoRow("Questions", task.question_count ?? "—")); details.append(info);
+      const info = node("div", "taskPrerequisites"); info.append(infoRow(t("portal.time.limit.48"), task.time_limit_minutes != null ? t("portal.minutes", { count: Number(task.time_limit_minutes).toLocaleString(locale()) }) : task.time_limit_seconds != null ? t("portal.minutes", { count: Math.round(task.time_limit_seconds / 60).toLocaleString(locale()) }) : "—"), infoRow(t("portal.questions.49"), task.question_count == null ? "—" : Number(task.question_count).toLocaleString(locale()))); details.append(info);
     } else {
-      const requirements = node("div", "taskPrerequisites"); requirements.append(node("h3", "", "Prerequisites"));
-      if (!task.prerequisites?.length) requirements.append(node("p", "", "没有前置知识要求。"));
+      const requirements = node("div", "taskPrerequisites"); requirements.append(node("h3", "", t("portal.prerequisites.50")));
+      if (!task.prerequisites?.length) requirements.append(node("p", "", t("portal.no.prerequisites.are.required.51")));
       for (const item of task.prerequisites || []) {
         const id = typeof item === "string" ? item : item.id;
         const known = (data.topics || []).find((topic) => topic.id === id) || (typeof item === "object" ? item : {});
@@ -326,10 +329,10 @@ export function initPortal(bridge) {
       const actions = node("div", "taskStartRow");
       const explicit = task.start_href || task.start_url;
       const target = (task.type === "Lesson" || !task.type) && task.topic_id ? `#/topic/${encode(task.topic_id)}` : typeof explicit === "string" && /^#\/(topic|learn|courses)\//.test(explicit) ? explicit : null;
-      if (target && allowed("learn")) actions.append(roundButton(percent(task.progress) > 0 || task.started ? "Resume" : "Start", () => navigate(target)));
-      else if (target && task.started && allowed("review_history")) actions.append(roundButton("回看", () => navigate(target)));
-      else if (target) actions.append(node("p", "", "管理员尚未开放学习功能，请联系管理员。"));
-      else actions.append(node("p", "", "此任务的学习入口尚未开放。"));
+      if (target && allowed("learn")) actions.append(roundButton(percent(task.progress) > 0 || task.started ? t("portal.resume.52") : t("portal.start.53"), () => navigate(target)));
+      else if (target && task.started && allowed("review_history")) actions.append(roundButton(t("portal.review.54"), () => navigate(target)));
+      else if (target) actions.append(node("p", "", t("portal.learning.is.not.enabled.for.your.account.please.contact.your.admi.55")));
+      else actions.append(node("p", "", t("portal.this.task.is.not.available.to.start.yet.56")));
       appendGuestReset(actions, task);
       details.append(actions);
     }
@@ -340,17 +343,17 @@ export function initPortal(bridge) {
     const summary = control("", "taskToggle", () => navigate(`/learn?taskId=${encode(task.id)}`)); summary.append(taskSummary(task, true)); card.append(summary);
     if (bridge.getAccess()?.role === "guest") {
       const actions = node("div", "taskStartRow completedTaskActions");
-      actions.append(roundButton("回看", () => navigate(`/learn?taskId=${encode(task.id)}`)));
+      actions.append(roundButton(t("portal.review.54"), () => navigate(`/learn?taskId=${encode(task.id)}`)));
       appendGuestReset(actions, task); card.append(actions);
     }
     return card;
   }
   function appendGuestReset(actions, task) {
     if (bridge.getAccess()?.role !== "guest" || !allowed("learn") || !task.topic_id || (task.type && task.type !== "Lesson")) return;
-    const reset = control("reset", "portalStart guestReset", async () => {
+    const reset = control(t("portal.reset.57"), "portalStart guestReset", async () => {
       if (reset.disabled) return;
       const learner = bridge.getAccess()?.learner_id, ticket = sequence;
-      reset.disabled = true; reset.textContent = "重置中…";
+      reset.disabled = true; reset.textContent = t("portal.resetting.58");
       actions.parentElement?.querySelector(".resetStatus")?.remove();
       try {
         const state = await call(`state?topic_id=${encode(task.topic_id)}`);
@@ -362,23 +365,23 @@ export function initPortal(bridge) {
         if (bridge.getAccess()?.learner_id !== learner || ticket !== sequence) return;
         dashboards.clear(); answerCache.clear();
         await route();
-        const status = node("p", "resetStatus", "进度已重置，可以重新开始。"); status.setAttribute("role", "status");
+        const status = node("p", "resetStatus", t("portal.progress.has.been.reset.you.can.start.again.59")); status.setAttribute("role", "status");
         root.prepend(status);
       } catch (error) {
         if (bridge.getAccess()?.learner_id !== learner || ticket !== sequence) return;
-        const status = node("p", "resetStatus fieldError", error.message); status.setAttribute("role", "alert"); actions.after(status);
-      } finally { reset.disabled = false; reset.textContent = "reset"; }
+        const status = node("p", "resetStatus fieldError", translateMessage(error.message)); status.setAttribute("role", "alert"); actions.after(status);
+      } finally { reset.disabled = false; reset.textContent = t("portal.reset.57"); }
     });
-    reset.title = "重置这个 lesson 的学习进度，从头开始";
+    reset.title = t("portal.reset.this.lesson.s.progress.and.start.again.60");
     actions.append(reset);
   }
   function renderHistory(data, target) {
     target.replaceChildren(); let date = null; renderedDay = dayKey(new Date());
-    if (!allowed("review_history")) { target.append(emptyBox("管理员尚未开放回看功能，请联系管理员。")); return; }
+    if (!allowed("review_history")) { target.append(emptyBox(t("portal.review.is.not.enabled.for.your.account.please.contact.your.admini.61"))); return; }
     for (const task of data.history) {
       const valid = task.completed_at && Number.isFinite(Date.parse(task.completed_at));
       const key = valid ? dayKey(task.completed_at) : "unknown";
-      if (key !== date) { target.append(node("h2", "completedTasksDate", valid ? key === dayKey(new Date()) ? "Today" : apiDate(task.completed_at) : "完成日期未知")); date = key; }
+      if (key !== date) { target.append(node("h2", "completedTasksDate", valid ? key === dayKey(new Date()) ? t("portal.today.62") : apiDate(task.completed_at) : t("portal.completion.date.unknown.63"))); date = key; }
       target.append(historyCard(task));
     }
   }
@@ -387,24 +390,24 @@ export function initPortal(bridge) {
     const layout = node("div", "dashboardLayout"), tasks = node("div", "dashboardTasks"); tasks.id = "dashboardTasks";
     layout.append(courseSidebar(data), tasks); root.replaceChildren(layout);
     if (taskId) { renderAnswers(tasks, taskId, ticket); return; }
-    const pending = node("section", "incompleteTasks"); pending.setAttribute("aria-label", "待完成任务");
+    const pending = node("section", "incompleteTasks"); pending.setAttribute("aria-label", t("portal.pending.tasks.64"));
     for (const task of data.tasks) pending.append(incompleteTask(task, data));
     if (!data.tasks.length) {
-      const empty = emptyBox(percent(data.course.progress) === 100 ? "本课程的现有学习任务已完成。" : "暂时没有可开始的任务，稍后会再次检查。" );
-      empty.append(control("重新检查", "textButton", () => route())); pending.append(empty);
+      const empty = emptyBox(percent(data.course.progress) === 100 ? t("portal.all.current.tasks.in.this.course.are.complete.65") : t("portal.no.tasks.are.available.to.start.we.will.check.again.shortly.66") );
+      empty.append(control(t("portal.check.again.67"), "textButton", () => route())); pending.append(empty);
       if (percent(data.course.progress) !== 100 && data.course.start_date) waitForTasks(ticket, 0);
     }
-    const historyList = node("section", "completedTasks"); historyList.id = "completedTasks"; historyList.setAttribute("aria-label", "已完成任务"); renderHistory(data, historyList);
+    const historyList = node("section", "completedTasks"); historyList.id = "completedTasks"; historyList.setAttribute("aria-label", t("portal.completed.tasks.68")); renderHistory(data, historyList);
     const more = node("div", "historyMore"); more.id = "historyMore";
     tasks.append(pending, historyList, more); renderMore();
-    if (!data.tasks.length && !data.history.length && percent(data.course.progress) !== 100) historyList.append(node("p", "historyEmpty", "完成后的学习记录会显示在这里。"));
+    if (!data.tasks.length && !data.history.length && percent(data.course.progress) !== 100) historyList.append(node("p", "historyEmpty", t("portal.completed.learning.records.will.appear.here.69")));
   }
   function renderMore(error = null) {
     const target = $("historyMore"), data = selectedDashboard(); if (!target || !data) return;
     target.replaceChildren(); historyError = error;
-    if (paging) { target.append(loading("正在读取更早记录…")); return; }
+    if (paging) { target.append(loading(t("portal.loading.earlier.records.70"))); return; }
     if (error) target.append(node("p", "fieldError", error));
-    if (data.has_more) target.append(control(error ? "重试加载" : "加载更早记录", "textButton", loadMore));
+    if (data.has_more) target.append(control(error ? t("portal.retry.loading.71") : t("portal.load.earlier.records.72"), "textButton", loadMore));
   }
   async function loadMore() {
     const data = selectedDashboard(), id = selectedCourse, ticket = sequence;
@@ -414,7 +417,7 @@ export function initPortal(bridge) {
       const next = await dashboard(id, data.history_cursor);
       if (ticket !== sequence) return;
       const merged = mergeDashboard(id, next, true); renderHistory(merged, $("completedTasks"));
-    } catch (error) { failure = error.message; }
+    } catch (error) { failure = translateMessage(error.message); }
     finally { paging = false; if (ticket === sequence) renderMore(failure); }
   }
   window.addEventListener("scroll", () => {
@@ -434,15 +437,15 @@ export function initPortal(bridge) {
         else waitForTasks(ticket, attempt + 1);
       } catch (error) {
         if (ticket !== sequence) return;
-        const target = root.querySelector(".incompleteTasks"); target?.replaceChildren(errorBox(error.message, () => route(), "暂时无法检查新任务"));
+        const target = root.querySelector(".incompleteTasks"); target?.replaceChildren(errorBox(translateMessage(error.message), () => route(), t("portal.unable.to.check.for.new.tasks.73")));
       }
     }, [5000, 10000, 15000][Math.min(attempt, 2)]);
   }
 
   async function renderAnswers(target, taskId, ticket) {
-    const back = control("← 返回学习记录", "taskBackButton", () => { if (scrolls.has("#/learn")) history.back(); else navigate("/learn"); });
-    if (!allowed("review_history")) { target.replaceChildren(back, emptyBox("管理员尚未开放回看功能，请联系管理员。")); return; }
-    target.replaceChildren(back, loading("正在读取作答记录…"));
+    const back = control(t("portal.back.to.learning.records.74"), "taskBackButton", () => { if (scrolls.has("#/learn")) history.back(); else navigate("/learn"); });
+    if (!allowed("review_history")) { target.replaceChildren(back, emptyBox(t("portal.review.is.not.enabled.for.your.account.please.contact.your.admini.61"))); return; }
+    target.replaceChildren(back, loading(t("portal.loading.answers.75")));
     try {
       const result = answerCache.get(taskId) || await call(`tasks/${encode(taskId)}/answers`);
       if (ticket !== sequence) return;
@@ -450,49 +453,49 @@ export function initPortal(bridge) {
       mathStyle(result.math_css);
       const summary = node("article", "portalTask taskCompleted answerTaskSummary"); summary.append(taskSummary(result.task, true));
       target.replaceChildren(back, summary);
-      if (!result.groups?.some((group) => group.answers?.length)) target.append(emptyBox("暂无可查看的作答记录。"));
+      if (!result.groups?.some((group) => group.answers?.length)) target.append(emptyBox(t("portal.no.answer.records.are.available.76")));
       for (const group of result.groups || []) {
         const section = node("section", "answerGroup"); section.append(node("h2", "answerGroupTitle", group.title));
         for (const [index, answer] of (group.answers || []).entries()) section.append(answerCard(answer, index, result.task));
         target.append(section);
       }
-    } catch (error) { if (ticket === sequence) target.replaceChildren(back, errorBox(error.message, () => renderAnswers(target, taskId, ticket), "暂时无法读取作答记录")); }
+    } catch (error) { if (ticket === sequence) target.replaceChildren(back, errorBox(translateMessage(error.message), () => renderAnswers(target, taskId, ticket), t("portal.unable.to.load.answers.77"))); }
   }
   function answerCard(answer, index, task) {
     const wrapper = node("article", "answerRecord"), head = node("div", "answerRecordHeader"), question = node("div", "answerQuestion");
-    head.append(node("span", "", `Question ${index + 1}`));
+    head.append(node("span", "", t("portal.questionIndex", { index: (index + 1).toLocaleString(locale()) })));
     const helpHost = node("div", "answerHelpHost"), helpMenu = node("div", "answerHelpMenu"); helpMenu.hidden = true;
     const help = control("?", "answerHelp", () => { helpMenu.hidden = !helpMenu.hidden; });
-    help.title = "题目帮助"; help.setAttribute("aria-label", "题目帮助"); help.setAttribute("aria-haspopup", "true");
-    helpMenu.append(control("Report a content error", "", () => { helpMenu.hidden = true; showFeedback({ course_id: task.course_id, topic_id: task.topic_id, task_id: task.id, question_id: answer.question_id }); }));
+    help.title = t("portal.question.help.78"); help.setAttribute("aria-label", t("portal.question.help.78")); help.setAttribute("aria-haspopup", "true");
+    helpMenu.append(control(t("portal.report.a.content.error.79"), "", () => { helpMenu.hidden = true; showFeedback({ course_id: task.course_id, topic_id: task.topic_id, task_id: task.id, question_id: answer.question_id }); }));
     helpHost.addEventListener("mouseenter", () => { helpMenu.hidden = false; });
     helpHost.addEventListener("mouseleave", () => { helpMenu.hidden = true; });
     helpHost.append(help, helpMenu); head.append(helpHost);
     question.append(trustedContent(answer.html));
     const meta = node("div", "answerMetadata");
-    const difficulty = answer.difficulty == null ? "—" : ({ easy: "E", medium: "M", hard: "H" }[answer.difficulty] || String(answer.difficulty));
-    const elapsed = answer.elapsed_seconds == null ? "—" : `${Math.round(answer.elapsed_seconds)} s`;
-    meta.append(node("span", "", `Difficulty ${difficulty}`), node("span", "", apiDate(answer.answered_at, true)), node("span", "", `Elapsed ${elapsed}`));
-    const outcomes = { correct: "Correct", incorrect: "Incorrect", full: "Full Credit", full_credit: "Full Credit", partial: "Partial Credit", partial_credit: "Partial Credit", none: "No Credit", no_credit: "No Credit", unanswered: "未作答" };
-    const result = outcomes[answer.result] || (answer.correct === true ? "Correct" : answer.correct === false ? "Incorrect" : "—");
+    const difficulty = answer.difficulty == null ? "—" : ({ easy: t("portal.easy"), medium: t("portal.medium"), hard: t("portal.hard") }[answer.difficulty] || String(answer.difficulty));
+    const elapsed = answer.elapsed_seconds == null ? "—" : t("portal.seconds", { count: Math.round(answer.elapsed_seconds).toLocaleString(locale()) });
+    meta.append(node("span", "", t("portal.difficulty", { value: difficulty })), node("span", "", apiDate(answer.answered_at, true)), node("span", "", t("portal.elapsed", { value: elapsed })));
+    const outcomes = { correct: t("portal.correct.80"), incorrect: t("portal.incorrect.81"), full: t("portal.full.credit.82"), full_credit: t("portal.full.credit.82"), partial: t("portal.partial.credit.83"), partial_credit: t("portal.partial.credit.83"), none: t("portal.no.credit.84"), no_credit: t("portal.no.credit.84"), unanswered: t("portal.unanswered.85") };
+    const result = outcomes[answer.result] || (answer.correct === true ? t("portal.correct.80") : answer.correct === false ? t("portal.incorrect.81") : "—");
     const outcome = node("span", `answerOutcome ${answer.correct === true ? "correct" : answer.correct === false ? "incorrect" : ""}`, result); meta.append(outcome);
     const explanation = node("div", "answerExplanation"); explanation.hidden = true;
-    if (answer.explanation_html) explanation.append(trustedContent(answer.explanation_html)); else explanation.append(node("p", "", "此题暂未提供解析。"));
-    if (answer.correct !== true) { explanation.append(node("h3", "", "Your Answer"), node("pre", "historyYourAnswer", answer.answer == null || answer.answer === "" ? "未作答" : answer.answer)); }
-    const toggle = control("查看解析", "answerExplanationToggle textButton", () => { explanation.hidden = !explanation.hidden; toggle.textContent = explanation.hidden ? "查看解析" : "收起解析"; toggle.setAttribute("aria-expanded", String(!explanation.hidden)); }); toggle.setAttribute("aria-expanded", "false");
+    if (answer.explanation_html) explanation.append(trustedContent(answer.explanation_html)); else explanation.append(node("p", "", t("portal.no.explanation.is.available.for.this.question.86")));
+    if (answer.correct !== true) { explanation.append(node("h3", "", t("portal.your.answer.87")), node("pre", "historyYourAnswer", answer.answer == null || answer.answer === "" ? t("portal.unanswered.85") : answer.answer)); }
+    const toggle = control(t("portal.show.explanation.88"), "answerExplanationToggle textButton", () => { explanation.hidden = !explanation.hidden; toggle.textContent = explanation.hidden ? t("portal.show.explanation.88") : t("portal.hide.explanation.89"); toggle.setAttribute("aria-expanded", String(!explanation.hidden)); }); toggle.setAttribute("aria-expanded", "false");
     question.addEventListener("click", (event) => { if (!event.target.closest("a,button")) toggle.click(); });
     wrapper.append(head, question, meta, toggle, explanation); return wrapper;
   }
 
   function renderCourseProgress(data, params) {
-    document.title = `${data.course.title} · 课程进度`;
-    const header = node("div", "progressPageHeading"); header.append(link("← 返回学习主页", learnHref(), "textButton"), node("h1", "portalPageTitle", data.course.title));
-    const details = node("section", "courseProgressSummary"); details.append(infoRow("Progress", percentLabel(data.course.progress)), infoRow("Start Date", apiDate(data.course.start_date)), infoRow("End Date", apiDate(data.course.end_date)), infoRow("Estimated completion", apiDate(data.course.estimated_completion)), control("查看知识图谱", "textButton", () => openGraph(data)));
+    document.title = t("portal.courseProgressTitle", { title: data.course.title });
+    const header = node("div", "progressPageHeading"); header.append(link(t("portal.back.to.learning.home.90"), learnHref(), "textButton"), node("h1", "portalPageTitle", data.course.title));
+    const details = node("section", "courseProgressSummary"); details.append(infoRow(t("portal.progress.36"), percentLabel(data.course.progress)), infoRow(t("portal.start.date.37"), apiDate(data.course.start_date)), infoRow(t("portal.end.date.38"), apiDate(data.course.end_date)), infoRow(t("portal.estimated.completion.39"), apiDate(data.course.estimated_completion)), control(t("portal.view.knowledge.map.91"), "textButton", () => openGraph(data)));
     root.replaceChildren(header, details);
     const max = Math.max(0, ...(data.units || []).map((unit) => Number(unit.topic_count) || 0));
     for (const unit of data.units || []) {
       const section = node("section", "progressUnit"); section.dataset.progressId = unit.id;
-      section.append(node("h2", "", `${unit.title} (${unit.topic_count} topics)`), unitBar(unit, max));
+      section.append(node("h2", "", t("portal.unitCount", { title: unit.title, count: Number(unit.topic_count).toLocaleString(locale()) })), unitBar(unit, max));
       for (const topic of (data.topics || []).filter((topic) => topic.unit_id === unit.id || unit.topic_ids?.includes(topic.id))) {
         const row = node("div", "progressTopic"); row.dataset.progressId = topic.id;
         row.append(node("span", "", topic.title), node("span", "", statusNames[topic.status] || "—"), node("span", "", percentLabel(topic.progress)));
@@ -500,21 +503,21 @@ export function initPortal(bridge) {
       }
       root.append(section);
     }
-    if (!data.units?.length) root.append(emptyBox("课程单元尚未提供。"));
+    if (!data.units?.length) root.append(emptyBox(t("portal.course.units.are.not.available.yet.34")));
   }
 
-  const graphDialog = node("dialog", "graphDialog"); graphDialog.setAttribute("aria-label", "课程知识图谱");
-  const graphHeading = node("div", "dialogHeading"), graphTitle = node("h2", "", "知识图谱"), graphContent = node("div", "graphContent");
-  const graphClose = control("×", "iconButton", () => graphDialog.close()); graphClose.setAttribute("aria-label", "关闭知识图谱");
+  const graphDialog = node("dialog", "graphDialog"); graphDialog.setAttribute("aria-label", t("portal.course.knowledge.map.92"));
+  const graphHeading = node("div", "dialogHeading"), graphTitle = node("h2", "", t("portal.knowledge.map.93")), graphContent = node("div", "graphContent");
+  const graphClose = control("×", "iconButton", () => graphDialog.close()); graphClose.setAttribute("aria-label", t("portal.close.knowledge.map.94"));
   graphHeading.append(graphTitle, graphClose); graphDialog.append(graphHeading, graphContent); document.body.append(graphDialog);
   graphDialog.addEventListener("close", () => { document.body.classList.remove("portalModalOpen"); window.scrollTo(0, graphScroll); });
   function openGraph(data) {
-    hidePopovers(); graphScroll = window.scrollY; graphTitle.textContent = `${data.course.title} · 知识图谱`;
-    graphContent.replaceChildren(loading("Initializing ...")); graphDialog.showModal(); document.body.classList.add("portalModalOpen");
+    hidePopovers(); graphScroll = window.scrollY; graphTitle.textContent = t("portal.graphTitle", { title: data.course.title });
+    graphContent.replaceChildren(loading(t("portal.initializing.95"))); graphDialog.showModal(); document.body.classList.add("portalModalOpen");
     requestAnimationFrame(() => drawGraph(data.topics || []));
   }
   function drawGraph(topics) {
-    if (!topics.length) { graphContent.replaceChildren(emptyBox("当前课程尚无知识图谱数据。")); return; }
+    if (!topics.length) { graphContent.replaceChildren(emptyBox(t("portal.no.knowledge.map.is.available.for.this.course.96"))); return; }
     const byId = new Map(topics.map((topic) => [topic.id, topic])), levels = new Map();
     function level(id, seen = new Set()) {
       if (levels.has(id)) return levels.get(id); if (seen.has(id)) return 0;
@@ -527,7 +530,7 @@ export function initPortal(bridge) {
     const width = Math.max(680, Math.max(...rows.map((row) => row.length)) * 210), height = Math.max(280, rows.length * 115 + 70), positions = new Map();
     rows.forEach((row, rank) => row.forEach((topic, index) => positions.set(topic.id, { x: width / (row.length + 1) * (index + 1), y: height - 65 - rank * 115 })));
     const ns = "http://www.w3.org/2000/svg", make = (tag, attrs = {}) => { const item = document.createElementNS(ns, tag); for (const [key, value] of Object.entries(attrs)) item.setAttribute(key, String(value)); return item; };
-    const svg = make("svg", { viewBox: `0 0 ${width} ${height}`, width, height, role: "img", "aria-label": "主题及其先修关系，自下向上排列" });
+    const svg = make("svg", { viewBox: `0 0 ${width} ${height}`, width, height, role: "img", "aria-label": t("portal.topics.and.prerequisites.arranged.from.bottom.to.top.97") });
     const defs = make("defs"), marker = make("marker", { id: "portalGraphArrow", markerWidth: 8, markerHeight: 8, refX: 7, refY: 4, orient: "auto" }); marker.append(make("path", { d: "M0,0 L8,4 L0,8 Z", fill: "#a9b4be" })); defs.append(marker); svg.append(defs);
     for (const topic of topics) for (const parent of topic.prerequisites || []) {
       const from = positions.get(typeof parent === "string" ? parent : parent.id), to = positions.get(topic.id); if (!from) continue;
@@ -537,30 +540,30 @@ export function initPortal(bridge) {
       const p = positions.get(topic.id), group = make("g"), completed = topic.status === "completed";
       const fill = completed ? "#176bb5" : topic.status === "in_progress" || topic.status === "paused" ? "#a5cff3" : topic.frontier ? "#c9e4ff" : "#f2f2f2";
       group.append(make("rect", { x: p.x - 86, y: p.y - 24, width: 172, height: 48, rx: 3, fill, stroke: "#c9d2da" }));
-      const title = make("title"); title.textContent = `${topic.title} · ${statusNames[topic.status] || "尚未学习"}`; group.append(title);
+      const title = make("title"); title.textContent = `${topic.title} · ${statusNames[topic.status] || t("portal.not.started.3")}`; group.append(title);
       const label = make("text", { x: p.x, y: p.y + 5, "text-anchor": "middle", fill: completed ? "#fff" : "#1e194e", "font-size": 13 }); label.textContent = [...topic.title].length > 13 ? [...topic.title].slice(0, 12).join("") + "…" : topic.title; group.append(label); svg.append(group);
     }
     const viewport = node("div", "graphViewport"); viewport.append(svg);
-    graphContent.replaceChildren(viewport, node("p", "graphLegend", "深蓝：已完成　浅蓝：学习中　淡蓝：可开始　灰色：尚未学习"));
+    graphContent.replaceChildren(viewport, node("p", "graphLegend", t("portal.dark.blue.completed.light.blue.in.progress.pale.blue.ready.to.sta.98")));
   }
 
   function renderHelp() {
     const article = node("article", "guidePage"), body = node("div", "guideBody courseContent");
     const questions = [
-      ["学习进度会保存吗？", "进度会自动保存。游客请使用同一浏览器继续学习；更换设备或清除浏览器数据后，可能无法找回原游客身份。使用邀请码登录的账号可在其他设备登录后继续。"],
-      ["“体验专用浏览版”怎么用？", "游客勾选右上角的选项后，作答框会自动填入标准答案，点击 Submit 即可提交。你也可以修改答案，系统仍会正常判对错；取消勾选后，后续题目需要自行作答。"],
-      ["reset 会重置什么？", "游客点击某个 Lesson 旁的黄色 reset，会立即清空该 Lesson 当前显示的学习进度和作答记录，让你从头开始。其他 Lesson 和其他人的进度不受影响。"],
-      ["题目有问题，或者不知道怎么操作怎么办？", "操作流程可以查看 GUIDE。发现题目或解析有误，可在学习页点击“内容反馈”，或在作答记录中点击问号选择 Report a content error；其他问题可通过头像菜单中的 Support 反馈。"],
+      [t("portal.is.my.progress.saved.99"), t("portal.progress.is.saved.automatically.guests.should.continue.in.the.sam.100")],
+      [t("portal.how.do.i.use.demo.browsing.101"), t("portal.as.a.guest.select.demo.browsing.beside.your.avatar.to.fill.answer.102")],
+      [t("portal.what.does.reset.clear.103"), t("portal.as.a.guest.click.the.yellow.reset.button.beside.a.lesson.to.clear.104")],
+      [t("portal.what.if.i.find.a.problem.or.need.help.105"), t("portal.see.guide.for.learning.instructions.to.report.a.question.or.expla.106")],
     ];
     for (const [question, answer] of questions) body.append(node("h2", "", question), node("p", "", answer));
-    body.append(link("查看 GUIDE →", "#/guide"));
-    article.append(node("h1", "portalPageTitle", "Q&A"), body); root.replaceChildren(article);
+    body.append(link(t("portal.view.guide.107"), "#/guide"));
+    article.append(node("h1", "portalPageTitle", t("portal.q.a.108")), body); root.replaceChildren(article);
   }
   async function renderGuide(ticket) {
     guideLoaded = false; guideVersion = null;
-    const article = node("article", "guidePage"), heading = node("h1", "portalPageTitle", "GUIDE"), notice = node("div", "guideNotice"), body = node("div", "guideBody courseContent"), updated = node("p", "guideUpdated");
+    const article = node("article", "guidePage"), heading = node("h1", "portalPageTitle", t("portal.guide.109")), notice = node("div", "guideNotice"), body = node("div", "guideBody courseContent"), updated = node("p", "guideUpdated");
     notice.id = "guideNotice"; body.id = "guideBody"; updated.id = "guideUpdated";
-    body.append(loading("正在读取指南…")); article.append(heading, notice, body, updated); root.replaceChildren(article);
+    body.append(loading(t("portal.loading.guide.110"))); article.append(heading, notice, body, updated); root.replaceChildren(article);
     await updateGuide(ticket);
   }
   async function updateGuide(ticket) {
@@ -568,65 +571,73 @@ export function initPortal(bridge) {
     try {
       const result = await call("guide"); if (ticket !== sequence || currentRoute?.path !== "/guide") return;
       const body = $("guideBody"), notice = $("guideNotice");
-      if (result.status === "unavailable") throw new Error(result.message || "指南暂时无法读取。");
+      if (result.status === "unavailable") throw new Error(result.message ? translateMessage(result.message) : t("portal.the.guide.is.temporarily.unavailable.111"));
       notice.replaceChildren();
       if (!guideLoaded || guideVersion !== result.version) {
         const y = window.scrollY;
-        if (result.status === "empty") body.replaceChildren(emptyBox("指南内容尚未填写。"));
+        if (result.status === "empty") body.replaceChildren(emptyBox(t("portal.the.guide.has.not.been.written.yet.112")));
         else if (result.status === "ready") { body.innerHTML = result.html || ""; mathStyle(result.math_css, "guideMathStyle"); }
-        else throw new Error("指南返回了无法识别的状态。");
+        else throw new Error(t("portal.the.guide.returned.an.unrecognized.status.113"));
         guideVersion = result.version; guideLoaded = true; window.scrollTo(0, y);
       }
-      $("guideUpdated").textContent = result.modified_at ? `更新于 ${apiDate(result.modified_at, true)}` : "";
+      $("guideUpdated").textContent = result.modified_at ? t("portal.updatedAt", { date: apiDate(result.modified_at, true) }) : "";
     } catch (error) {
       if (ticket !== sequence) return;
       if (!guideLoaded) $("guideBody")?.replaceChildren();
-      $("guideNotice")?.replaceChildren(errorBox(error.message, () => updateGuide(ticket), "暂时无法更新指南"));
+      $("guideNotice")?.replaceChildren(errorBox(translateMessage(error.message), () => updateGuide(ticket), t("portal.unable.to.update.the.guide.114")));
     } finally { if (ticket === sequence && currentRoute?.path === "/guide") refreshTimer = setTimeout(() => { if (document.hidden) updateGuideLater(ticket); else updateGuide(ticket); }, 5000); }
   }
   function updateGuideLater(ticket) { if (ticket === sequence) refreshTimer = setTimeout(() => updateGuide(ticket), 5000); }
 
   function renderSettings() {
     const page = node("section", "settingsPage"), form = node("form", "profileForm");
-    page.append(node("h1", "portalPageTitle", "个人设置"));
-    const displayLabel = node("label", "", "显示名称"), display = node("input"); display.id = "profileDisplayName"; displayLabel.htmlFor = display.id; display.value = profile.display_name || ""; display.maxLength = 100; display.required = true;
-    const zoneLabel = node("label", "", "时区"), zone = node("input"); zone.id = "profileTimezone"; zoneLabel.htmlFor = zone.id; zone.value = timezone(); zone.required = true; zone.setAttribute("list", "timezoneOptions");
+    page.append(node("h1", "portalPageTitle", t("portal.settings.115")));
+    const displayLabel = node("label", "", t("portal.display.name.116")), display = node("input"); display.id = "profileDisplayName"; displayLabel.htmlFor = display.id; const defaultGuestName = bridge.getAccess()?.role === "guest" && (!profile.display_name || profile.display_name === "游客"); display.value = defaultGuestName ? t("portal.guest.12") : profile.display_name || ""; display.maxLength = 100; display.required = true;
+    const zoneLabel = node("label", "", t("portal.time.zone.117")), zone = node("input"); zone.id = "profileTimezone"; zoneLabel.htmlFor = zone.id; zone.value = timezone(); zone.required = true; zone.setAttribute("list", "timezoneOptions");
     const zones = node("datalist"); zones.id = "timezoneOptions";
     for (const value of Intl.supportedValuesOf?.("timeZone") || [timezone(), "UTC"]) { const option = node("option"); option.value = value; zones.append(option); }
-    const hint = node("p", "fieldHint", "历史日期、完成时间与作答时间按此时区显示。"), status = node("p", "profileStatus"); status.setAttribute("role", "status");
-    const submit = node("button", "primaryButton", "保存"); submit.type = "submit";
-    form.append(displayLabel, display, zoneLabel, zone, zones, hint, status, submit);
+    const hint = node("p", "fieldHint", t("portal.history.dates.completion.times.and.answer.times.use.this.time.zon.118")), status = node("p", "profileStatus"); status.setAttribute("role", "status");
+    const submit = node("button", "primaryButton", t("portal.save.119")); submit.type = "submit";
+    const languageLabel = node("label", "", t("portal.language")), language = node("select");
+    language.id = "profileLanguage"; languageLabel.htmlFor = language.id;
+    for (const [value, key] of [["zh-CN", "portal.languageZh"], ["en", "portal.languageEn"]]) {
+      const option = node("option", "", t(key)); option.value = value; language.append(option);
+    }
+    language.value = getLanguage();
+    language.addEventListener("change", () => { setLanguage(language.value); location.reload(); });
+    const languageHint = node("p", "fieldHint", t("portal.languageHint"));
+    form.append(languageLabel, language, languageHint, displayLabel, display, zoneLabel, zone, zones, hint, status, submit);
     form.addEventListener("submit", async (event) => {
-      event.preventDefault(); if (submit.disabled) return; submit.disabled = true; status.textContent = "正在保存…";
-      try { profile = await call("profile", { method: "POST", body: { display_name: display.value.trim(), timezone: zone.value.trim() } }); updateUser(); status.textContent = "个人设置已保存。"; }
-      catch (error) { status.textContent = error.message; }
+      event.preventDefault(); if (submit.disabled) return; submit.disabled = true; status.textContent = t("portal.saving.120");
+      try { profile = await call("profile", { method: "POST", body: { display_name: defaultGuestName && display.value.trim() === t("portal.guest.12") ? profile.display_name || "游客" : display.value.trim(), timezone: zone.value.trim() } }); updateUser(); status.textContent = t("portal.settings.saved.121"); }
+      catch (error) { status.textContent = translateMessage(error.message); }
       finally { submit.disabled = false; }
     });
     page.append(form); root.replaceChildren(page);
   }
 
-  const feedbackDialog = node("dialog", "feedbackDialog"), feedbackForm = node("form"), feedbackHeading = node("div", "dialogHeading"), feedbackTitle = node("h2", "", "Support · 站内反馈");
-  const feedbackClose = control("×", "iconButton", () => feedbackDialog.close()); feedbackClose.setAttribute("aria-label", "关闭反馈"); feedbackHeading.append(feedbackTitle, feedbackClose);
-  const feedbackLabel = node("label", "", "请描述你遇到的问题"), feedbackInput = node("textarea"); feedbackInput.id = "feedbackMessage"; feedbackLabel.htmlFor = feedbackInput.id; feedbackInput.maxLength = 4000; feedbackInput.required = true; feedbackInput.rows = 7;
+  const feedbackDialog = node("dialog", "feedbackDialog"), feedbackForm = node("form"), feedbackHeading = node("div", "dialogHeading"), feedbackTitle = node("h2", "", t("portal.feedback.122"));
+  const feedbackClose = control("×", "iconButton", () => feedbackDialog.close()); feedbackClose.setAttribute("aria-label", t("portal.close.feedback.123")); feedbackHeading.append(feedbackTitle, feedbackClose);
+  const feedbackLabel = node("label", "", t("portal.describe.the.issue.you.encountered.124")), feedbackInput = node("textarea"); feedbackInput.id = "feedbackMessage"; feedbackLabel.htmlFor = feedbackInput.id; feedbackInput.maxLength = 4000; feedbackInput.required = true; feedbackInput.rows = 7;
   const feedbackStatus = node("p", "feedbackStatus"); feedbackStatus.setAttribute("role", "status");
-  const feedbackActions = node("div", "dialogActions"), feedbackCancel = control("Cancel", "secondaryButton", () => feedbackDialog.close()), feedbackSubmit = node("button", "primaryButton", "Submit"); feedbackSubmit.type = "submit";
+  const feedbackActions = node("div", "dialogActions"), feedbackCancel = control(t("portal.cancel.125"), "secondaryButton", () => feedbackDialog.close()), feedbackSubmit = node("button", "primaryButton", t("portal.submit.126")); feedbackSubmit.type = "submit";
   feedbackActions.append(feedbackCancel, feedbackSubmit); feedbackForm.append(feedbackHeading, feedbackLabel, feedbackInput, feedbackStatus, feedbackActions); feedbackDialog.append(feedbackForm); document.body.append(feedbackDialog);
   function showFeedback(context = {}) {
     if (feedbackBusy) return;
     const matchesSelected = !context.topic_id || selectedDashboard()?.topics?.some((topic) => topic.id === context.topic_id);
     feedbackContext = { ...(selectedCourse && matchesSelected ? { course_id: selectedCourse } : {}), ...context };
-    feedbackTitle.textContent = context.question_id ? "Report a content error · 内容纠错" : "Support · 站内反馈";
-    feedbackStatus.textContent = ""; feedbackInput.value = ""; feedbackInput.hidden = false; feedbackLabel.hidden = false; feedbackSubmit.hidden = false; feedbackCancel.textContent = "Cancel";
+    feedbackTitle.textContent = context.question_id ? t("portal.report.a.content.error.127") : t("portal.feedback.122");
+    feedbackStatus.textContent = ""; feedbackInput.value = ""; feedbackInput.hidden = false; feedbackLabel.hidden = false; feedbackSubmit.hidden = false; feedbackCancel.textContent = t("portal.cancel.125");
     if (!feedbackDialog.open) feedbackDialog.showModal();
   }
   feedbackForm.addEventListener("submit", async (event) => {
     event.preventDefault(); if (feedbackBusy || !feedbackInput.value.trim()) return;
-    feedbackBusy = true; feedbackSubmit.disabled = true; feedbackClose.disabled = true; feedbackCancel.disabled = true; feedbackStatus.textContent = "正在保存反馈…";
+    feedbackBusy = true; feedbackSubmit.disabled = true; feedbackClose.disabled = true; feedbackCancel.disabled = true; feedbackStatus.textContent = t("portal.saving.feedback.128");
     try {
       const result = await call("feedback", { method: "POST", body: { message: feedbackInput.value.trim(), ...feedbackContext } });
-      if (result.status !== "saved") throw new Error("反馈尚未确认保存，请重试。");
-      feedbackStatus.textContent = "反馈已保存，谢谢。"; feedbackInput.hidden = true; feedbackLabel.hidden = true; feedbackSubmit.hidden = true; feedbackCancel.textContent = "Close";
-    } catch (error) { feedbackStatus.textContent = error.message; }
+      if (result.status !== "saved") throw new Error(t("portal.feedback.was.not.confirmed.as.saved.please.try.again.129"));
+      feedbackStatus.textContent = t("portal.feedback.saved.thank.you.130"); feedbackInput.hidden = true; feedbackLabel.hidden = true; feedbackSubmit.hidden = true; feedbackCancel.textContent = t("portal.close.131");
+    } catch (error) { feedbackStatus.textContent = translateMessage(error.message); }
     finally { feedbackBusy = false; feedbackSubmit.disabled = false; feedbackClose.disabled = false; feedbackCancel.disabled = false; }
   });
   feedbackDialog.addEventListener("cancel", (event) => { if (feedbackBusy) event.preventDefault(); });

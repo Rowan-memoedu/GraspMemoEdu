@@ -5,7 +5,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 if ($Repository -notmatch '^[A-Za-z0-9-]+/[A-Za-z0-9_.-]+$') { throw 'Invalid repository name.' }
-$expected = @('.nojekyll','app.js','deployment.json','favicon.svg','index.html','portal.js','portal.css','styles.css')
+$expected = @('.nojekyll','app.js','deployment.json','favicon.svg','index.html','portal.js','portal.css','styles.css','i18n.js','reader-messages.js','portal-messages.js','static-messages.js')
 $files = @(Get-ChildItem -LiteralPath $ExportDirectory -File -Force)
 if (@(Compare-Object ($expected | Sort-Object) ($files.Name | Sort-Object)).Count -ne 0) { throw 'Unexpected files in static publication directory.' }
 foreach ($name in $expected | Where-Object { $_ -notin @('.nojekyll', 'deployment.json') }) {

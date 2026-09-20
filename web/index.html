@@ -5,62 +5,62 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
     <meta name="referrer" content="no-referrer">
-    <meta name="description" content="按自己的进度阅读、练习和回看数学课程。">
-    <title>数学学习</title>
+    <meta name="description" data-i18n-content="site.description" content="按自己的进度阅读、练习和回看数学课程。">
+    <title data-i18n="site.title">数学学习</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="./styles.css">
     <link rel="stylesheet" href="./portal.css">
     <script type="module" src="./app.js"></script>
   </head>
   <body>
-    <a class="skipLink" id="skipContent" href="#portalContent">跳到主要内容</a>
+    <a class="skipLink" id="skipContent" href="#portalContent" data-i18n="nav.skip">跳到主要内容</a>
     <header class="topRibbon">
       <div class="topBarContainer">
-        <a class="portalLogo" href="#/learn" aria-label="数学学习主页"><img src="./favicon.svg" width="34" height="34" alt=""><span>数学学习</span></a>
-        <nav class="mainNavigation" aria-label="主要导航">
-          <a href="#/learn" data-navigation="learn">LEARN</a>
-          <a href="#/courses" data-navigation="courses">COURSES</a>
-          <a href="#/guide" data-navigation="guide">GUIDE</a>
+        <a class="portalLogo" href="#/learn" aria-label="数学学习主页" data-i18n-aria-label="nav.home"><img src="./favicon.svg" width="34" height="34" alt=""><span data-i18n="site.title">数学学习</span></a>
+        <nav class="mainNavigation" aria-label="主要导航" data-i18n-aria-label="nav.main">
+          <a href="#/learn" data-navigation="learn" data-i18n="nav.learn">学习</a>
+          <a href="#/courses" data-navigation="courses" data-i18n="nav.courses">课程</a>
+          <a href="#/guide" data-navigation="guide" data-i18n="nav.guide">指南</a>
         </nav>
         <div class="userMenuHost" id="userMenuHost">
-          <button class="userAvatar" id="userMenuButton" type="button" aria-label="用户菜单" aria-haspopup="true" aria-expanded="false" aria-controls="userMenu">游</button>
+          <button class="userAvatar" id="userMenuButton" type="button" aria-label="用户菜单" data-i18n-aria-label="account.menu" aria-haspopup="true" aria-expanded="false" aria-controls="userMenu">游</button>
           <div class="userMenu" id="userMenu" hidden>
-            <div class="userMenuIdentity"><strong id="menuDisplayName">游客</strong><span id="menuRole">游客身份</span><span id="menuAccountPurpose" class="accountPurpose" hidden>测试账号</span></div>
-            <a href="#/settings">Settings <span>个人设置</span></a>
-            <a href="#/help">Help <span>常见问题</span></a>
-            <button id="supportButton" type="button">Support <span>站内反馈</span></button>
+            <div class="userMenuIdentity"><strong id="menuDisplayName">游客</strong><span id="menuRole">游客身份</span><span id="menuAccountPurpose" class="accountPurpose" data-i18n="account.test" hidden>测试账号</span></div>
+            <a href="#/settings" data-i18n="nav.settings">设置</a>
+            <a href="#/help" data-i18n="nav.help">帮助</a>
+            <button id="supportButton" type="button" data-i18n="nav.support">反馈</button>
             <button class="identityButton" id="identityButton" type="button" aria-haspopup="dialog"><span id="identityAction">邀请码登录</span><span id="identityName" hidden>游客</span></button>
-            <button id="logoutButton" type="button" hidden>Logout <span>退出并切回游客</span></button>
+            <button id="logoutButton" type="button" data-i18n="account.logout" hidden>退出登录</button>
           </div>
         </div>
-        <label class="guestDemoOption" id="guestDemoOption" hidden><input id="guestDemoCheckbox" type="checkbox"><span>体验专用浏览版</span></label>
+        <label class="guestDemoOption" id="guestDemoOption" hidden><input id="guestDemoCheckbox" type="checkbox"><span data-i18n="account.demo">体验专用浏览版</span></label>
       </div>
     </header>
     <section id="identityNotice" class="identityNotice" role="status" hidden></section>
-    <main class="portalShell" id="portalContent" tabindex="-1"><section class="portalLoading" aria-live="polite"><span class="spinner" aria-hidden="true"></span><p>正在读取课程…</p></section></main>
+    <main class="portalShell" id="portalContent" tabindex="-1"><section class="portalLoading" aria-live="polite"><span class="spinner" aria-hidden="true"></span><p data-i18n="loading.courses">正在读取课程…</p></section></main>
     <div class="appLayout" id="appLayout" hidden>
-      <aside id="historySidebar" class="historySidebar" aria-label="学习记录">
-        <button id="historyButton" class="textButton historyButton" type="button" aria-label="收起学习记录" aria-expanded="true" aria-controls="historyPanel">
+      <aside id="historySidebar" class="historySidebar" aria-label="学习记录" data-i18n-aria-label="history.title">
+        <button id="historyButton" class="textButton historyButton" type="button" aria-label="收起学习记录" data-i18n-aria-label="history.collapse" aria-expanded="true" aria-controls="historyPanel">
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 4h12M5 10h12M5 16h12"/><path d="M2 4h.01M2 10h.01M2 16h.01"/></svg>
-          <span class="historyLabel">学习记录</span>
+          <span class="historyLabel" data-i18n="history.title">学习记录</span>
           <span class="chevron" aria-hidden="true"></span>
         </button>
-        <nav id="historyPanel" class="historyPanel" aria-label="已学内容与模块进度"><p class="historyHint">正在读取学习记录…</p></nav>
+        <nav id="historyPanel" class="historyPanel" aria-label="已学内容与模块进度" data-i18n-aria-label="history.navigation"><p class="historyHint" data-i18n="history.loading">正在读取学习记录…</p></nav>
       </aside>
-      <button id="historyDrawerToggle" class="historyDrawerToggle" type="button" aria-label="展开学习记录" aria-expanded="true" aria-controls="historyPanel">
+      <button id="historyDrawerToggle" class="historyDrawerToggle" type="button" aria-label="展开学习记录" data-i18n-aria-label="history.expand" aria-expanded="true" aria-controls="historyPanel">
         <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 4h12M5 10h12M5 16h12"/><path d="M2 4h.01M2 10h.01M2 16h.01"/></svg>
-        <span>学习记录</span>
+        <span data-i18n="history.title">学习记录</span>
       </button>
-      <button id="historyScrim" class="historyScrim" type="button" aria-label="收起学习记录" tabindex="-1" hidden></button>
+      <button id="historyScrim" class="historyScrim" type="button" aria-label="收起学习记录" data-i18n-aria-label="history.collapse" tabindex="-1" hidden></button>
       <div class="pageShell">
-      <div class="topicBreadcrumb"><a href="#/learn" id="topicHomeLink">← 返回学习主页</a><button id="topicFeedbackButton" class="textButton" type="button">内容反馈</button></div>
+      <div class="topicBreadcrumb"><a href="#/learn" id="topicHomeLink" data-i18n="nav.backHome">← 返回学习主页</a><button id="topicFeedbackButton" class="textButton" type="button" data-i18n="lesson.feedback">内容反馈</button></div>
 
       <main class="lesson" id="lessonContent" tabindex="-1">
         <div class="lessonHeading">
-          <p class="eyebrow">TOPIC</p>
+          <p class="eyebrow" data-i18n="lesson.topic">主题</p>
           <h1 class="lessonTitle" id="lessonTitle">数学学习</h1>
           <div class="progressCaption" id="progressCaption" hidden></div>
-          <div class="lessonProgress" id="lessonProgress" role="progressbar" aria-label="模块完成进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden></div>
+          <div class="lessonProgress" id="lessonProgress" role="progressbar" aria-label="模块完成进度" data-i18n-aria-label="lesson.progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden></div>
         </div>
 
         <section id="connectionNotice" class="notice" aria-live="polite" hidden></section>
@@ -68,26 +68,26 @@
 
         <section class="emptyState" id="loadingState" aria-live="polite">
           <span class="spinner" aria-hidden="true"></span>
-          <h2>正在读取学习进度</h2>
-          <p>稍等片刻，课程将在这里打开。</p>
+          <h2 data-i18n="loading.progress">正在读取学习进度</h2>
+          <p data-i18n="loading.wait">稍等片刻，课程将在这里打开。</p>
         </section>
 
         <div id="courseShell" hidden>
           <section id="pauseNotice" class="pauseNotice" role="status" hidden></section>
           <div class="lessonToolbar">
             <div id="pauseControl" class="pauseControl">
-              <button id="pauseButton" class="textButton pauseButton" type="button" aria-describedby="pauseHint" title="暂时终止整个 Topic 的作答，等待管理者解锁">
+              <button id="pauseButton" class="textButton pauseButton" type="button" aria-describedby="pauseHint" title="暂时终止整个主题的作答，等待管理者解锁" data-i18n-title="lesson.pauseTitle">
                 <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4v12M13 4v12"/></svg>
-                暂时终止学习
+                <span data-i18n="lesson.pause">暂时终止学习</span>
               </button>
-              <p id="pauseHint" class="pauseHint">未掌握前置知识，感到困难，可选择后延该模块</p>
+              <p id="pauseHint" class="pauseHint" data-i18n="lesson.pauseHint">未掌握前置知识，感到困难，可选择后延该模块</p>
             </div>
           </div>
           <div id="reviewNotice" class="reviewNotice" hidden></div>
           <article id="stepCard" class="step" aria-labelledby="stepTitle"></article>
-          <section id="moduleResult" class="moduleResult" aria-label="模块学习结果" hidden></section>
+          <section id="moduleResult" class="moduleResult" aria-label="模块学习结果" data-i18n-aria-label="lesson.result" hidden></section>
           <footer class="lessonFooter">
-            <span id="saveStatus">学习进度自动保存</span>
+            <span id="saveStatus" data-i18n="lesson.autosave">学习进度自动保存</span>
             <span id="footerPosition"></span>
           </footer>
         </div>
@@ -98,18 +98,18 @@
     <dialog id="identityDialog" class="identityDialog" aria-labelledby="identityTitle">
       <form id="identityForm">
         <div class="dialogHeading">
-          <h2 id="identityTitle">邀请码登录</h2>
-          <button id="closeIdentityButton" class="iconButton" type="button" aria-label="关闭邀请码登录">×</button>
+          <h2 id="identityTitle" data-i18n="account.loginTitle">邀请码登录</h2>
+          <button id="closeIdentityButton" class="iconButton" type="button" aria-label="关闭邀请码登录" data-i18n-aria-label="account.closeLogin">×</button>
         </div>
         <p class="dialogIntro" id="identityDialogStatus">当前使用游客身份。</p>
-        <label for="invitationCode">邀请码</label>
-        <input id="invitationCode" type="password" autocomplete="off" spellcheck="false" placeholder="输入管理员提供的邀请码" maxlength="512" required>
-        <p class="fieldHint">登录后，可学习管理员为你的账号开放的课程。</p>
+        <label for="invitationCode" data-i18n="account.invitation">邀请码</label>
+        <input id="invitationCode" type="password" autocomplete="off" spellcheck="false" placeholder="输入管理员提供的邀请码" data-i18n-placeholder="account.invitationPlaceholder" maxlength="512" required>
+        <p class="fieldHint" data-i18n="account.loginHint">登录后，可学习管理员为你的账号开放的课程。</p>
         <p id="identityError" class="fieldError" role="alert" hidden></p>
         <div class="dialogActions">
-          <button id="guestIdentityButton" class="secondaryButton" type="button" hidden>切回游客</button>
-          <button id="cancelIdentityButton" class="secondaryButton" type="button">取消</button>
-          <button id="identitySubmitButton" class="primaryButton" type="submit">登录</button>
+          <button id="guestIdentityButton" class="secondaryButton" type="button" data-i18n="account.guest" hidden>切回游客</button>
+          <button id="cancelIdentityButton" class="secondaryButton" type="button" data-i18n="action.cancel">取消</button>
+          <button id="identitySubmitButton" class="primaryButton" type="submit" data-i18n="account.login">登录</button>
         </div>
       </form>
     </dialog>

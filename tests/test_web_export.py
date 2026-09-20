@@ -20,7 +20,7 @@ class PublicExportTests(unittest.TestCase):
             result, output = self.export(Path(temporary), 'https://example.trycloudflare.com')
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual({p.name for p in output.iterdir()},
-                             {'.nojekyll', 'app.js', 'deployment.json', 'favicon.svg', 'index.html', 'portal.js', 'portal.css', 'styles.css'})
+                             {'.nojekyll', 'app.js', 'deployment.json', 'favicon.svg', 'index.html', 'portal.js', 'portal.css', 'styles.css', 'i18n.js', 'reader-messages.js', 'portal-messages.js', 'static-messages.js'})
             self.assertEqual(json.loads((output / 'deployment.json').read_text()),
                              {'api_origin': 'https://example.trycloudflare.com'})
             self.assertEqual((output / 'app.js').read_bytes(),
