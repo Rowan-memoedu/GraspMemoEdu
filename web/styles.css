@@ -136,7 +136,7 @@ mjx-container[jax="SVG"] text { font-family: "Microsoft YaHei", sans-serif; }
 .primaryButton, .secondaryButton { display: inline-flex; justify-content: center; align-items: center; gap: 8px; min-height: 41px; border: 1px solid transparent; border-radius: 3px; padding: 9px 22px; font-size: 14px; line-height: 1.5; }
 .primaryButton { background: var(--ma-blue); color: var(--primary-text, white); font-weight: var(--primary-weight, 400); border-color: var(--ma-blue); }
 .primaryButton:hover:not(:disabled) { background: var(--button-hover); border-color: var(--button-hover); }
-.secondaryButton { background: white; color: #000; font-weight: 700; border-color: #cdd3d9; }
+.secondaryButton { background: white; color: var(--ma-navy); border-color: #cdd3d9; }
 .secondaryButton:hover:not(:disabled) { border-color: var(--muted-accent-border); background: var(--subtle-accent-background); }
 .answerForm label { display: block; margin-bottom: 9px; color: var(--ma-navy); font-size: 14px; font-weight: 700; }
 .answerInput { display: block; width: 100%; min-height: 91px; resize: vertical; padding: 11px 13px; border: 1px solid #bdc7cf; border-radius: 3px; background: #fff; color: var(--ma-ink); line-height: 1.6; }

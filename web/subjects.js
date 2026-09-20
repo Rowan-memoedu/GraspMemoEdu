@@ -1,4 +1,4 @@
-import { getLanguage } from './i18n.js';
+import { getLanguage } from './i18n.js?v=a9ca201721c9da25';
 
 const copy = (zh, en) => getLanguage() === 'en' ? en : zh;
 const element = (tag, className, text) => {
@@ -175,7 +175,7 @@ export function applySubjectTheme(subject, { home = false } = {}) {
   const color = home ? '#000000' : palette['--link-color'];
   document.documentElement.style.setProperty('--subject-accent', color);
   document.documentElement.style.setProperty('--subject-accent-soft', color + '12');
-  document.documentElement.style.setProperty('--primary-text', subject?.id === 'physics' ? '#000000' : '#ffffff');
+  document.documentElement.style.setProperty('--primary-text', '#ffffff');
   document.documentElement.style.setProperty('--primary-weight', subject?.id === 'physics' ? '700' : '400');
   for (const [name, value] of Object.entries(palette)) document.documentElement.style.setProperty(name, value);
   document.body.classList.toggle('platformTheme', home);
@@ -186,7 +186,7 @@ export function applySubjectTheme(subject, { home = false } = {}) {
 }
 
 export function subjectLogo(subject) {
-  if (!subject) return './favicon.svg';
+  if (!subject) return './favicon.svg?v=a9ca201721c9da25';
   const color = subjectPalette(subject.id)[subjectMarks[subject.id] ? '--link-color' : '--ma-navy'];
   const mark = subjectMarks[subject.id]
     ? '<g stroke="' + color + '" color="' + color + '" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + subjectMarks[subject.id] + '</g>'

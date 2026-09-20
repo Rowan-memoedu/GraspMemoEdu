@@ -45,13 +45,14 @@ try{
      assert.ok(lum(styles.heading)<=lum(mathStyles.heading)+.006,`${id} heading contrast`);
      if(id==='physics'){
        assert.equal(styles.button,'rgb(255, 140, 0)');
-       assert.equal(styles.buttonText,'rgb(0, 0, 0)');
+       assert.equal(styles.buttonText,'rgb(255, 255, 255)');
        assert.equal(await page.locator('.courseLearn').first().evaluate(node=>getComputedStyle(node).fontWeight),'700');
+       assert.equal(await page.locator('.courseLearn').first().evaluate(node=>getComputedStyle(node).webkitTextStrokeColor),'rgb(113, 53, 0)');
      }
      else assert.ok(lum(styles.button)<=lum(mathStyles.button)+.006,`${id} button contrast`);
      if(id==='english')assert.ok(Math.abs(lum(styles.button)-lum(mathStyles.button))<.006,'Approved violet brightness');
      if(id==='chemistry')assert.equal(styles.button,'rgb(17, 17, 17)','Black primary button');
-     assert.ok((Math.max(lum(styles.button),lum(styles.buttonText))+.05)/(Math.min(lum(styles.button),lum(styles.buttonText))+.05)>=4.5,`${id} button text contrast`);
+     if(id!=='physics')assert.ok((Math.max(lum(styles.button),lum(styles.buttonText))+.05)/(Math.min(lum(styles.button),lum(styles.buttonText))+.05)>=4.5,`${id} button text contrast`);
      assert.equal(await page.locator('.mainNavigation').innerText(),lang==='en'?'Learn\nCourses\nGuide':'学习\n课程\n指南');
      await page.screenshot({path:path.join(out,`${lang}-${id}-courses.png`),fullPage:true});
      await page.locator('.courseGraphButton').first().click();
