@@ -2,7 +2,7 @@
 
 本表从当前界面词库自动生成。修改以词库为准，随后重新生成并检查本表。术语约定见 [界面语言规范](ui-language.md)。
 
-共 396 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
+共 414 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
 
 不包括作者课程正文、题目、答案、解析或用户输入。首页的学科双语副标题按约定保留。
 
@@ -376,6 +376,24 @@
 | Chinese | 中文 |
 | English | 英文 |
 | Changes apply immediately to interface text only. Course content stays unchanged. | 切换后立即生效，仅改变界面文字，不改变课程内容。 |
+| No graph nodes. | 暂无图谱节点。 |
+| A dependency cycle prevents rendering. | 前置关系存在循环，无法绘图。 |
+| Search Topic title or ID | 搜索 主题 名称或 ID |
+| Select Topic | 选择 主题 |
+| Topic prerequisites, bottom to top | 由下向上的 主题 前置关系图 |
+| Content not imported | 内容未导入 |
+| Completed | 已完成 |
+| In progress | 学习中 |
+| Paused | 已暂停 |
+| Content imported | 教学内容已导入 |
+| Select a node to inspect prerequisites and highlight its upstream paths. | 点击节点，查看前置与后续，并高亮全部上游路径。 |
+| Direct prerequisites | 直接前置 |
+| Direct successors | 直接后续 |
+| None | 无 |
+| Open Topic | 打开 主题 |
+| Choose Topic… | 选择 主题… |
+| Fit width | 适应宽度 |
+| Clear selection | 清除选择 |
 
 ## 操作与服务提示
 

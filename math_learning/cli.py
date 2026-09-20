@@ -239,6 +239,11 @@ def main():
     parser = argparse.ArgumentParser(description='本机数学学习网站与管理命令')
     parser.add_argument('--data-dir', type=Path, default=None)
     sub = parser.add_subparsers(dest='command', required=True)
+    graph = sub.add_parser('graph-import', help='独立校验、预览或更新课程图谱，不导入 Topic 正文')
+    graph.add_argument('--source', type=Path, required=True)
+    graph.add_argument('--apply', action='store_true', help='安装整份图谱；默认只显示差异')
+    graph.add_argument('--expected-revision', help='可选并发检查：上次预览的 previous_revision，首次为 none')
+    graph.add_argument('--preview-html', type=Path, help='生成可离线打开的交互式图谱')
     for command in ('author-prepare', 'author-import', 'author-install'):
         author = sub.add_parser(command, help='本机作者 Markdown 导入：准备审核包、入库或一键执行')
         if command != 'author-install':
@@ -324,6 +329,12 @@ def main():
             from .api import create_app
             with server_lock(settings.data_dir):
                 uvicorn.run(create_app(settings), host='127.0.0.1', port=settings.port, access_log=False, proxy_headers=False)
+        elif args.command == 'graph-import':
+            from .course_graph import import_graph, preview_html
+            result = import_graph(settings, args.source, apply=args.apply, expected_revision=args.expected_revision)
+            if args.preview_html:
+                result.update(preview_html(settings, args.source, args.preview_html))
+            output(result)
         elif args.command in ('author-prepare', 'author-import', 'author-install'):
             from .author_import import prepare_topic
             from .topic_install import install_topic

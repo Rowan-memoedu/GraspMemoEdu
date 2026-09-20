@@ -155,6 +155,39 @@ class TopicInstallTests(unittest.TestCase):
             self.install(subject_id='math')
         self.assert_not_activated()
 
+    def test_graph_first_then_real_topic_import_preserves_graph_and_binds_content(self):
+        from math_learning.course_graph import GraphStore, import_graph
+        source = self.root / 'graph.json'
+        graph = {'schema_version': 1, 'subject_id': 'physics', 'course_id': 'physics-course', 'title': 'Physics',
+                 'nodes': [{'topic_id': 'imported-physics', 'title': 'Speed'}, {'topic_id': 'pending', 'title': 'Later'}],
+                 'edges': [{'from': 'imported-physics', 'to': 'pending', 'type': 'prerequisite'}]}
+        write(source, graph)
+        result = import_graph(self.settings, source, apply=True)
+        before = Path(result['path']).read_bytes()
+        self.install()
+        self.assertEqual(Path(result['path']).read_bytes(), before)
+        store = GraphStore(self.settings)
+        visible = store.public(store.load('physics-course'), {'role': 'account', 'topics': [], 'permission_defaults': {'topics': True}})
+        self.assertEqual({node['topic_id']: node['content_status'] for node in visible['nodes']},
+                         {'imported-physics': 'available', 'pending': 'not_imported'})
+        self.assertEqual((self.data / 'learning.sqlite3').read_bytes(), self.database_before)
+
+    def test_topic_first_then_graph_updates_do_not_change_topic_or_progress(self):
+        from math_learning.course_graph import import_graph
+        installed = self.install()
+        topic_path = Path(installed['topic_path'])
+        before = topic_path.read_bytes()
+        catalog = (self.data / 'catalog.json').read_bytes()
+        source = self.root / 'graph.json'
+        graph = {'schema_version': 1, 'subject_id': 'physics', 'course_id': 'physics-course', 'title': 'Physics',
+                 'nodes': [{'topic_id': 'imported-physics', 'title': 'Speed'}], 'edges': []}
+        write(source, graph); import_graph(self.settings, source, apply=True)
+        graph['title'] = 'New graph title'
+        write(source, graph); import_graph(self.settings, source, apply=True)
+        self.assertEqual(topic_path.read_bytes(), before)
+        self.assertEqual((self.data / 'catalog.json').read_bytes(), catalog)
+        self.assertEqual((self.data / 'learning.sqlite3').read_bytes(), self.database_before)
+
     def test_commit_failure_leaves_catalog_inactive_and_allows_recovery(self):
         with patch('math_learning.topic_install.os.replace', side_effect=OSError('simulated commit failure')):
             with self.assertRaisesRegex(OSError, 'simulated commit failure'):

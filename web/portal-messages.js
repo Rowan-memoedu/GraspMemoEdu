@@ -618,5 +618,77 @@ export const portalMessages = {
   "portal.languageHint": [
     "切换后立即生效，仅改变界面文字，不改变课程内容。",
     "Changes apply immediately to interface text only. Course content stays unchanged."
+  ],
+  "graph.empty": [
+    "暂无图谱节点。",
+    "No graph nodes."
+  ],
+  "graph.cycle": [
+    "前置关系存在循环，无法绘图。",
+    "A dependency cycle prevents rendering."
+  ],
+  "graph.search": [
+    "搜索 主题 名称或 ID",
+    "Search Topic title or ID"
+  ],
+  "graph.select": [
+    "选择 主题",
+    "Select Topic"
+  ],
+  "graph.diagram": [
+    "由下向上的 主题 前置关系图",
+    "Topic prerequisites, bottom to top"
+  ],
+  "graph.pending": [
+    "内容未导入",
+    "Content not imported"
+  ],
+  "graph.completed": [
+    "已完成",
+    "Completed"
+  ],
+  "graph.inProgress": [
+    "学习中",
+    "In progress"
+  ],
+  "graph.paused": [
+    "已暂停",
+    "Paused"
+  ],
+  "graph.imported": [
+    "教学内容已导入",
+    "Content imported"
+  ],
+  "graph.hint": [
+    "点击节点，查看前置与后续，并高亮全部上游路径。",
+    "Select a node to inspect prerequisites and highlight its upstream paths."
+  ],
+  "graph.parents": [
+    "直接前置",
+    "Direct prerequisites"
+  ],
+  "graph.children": [
+    "直接后续",
+    "Direct successors"
+  ],
+  "graph.none": [
+    "无",
+    "None"
+  ],
+  "graph.open": [
+    "打开 主题",
+    "Open Topic"
+  ],
+  "graph.choose": [
+    "选择 主题…",
+    "Choose Topic…"
+  ],
+  "graph.fit": [
+    "适应宽度",
+    "Fit width"
+  ],
+  "graph.clear": [
+    "清除选择",
+    "Clear selection"
   ]
 };

@@ -155,17 +155,24 @@ class DashboardStore:
                 'completed_modules': len(completed), 'module_count': module_count,
                 'progress': round(100 * len(completed) / module_count, 2)}
 
-    def _task(self, course, topic_id, snapshot, allowed):
-        metadata = self.catalog.metadata(topic_id)
+    def _task(self, course, topic_id, snapshot, allowed, dependencies=None):
+        if dependencies is None:
+            dependencies = self._dependencies(course['id'])
         task = {'id': 'lesson:' + topic_id, 'type': 'Lesson', 'topic_id': topic_id,
                 'course_id': course['id'], 'course_title': course['title'],
                 'title': self.catalog.topics[topic_id]['title'], 'progress': snapshot['progress'],
                 'started': snapshot['started_at'] is not None, 'started_at': snapshot['started_at'],
-                'status': snapshot['status'], 'prerequisites': [item for item in metadata['prerequisites'] if item in allowed],
+                'status': snapshot['status'], 'prerequisites': [item for item in dependencies.get(topic_id, []) if item in allowed],
                 'maintenance': False}
         if snapshot['status'] == 'completed':
             task.update(completed_at=snapshot['completed_at'], result='completed')
         return task
+
+    def _dependencies(self, course_id):
+        if self.subjects is None:
+            return {item['id']: item['prerequisites'] for item in self.catalog.course(course_id)['topics']}
+        from .course_graph import GraphStore
+        return GraphStore(self.subjects.settings, self.catalog, self.subjects).dependencies(course_id)
 
     @staticmethod
     def _has_reviews(con):
@@ -251,6 +258,7 @@ class DashboardStore:
         course = self._course(access, course_id, subject_id)
         allowed = self._allowed_topics(access)
         visible = [topic for topic in course['topics'] if topic['id'] in allowed]
+        dependencies = self._dependencies(course_id)
         boundary = self._decode_cursor(cursor, course_id, access['learner_id'])
         with closing(self.access_store._connect()) as con:
             # One consistent SQLite snapshot for progress, tasks and history.
@@ -279,7 +287,7 @@ class DashboardStore:
                           'status_counts': counts})
         for metadata in visible:
             topic_id, snapshot = metadata['id'], snapshots[metadata['id']]
-            task = self._task(course, topic_id, snapshot, allowed)
+            task = self._task(course, topic_id, snapshot, allowed, dependencies)
             if topic_id in review_paused and snapshot['status'] != 'completed':
                 task['status'] = 'paused'
             (history if snapshot['status'] == 'completed' else tasks).append(task)
@@ -287,7 +295,7 @@ class DashboardStore:
                            'prerequisites': task['prerequisites'],
                            'unit_id': next(unit['id'] for unit in units if topic_id in unit['topic_ids']),
                            'frontier': snapshot['status'] != 'completed' and all(
-                               item in snapshots and snapshots[item]['status'] == 'completed' for item in metadata['prerequisites'])})
+                               item in snapshots and snapshots[item]['status'] == 'completed' for item in dependencies.get(topic_id, []))})
         history.sort(key=lambda task: (task['completed_at'] or '', task['id']), reverse=True)
         if 'review_history' not in access['features']:
             history = []

@@ -1,0 +1,16 @@
+.courseGraph { color: #20364a; font-family: inherit; }
+.cgToolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 12px 0; }
+.cgToolbar input, .cgToolbar select { max-width: 100%; min-width: 170px; padding: 8px; border: 1px solid #c7d2db; border-radius: 5px; background: white; color: #20364a; }
+.courseGraph button { border: 1px solid #c7d2db; background: white; color: #20364a; border-radius: 5px; padding: 7px 10px; cursor: pointer; font: inherit; }
+.courseGraph button:hover { background: #edf3f7; }
+.cgZoom { font-size: 12px; color: #596e7e; }
+.cgViewport { overflow: auto; max-height: 64vh; border: 1px solid #d5dfe7; border-radius: 7px; background: #f6f8fa; }
+.cgViewport svg { display: block; max-width: none; flex-shrink: 0; }
+.cgViewport g[role=button] { cursor: pointer; }
+.cgViewport g[role=button]:focus { outline: none; }
+.cgViewport g[role=button]:focus rect { stroke: #1565c0; stroke-width: 3px; }
+.cgDetails { margin-top: 12px; min-height: 55px; padding: 12px; border-left: 3px solid #506e86; background: #f6f8fa; }
+.cgDetails p { margin: 8px 0; }
+.cgDetails button { margin: 3px; font-size: 13px; }
+.graphLibrary { margin-top: 28px; }
+.graphLibrary .courseChoice { margin: 12px 0; }

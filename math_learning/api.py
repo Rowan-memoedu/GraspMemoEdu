@@ -298,7 +298,9 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         task_answers_path = path.startswith('/api/tasks/') and path.endswith('/answers') and path.count('/') == 4
         review_feature = review_route_feature(path, request.method)
         review_path = review_feature is not None
-        if public and path.startswith('/api/') and path not in public_paths and not path.startswith('/api/submissions/') and not task_answers_path and not review_path:
+        graph_method = request.headers.get('access-control-request-method', '').upper() if request.method == 'OPTIONS' else request.method
+        graph_read = graph_method == 'GET' and (path == '/api/graphs' or (path.startswith('/api/graphs/') and path.count('/') == 3))
+        if public and path.startswith('/api/') and path not in public_paths and not path.startswith('/api/submissions/') and not task_answers_path and not review_path and not graph_read:
             return deny('public_endpoint_forbidden', '公网不开放管理操作。')
         if request.method == 'OPTIONS':
             if not origin or origin not in permitted_origins:
@@ -424,6 +426,56 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                   limit: int = Query(default=25, ge=1, le=50)):
         access = access_store.resolve(request.headers.get('x-learning-identity'))
         return dashboard_store.dashboard(access, course_id, cursor, limit, request.query_params.get('subject_id'))
+
+    @app.get('/api/graphs')
+    def graph_catalog(request: Request, subject_id: str = 'math'):
+        from .course_graph import GraphStore
+        access = access_store.resolve(request.headers.get('x-learning-identity'))
+        subjects.authorize_subject(access, subject_id)
+        try:
+            store = GraphStore(settings, catalog, subjects)
+            rows = []
+            for graph in store.all():
+                if graph['subject_id'] != subject_id:
+                    continue
+                visible = store.public(graph, access)
+                if visible['nodes']:
+                    rows.append({key: visible[key] for key in ('course_id', 'subject_id', 'title')} | {
+                        'node_count': len(visible['nodes']), 'edge_count': len(visible['edges'])})
+            return {'graphs': rows}
+        except (ValueError, OSError) as exc:
+            raise DomainError('invalid_graph', '图谱配置无效，请由管理者检查。', 422) from exc
+
+    @app.get('/api/graphs/{course_id}')
+    def course_graph(course_id: str, request: Request, subject_id: str = 'math'):
+        from .course_graph import GraphStore
+        access = access_store.resolve(request.headers.get('x-learning-identity'))
+        subjects.authorize_subject(access, subject_id)
+        try:
+            store = GraphStore(settings, catalog, subjects)
+            graph = store.load(course_id)
+            if graph is None:
+                subjects.authorize_course(subject_id, course_id)
+                course = catalog.course(course_id)
+                graph = {'schema_version': 1, 'subject_id': subject_id, 'course_id': course_id,
+                         'title': course['title'],
+                         'nodes': [{'topic_id': item['id'], 'title': catalog.topic(item['id'])['title']}
+                                   for item in course['topics']],
+                         'edges': [{'from': parent, 'to': item['id'], 'type': 'prerequisite'}
+                                   for item in course['topics'] for parent in item['prerequisites']]}
+            if graph['subject_id'] != subject_id:
+                raise DomainError('unknown_graph', '未找到可访问的课程图谱。', 404)
+            result = store.public(graph, access)
+            if not result['nodes']:
+                raise DomainError('unknown_graph', '未找到可访问的课程图谱。', 404)
+            if course_id in catalog.courses and any(node['content_status'] == 'available' for node in result['nodes']):
+                states = {topic['id']: topic for topic in dashboard_store.dashboard(access, course_id, subject_id=subject_id)['topics']}
+                for node in result['nodes']:
+                    state = states.get(node['topic_id'], {})
+                    node.update({key: state[key] for key in ('status', 'frontier') if key in state})
+            return result
+        except (ValueError, OSError) as exc:
+            raise DomainError('invalid_graph', '图谱配置无效，请由管理者检查。', 422) from exc
 
     @app.get('/api/tasks/{task_id}/answers')
     def task_answers(task_id: str, request: Request):

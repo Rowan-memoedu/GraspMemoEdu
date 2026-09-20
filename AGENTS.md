@@ -12,6 +12,7 @@
 - 课程导入从只读原稿重跑；排版勘误放外置 sidecar 并保留来源。不要手改生成课程冒充管线通过。
 - 界面术语以 `docs/ui-language.md` 为准，完整对照表从生产词库生成并检查；Introduction 为“指导”，Guide 为“指南”。UI 本地化不得翻译课程正文、答案或解析。
 - 作者 Markdown 导入使用 `Import-Topic.ps1` 或 `author-prepare` / `author-install`，规范见 `docs/author-import.md`。复用原转换器，LLM 提取与独立审核后按题目 ID 注入；审核包留本机。只新增至已有 Course，不覆盖 Topic 或自动扩大账号权限，安装后重载后端。
+- 图谱与 Topic 分开导入，规范见 `docs/course-graph.md`。`Import-Graph.ps1` / `graph-import` 按整份课程图谱反复更新，以稳定 `topic_id` 关联，可先于正文导入。图谱不修改正文、题库、权限或学习进度；版本 1 只含 Topic 内部前置关系。图谱数据和历史留本机，不提交私人课程内容到源码仓库。
 - Practice 输入兼容连续整数编号和每例 5×3 的分组编号 1.1–5.3。分组稿展平显示普通序号 1–15，`source_practice` 保留分组；拒绝重复、缺号、乱序与同例混合编号。15 题库使用 `practice_queue.py` 的学习者/Example 持久队列：每组首抽一题、组内首次错题追加其余两题到队尾、跨 Lesson/复习接续，耗尽后先未推送题再最久未推送题。同组补题标记持续至清空记录，暂停/解锁不重置。旧已开始轮次保留原题序，旧历史不回填；详见 `docs/practice-queue.md`。
 - 课程版本不匹配须保留旧进度；暂停与评分由 SQLite 事务决定；在途判题不持有数据库锁，旧轮次结果不能推进新轮次。
 - 后端只绑定回环地址；禁止 Web 解锁。管理命令精确指定学习者、Topic、模块、暂停事件。

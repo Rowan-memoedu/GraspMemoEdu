@@ -136,6 +136,8 @@ def _validate_payload(manifest, blobs):
                 raise ValueError('Review requires its source and answers')
             _validate_review(topics[topic_id], blobs[entry['source']], blobs[entry['answers']], blobs[entry['review']])
         expected_files.update(entry.values())
+    from .course_graph import validate_graph_archive
+    expected_files.update(validate_graph_archive(blobs))
     guide_roots = {'guide': 'guide/guide.md'}
     if 'subjects.json' in blobs:
         if len(blobs['subjects.json']) > 1024 * 1024:
@@ -235,6 +237,8 @@ def backup_site(settings, destination=None):
     portable = {'courses': [{**course, 'topics': [{**topic, 'path': f"courses/{topic['id']}.json"}
                                                 for topic in course['topics']]} for course in catalog.courses.values()]}
     blobs['catalog.json'] = _json(portable)
+    from .course_graph import graph_backup_blobs
+    blobs.update(graph_backup_blobs(settings))
     def include_guide(source, prefix):
         if not source.is_file():
             return
@@ -309,6 +313,8 @@ def restore_site(backup, destination):
             settings = Settings(data_dir=staged, course_path=staged / f'courses/{default_id}.json')
             catalog = Catalog.load(settings)
             Subjects(settings, catalog)
+            from .course_graph import GraphStore
+            GraphStore(settings, catalog).all()
             with closing(sqlite3.connect(staged / 'learning.sqlite3')) as con:
                 if con.execute('PRAGMA integrity_check').fetchone()[0] != 'ok' or con.execute('PRAGMA foreign_key_check').fetchone():
                     raise ValueError('Invalid database integrity')

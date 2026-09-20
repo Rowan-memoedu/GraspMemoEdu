@@ -1,5 +1,7 @@
 # 作者导入：Markdown → Topic
 
+Topic 内容与课程图谱独立导入。此入口不创建或覆盖图谱关系；图谱使用 `Import-Graph.ps1` / `graph-import`，可反复整体更新，详见 [图谱格式与工作流](course-graph.md)。两者通过稳定的 `topic_id` 关联，图谱可先于正文导入。
+
 在后端电脑调用，网页不提供配置或上传入口。第一版把一个已校准的 Markdown 文件导入已有学科、Course；不自动创建 Course，不覆盖既有 Topic，不写账号权限或学习记录。采用默认权限的账号会自动获得新 Topic，设置过 Topic 覆盖的账号继续受其明确配置限制。
 
 ## 一条命令

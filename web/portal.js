@@ -1,6 +1,7 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=68a9fa87b0a7385b";
-import { createReviewView } from "./review.js?v=68a9fa87b0a7385b";
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=68a9fa87b0a7385b";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=5c57152f1c408c20";
+import { createReviewView } from "./review.js?v=5c57152f1c408c20";
+import { renderCourseGraph } from "./course-graph.js?v=5c57152f1c408c20";
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=5c57152f1c408c20";
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -224,7 +225,7 @@ export function initPortal(bridge) {
         document.title = "GraspMemoEdu"; root.replaceChildren(renderSubjectHome(subjects.map(item => ({...item, available: subjectRestricted(item) ? false : item.available})), {onRestricted: item => restrictedNotice(item, true)}));
       } else if (path === "/learn") {
         document.title = pageTitle(t("nav.learn"));
-        if (!catalog.courses.length) { root.replaceChildren(renderSubjectEmpty(subject)); return; }
+        if (!catalog.courses.length) { root.replaceChildren(renderSubjectEmpty(subject)); await renderGraphLibrary(ticket); return; }
         let viewedCourse = selectedCourse;
         if (!viewedCourse && params.get("taskId")) {
           const result = await call(`tasks/${encode(params.get("taskId"))}/answers`);
@@ -236,7 +237,7 @@ export function initPortal(bridge) {
         if (ticket !== sequence) return;
         renderLearn(data, params.get("taskId"), ticket);
       } else if (path === "/courses") {
-        document.title = pageTitle(t("nav.courses")); renderCourses();
+        document.title = pageTitle(t("nav.courses")); await renderCourses();
       } else if (path === "/guide") {
         document.title = pageTitle(t("nav.guide")); await renderGuide(ticket);
       } else if (path === "/help") {
@@ -273,10 +274,11 @@ export function initPortal(bridge) {
     }
   }
 
-  function renderCourses() {
+  async function renderCourses() {
+    const ticket = sequence;
     const heading = node("h1", "portalPageTitle", t("portal.courses.28")), grid = node("div", "courseGrid");
     root.replaceChildren(heading, grid);
-    if (!catalog.courses.length) { root.replaceChildren(renderSubjectEmpty(activeSubject)); return; }
+    if (!catalog.courses.length) { root.replaceChildren(renderSubjectEmpty(activeSubject)); await renderGraphLibrary(ticket); return; }
     if (bridge.getAccess()?.role === "account" && !catalog.courses.some((course) => course.available)) root.insertBefore(emptyBox(t("portal.no.courses.are.enabled.for.your.account.please.contact.your.admin.29")), grid);
     for (const course of catalog.courses) {
       const card = node("article", "courseChoice"); card.dataset.courseId = course.id;
@@ -323,6 +325,26 @@ export function initPortal(bridge) {
       tools.append(progress, graph); card.append(tools);
       card.append(learn); if (!course.available) card.append(node("p", "courseAvailability", t("portal.no.learning.content.is.currently.available.33")));
       grid.append(card);
+    }
+    await renderGraphLibrary(ticket);
+  }
+
+  async function renderGraphLibrary(ticket) {
+    try {
+      const result = await call('graphs');
+      if (ticket !== sequence) return;
+      const separate = result.graphs.filter(graph => !catalog.courses.some(course => course.id === graph.course_id && course.available));
+      if (!separate.length) return;
+      const section = node('section', 'graphLibrary');
+      section.append(node('h2', '', t('portal.knowledge.map.93')));
+      for (const graph of separate) {
+        const card = node('article', 'courseChoice');
+        card.append(node('h3', '', graph.title), control(t('portal.view.knowledge.map.91'), 'textButton', () => openGraph({course: {id: graph.course_id, title: graph.title}})));
+        section.append(card);
+      }
+      root.append(section);
+    } catch (error) {
+      if (ticket === sequence) root.append(errorBox(error.message, () => route()));
     }
   }
 
@@ -635,40 +657,20 @@ export function initPortal(bridge) {
   const graphClose = control("×", "iconButton", () => graphDialog.close()); graphClose.setAttribute("aria-label", t("portal.close.knowledge.map.94"));
   graphHeading.append(graphTitle, graphClose); graphDialog.append(graphHeading, graphContent); document.body.append(graphDialog);
   graphDialog.addEventListener("close", () => { document.body.classList.remove("portalModalOpen"); window.scrollTo(0, graphScroll); });
-  function openGraph(data) {
+  let graphRequest = 0;
+  async function openGraph(data) {
+    const request = ++graphRequest, ticket = sequence, learner = bridge.getAccess()?.learner_id;
     hidePopovers(); graphScroll = window.scrollY; graphTitle.textContent = t("portal.graphTitle", { title: data.course.title });
     graphContent.replaceChildren(loading(t("portal.initializing.95"))); graphDialog.showModal(); document.body.classList.add("portalModalOpen");
-    requestAnimationFrame(() => drawGraph(data.topics || []));
-  }
-  function drawGraph(topics) {
-    if (!topics.length) { graphContent.replaceChildren(emptyBox(t("portal.no.knowledge.map.is.available.for.this.course.96"))); return; }
-    const byId = new Map(topics.map((topic) => [topic.id, topic])), levels = new Map();
-    function level(id, seen = new Set()) {
-      if (levels.has(id)) return levels.get(id); if (seen.has(id)) return 0;
-      const nextSeen = new Set(seen).add(id);
-      const parents = (byId.get(id)?.prerequisites || []).map((p) => typeof p === "string" ? p : p.id).filter((p) => byId.has(p));
-      const result = parents.length ? Math.max(...parents.map((p) => level(p, nextSeen))) + 1 : 0; levels.set(id, result); return result;
+    try {
+      const graph = await call(`graphs/${encode(data.course.id)}`);
+      if (request !== graphRequest || ticket !== sequence || learner !== bridge.getAccess()?.learner_id || !graphDialog.open) return;
+      renderCourseGraph(graphContent, graph, {language: getLanguage(), onOpenTopic: id => {
+        graphDialog.close(); navigate(`/topic/${encode(id)}`);
+      }});
+    } catch (error) {
+      if (request === graphRequest && ticket === sequence && graphDialog.open) graphContent.replaceChildren(errorBox(error.message, () => { graphDialog.close(); openGraph(data); }));
     }
-    topics.forEach((topic) => level(topic.id));
-    const maxLevel = Math.max(...levels.values()), rows = Array.from({ length: maxLevel + 1 }, () => []); topics.forEach((topic) => rows[levels.get(topic.id)].push(topic));
-    const width = Math.max(680, Math.max(...rows.map((row) => row.length)) * 210), height = Math.max(280, rows.length * 115 + 70), positions = new Map();
-    rows.forEach((row, rank) => row.forEach((topic, index) => positions.set(topic.id, { x: width / (row.length + 1) * (index + 1), y: height - 65 - rank * 115 })));
-    const ns = "http://www.w3.org/2000/svg", make = (tag, attrs = {}) => { const item = document.createElementNS(ns, tag); for (const [key, value] of Object.entries(attrs)) item.setAttribute(key, String(value)); return item; };
-    const svg = make("svg", { viewBox: `0 0 ${width} ${height}`, width, height, role: "img", "aria-label": t("portal.topics.and.prerequisites.arranged.from.bottom.to.top.97") });
-    const defs = make("defs"), marker = make("marker", { id: "portalGraphArrow", markerWidth: 8, markerHeight: 8, refX: 7, refY: 4, orient: "auto" }); marker.append(make("path", { d: "M0,0 L8,4 L0,8 Z", fill: "#a9b4be" })); defs.append(marker); svg.append(defs);
-    for (const topic of topics) for (const parent of topic.prerequisites || []) {
-      const from = positions.get(typeof parent === "string" ? parent : parent.id), to = positions.get(topic.id); if (!from) continue;
-      svg.append(make("path", { d: `M${from.x},${from.y - 24} C${from.x},${from.y - 70} ${to.x},${to.y + 70} ${to.x},${to.y + 24}`, fill: "none", stroke: "#b6c2cc", "stroke-width": 1.5, "marker-end": "url(#portalGraphArrow)" }));
-    }
-    for (const topic of topics) {
-      const p = positions.get(topic.id), group = make("g"), completed = topic.status === "completed";
-      const fill = completed ? "var(--progress-complete)" : topic.status === "in_progress" || topic.status === "paused" ? "var(--progress-paused)" : topic.frontier ? "var(--progress-ready)" : "#f2f2f2";
-      group.append(make("rect", { x: p.x - 86, y: p.y - 24, width: 172, height: 48, rx: 3, fill, stroke: "#c9d2da" }));
-      const title = make("title"); title.textContent = `${topic.title} · ${statusNames[topic.status] || t("portal.not.started.3")}`; group.append(title);
-      const label = make("text", { x: p.x, y: p.y + 5, "text-anchor": "middle", fill: completed ? "var(--primary-text, #fff)" : "var(--ma-navy)", "font-size": 13 }); label.textContent = [...topic.title].length > 13 ? [...topic.title].slice(0, 12).join("") + "…" : topic.title; group.append(label); svg.append(group);
-    }
-    const viewport = node("div", "graphViewport"); viewport.append(svg);
-    graphContent.replaceChildren(viewport, node("p", "graphLegend", t("portal.dark.blue.completed.light.blue.in.progress.pale.blue.ready.to.sta.98")));
   }
 
   function renderHelp() {

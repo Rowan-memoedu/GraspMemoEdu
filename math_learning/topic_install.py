@@ -72,6 +72,8 @@ def install_topic(settings, package, *, subject_id, course_id, unit_id=None):
         subjects = Subjects(settings, catalog)
         subjects.authorize_course(subject_id, course_id)
         catalog.course(course_id)
+        from .course_graph import GraphStore
+        GraphStore(settings, catalog, subjects).validate_topic_target(topic_id, subject_id, course_id)
         if topic_id in catalog.topics:
             if catalog.topics[topic_id] == topic and catalog.topic_courses[topic_id] == course_id:
                 return {'status': 'already_installed', 'topic_id': topic_id, 'course_id': course_id,
