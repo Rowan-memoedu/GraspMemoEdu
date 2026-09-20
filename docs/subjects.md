@@ -1,6 +1,6 @@
 # GraspMemoEdu 学科配置与扩展
 
-总首页为 `#/`，六科固定标识为 `math`、`physics`、`english`、`chinese`、`biology`、`chemistry`。六科共用一个前端、账号系统和学习后端。数学只保留「再探小学算术」，不新增测试课；其余五科各初始化一门明确标注测试的课程和一个测试 Topic。
+总首页为 `#/`，六科固定标识为 `math`、`physics`、`english`、`chinese`、`biology`、`chemistry`。六科共用一个前端、账号系统和学习后端。数学只保留「再探小学算术」，不新增测试课；其余五科当前无已发布课程。原五门测试课程及六个测试 Topic（含物理作者导入测试）、配套测试指南均已下线，原文件和学习记录保留在本机。
 
 古典衬线风格仅作用于总首页。数学及全局设置使用原模板视觉，其他科使用同一模板并替换学科色调、名称和徽标。学科导航栏最左侧的 GraspMemoEdu 品牌返回总首页，其右侧保留独立学科标识（数学为原来的 Σ 与「数学学习」）。平台返回入口的样式不覆盖学科主题。
 
@@ -76,12 +76,14 @@ pwsh -NoProfile -File D:/Projects/MathLearningWeb/Start-PublicLearning.ps1 -Rest
 
 ## 测试课程初始化
 
+正式站点测试内容已下线。以下初始化工具仅保留供独立验收使用，不应重新应用到正式数据目录；恢复发布须有新的用户要求。
+
 `scripts/initialize_subject_test_courses.py` 从确定性 Markdown 和答案 sidecar 调用正式导入管线生成五科测试内容。每个 Topic 有两个 Example，每个模块有十五道 Practice，可验证练习补题、完成评分及 FSRS 复习。默认只预览，加 `--apply` 才安装：
 
 ```powershell
-& D:/AppData/MathLearningWeb/venv/Scripts/python.exe scripts/initialize_subject_test_courses.py --data-dir D:/AppData/MathLearningWeb
+& D:/AppData/MathLearningWeb/venv/Scripts/python.exe scripts/initialize_subject_test_courses.py --data-dir D:/Artifacts/MathLearningWeb/isolated-subject-fixture/data
 # 在本机服务停止期间应用；随后用正常入口启动。
-& D:/AppData/MathLearningWeb/venv/Scripts/python.exe scripts/initialize_subject_test_courses.py --data-dir D:/AppData/MathLearningWeb --apply
+& D:/AppData/MathLearningWeb/venv/Scripts/python.exe scripts/initialize_subject_test_courses.py --data-dir D:/Artifacts/MathLearningWeb/isolated-subject-fixture/data --apply
 ```
 
 数学课程和既有文件保持不变；已有指南不覆盖，尚未填写的预留指南会加入测试说明。重复执行幂等，测试文件被人工改动或 ID 冲突时停止，不强行覆盖。所有配置在写入前验证，异常回滚本轮写入。课程内容、源稿、答案和导入回执位于本机 `test-content/<学科>`，不进入公开静态仓库。
