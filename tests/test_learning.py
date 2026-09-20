@@ -219,6 +219,7 @@ class LearningAcceptanceTests(unittest.TestCase):
 
     def test_duplicate_submission_counts_once_and_uses_trusted_answer(self):
         self.study()
+        question_id = self.active()["question_id"]
         request = self.payload(answer="wrong", reference_answer="attacker", correct=True)
         first = self.service.submit(request)
         again = self.service.submit(copy.deepcopy(request))
@@ -228,7 +229,7 @@ class LearningAcceptanceTests(unittest.TestCase):
         replay = self.service.submit(copy.deepcopy(request))
         self.assertEqual(replay["submission_id"], first["submission_id"])
         self.assertEqual(len(self.judge.calls), 1)
-        self.assertEqual(self.judge.calls[0][1], "REFERENCE_ONLY::module-1-practice-1")
+        self.assertEqual(self.judge.calls[0][1], "REFERENCE_ONLY::" + question_id)
         self.assertEqual(self.module()["practice_error_count"], 1)
         self.assertEqual(self.module()["practice_target_count"], 3)
         self.assertEqual(self.module()["practice_answered_count"], 1)
@@ -519,7 +520,10 @@ class LearningAcceptanceTests(unittest.TestCase):
             self.assertNotIn("reference_answer", serialized)
             self.assertNotIn("QUESTION::module-2-example", serialized)
             self.assertNotIn("EXPLANATION::module-2-example", serialized)
-            self.assertNotIn("QUESTION::module-1-practice-2", serialized)
+            shown = {step.get("question_id") for step in self.service.state()["steps"]}
+            for question in self.course["modules"][0]["practices"]:
+                if question["id"] not in shown:
+                    self.assertNotIn(json.dumps(question["html"]), serialized)
 
         verify()
         self.assertNotIn("INTRODUCTION_ONLY", json.dumps(self.service.state()))
@@ -551,6 +555,7 @@ class LearningAcceptanceTests(unittest.TestCase):
         self.study()
         last_result = None
         for index in range(4):
+            last_question_id = self.active()["question_id"]
             last_result = self.answer("wrong")
             if index < 3:
                 self.advance()
@@ -566,7 +571,7 @@ class LearningAcceptanceTests(unittest.TestCase):
         self.assertEqual(event["attempt_id"], state["attempt_id"])
         self.assertEqual(event["practice_error_count"], 4)
         self.assertEqual(event["pause_reason"], "practice_error_limit")
-        self.assertEqual(event["question_id"], "module-1-practice-4")
+        self.assertEqual(event["question_id"], last_question_id)
         self.assertEqual(event["student_answer"], "wrong")
         self.assertFalse(event["judgement"]["correct"])
         self.assertEqual(event["submission_id"], last_result["submission_id"])
@@ -610,6 +615,7 @@ class LearningAcceptanceTests(unittest.TestCase):
 
     def test_manual_pause_in_feedback_logs_existing_answer_and_judgement(self):
         self.study()
+        question_id = self.active()["question_id"]
         submission = self.answer("wrong")
         state = self.service.pause({"request_id": str(uuid.uuid4())})
         records = [json.loads(line) for line in self.service.log_path.read_text(encoding="utf-8").splitlines()]
@@ -617,7 +623,7 @@ class LearningAcceptanceTests(unittest.TestCase):
         self.assertEqual(event["pause_reason"], "manual_difficulty")
         self.assertEqual(event["practice_error_count"], 1)
         self.assertIsNone(event["mastery"])
-        self.assertEqual(event["question_id"], "module-1-practice-1")
+        self.assertEqual(event["question_id"], question_id)
         self.assertEqual(event["student_answer"], "wrong")
         self.assertEqual(event["submission_id"], submission["submission_id"])
         self.assertEqual(event["judgement"]["correct"], False)

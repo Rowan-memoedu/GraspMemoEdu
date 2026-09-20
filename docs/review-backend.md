@@ -6,6 +6,7 @@
 
 - `math_learning/fsrs_engine.py`：调用上游 `Scheduler`，不修改 FSRS 公式。数字 1/2/3/4 分别对应 Again/Hard/Good/Easy。
 - `math_learning/practice.py`：Lesson 与复习共用补题、错误计数与结算逻辑；两者分别使用自己的规则。
+- `math_learning/practice_queue.py`：每个学习者/Example 的持久分组题源，跨 Lesson 和复习接续，与单轮题量及评分分开。
 - `math_learning/judging.py`：共用现有 MathAnswerJudge 判题约定；网络判题不持有数据库写锁。
 - `math_learning/review.py`：Example 卡片、到期任务、复习轮次、评分记录、参数配置和优化接口。
 
@@ -79,7 +80,7 @@ result = reviews.submission(submission["submission_id"])
 - `due()` 返回该学习者、当前 Topic 的到期 Example，按到期时间排序；返回任务类型、内容标识、时间与调度修订号。按账户的已授权 Topic 汇集这些结果即可组成网站复习队列。
 - `next_due_at()` 供后端决定下一次查询时间。SQLite 到期队列在停机后仍保留；未领取任务不会因某次轮询或服务重启丢失。它服务于网站内推送，本阶段不包含浏览器 Push、邮件或消息发送。
 - 同 Topic 同时最多进行一轮复习。开始后从可推送队列移除，刷新或重新领取同一 Example 会恢复该轮；不同请求争抢不会重复创建轮次。
-- 每轮按随机无放回顺序抽题，并持久保存抽题顺序。答题返回只包含当前 Practice 和已完成记录，不返回 Example、Introduction、未来题目或标准答案。答题成功后才提供该 Practice 的解析。
+- 15 题库使用 [Practice 持久队列](practice-queue.md)：五组各随机首抽一题，首次错组补入其余两题，追加队尾且跨轮只补一次。每轮开始/继续时才取实际展示的题，余题留给后续复习；队列不足时先随机取未推送题，再按最久未推送顺序复用，同轮不重复。答题返回只包含当前 Practice 和已完成记录，不返回 Example、Introduction、未来题目或标准答案。答题成功后才提供该 Practice 的解析。升级前已经开始的轮次保持其原有冻结题序，非 15 题旧库继续原有抽题方式。
 - 未完成轮次的结果反馈必须由调用方调用 `advance(session_id, {request_id, expected_revision, question_id})` 推进。完成轮次的状态直接包含 `mastery` 与新的 `due_at`。
 - 重复提交不重复判题或补题。判题异常不计错，原请求可重试；启动恢复会把中断请求置为可重试。暂停或解锁后才到达的旧结果不能推进新轮次。
 
@@ -100,7 +101,7 @@ result = reviews.submission(submission["submission_id"])
 
 `pause(session_id, request_id=...)` 或第 3 次错误沿用“整个 Topic 暂停”的语义。若 Lesson 仍在进行，也会暂停其当前未完成模块；已完成模块评分保留。若 Lesson 已全部完成，保留其完成状态，同时停止该 Topic 的所有复习推送。暂停的复习不调用 FSRS，保留原卡与到期时间。
 
-`unlock_topic(pause_event_id=...)` 是仅供本机管理侧调用的入口。它按精确事件恢复整个 Topic；若 Lesson 同时暂停，复用其原有解锁规则。旧复习轮次作为历史保留，再次 `begin()` 新建轮次、重新抽题，错误数清零。对同一事件重复解锁不会重复创建轮次，也不能误解锁后来的暂停。
+`unlock_topic(pause_event_id=...)` 是仅供本机管理侧调用的入口。它按精确事件恢复整个 Topic；若 Lesson 同时暂停，复用其原有解锁规则。旧复习轮次作为历史保留，再次 `begin()` 新建轮次，从该 Example 剩余队列继续取题，本轮错误数清零，组内已补题标记保留。对同一事件重复解锁不会重复创建轮次，也不能误解锁后来的暂停。
 
 学习权限（包括游客不能主动暂停）由现有账号系统决定；正式接线时在调用这些后端方法前执行原有权限检查，不给网页开放解锁入口。
 

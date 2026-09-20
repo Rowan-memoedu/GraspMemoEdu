@@ -56,7 +56,9 @@ pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Stop-Learning.ps1'
 
 点击已完成任务可回看各模块的实际作答、结果和解析。新作答记录页面可见且处于答题状态的累计用时，不计判题等待；旧记录不补造用时。更早记录支持分页、失败重试和去重。总首页为 `#/`，学科页面为 `#/subjects/<学科ID>/learn`、`courses`、`guide`、`topic/<id>`、`review/<topic>/<module>?session=<round>`。原来的 `#/learn` 等链接自动转到数学并保留查询参数。支持刷新、浏览器前进和后退，也适用于 GitHub Pages 子路径。
 
-复习先随机抽 1 题，每错 1 题追加 2 题，已抽题目不重复。首题正确返回 4（Easy）；累计错 1 题并完成共 3 题返回 2（Hard）；累计错 2 题并完成共 5 题返回 1（Again）。第 3 次错误或主动暂停立即终止本轮，不评分、不更新 FSRS。当前没有返回 3（Good）的复习路径。游客不能主动暂停，自动暂停仍有效。以后调整 `math_learning/practice.py` 中的 `REVIEW_POLICY` 并递增版本；进行中的轮次继续使用原规则快照。
+每个学习者的 Example 有一条跨 Lesson/复习保留的抽题队列：15 道 Practice 按 5 组各 3 题组织，首次每组随机选一题；某组第一次答错时，将其余两题追加到队尾，该组以后答错不重复补入。每轮只取实际需要的题，余题留给以后；不足时随机补未推送题，全都推送过后按最久未推送顺序复用，同轮不重复。详见 [Practice 持久队列](docs/practice-queue.md)。
+
+复习每轮先做 1 题，每错 1 题增加 2 题的本轮题量，从上述队列继续取题。首题正确返回 4（Easy）；累计错 1 题并完成共 3 题返回 2（Hard）；累计错 2 题并完成共 5 题返回 1（Again）。第 3 次错误或主动暂停立即终止本轮，不评分、不更新 FSRS。当前没有返回 3（Good）的复习路径。游客不能主动暂停，自动暂停仍有效。以后调整 `math_learning/practice.py` 中的 `REVIEW_POLICY` 并递增版本；进行中的轮次继续使用原规则快照。
 
 用户菜单的「设置」可修改显示名、时区和界面语言，默认中文，可切换英文；课程正文不随 UI 语言翻译。「帮助」打开常见问题 Q&A，「反馈」提交站内反馈，指南保留在顶部导航。游客可在头像右侧开启「体验专用浏览版」，学习任务的学习按钮旁可用黄色「重置」按钮重置当前游客的该主题；账号不显示这两个游客入口。题目记录中的内容纠错会附上课程与题目位置。反馈保存于本机数据库，管理员查看：
 
@@ -123,7 +125,7 @@ pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' review-s
 pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' review-unlock --learner '<学习者 ID>' --topic digits-to-letters --pause-event '<暂停事件 ID>'
 ```
 
-解锁后旧轮次保留，新轮次重新抽题、错误数清零。游客重置某 Topic 时，其 Lesson 进度和复习记录一起清空；复习判题在途时须等判定结束再重置。
+解锁后旧轮次保留，新轮次从 Example 剩余队列继续取题、本轮错误数清零；长期的组内补题标记保留。游客重置某 Topic 时，其 Lesson 进度、复习记录和 Practice 队列一起清空；复习判题在途时须等判定结束再重置。
 
 ## 数据与备份
 

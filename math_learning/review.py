@@ -19,6 +19,7 @@ from fsrs import Card, ReviewLog, Scheduler
 from .fsrs_engine import FSRSEngine, utc_time
 from .judging import judge_answer
 from .practice import PracticePolicy, REVIEW_POLICY, apply_practice_result
+from .practice_queue import VERSION as PRACTICE_QUEUE_VERSION
 from .service import DomainError, encode
 
 
@@ -435,7 +436,9 @@ class ReviewBackend:
                     raise DomainError('review_not_due', '此 Example 尚未到复习时间。')
                 if len(module['practices']) < self.policy.targets[-1]:
                     raise DomainError('insufficient_practices', '当前练习库不足以完成这套复习规则。', 422)
-                order = self.rng.sample([question['id'] for question in module['practices']], self.policy.targets[-1])
+                grouped = self.learning.practice_queue.supported(module)
+                order = ([self.learning.practice_queue.draw(con, module, exclude=[])] if grouped else
+                         self.rng.sample([question['id'] for question in module['practices']], self.policy.targets[-1]))
                 state = {'session_id': str(uuid.uuid4()), 'module_id': module_id,
                          'course_version': self.version, 'revision': 0, 'status': 'in_progress',
                          'mastery': None, 'policy': self.policy.to_dict(), 'order': order, 'index': 0,
@@ -444,6 +447,8 @@ class ReviewBackend:
                          'practice_target_count': self.policy.targets[0], 'pending_submission_id': None,
                          'created_at': self._now().isoformat(), 'completed_at': None,
                          'paused_at': None, 'pause_reason': None, 'pause_event_id': None, 'due_at': card['due_at']}
+                if grouped:
+                    state['practice_queue_version'] = PRACTICE_QUEUE_VERSION
                 con.execute('INSERT INTO review_sessions VALUES (?,?,?,?,?,?,?)',
                             (state['session_id'], *self.key, module_id, self.version, state['status'], encode(state)))
                 con.execute('UPDATE review_cards SET active_session=? WHERE learner=? AND topic=? AND module=?',
@@ -475,6 +480,9 @@ class ReviewBackend:
                 self._guard_session(con, state, data)
                 if state['phase'] != 'feedback':
                     raise DomainError('answer_required', '请先完成当前题目。')
+                if state.get('practice_queue_version') == PRACTICE_QUEUE_VERSION:
+                    state['order'].append(self.learning.practice_queue.draw(
+                        con, self._module(state['module_id']), exclude=state['order']))
                 state.update(index=state['index'] + 1, phase='answer', feedback=None)
                 self._save_session(con, state)
                 self._record_action(con, data, fingerprint, session_id)
@@ -558,6 +566,9 @@ class ReviewBackend:
             if applies:
                 state['pending_submission_id'] = None
                 if correct is not None:
+                    if state.get('practice_queue_version') == PRACTICE_QUEUE_VERSION:
+                        self.learning.practice_queue.record_result(
+                            con, self._module(state['module_id']), item['question'], correct)
                     state.update(phase='feedback', feedback={'correct': correct, 'reason': reason, 'submission_id': submission_id})
                     state['answers'].append({'question_id': item['question'], 'answer': item['answer'],
                                              'correct': correct, 'elapsed_ms': item['elapsed_ms']})

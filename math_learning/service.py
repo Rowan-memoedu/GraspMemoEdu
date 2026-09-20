@@ -12,6 +12,7 @@ import uuid
 
 from .judging import judge_answer
 from .practice import LESSON_POLICY, apply_practice_result
+from .practice_queue import PersistentPracticeQueue
 
 
 def now():
@@ -33,7 +34,7 @@ class LearningService:
 
     def __init__(self, course: dict, data_dir: Path, judge=None, learner_id='local'):
         self.course, self.data_dir, self.judge = course, Path(data_dir), judge
-        # Explicitly attached by ReviewBackend; ordinary website startup is unchanged.
+        # Attached by the website or trusted review integration.
         self.review_backend = None
         self.learner_id, self.topic_id = learner_id, course['id']
         self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -42,6 +43,9 @@ class LearningService:
         self._log_lock = threading.Lock()
         self.questions = {}
         self._validate_course()
+        self.practice_queue = PersistentPracticeQueue(self)
+        for module in self.course['modules']:
+            self.practice_queue.supported(module)
         with closing(self._connect()) as con:
             con.executescript('''
                 PRAGMA journal_mode=WAL;
@@ -68,6 +72,7 @@ class LearningService:
                     pause_event TEXT PRIMARY KEY, learner TEXT NOT NULL,
                     topic TEXT NOT NULL, module TEXT NOT NULL, attempt TEXT);
             ''')
+            self.practice_queue.initialize_schema(con)
         with self._transaction() as con:
             columns = {item['name'] for item in con.execute('PRAGMA table_info(submissions)')}
             if 'elapsed_ms' not in columns:
@@ -152,6 +157,8 @@ class LearningService:
                    'practice_error_count': 0, 'practice_answered_count': 0,
                    'practice_target_count': 2, 'example_result': None,
                    'created_at': now(), 'completed_at': None, 'paused_at': None, 'pause_reason': None}
+        if self.practice_queue.supported(module):
+            attempt['practice_queue_version'] = self.practice_queue.VERSION
         state['attempts'].append(attempt)
         state['attempt_id'] = attempt['id']
         state['module_index'] = index
@@ -288,6 +295,7 @@ class LearningService:
                               'review_submissions', 'review_topic_pauses', 'review_unlocks', 'review_optimizations'):
                     if table in review_tables:
                         con.execute(f'DELETE FROM {table} WHERE learner=? AND topic=?', self.key)
+                con.execute('DELETE FROM practice_queues WHERE learner=? AND topic=?', self.key)
                 previous = state
                 state = {'revision': previous['revision'], 'status': 'in_progress',
                          'introduction_read': False, 'attempts': [], 'steps': [],
@@ -370,10 +378,10 @@ class LearningService:
                 elif step['kind'] == 'example' and step['phase'] in ('unmastered', 'feedback'):
                     self._learn(state)
                 elif step['kind'] == 'example' and step['phase'] == 'reading':
-                    question = self.course['modules'][attempt['module_index']]['practices'][0]
+                    question = self._practice_question(con, state, attempt)
                     self._add_step(state, kind='practice', question=question, phase='answer')
                 elif step['kind'] == 'practice' and step['phase'] == 'feedback':
-                    question = self.course['modules'][attempt['module_index']]['practices'][attempt['practice_answered_count']]
+                    question = self._practice_question(con, state, attempt)
                     self._add_step(state, kind='practice', question=question, phase='answer')
                 else:
                     raise DomainError('invalid_step', '无法推进当前步骤。')
@@ -381,6 +389,16 @@ class LearningService:
                 self._save(con, state)
         self.flush_logs()
         return self._public(state)
+
+    def _practice_question(self, con, state, attempt):
+        module = self.course['modules'][attempt['module_index']]
+        if attempt.get('practice_queue_version') == self.practice_queue.VERSION:
+            shown = [step['question_id'] for step in state['steps']
+                     if step['attempt_id'] == attempt['id'] and step['kind'] == 'practice']
+            question_id = self.practice_queue.draw(con, module, exclude=shown)
+            return self.questions[question_id]
+        # A round started before this upgrade keeps its original question order.
+        return module['practices'][attempt['practice_answered_count']]
 
     def select(self, payload):
         with self._transaction() as con:
@@ -520,6 +538,9 @@ class LearningService:
                         if correct:
                             self._complete(con, state, 4)
                     else:
+                        if attempt.get('practice_queue_version') == self.practice_queue.VERSION:
+                            self.practice_queue.record_result(con, self.course['modules'][attempt['module_index']],
+                                                              item['question'], correct)
                         must_pause, mastery = apply_practice_result(attempt, correct, LESSON_POLICY)
                         if must_pause:
                             self._pause(con, state, 'practice_error_limit', submission={**item, 'correct': correct, 'reason': reason})
