@@ -1,6 +1,6 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=a9ca201721c9da25";
-import { createReviewView } from "./review.js?v=a9ca201721c9da25";
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=a9ca201721c9da25";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=9e6bf2e118b0c848";
+import { createReviewView } from "./review.js?v=9e6bf2e118b0c848";
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=9e6bf2e118b0c848";
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {

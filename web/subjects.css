@@ -35,12 +35,6 @@ body.platformTheme { background: var(--platform-paper); }
 .subjectCardTop { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; }
 .subjectEmblem { display: block; width: 40px; height: 40px; }
 .hasSubjectContext .portalLogo { color: var(--subject-accent); }
-/* Keep white glyphs crisp against the requested bright orange. */
-body[data-subject="physics"] :is(.primaryButton, .portalStart:not(.guestReset)) {
-  -webkit-text-stroke: .65px #713500;
-  paint-order: stroke fill;
-  text-shadow: 0 1px 1px #713500;
-}
 .subjectCardArrow { color: var(--card-accent, var(--subject-accent)); font: 21px/1 var(--platform-serif); opacity: .65; }
 .subjectName { margin: 0; font: 500 25px/1.35 var(--platform-serif); }
 .subjectSecondaryName { margin: 4px 0 0; color: var(--card-accent, var(--subject-accent)); font: 13px/1.4 var(--platform-serif); letter-spacing: .025em; }

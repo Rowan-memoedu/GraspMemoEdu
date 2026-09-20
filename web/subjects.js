@@ -1,4 +1,4 @@
-import { getLanguage } from './i18n.js?v=a9ca201721c9da25';
+import { getLanguage } from './i18n.js?v=9e6bf2e118b0c848';
 
 const copy = (zh, en) => getLanguage() === 'en' ? en : zh;
 const element = (tag, className, text) => {
@@ -75,9 +75,9 @@ export function subjectPalette(subjectId = 'math') {
     id === 'chemistry' && monochromeInk.has(token) ? '#111111' :
     id === 'chemistry' && ['--link-hover', '--button-hover', '--button-active'].includes(token) ? '#000000' : recolor(value, id)]));
   if (id === 'physics') Object.assign(palette, {
-    '--link-color': '#FF8C00', '--ma-blue': '#FF8C00', '--score-color': '#FF8C00',
-    '--progress-complete': '#FF8C00', '--link-hover': '#ed8200',
-    '--button-hover': '#ed8200', '--button-active': '#e07b00'
+    '--link-color': '#E67E00', '--ma-blue': '#E67E00', '--score-color': '#E67E00',
+    '--progress-complete': '#E67E00', '--link-hover': '#d87500',
+    '--button-hover': '#d87500', '--button-active': '#cc6e00'
   });
   return palette;
 }
@@ -175,7 +175,7 @@ export function applySubjectTheme(subject, { home = false } = {}) {
   const color = home ? '#000000' : palette['--link-color'];
   document.documentElement.style.setProperty('--subject-accent', color);
   document.documentElement.style.setProperty('--subject-accent-soft', color + '12');
-  document.documentElement.style.setProperty('--primary-text', '#ffffff');
+  document.documentElement.style.setProperty('--primary-text', subject?.id === 'physics' ? '#000000' : '#ffffff');
   document.documentElement.style.setProperty('--primary-weight', subject?.id === 'physics' ? '700' : '400');
   for (const [name, value] of Object.entries(palette)) document.documentElement.style.setProperty(name, value);
   document.body.classList.toggle('platformTheme', home);
@@ -186,7 +186,7 @@ export function applySubjectTheme(subject, { home = false } = {}) {
 }
 
 export function subjectLogo(subject) {
-  if (!subject) return './favicon.svg?v=a9ca201721c9da25';
+  if (!subject) return './favicon.svg?v=9e6bf2e118b0c848';
   const color = subjectPalette(subject.id)[subjectMarks[subject.id] ? '--link-color' : '--ma-navy'];
   const mark = subjectMarks[subject.id]
     ? '<g stroke="' + color + '" color="' + color + '" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + subjectMarks[subject.id] + '</g>'
