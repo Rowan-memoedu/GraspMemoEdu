@@ -1,6 +1,6 @@
 import { t, getLanguage, setLanguage, locale, translateMessage } from "./i18n.js";
 import { createReviewView } from "./review.js";
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel } from "./subjects.js";
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js";
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -24,6 +24,7 @@ export function initPortal(bridge) {
   let sequence = 0, currentHash = "", currentRoute = null, busyCourse = false;
   let expandedTask = null, paging = false, historyError = null, guideVersion = null, guideLoaded = false;
   let refreshTimer = null, menuTimer = null, popoverTimer = null, pageTimer = null;
+  let guideObjectUrls = [];
   let graphScroll = 0, feedbackContext = {}, feedbackBusy = false, renderedDay = null;
   const dashboards = new Map(), scrolls = new Map(), answerCache = new Map();
   const routeKey = () => location.hash || "#/";
@@ -91,14 +92,21 @@ export function initPortal(bridge) {
   }
   function updateSubjectContext(subject) {
     activeSubject = subject;
-    applySubjectTheme(subject);
+    const home = currentRoute?.path === "/" && !currentRoute.subjectId;
+    applySubjectTheme(subject, {home});
+    const logo = document.querySelector('.portalLogo');
+    logo.hidden = !subject;
+    logo.href = subject ? subjectHref(subject.id) : '#/';
+    logo.querySelector('img').src = subjectLogo(subject);
+    logo.querySelector('span').textContent = subject ? getLanguage() === 'en' ? `${subject.id === 'math' ? 'Math' : subjectLabel(subject)} Learning` : `${subjectLabel(subject)}学习` : 'GraspMemoEdu';
+    logo.setAttribute('aria-label', subject ? subjectLabel(subject) + ' · ' + t('nav.learn') : t('nav.home'));
     const context = $("subjectContext");
-    context.hidden = !subject;
+    context.hidden = true;
     context.textContent = subject ? subjectLabel(subject) : "";
     context.href = subject ? subjectHref(subject.id) : "#/";
     for (const item of document.querySelectorAll(".mainNavigation [data-navigation]")) {
       const section = item.dataset.navigation;
-      item.hidden = section !== "subjects" && !subject;
+      item.hidden = section === 'subjects' ? Boolean(subject) : !subject;
       item.href = section === "subjects" ? "#/" : subjectHref(subject?.id || "math", `/${section}`);
     }
     $("topicHomeLink").href = learnHref();
@@ -136,13 +144,17 @@ export function initPortal(bridge) {
   document.addEventListener("keydown", (event) => { if (event.key === "Escape") { showMenu(false); hidePopovers(); collapseTasks(); } });
 
   async function basics(ticket, subjectId) {
-    const [nextSubjects, nextProfile, nextCatalog] = await Promise.all([
+    const [nextSubjects, nextProfile] = await Promise.all([
       subjects ? { subjects } : bridge.request("subjects"),
       profile || bridge.request("profile"),
-      subjectId ? catalog && catalogSubject === subjectId ? catalog : scopedRequest("catalog", undefined, subjectId) : null,
     ]);
     if (ticket !== sequence) return;
-    if (!Array.isArray(nextSubjects.subjects) || (subjectId && !Array.isArray(nextCatalog?.courses))) throw new Error(t("portal.the.course.catalog.is.temporarily.unavailable.17"));
+    const subject = nextSubjects.subjects?.find(item => item.id === subjectId);
+    const nextCatalog = subjectId && !subjectRestricted(subject)
+      ? catalog && catalogSubject === subjectId ? catalog : await scopedRequest("catalog", undefined, subjectId)
+      : null;
+    if (ticket !== sequence) return;
+    if (!Array.isArray(nextSubjects.subjects) || (subjectId && !subjectRestricted(subject) && !Array.isArray(nextCatalog?.courses))) throw new Error(t("portal.the.course.catalog.is.temporarily.unavailable.17"));
     subjects = nextSubjects.subjects; profile = nextProfile; catalog = nextCatalog; catalogSubject = subjectId;
     selectedCourse = catalog?.selected_course_id || null;
     if (!profile.timezone) {
@@ -153,6 +165,17 @@ export function initPortal(bridge) {
       } catch { /* Use browser time while a later settings save can retry. */ }
     }
     updateUser();
+  }
+  function subjectRestricted(subject) {
+    return Boolean(subject && bridge.getAccess()?.role !== 'account' && (subject.requires_account || subject.id !== 'math'));
+  }
+  function restrictedNotice(subject, home = false) {
+    const notice = node('section', 'subjectAccessNotice'); notice.setAttribute('role', 'status');
+    notice.append(node('p', '', t('该功能需注册账号才能使用')),
+      control(t('account.loginTitle'), 'primaryButton', () => bridge.openIdentity()));
+    if (!home) notice.append(link(getLanguage() === 'en' ? 'All subjects' : '返回所有学科', '#/', 'textButton'));
+    if (home) { root.querySelector('.subjectAccessNotice')?.remove(); root.querySelector('.subjectHomeHeading')?.append(notice); }
+    else { document.title = pageTitle(subjectLabel(subject)); root.replaceChildren(node('h1', 'portalPageTitle', subjectLabel(subject)), notice); }
   }
   async function dashboard(id, cursor = null) {
     const data = await call(`dashboard?${query({ course_id: id, cursor, limit: 25 })}`);
@@ -171,7 +194,8 @@ export function initPortal(bridge) {
     }
     dashboards.set(id, merged); return merged;
   }
-  function stopPageWork() { clearTimeout(refreshTimer); clearTimeout(pageTimer); review.stop(); hidePopovers(); }
+  function releaseGuideAssets() { for (const url of guideObjectUrls) URL.revokeObjectURL(url); guideObjectUrls = []; }
+  function stopPageWork() { clearTimeout(refreshTimer); clearTimeout(pageTimer); releaseGuideAssets(); review.stop(); hidePopovers(); }
   async function route() {
     if (currentHash) scrolls.set(currentHash, window.scrollY);
     currentRoute = parseRoute();
@@ -195,8 +219,9 @@ export function initPortal(bridge) {
       const subject = subjects.find(item => item.id === subjectId);
       if (subjectId && !subject) throw new Error(t("platform.unknownSubject"));
       updateSubjectContext(subject || null);
+      if (subjectRestricted(subject)) { restrictedNotice(subject); return; }
       if (path === "/" && !subjectId) {
-        document.title = "GraspMemoEdu"; root.replaceChildren(renderSubjectHome(subjects));
+        document.title = "GraspMemoEdu"; root.replaceChildren(renderSubjectHome(subjects.map(item => ({...item, available: subjectRestricted(item) ? false : item.available})), {onRestricted: item => restrictedNotice(item, true)}));
       } else if (path === "/learn") {
         document.title = pageTitle(t("nav.learn"));
         if (!catalog.courses.length) { root.replaceChildren(renderSubjectEmpty(subject)); return; }
@@ -239,6 +264,10 @@ export function initPortal(bridge) {
     } catch (error) {
       if (ticket !== sequence) return;
       if (bridge.getIdentityProblem()) { root.hidden = true; root.replaceChildren(); return; }
+      const restricted = subjects?.find(item => item.id === currentRoute.subjectId);
+      if (subjectRestricted(restricted)) {
+        restrictedNotice(restricted); return;
+      }
       const forbidden = error.status === 403 && ["feature_forbidden", "topic_forbidden", "course_forbidden"].includes(error.code);
       root.hidden = false; root.replaceChildren(errorBox(translateMessage(error.message), forbidden ? () => navigate("/courses") : () => location.reload(), forbidden ? t("portal.content.unavailable.26") : t("portal.service.unavailable.27")));
     }
@@ -269,6 +298,29 @@ export function initPortal(bridge) {
         } finally { busyCourse = false; }
       });
       learn.dataset.available = String(course.available !== false); learn.disabled = course.available === false;
+      const tools = node('div', 'courseTools');
+      const progress = link(t('platform.courseProgress'), `#/courses/${encode(course.id)}/progress`, 'textButton courseProgressLink');
+      const graph = control(t('portal.knowledge.map.93'), 'textButton courseGraphButton', async () => {
+        if (graph.disabled) return;
+        const ticket = sequence, learner = bridge.getAccess()?.learner_id;
+        graph.disabled = true; graph.setAttribute('aria-busy', 'true');
+        card.querySelector('.courseGraphStatus')?.remove();
+        try {
+          const data = await dashboard(course.id);
+          if (ticket !== sequence || learner !== bridge.getAccess()?.learner_id || !graph.isConnected) return;
+          openGraph(data);
+        } catch (error) {
+          if (ticket !== sequence || learner !== bridge.getAccess()?.learner_id || !graph.isConnected) return;
+          const failure = node('p', 'courseGraphStatus fieldError', translateMessage(error.message));
+          failure.setAttribute('role', 'status'); tools.after(failure);
+        } finally { graph.disabled = course.available === false; graph.removeAttribute('aria-busy'); }
+      });
+      if (course.available === false) {
+        progress.removeAttribute('href'); progress.setAttribute('aria-disabled', 'true'); progress.tabIndex = -1;
+        progress.title = t('portal.no.learning.content.is.currently.available.33');
+        graph.disabled = true; graph.title = progress.title;
+      }
+      tools.append(progress, graph); card.append(tools);
       card.append(learn); if (!course.available) card.append(node("p", "courseAvailability", t("portal.no.learning.content.is.currently.available.33")));
       grid.append(card);
     }
@@ -638,6 +690,36 @@ export function initPortal(bridge) {
     body.append(loading(t("portal.loading.guide.110"))); article.append(heading, notice, body, updated); root.replaceChildren(article);
     await updateGuide(ticket);
   }
+  async function guideContent(html, ticket, subjectId) {
+    const template = document.createElement('template'); template.innerHTML = html || '';
+    const urls = [], assets = new Map();
+    try {
+      if (subjectId && subjectId !== 'math') {
+        const origin = new URL(bridge.getApiOrigin()).origin;
+        const prefix = `/subject-guide-assets/${encode(subjectId)}/`;
+        await Promise.all([...template.content.querySelectorAll('img[src],a[href]')].map(async item => {
+          const attribute = item.tagName === 'IMG' ? 'src' : 'href';
+          const url = new URL(item.getAttribute(attribute), origin);
+          // External images/links retain their normal URL. Credentials are only
+          // sent through the exact, subject-scoped trusted asset transport.
+          if (url.origin !== origin || !url.pathname.startsWith(prefix)) return;
+          if (!assets.has(url.href)) assets.set(url.href, bridge.fetchGuideAsset(url.href, subjectId).then(blob => {
+            const local = URL.createObjectURL(blob); urls.push(local); return local;
+          }));
+          item.setAttribute(attribute, await assets.get(url.href));
+          if (attribute === 'href') item.setAttribute('download', decodeURIComponent(url.pathname.split('/').at(-1)));
+        }));
+      }
+      if (ticket !== sequence) throw new Error('stale guide');
+      releaseGuideAssets(); guideObjectUrls = urls;
+      return template.content;
+    } catch (error) {
+      // Wait for all started downloads before revoking their temporary URLs.
+      await Promise.allSettled(assets.values());
+      for (const url of urls) URL.revokeObjectURL(url);
+      throw error;
+    }
+  }
   async function updateGuide(ticket) {
     clearTimeout(refreshTimer);
     try {
@@ -647,14 +729,19 @@ export function initPortal(bridge) {
       notice.replaceChildren();
       if (!guideLoaded || guideVersion !== result.version) {
         const y = window.scrollY;
-        if (result.status === "empty") body.replaceChildren(emptyBox(t("portal.the.guide.has.not.been.written.yet.112")));
-        else if (result.status === "ready") { body.innerHTML = result.html || ""; mathStyle(result.math_css, "guideMathStyle"); }
+        if (result.status === "empty") { releaseGuideAssets(); body.replaceChildren(emptyBox(t("portal.the.guide.has.not.been.written.yet.112"))); }
+        else if (result.status === "ready") {
+          const fragment = await guideContent(result.html, ticket, currentRoute.subjectId);
+          if (ticket !== sequence) return;
+          body.replaceChildren(fragment); mathStyle(result.math_css, "guideMathStyle");
+        }
         else throw new Error(t("portal.the.guide.returned.an.unrecognized.status.113"));
         guideVersion = result.version; guideLoaded = true; window.scrollTo(0, y);
       }
       $("guideUpdated").textContent = result.modified_at ? t("portal.updatedAt", { date: apiDate(result.modified_at, true) }) : "";
     } catch (error) {
       if (ticket !== sequence) return;
+      if (error.status === 401 || error.status === 403) { releaseGuideAssets(); guideLoaded = false; }
       if (!guideLoaded) $("guideBody")?.replaceChildren();
       $("guideNotice")?.replaceChildren(errorBox(translateMessage(error.message), () => updateGuide(ticket), t("portal.unable.to.update.the.guide.114")));
     } finally { if (ticket === sequence && currentRoute?.path === "/guide") refreshTimer = setTimeout(() => { if (document.hidden) updateGuideLater(ticket); else updateGuide(ticket); }, 5000); }
@@ -719,6 +806,7 @@ export function initPortal(bridge) {
   return {
     start: route,
     setIdentity(next) {
+      if (identity?.learner_id !== next?.learner_id || identity?.role !== next?.role) subjects = null;
       if (identity?.learner_id && next?.learner_id !== identity.learner_id) profile = null;
       if (identity && (JSON.stringify(identity.features) !== JSON.stringify(next?.features) || JSON.stringify(identity.topics) !== JSON.stringify(next?.topics))) {
         catalog = null; dashboards.clear(); answerCache.clear();
@@ -727,14 +815,14 @@ export function initPortal(bridge) {
     },
     suspendIdentity() {
       sequence += 1; stopPageWork(); showMenu(false); bridge.leaveTopic();
-      catalog = null; profile = null; selectedCourse = null; dashboards.clear(); answerCache.clear(); scrolls.clear();
+      subjects = null; catalog = null; profile = null; selectedCourse = null; dashboards.clear(); answerCache.clear(); scrolls.clear();
       paging = false; busyCourse = false; expandedTask = null; root.replaceChildren(); root.hidden = true;
       if (graphDialog.open) graphDialog.close();
       if (feedbackDialog.open) feedbackDialog.close();
       feedbackInput.value = "";
     },
     permissionsChanged() { catalog = null; dashboards.clear(); answerCache.clear(); },
-    async identityChanged() { catalog = null; profile = null; dashboards.clear(); answerCache.clear(); scrolls.clear(); await route(); },
+    async identityChanged() { subjects = null; catalog = null; profile = null; dashboards.clear(); answerCache.clear(); scrolls.clear(); await route(); },
     progressChanged() { /* Returning to Learn reads current server progress without changing it. */ },
     showFeedback,
   };

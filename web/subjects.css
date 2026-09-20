@@ -9,7 +9,7 @@
   --platform-serif: Georgia, "Times New Roman", "Noto Serif SC", "Source Han Serif SC", "Songti SC", SimSun, serif;
 }
 body.platformTheme { background: var(--platform-paper); }
-.subjectHome, .subjectEmpty { font-family: var(--platform-serif); }
+.subjectHome { font-family: var(--platform-serif); }
 .platformTheme .topRibbon { background: #fdfbf7; border-bottom-color: var(--platform-rule); }
 .platformTheme .topBarContainer { gap: 0; }
 .platformTheme .portalLogo { font: 600 18px/1 var(--platform-serif); letter-spacing: -.45px; color: var(--platform-ink); margin-right: 25px; }
@@ -38,18 +38,66 @@ body.platformTheme { background: var(--platform-paper); }
 .subjectSecondaryName { margin: 4px 0 0; color: var(--card-accent, var(--subject-accent)); font: 13px/1.4 var(--platform-serif); letter-spacing: .025em; }
 .subjectDescription { margin: 15px 0 0; color: var(--platform-muted); font-size: 13px; line-height: 1.8; overflow-wrap: anywhere; }
 .subjectCardStatus { display: block; margin-top: auto; padding-top: 24px; color: var(--platform-muted); font-size: 11px; letter-spacing: .04em; }
-.subjectEmpty { max-width: 860px; margin: 0 auto; padding: 20px 0; color: var(--platform-ink); }
+.subjectEmpty { max-width: 860px; margin: 0 auto; padding: 20px 0; color: var(--ma-ink); }
 .subjectBack { display: inline-block; margin-bottom: 24px; font-size: 13px; color: var(--platform-muted); text-decoration: none; }
 .subjectBack:hover { color: var(--subject-accent); }
-.subjectEmptyPanel { padding: 66px 28px; text-align: center; border: 1px solid var(--platform-rule); border-top: 2px solid var(--card-accent, var(--subject-accent)); background: #fdfcf8; }
+.subjectEmptyPanel { padding: 66px 28px; text-align: center; border: 1px solid var(--ma-border); background: #fff; }
 .subjectEmptyPanel .subjectEmblem { font-size: 42px; }
-.subjectEmptyTitle { margin: 25px 0 12px; font: 400 36px/1.3 var(--platform-serif); }
-.subjectEmptyMessage { color: var(--platform-muted); font: 16px/1.8 var(--platform-serif); }
+.subjectEmptyTitle { margin: 25px 0 12px; color: var(--ma-navy); font-size: 28px; font-weight: 400; line-height: 1.3; }
+.subjectEmptyMessage { color: var(--muted); font-size: 16px; line-height: 1.8; }
 .subjectEmptyActions { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 18px; margin-top: 30px; }
 .subjectEmptyActions a { font-size: 13px; }
 .subjectGuideLink { padding: 10px 17px; border: 1px solid var(--card-accent, var(--subject-accent)); color: var(--card-accent, var(--subject-accent)); text-decoration: none; }
 .subjectGuideLink:hover { background: var(--subject-accent-soft); }
 .subjectAllLink { color: var(--platform-muted); text-underline-offset: 4px; }
+.subjectAccessNotice { margin-top: 22px; padding: 18px; border: 1px solid #e0e0e0; background: #fff; color: #404040; font-family: "Trebuchet MS", Arial, "Microsoft YaHei", sans-serif; font-size: 14px; }
+.subjectAccessNotice p { margin: 0 0 14px; }
+.subjectAccessNotice > a { margin-left: 18px; }
+.courseTools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 22px; margin: 0 0 12px; }
+.courseTools a { text-decoration: none; }
+.courseProgressLink[aria-disabled="true"] { opacity: .5; cursor: default; }
+.courseGraphStatus { font-size: 13px; margin: 0 0 12px; }
+/* Non-Math subjects share the original template, with only their accent changed.
+   Math and global settings match the existing styles.css / portal.css rules. */
+.subjectTemplate .portalLogo,
+.subjectTemplate .portalPageTitle,
+.subjectTemplate .courseChoice h2,
+.subjectTemplate .courseNameLink,
+.subjectTemplate .guideBody :is(h1,h2,h3),
+.subjectTemplate .profileForm label,
+.subjectTemplate .taskTitle,
+.subjectTemplate .taskHeading,
+.subjectTemplate .taskIcon.unlocked,
+.subjectTemplate .taskPrerequisites h3,
+.subjectTemplate .answerGroupTitle,
+.subjectTemplate .sequenceTab.selected,
+.subjectTemplate .userMenuIdentity strong,
+.subjectTemplate .identityNotice h2,
+.subjectTemplate .portalMessage h2,
+.subjectTemplate .feedbackDialog label,
+.subjectTemplate .answerExplanation h3,
+.subjectTemplate .progressUnit h2 { color: var(--ma-navy); }
+.subjectTemplate .mainNavigation a.active { color: var(--ma-blue); border-bottom-color: var(--ma-blue); }
+.subjectTemplate .mainNavigation a:hover,
+.subjectTemplate .guideBody a,
+.subjectTemplate .topicBreadcrumb a,
+.subjectTemplate .unitRow a:hover,
+.subjectTemplate .prerequisiteRow a:hover,
+.subjectTemplate .courseNameLink:hover { color: var(--ma-blue); }
+.subjectTemplate .portalStart:not(.guestReset),
+.subjectTemplate .courseLearn,
+.subjectTemplate .taskProgress > span,
+.subjectTemplate .unitProgress .completed { background: var(--ma-blue); border-color: var(--ma-blue); }
+.subjectTemplate .portalStart:not(.guestReset):hover,
+.subjectTemplate .courseLearn:hover { background: color-mix(in srgb, var(--ma-blue) 82%, #000); }
+.subjectTemplate .primaryButton:hover:not(:disabled) { background: color-mix(in srgb, var(--ma-blue) 82%, #000); border-color: var(--ma-blue); }
+.subjectTemplate .historyItem:hover { background: var(--soft-blue); border-color: color-mix(in srgb, var(--ma-blue) 25%, #fff); }
+.subjectTemplate .graphViewport rect[fill="#176bb5"] { fill: var(--ma-blue); }
+.subjectTemplate .graphViewport rect[fill="#a5cff3"] { fill: color-mix(in srgb, var(--ma-blue) 35%, #fff); }
+.subjectTemplate .graphViewport rect[fill="#c9e4ff"] { fill: color-mix(in srgb, var(--ma-blue) 18%, #fff); }
+.subjectTemplate .unitProgress .in_progress { background: color-mix(in srgb, var(--ma-blue) 58%, #fff); }
+.subjectTemplate .unitProgress .paused { background: color-mix(in srgb, var(--ma-blue) 35%, #fff); }
+.subjectTemplate .guestDemoOption input { accent-color: var(--ma-blue); }
 @media (max-width: 960px) {
   .platformTheme .portalLogo { margin-right: 18px; font-size: 17px; }
   .platformTheme #subjectContext { margin-right: 12px; padding-left: 10px; font-size: 14px; }
@@ -97,3 +145,49 @@ body.platformTheme { background: var(--platform-paper); }
   .subjectGrid { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { .subjectCard { transition: none; } }
+
+/* The platform return link is separate from each subject's original logo.
+   Its serif branding never changes the subject reader or settings typography. */
+:root { --site-header-height: 50px; }
+body { padding-top: var(--site-header-height); }
+.topRibbon, .topBarContainer { height: var(--site-header-height); }
+.topBarContainer { max-width: 1360px; }
+.platformHomeLink { display: inline-flex; align-items: center; flex-shrink: 0; gap: 8px; margin-right: 26px; padding-right: 26px; border-right: 1px solid #ddd8d0; font: 600 21px/1 var(--platform-serif); letter-spacing: -.55px; color: #302e29; text-decoration: none; white-space: nowrap; }
+.platformHomeLink img { display: block; width: 34px; height: 34px; }
+.topBarContainer > .portalLogo { flex-shrink: 0; }
+.platformTheme .platformHomeLink { border-right: 0; }
+@media (max-width: 1200px) and (min-width: 1001px) {
+  .platformHomeLink { margin-right: 18px; padding-right: 18px; font-size: 19px; }
+}
+@media (max-width: 1000px) {
+  :root { --site-header-height: 132px; }
+  body:has(.guestDemoOption[hidden]) { --site-header-height: 96px; }
+  .topRibbon { height: var(--site-header-height); }
+  .topBarContainer { height: var(--site-header-height); display: grid; grid-template-columns: auto minmax(0,1fr) 34px; grid-template-rows: 50px 46px 36px; column-gap: 10px; padding-inline: 14px; }
+  body:has(.guestDemoOption[hidden]) .topBarContainer { grid-template-rows: 50px 46px; }
+  .topBarContainer .platformHomeLink { grid-column: 1 / 3; grid-row: 1; justify-self: start; margin: 0; padding: 0; border: 0; font-size: 20px; }
+  .topBarContainer .platformHomeLink img { width: 30px; height: 30px; }
+  .topBarContainer > .portalLogo { grid-column: 1; grid-row: 2; margin: 0; font-size: 12px; }
+  .topBarContainer > .portalLogo span { display: inline; }
+  .topBarContainer > .portalLogo img { width: 30px; height: 30px; }
+  .topBarContainer .userMenuHost { grid-column: 3; grid-row: 1; margin-left: 0; height: 50px; }
+  .topBarContainer .userAvatar { width: 34px; height: 34px; }
+  .topBarContainer .mainNavigation { grid-column: 2 / 4; grid-row: 2; width: 100%; height: 46px; justify-content: flex-end; min-width: 0; padding: 0; }
+  .topBarContainer .mainNavigation a { padding-inline: 7px; margin-right: 5px; font-size: 12px; }
+  .topBarContainer .guestDemoOption { position: static; grid-column: 1 / 4; grid-row: 3; justify-self: end; margin: 0; font-size: 12px; gap: 7px; }
+  .topBarContainer .guestDemoOption input { width: 15px; height: 15px; }
+  .topBarContainer:has(.portalLogo[hidden]) .mainNavigation { grid-column: 1 / 4; justify-content: flex-start; }
+  .platformTheme .topBarContainer:has(.guestDemoOption:not([hidden])) .mainNavigation { padding: 0; }
+  body.topicPage .historySidebar { top: var(--site-header-height); max-height: calc(100dvh - var(--site-header-height)); }
+  body.topicPage .appLayout::before, body.topicPage .historyScrim { top: var(--site-header-height); }
+  body.topicPage .historyScrim { height: calc(100% - var(--site-header-height)); }
+  body.topicPage .historyDrawerToggle { top: calc(var(--site-header-height) + 95px); }
+  body.topicPage .step { scroll-margin-top: calc(var(--site-header-height) + 14px); }
+}
+@media (max-width: 360px) {
+  .topBarContainer { column-gap: 6px; padding-inline: 10px; }
+  .topBarContainer > .portalLogo { gap: 5px; font-size: 11px; }
+  .topBarContainer > .portalLogo img { width: 26px; height: 26px; }
+  .topBarContainer .mainNavigation a { font-size: 11px; padding-inline: 5px; margin-right: 2px; }
+  .topBarContainer .platformHomeLink { font-size: 19px; }
+}

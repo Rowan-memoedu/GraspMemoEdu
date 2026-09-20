@@ -122,10 +122,11 @@ def register_guide_routes(app, settings, access_store, subjects=None):
 
     @app.get('/api/guide')
     def guide(request: Request):
-        access_store.resolve(request.headers.get('x-learning-identity'))
+        access = access_store.resolve(request.headers.get('x-learning-identity'))
         origin = settings.public_api_origin if request.state.public_transport else f"http://{request.headers['host']}"
         subject_id = request.query_params.get('subject_id')
         if subject_id is not None and subjects:
+            subjects.authorize_subject(access, subject_id)
             selected = subject_reader(subject_id)
             if selected is None or not selected.source.is_file():
                 return {'status': 'empty', 'html': '', 'math_css': '', 'version': None,
@@ -134,7 +135,12 @@ def register_guide_routes(app, settings, access_store, subjects=None):
         return reader.read(origin + '/guide-assets')
 
     @app.get('/subject-guide-assets/{subject_id}/{relative:path}')
-    def subject_guide_asset(subject_id: str, relative: str):
+    def subject_guide_asset(subject_id: str, relative: str, request: Request):
+        if subjects:
+            subjects.require(subject_id)
+            if subject_id != 'math':
+                access = access_store.resolve(request.headers.get('x-learning-identity'))
+                subjects.authorize_subject(access, subject_id)
         selected = subject_reader(subject_id) if subjects else None
         if selected is None:
             raise DomainError('guide_asset_not_found', '未找到指南资源。', 404)

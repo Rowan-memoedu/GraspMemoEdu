@@ -102,8 +102,11 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     # Store only a salted cryptographic hash of the remote pairing credential.
     pairing_file = settings.data_dir / 'pairing.json'
     executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='answer-judge')
-    access_store = AccessStore(settings.data_dir, [{'id': topic['id'], 'title': topic['title']} for topic in catalog.topics.values()])
     subjects = Subjects(settings, catalog)
+    math_topics = {topic_id for topic_id, course_id in catalog.topic_courses.items()
+                   if course_id in subjects.course_ids('math')}
+    access_store = AccessStore(settings.data_dir, [{'id': topic['id'], 'title': topic['title']} for topic in catalog.topics.values()],
+                               guest_topic_ids=math_topics)
     dashboard_store = DashboardStore(catalog, access_store, subjects)
     learning_services = ServiceCache(catalog.default_topic_id)
     learning_services[(service.learner_id, service.topic_id)] = service
@@ -135,6 +138,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
 
     def identity(request, feature=None):
         access = access_store.resolve(request.headers.get('x-learning-identity'))
+        subjects.authorize_subject(access, request.query_params.get('subject_id'))
         topic_id = requested_topic(request)
         access_store.authorize(access, topic_id, feature)
         return access, service_for(access['learner_id'], topic_id)
@@ -327,11 +331,12 @@ def create_app(settings: Settings | None = None, service: LearningService | None
             if not size.isdigit() or int(size) > 16384:
                 return deny('request_too_large', '请求过大。', 413)
             # Enforce permissions before parsing a mutation body; hiding controls is not authorization.
-            action_features = {'/api/choose': 'learn', '/api/continue': 'learn',
+            action_features = {'/api/choose': 'learn', '/api/continue': 'learn', '/api/guest/reset': 'learn',
                                '/api/submit': 'submit_answer', '/api/select': 'review_history', '/api/pause': 'pause_topic'}
             if path in action_features or path == '/api/state' or path.startswith('/api/submissions/') or review_path:
                 try:
                     access = access_store.resolve(request.headers.get('x-learning-identity'))
+                    subjects.authorize_subject(access, request.query_params.get('subject_id'))
                     feature = review_feature if review_path else action_features.get(path)
                     if path.startswith('/api/submissions/'):
                         feature = 'submit_answer'
@@ -347,7 +352,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         response.headers['Cache-Control'] = 'no-store'
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['Referrer-Policy'] = 'no-referrer'
-        response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' http://127.0.0.1:* http://localhost:*; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+        response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' http://127.0.0.1:* http://localhost:*; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
         if remote:
             response.headers['Access-Control-Allow-Origin'] = origin
             response.headers['Vary'] = 'Origin'
@@ -406,8 +411,8 @@ def create_app(settings: Settings | None = None, service: LearningService | None
 
     @app.get('/api/subjects')
     def subject_catalog(request: Request):
-        access_store.resolve(request.headers.get('x-learning-identity'))
-        return subjects.public()
+        access = access_store.resolve(request.headers.get('x-learning-identity'))
+        return subjects.public(access)
 
     @app.post('/api/catalog/select')
     def select_course(payload: CourseSelection, request: Request):

@@ -12,6 +12,7 @@ from math_learning.api import create_app
 from math_learning.config import Settings
 from math_learning.service import LearningService
 from review_web_fixture import make_course
+from initialize_subject_test_courses import initialize
 
 
 def main():
@@ -34,9 +35,11 @@ def main():
     course['version'] = hashlib.sha256(json.dumps(course, sort_keys=True).encode()).hexdigest()
     source = data / 'course.json'
     source.write_text(json.dumps(course, ensure_ascii=False), encoding='utf-8')
+    (data / 'settings.json').write_text(json.dumps({'course_path': str(source)}), encoding='utf-8')
     guide = data / 'guide' / 'guide.md'
     guide.parent.mkdir()
     guide.write_text('# 数学指南\n\n## 学习流程\n\nMATH_GUIDE_SENTINEL\n', encoding='utf-8')
+    initialize(data, apply=True)
     def judge(question, reference, answer):
         return {'status': 'judged', 'correct': answer.strip() == reference,
                 'reason': 'Synthetic platform fixture oracle'}

@@ -2,7 +2,7 @@ param(
     [string]$DataDirectory = 'D:\AppData\MathLearningWeb',
     [int]$Port = 8767,
     [string]$CloudflaredPath = 'D:\Applications\cloudflared\cloudflared.exe',
-    [string]$Repository = 'amymiller76717-sudo/MathLearningWeb-Pages',
+    [string]$Repository = 'amymiller76717-sudo/GraspMemoEdu-Pages',
     [string]$ArtifactDirectory = 'D:\Artifacts\MathLearningWeb\public-internet',
     [switch]$SkipPublish,
     [switch]$RestartBackend

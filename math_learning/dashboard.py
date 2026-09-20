@@ -48,6 +48,8 @@ class DashboardStore:
 
     def _course(self, access, course_id, subject_id=None):
         if self.subjects:
+            self.subjects.authorize_subject(access, subject_id)
+            self.subjects.authorize_subject(access, self.subjects.course_subjects.get(course_id))
             self.subjects.authorize_course(subject_id, course_id)
         course = self.catalog.course(course_id)
         if not self._allowed_topics(access).intersection(topic['id'] for topic in course['topics']):
@@ -105,7 +107,10 @@ class DashboardStore:
 
     def catalog_view(self, access, subject_id=None):
         allowed = self._allowed_topics(access)
-        ids = self.subjects.course_ids(subject_id) if subject_id is not None and self.subjects else set(self.catalog.courses)
+        if self.subjects:
+            self.subjects.authorize_subject(access, subject_id)
+        scope = 'math' if self.subjects and subject_id is None and access['role'] == 'guest' else subject_id
+        ids = self.subjects.course_ids(scope) if scope is not None and self.subjects else set(self.catalog.courses)
         return {'courses': [{'id': course['id'], 'title': course['title'], 'description': course['description'],
                              'available': bool(allowed.intersection(topic['id'] for topic in course['topics'])),
                              'topic_count': len(course['topics'])} for course in self.catalog.courses.values() if course['id'] in ids],
@@ -239,7 +244,7 @@ class DashboardStore:
 
     def dashboard(self, access, course_id=None, cursor=None, limit=25, subject_id=None):
         if subject_id is not None and self.subjects:
-            self.subjects.require(subject_id)
+            self.subjects.authorize_subject(access, subject_id)
         course_id = course_id or self._selection(access, subject_id)
         if not course_id:
             raise DomainError('course_required', '请先选择课程。', 409)
@@ -321,6 +326,8 @@ class DashboardStore:
 
     def answers(self, access, task_id, subject_id=None):
         self._feature(access, 'review_history')
+        if self.subjects:
+            self.subjects.authorize_subject(access, subject_id)
         topic_id = self._task_topic(access, task_id)
         if self.subjects:
             self.subjects.authorize_topic(subject_id, topic_id)

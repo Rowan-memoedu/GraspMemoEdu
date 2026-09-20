@@ -246,6 +246,44 @@ async function request(path, { method = "GET", body, bootstrap = false, timeout 
   } finally { clearTimeout(timer); }
 }
 
+async function fetchGuideAsset(value, subjectId, retried = false) {
+  await ensureDeployment();
+  await ensureIdentity();
+  if (!publicMode) await ensureSession();
+  const base = new URL(apiBase || window.location.origin);
+  const url = new URL(value, base);
+  const prefix = `/subject-guide-assets/${encodeURIComponent(subjectId)}/`;
+  if (!/^[a-z][a-z0-9-]*$/.test(subjectId) || subjectId === 'math' || url.origin !== base.origin
+      || url.username || url.password || !url.pathname.startsWith(prefix)
+      || url.pathname.slice(prefix.length).split('/').some(part => {
+        try { const decoded = decodeURIComponent(part); return !decoded || ['.', '..'].includes(decoded) || /[\\/\u0000]/.test(decoded); }
+        catch { return true; }
+      })) throw new ApiError(t('portal.content.unavailable.26'), 403, 'invalid_guide_asset');
+  const epoch = identityGeneration, generation = connectionGeneration, token = identityToken;
+  const headers = {'X-Learning-Identity': token};
+  if (!publicMode) headers['X-Learning-Session'] = sessionToken;
+  const controller = new AbortController(), timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+  const changed = () => epoch !== identityGeneration || generation !== connectionGeneration || token !== identityToken;
+  try {
+    const response = await fetch(url, {headers, signal:controller.signal, credentials:publicMode ? 'omit' : 'same-origin', redirect:'error', cache:'no-store'});
+    if (changed()) throw new ApiError(t('身份或学习页面已更新。'), 0, 'connection_changed');
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      const detail = data?.detail;
+      if (!publicMode && !retried && response.status === 401 && ['authentication_required','invalid_session'].includes(detail?.code)) {
+        sessionToken = null; await ensureSession();
+        if (changed()) throw new ApiError(t('身份或学习页面已更新。'), 0, 'connection_changed');
+        return fetchGuideAsset(value, subjectId, true);
+      }
+      throw new ApiError(detail?.message || t('portal.content.unavailable.26'), response.status, detail?.code || 'guide_asset_unavailable');
+    }
+    const blob = await response.blob();
+    if (changed()) throw new ApiError(t('身份或学习页面已更新。'), 0, 'connection_changed');
+    if (blob.size > 20 * 1024 * 1024) throw new ApiError(t('portal.content.unavailable.26'), 413, 'guide_asset_too_large');
+    return blob;
+  } finally { clearTimeout(timer); }
+}
+
 async function ensureSession() {
   if (sessionToken) return;
   if (!sessionPromise) {
@@ -1367,6 +1405,10 @@ async function openTopic(id, subjectId) {
 
 const { initPortal } = await import("./portal.js");
 portal = initPortal({
+  fetchGuideAsset: async (url, subjectId) => {
+    try { return await fetchGuideAsset(url, subjectId); }
+    catch (error) { if (identityFailure(error)) await recoverIdentity(error); throw error; }
+  },
   request: async (path, options) => {
     try { return await request(path, options); }
     catch (error) {

@@ -32,11 +32,14 @@ def credential_digest(kind, value):
 class AccessStore:
     """Identity tables share the learning DB so backups preserve their mapping."""
 
-    def __init__(self, data_dir: Path, topics: list[dict]):
+    def __init__(self, data_dir: Path, topics: list[dict], *, guest_topic_ids=None):
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.db_path = self.data_dir / 'learning.sqlite3'
         self.topics = {topic['id']: {'id': topic['id'], 'title': topic['title']} for topic in topics}
+        self.guest_topic_ids = set(self.topics) if guest_topic_ids is None else set(guest_topic_ids)
+        if self.guest_topic_ids - set(self.topics):
+            raise ValueError('Guest Topic permissions must refer to configured Topics')
         with closing(self._connect()) as con:
             con.executescript('''
                 PRAGMA journal_mode=WAL;
@@ -105,7 +108,7 @@ class AccessStore:
     def _public(self, row):
         guest = row['role'] == 'guest'
         features = list(GUEST_FEATURES) if guest else json.loads(row['features'])
-        topic_ids = list(self.topics) if guest else json.loads(row['topic_ids'])
+        topic_ids = [topic for topic in self.topics if topic in self.guest_topic_ids] if guest else json.loads(row['topic_ids'])
         result = {
             'role': row['role'], 'learner_id': row['learner_id'],
             'display_name': row['display_name'],
@@ -157,6 +160,8 @@ class AccessStore:
         return self._public(row)
 
     def authorize(self, access, topic_id, feature=None):
+        if access['role'] == 'guest' and topic_id not in self.guest_topic_ids:
+            raise DomainError('topic_forbidden', REGISTER_MESSAGE, 403)
         if topic_id not in {topic['id'] for topic in access['topics']}:
             raise DomainError('topic_forbidden', '当前身份没有访问此 Topic 的权限。', 403)
         if feature and feature not in access['features']:

@@ -101,7 +101,17 @@ class Subjects:
     def authorize_topic(self, subject_id, topic_id):
         self.authorize_course(subject_id, self.catalog.topic_courses[topic_id])
 
-    def public(self):
-        return {'subjects': [{**subject, 'course_count': len(self.course_ids(subject_id))}
+    def authorize_subject(self, access, subject_id):
+        if subject_id is None:
+            return
+        self.require(subject_id)
+        if access['role'] == 'guest' and subject_id != 'math':
+            raise DomainError('subject_account_required', '该功能需注册账号才能使用', 403)
+
+    def public(self, access=None):
+        guest = access is None or access['role'] == 'guest'
+        return {'subjects': [{**subject, 'course_count': len(self.course_ids(subject_id)),
+                             'available': not guest or subject_id == 'math',
+                             'requires_account': subject_id != 'math'}
                              for subject_id, subject in self.subjects.items()],
                 'default_subject_id': 'math', 'brand': 'GraspMemoEdu'}

@@ -49,7 +49,7 @@ function emblem(subject) {
   return symbol;
 }
 
-export function renderSubjectHome(subjects) {
+export function renderSubjectHome(subjects, { onRestricted } = {}) {
   const section = element('section', 'subjectHome');
   section.setAttribute('aria-labelledby', 'subjectHomeTitle');
   const heading = element('header', 'subjectHomeHeading');
@@ -60,6 +60,9 @@ export function renderSubjectHome(subjects) {
   for (const subject of subjects) {
     const card = link('', subjectHref(subject.id), 'subjectCard');
     card.dataset.subjectId = subject.id;
+    if (subject.available === false && onRestricted) {
+      card.addEventListener('click', event => { event.preventDefault(); onRestricted(subject); });
+    }
     card.style.setProperty('--card-accent', accent(subject));
     const top = element('div', 'subjectCardTop');
     top.append(emblem(subject));
@@ -96,12 +99,29 @@ export function renderSubjectEmpty(subject) {
   return section;
 }
 
-export function applySubjectTheme(subject) {
-  const color = accent(subject);
+export function applySubjectTheme(subject, { home = false } = {}) {
+  const color = subject?.id === 'math' ? '#096bb7' : accent(subject);
   document.documentElement.style.setProperty('--subject-accent', color);
   document.documentElement.style.setProperty('--subject-accent-soft', color + '12');
-  document.body.classList.add('platformTheme');
+  // Only the all-subject landing page uses the classical design. Keep the
+  // existing reader/dashboard variables untouched for Math and global settings.
+  const themed = subject && subject.id !== 'math';
+  for (const [name, value] of [['--ma-blue', color], ['--ma-navy', color], ['--soft-blue', color + '0d']]) {
+    if (themed) document.documentElement.style.setProperty(name, value);
+    else document.documentElement.style.removeProperty(name);
+  }
+  document.body.classList.toggle('platformTheme', home);
+  document.body.classList.toggle('subjectTemplate', Boolean(themed));
   document.body.classList.toggle('hasSubjectContext', Boolean(subject));
   document.body.dataset.subject = subject?.id || '';
   document.body.dataset.platformContext = subject ? 'subject' : 'platform';
+}
+
+export function subjectLogo(subject) {
+  if (!subject) return './favicon.svg';
+  const color = subject.id === 'math' ? '#1e194e' : accent(subject);
+  const mark = subject.id === 'math'
+    ? '<path d="M12 11h17M12 29h17M27 11 17 20l10 9" fill="none" stroke="' + color + '" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>'
+    : '<text x="20" y="27" text-anchor="middle" font-family="Arial,sans-serif" font-size="22" fill="' + color + '">' + (emblems[subject.id] || '·') + '</text>';
+  return 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect x="1" y="1" width="38" height="38" rx="7" fill="#fff" stroke="#e0e0e0"/>' + mark + '</svg>');
 }

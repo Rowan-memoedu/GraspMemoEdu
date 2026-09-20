@@ -1,5 +1,5 @@
 param(
-    [string]$Repository = 'amymiller76717-sudo/MathLearningWeb-Pages',
+    [string]$Repository = 'amymiller76717-sudo/GraspMemoEdu-Pages',
     [string]$ExportDirectory = 'D:\Artifacts\MathLearningWeb\pages-ready',
     [string]$EvidenceDirectory = 'D:\Artifacts\MathLearningWeb\publication'
 )
@@ -41,7 +41,7 @@ $repo = @($existing | Where-Object nameWithOwner -EQ $Repository)
 $created = $repo.Count -eq 0
 if ($created) {
     Write-Output 'Creating the authorized public frontend repository.'
-    $info = Invoke-Api POST 'user/repos' @{name=$name;private=$false;auto_init=$true;description='MathLearningWeb static frontend. Course data, answers and credentials remain local.'}
+    $info = Invoke-Api POST 'user/repos' @{name=$name;private=$false;auto_init=$true;description='GraspMemoEdu static frontend. Course data, answers and credentials remain local.'}
 } else {
     if ($repo[0].isPrivate) { throw 'Refusing to change visibility of an existing private repository.' }
     $info = Invoke-Api GET ('repos/' + $Repository)

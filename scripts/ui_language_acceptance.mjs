@@ -17,7 +17,7 @@ try {
  await page.goto(base+'#/subjects/math/courses',{waitUntil:'networkidle'});
  await page.locator('#guestDemoOption:not([hidden])').waitFor();
  assert.equal(await page.locator('html').getAttribute('lang'),'zh-CN');
- assert.deepEqual(await page.locator('.mainNavigation a:visible').allTextContents(),['学科','学习','课程','指南']);
+ assert.deepEqual(await page.locator('.mainNavigation a:visible').allTextContents(),['学习','课程','指南']);
  const courseContent=await page.locator('.courseChoice h2,.courseDescription').allTextContents();
  await page.screenshot({path:path.join(out,'chinese-default.png'),fullPage:true});
  const changeLanguage=async value=>{

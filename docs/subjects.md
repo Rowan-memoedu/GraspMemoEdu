@@ -1,6 +1,8 @@
 # GraspMemoEdu 学科配置与扩展
 
-总首页为 `#/`，六科固定标识为 `math`、`physics`、`english`、`chinese`、`biology`、`chemistry`。六科共用一个前端、账号系统和学习后端。当前数学有「再探小学算术」；其余五科显示空课程与空指南，不生成示范 Topic。
+总首页为 `#/`，六科固定标识为 `math`、`physics`、`english`、`chinese`、`biology`、`chemistry`。六科共用一个前端、账号系统和学习后端。数学只保留「再探小学算术」，不新增测试课；其余五科各初始化一门明确标注测试的课程和一个测试 Topic。
+
+古典衬线风格仅作用于总首页。数学及全局设置使用原模板视觉，其他科使用同一模板并替换学科色调、名称和徽标。学科导航栏最左侧的 GraspMemoEdu 品牌返回总首页，其右侧保留独立学科标识（数学为原来的 Σ 与「数学学习」）。平台返回入口的样式不覆盖学科主题。
 
 ## 本机配置
 
@@ -43,13 +45,13 @@ pwsh -NoProfile -File D:/Projects/MathLearningWeb/Start-PublicLearning.ps1 -Rest
 
 ## 路由、身份与兼容
 
-学科内页面为 `#/subjects/<id>/learn`、`courses`、`guide`、`topic/<topic-id>`、`review/<topic-id>/<module-id>`。顶栏品牌返回总首页；学科名称返回该学科学习页。全局设置和帮助保留 `#/settings`、`#/help`。
+学科内页面为 `#/subjects/<id>/learn`、`courses`、`guide`、`topic/<topic-id>`、`review/<topic-id>/<module-id>`。顶栏 GraspMemoEdu 返回总首页；独立学科标识返回该学科学习页。全局设置和帮助保留 `#/settings`、`#/help`。每张课程卡片可直接进入学习进度或打开知识图谱，复用已有页面与组件，不会改变当前选课；未获课程访问权限时相应入口禁用。
 
 旧 `#/learn`、`#/courses`、`#/guide`、`#/topic/...` 和 `#/review/...` 会转入数学并原样保留查询参数。Topic ID、课程版本、学习记录、复习卡片和浏览器身份键不变。新增 `learner_subject_preferences` 保存每科选课；数学未产生新选择时读取旧选课记录，不改写旧行。
 
-同一账号及游客身份在全部学科通用，权限仍由 Topic 与功能决定。学科归属只组织内容，不授予学习权限。未配置内容的学科没有学习任务，切换学科也不会重置进度。游客仍只能被自动暂停，不能主动暂停 Topic；体验浏览偏好保持原行为。
+同一账号在全部学科通用，课程权限仍由 Topic 与功能决定。学科归属不授予学习权限，新增测试课不会自动扩大现有账号授权。游客目前只能进入数学，其他学科的课程、指南和资源均在后端拒绝游客；省略学科参数也不能绕过非数学 Topic 权限。游客不能主动暂停 Topic，体验浏览偏好保持原行为。
 
-`GET /api/subjects` 仅公开展示字段与课程数，不包含本地文件路径。课程目录、选课、Dashboard、作答记录以及 Lesson/Review 请求接受可选 `subject_id`；显式学科与课程不匹配时拒绝请求。旧客户端不传学科时保留兼容行为，身份和权限校验依然生效。
+`GET /api/subjects` 返回展示字段、课程数、`available` 与 `requires_account`，不包含本地文件路径。课程目录、选课、Dashboard、作答记录以及 Lesson/Review 请求接受可选 `subject_id`；显式学科与课程不匹配时拒绝请求。旧客户端不传学科时保留兼容行为，身份和权限校验依然生效。非数学指南的图片和附件经账号认证后转为临时 Blob URL，离开页面或退出登录后撤销；不会向外部链接传递账号凭据。
 
 ## 共用实现与后续范围
 
@@ -58,7 +60,19 @@ pwsh -NoProfile -File D:/Projects/MathLearningWeb/Start-PublicLearning.ps1 -Rest
 - `math_learning/subjects.py`：本地配置、课程归属与公开字段白名单。
 - 现有 Lesson、Practice、FSRS 和账号代码：各学科复用，保持原规则。
 
-本轮没有加入其他学科的课程、专属模块、判题提示词或不同评分算法。学科专属功能后续按已确认需求接入；当前不要在 `subjects.json` 中填写尚未支持的 `prompt`、`rating` 或插件字段。共用结构的后续修改直接作用于六科，无需复制页面。
+五科测试内容沿用现有 Example、Introduction、Practice 与复习机制，不引入专属模块、判题提示词或不同评分算法。当前不要在 `subjects.json` 中填写尚未支持的 `prompt`、`rating` 或插件字段。共用结构的后续修改直接作用于六科，无需复制页面。
+
+## 测试课程初始化
+
+`scripts/initialize_subject_test_courses.py` 从确定性 Markdown 和答案 sidecar 调用正式导入管线生成五科测试内容。每个 Topic 有两个 Example，每个模块有十五道 Practice，可验证练习补题、完成评分及 FSRS 复习。默认只预览，加 `--apply` 才安装：
+
+```powershell
+& D:/AppData/MathLearningWeb/venv/Scripts/python.exe scripts/initialize_subject_test_courses.py --data-dir D:/AppData/MathLearningWeb
+# 在本机服务停止期间应用；随后用正常入口启动。
+& D:/AppData/MathLearningWeb/venv/Scripts/python.exe scripts/initialize_subject_test_courses.py --data-dir D:/AppData/MathLearningWeb --apply
+```
+
+数学课程和既有文件保持不变；已有指南不覆盖，尚未填写的预留指南会加入测试说明。重复执行幂等，测试文件被人工改动或 ID 冲突时停止，不强行覆盖。所有配置在写入前验证，异常回滚本轮写入。课程内容、源稿、答案和导入回执位于本机 `test-content/<学科>`，不进入公开静态仓库。
 
 完整备份继续使用格式 2，增加可选 `subjects.json` 和各学科指南。备份会转换本地指南路径为可移植相对路径，包含被正文引用的安全资源与全库偏好；还原仍兼容旧备份。
 
