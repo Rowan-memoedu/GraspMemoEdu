@@ -30,6 +30,17 @@ try {
             $priorProcess.StartTime.ToUniversalTime() -eq ([datetime]$candidate.startedAt).ToUniversalTime()) {
             if ($candidate.port -ne $Port) { throw '已有公开入口使用另一个端口，请先运行 Stop-PublicLearning.ps1。' }
             $record = $candidate
+            if (Test-Path -LiteralPath $candidate.stderr -PathType Leaf) {
+                $priorLog = Read-SharedLog $candidate.stderr
+                $lostAt = $priorLog.LastIndexOf('Unauthorized: Tunnel not found', [StringComparison]::Ordinal)
+                $connectedAt = $priorLog.LastIndexOf('Registered tunnel connection', [StringComparison]::Ordinal)
+                if ($lostAt -ge 0 -and $lostAt -gt $connectedAt) {
+                    Write-Output '旧临时隧道已被服务商移除，正在重建公网入口……'
+                    & pwsh -NoLogo -NoProfile -File (Join-Path $PSScriptRoot 'Stop-PublicLearning.ps1') -DataDirectory $DataDirectory
+                    if ($LASTEXITCODE -ne 0) { throw '失效隧道停止失败。' }
+                    $record = $null
+                }
+            }
         }
     }
     if (-not $record) {
