@@ -26,6 +26,9 @@ export function t(key, params = {}) {
 
 // Only API operational errors belong here. A judge's explanation is course content.
 const errors = {
+  '未找到此学科。': 'This subject could not be found.',
+  '此课程不属于当前学科。': 'This course does not belong to the current subject.',
+  '指南路径无效。': 'This guide is unavailable.',
   '请先选择游客访问或使用邀请码登录。': 'Continue as a guest or sign in with an invitation code.',
   '访问身份已失效，请重新选择访问方式。': 'Your session is no longer valid. Please sign in again or continue as a guest.',
   '账号登录已到期，请重新输入邀请码登录。': 'Your session has expired. Enter your invitation code to sign in again.',

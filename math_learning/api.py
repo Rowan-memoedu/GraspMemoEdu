@@ -23,6 +23,7 @@ from .service import DomainError, LearningService
 from .access import AccessStore
 from .catalog import Catalog
 from .dashboard import DashboardStore
+from .subjects import Subjects
 from .guide import register_guide_routes
 from .guest_reset import register_guest_reset_routes
 from .review import ReviewBackend
@@ -102,7 +103,8 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     pairing_file = settings.data_dir / 'pairing.json'
     executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='answer-judge')
     access_store = AccessStore(settings.data_dir, [{'id': topic['id'], 'title': topic['title']} for topic in catalog.topics.values()])
-    dashboard_store = DashboardStore(catalog, access_store)
+    subjects = Subjects(settings, catalog)
+    dashboard_store = DashboardStore(catalog, access_store, subjects)
     learning_services = ServiceCache(catalog.default_topic_id)
     learning_services[(service.learner_id, service.topic_id)] = service
     if service.review_backend is None:
@@ -128,6 +130,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     def requested_topic(request):
         topic_id = request.query_params.get('topic_id', catalog.default_topic_id)
         catalog.topic(topic_id)
+        subjects.authorize_topic(request.query_params.get('subject_id'), topic_id)
         return topic_id
 
     def identity(request, feature=None):
@@ -223,6 +226,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     app.state.access_store = access_store
     app.state.catalog = catalog
     app.state.dashboard_store = dashboard_store
+    app.state.subjects = subjects
     app.state.learning_services = learning_services
     app.state.public_limits = public_limits
 
@@ -286,7 +290,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
             return response
         public_paths = {'/api/health', '/api/access', '/api/access/guest', '/api/access/login', '/api/access/logout',
                         '/api/state', '/api/demo-answer', '/api/guest/reset', '/api/choose', '/api/continue', '/api/select', '/api/pause', '/api/submit',
-                        '/api/catalog', '/api/catalog/select', '/api/dashboard', '/api/profile', '/api/feedback', '/api/guide'}
+                        '/api/subjects', '/api/catalog', '/api/catalog/select', '/api/dashboard', '/api/profile', '/api/feedback', '/api/guide'}
         task_answers_path = path.startswith('/api/tasks/') and path.endswith('/answers') and path.count('/') == 4
         review_feature = review_route_feature(path, request.method)
         review_path = review_feature is not None
@@ -398,23 +402,28 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     @app.get('/api/catalog')
     def course_catalog(request: Request):
         access = access_store.resolve(request.headers.get('x-learning-identity'))
-        return dashboard_store.catalog_view(access)
+        return dashboard_store.catalog_view(access, request.query_params.get('subject_id'))
+
+    @app.get('/api/subjects')
+    def subject_catalog(request: Request):
+        access_store.resolve(request.headers.get('x-learning-identity'))
+        return subjects.public()
 
     @app.post('/api/catalog/select')
     def select_course(payload: CourseSelection, request: Request):
         access = access_store.resolve(request.headers.get('x-learning-identity'))
-        return dashboard_store.select_course(access, payload.course_id)
+        return dashboard_store.select_course(access, payload.course_id, request.query_params.get('subject_id'))
 
     @app.get('/api/dashboard')
     def dashboard(request: Request, course_id: str | None = None, cursor: str | None = None,
                   limit: int = Query(default=25, ge=1, le=50)):
         access = access_store.resolve(request.headers.get('x-learning-identity'))
-        return dashboard_store.dashboard(access, course_id, cursor, limit)
+        return dashboard_store.dashboard(access, course_id, cursor, limit, request.query_params.get('subject_id'))
 
     @app.get('/api/tasks/{task_id}/answers')
     def task_answers(task_id: str, request: Request):
         access = access_store.resolve(request.headers.get('x-learning-identity'))
-        return dashboard_store.answers(access, task_id)
+        return dashboard_store.answers(access, task_id, request.query_params.get('subject_id'))
 
     @app.get('/api/profile')
     def profile(request: Request):
@@ -500,7 +509,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         result = learner.submission(submission_id)
         return public_submission(result, access, learner)
 
-    register_guide_routes(app, settings, access_store)
+    register_guide_routes(app, settings, access_store, subjects)
     register_guest_reset_routes(app, identity, public_state, Action)
     register_review_routes(app, identity, admission_lock, public_limits, schedule, outstanding_count)
     app.mount('/', StaticFiles(directory=Path(__file__).resolve().parent.parent / 'web', html=True), name='web')

@@ -1,5 +1,7 @@
 # MathLearningWeb
 
+- 产品品牌为 GraspMemoEdu，整体多学科框架以 RemNote「搭建掌握式学习平台」（MQrYfdVzLFh4tV96K）的已确认范围为准。总首页选择六科学科；数学保留既有内容，其他五科共用空页面，本轮不填学科专属内容或功能。共用结构在当前仓库维护，不复制六份网站。
+- 学科路由为 `#/subjects/<id>/...`；旧数学路径继续兼容。账号、身份存储与 Topic ID 不因学科拆分改变。课程归属、配色、徽标及各自指南通过本机 `subjects.json` 配置，见 `docs/subjects.md`；不得将本机路径暴露给公开前端。
 - 本机数学学习应用；Lesson 产品行为以 `D:/Artifacts/MathLearningWebPlan/01-需求与方案.md`、`04-推送系统补充需求.md` 为准，复习后端以 `docs/review-backend.md` 为准，当前实现/运维以 README 为准。
 - 主页布局以 `D:/Artifacts/MathTopicPipeline/MathAcademy-learn-主页复刻需求.md` 为准；Course「再探小学算术」组织 Topic「数字化为字母」，不改变其 ID、版本和既有进度。网站主页产生真实 Lesson 和到期 Review 任务，尚未接入 XP 或测验。
 - GUIDE 由 `D:/AppData/MathLearningWeb/guide/guide.md` 与相对 assets 单向发布；内容分极简使用流程和系统工作原理，配图用本网站真实截图标注。更新指南不能夹带技术配置说明或暴露其他本机文件。

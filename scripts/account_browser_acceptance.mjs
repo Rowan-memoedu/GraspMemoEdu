@@ -62,7 +62,7 @@ async function createDevice(mobile = false) {
       if (token) {device.token = token; if (!secretValues.includes(token)) secretValues.push(token);}
     }
   });
-  await page.goto(base, {waitUntil:'networkidle'});
+  await page.goto(base.replace(/#.*$/, '')+'#/subjects/math/courses', {waitUntil:'networkidle'});
   await page.locator('.courseChoice').first().waitFor();
   assert.equal((await get(device.token, 'access')).body.role, 'guest');
   return device;

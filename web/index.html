@@ -5,22 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
     <meta name="referrer" content="no-referrer">
-    <meta name="description" data-i18n-content="site.description" content="按自己的进度阅读、练习和回看数学课程。">
-    <title data-i18n="site.title">数学学习</title>
+    <meta name="description" data-i18n-content="site.description" content="选择学科，按自己的进度阅读、练习与复习。">
+    <title data-i18n="site.title">GraspMemoEdu</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="./styles.css">
     <link rel="stylesheet" href="./portal.css">
+    <link rel="stylesheet" href="./subjects.css">
     <script type="module" src="./app.js"></script>
   </head>
   <body>
     <a class="skipLink" id="skipContent" href="#portalContent" data-i18n="nav.skip">跳到主要内容</a>
     <header class="topRibbon">
       <div class="topBarContainer">
-        <a class="portalLogo" href="#/learn" aria-label="数学学习主页" data-i18n-aria-label="nav.home"><img src="./favicon.svg" width="34" height="34" alt=""><span data-i18n="site.title">数学学习</span></a>
+        <a class="portalLogo" href="#/" aria-label="GraspMemoEdu 主页" data-i18n-aria-label="nav.home"><img src="./favicon.svg" width="34" height="34" alt=""><span data-i18n="site.title">GraspMemoEdu</span></a>
+        <a id="subjectContext" class="subjectContext" href="#/" hidden></a>
         <nav class="mainNavigation" aria-label="主要导航" data-i18n-aria-label="nav.main">
-          <a href="#/learn" data-navigation="learn" data-i18n="nav.learn">学习</a>
-          <a href="#/courses" data-navigation="courses" data-i18n="nav.courses">课程</a>
-          <a href="#/guide" data-navigation="guide" data-i18n="nav.guide">指南</a>
+          <a href="#/" data-navigation="subjects" data-i18n="nav.subjects">学科</a>
+          <a href="#/subjects/math/learn" data-navigation="learn" data-i18n="nav.learn" hidden>学习</a>
+          <a href="#/subjects/math/courses" data-navigation="courses" data-i18n="nav.courses" hidden>课程</a>
+          <a href="#/subjects/math/guide" data-navigation="guide" data-i18n="nav.guide" hidden>指南</a>
         </nav>
         <div class="userMenuHost" id="userMenuHost">
           <button class="userAvatar" id="userMenuButton" type="button" aria-label="用户菜单" data-i18n-aria-label="account.menu" aria-haspopup="true" aria-expanded="false" aria-controls="userMenu">游</button>
@@ -58,7 +61,7 @@
       <main class="lesson" id="lessonContent" tabindex="-1">
         <div class="lessonHeading">
           <p class="eyebrow" data-i18n="lesson.topic">主题</p>
-          <h1 class="lessonTitle" id="lessonTitle">数学学习</h1>
+          <h1 class="lessonTitle" id="lessonTitle">GraspMemoEdu</h1>
           <div class="progressCaption" id="progressCaption" hidden></div>
           <div class="lessonProgress" id="lessonProgress" role="progressbar" aria-label="模块完成进度" data-i18n-aria-label="lesson.progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden></div>
         </div>

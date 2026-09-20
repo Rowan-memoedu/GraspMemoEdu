@@ -100,6 +100,7 @@ class GuestResetTests(unittest.TestCase):
     def test_dashboard_old_choices_and_answers_do_not_reappear(self):
         dashboard = object.__new__(DashboardStore)
         dashboard.catalog = Catalog.load(Settings(data_dir=self.root), self.course)
+        dashboard.subjects = None
         dashboard.access_store = SimpleNamespace(_connect=self.service._connect, authorize=lambda *args: None)
         access = {'learner_id': 'guest-one', 'features': ['review_history'], 'topics': [{'id': self.course['id']}]}
         self.complete()

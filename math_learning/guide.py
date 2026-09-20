@@ -14,6 +14,7 @@ from fastapi import Request
 from fastapi.responses import FileResponse
 
 from .service import DomainError
+from .subjects import Subjects
 
 
 class GuideReader:
@@ -104,21 +105,49 @@ class GuideReader:
                 raise DomainError('guide_asset_not_found', '未找到指南资源。', 404)
 
 
-def register_guide_routes(app, settings, access_store):
+def register_guide_routes(app, settings, access_store, subjects=None):
     reader = GuideReader(settings.guide_path)
     app.state.guide = reader
+    subject_readers = {subject_id: GuideReader(path) for subject_id, path in subjects.guide_paths.items()} if subjects else {}
+
+    def subject_reader(subject_id):
+        subjects.require(subject_id)
+        configured = subjects.guide_paths.get(subject_id)
+        if subject_id in subjects.explicit_guides:
+            try:
+                Subjects.guide_location(settings.data_dir, configured.relative_to(settings.data_dir).as_posix())
+            except (ValueError, OSError):
+                raise DomainError('guide_unavailable', '指南路径无效。', 404)
+        return subject_readers.get(subject_id)
 
     @app.get('/api/guide')
     def guide(request: Request):
         access_store.resolve(request.headers.get('x-learning-identity'))
         origin = settings.public_api_origin if request.state.public_transport else f"http://{request.headers['host']}"
+        subject_id = request.query_params.get('subject_id')
+        if subject_id is not None and subjects:
+            selected = subject_reader(subject_id)
+            if selected is None or not selected.source.is_file():
+                return {'status': 'empty', 'html': '', 'math_css': '', 'version': None,
+                        'modified_at': None, 'message': '该学科指南暂未填写。'}
+            return selected.read(origin + '/subject-guide-assets/' + subject_id)
         return reader.read(origin + '/guide-assets')
 
-    @app.get('/guide-assets/{relative:path}')
-    def guide_asset(relative: str):
-        resource = reader.asset(relative)
+    @app.get('/subject-guide-assets/{subject_id}/{relative:path}')
+    def subject_guide_asset(subject_id: str, relative: str):
+        selected = subject_reader(subject_id) if subjects else None
+        if selected is None:
+            raise DomainError('guide_asset_not_found', '未找到指南资源。', 404)
+        return asset_response(selected.asset(relative))
+
+    def asset_response(resource):
         media_type = mimetypes.guess_type(resource.name)[0] or 'application/octet-stream'
         disposition = 'inline' if media_type.startswith('image/') else 'attachment'
         return FileResponse(resource, media_type=media_type,
                             headers={'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
                                      'Content-Disposition': f"{disposition}; filename*=UTF-8''{quote(resource.name)}"})
+
+    @app.get('/guide-assets/{relative:path}')
+    def guide_asset(relative: str):
+        resource = reader.asset(relative)
+        return asset_response(resource)

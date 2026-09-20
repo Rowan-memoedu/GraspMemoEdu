@@ -8,11 +8,13 @@ import re
 import sqlite3
 import tempfile
 import zipfile
+from types import SimpleNamespace
 
 from .catalog import Catalog
 from .config import Settings
 from .guide import GuideReader
 from .service import DomainError, LearningService
+from .subjects import Subjects
 
 
 def _json(value):
@@ -101,21 +103,39 @@ def _validate_payload(manifest, blobs):
         if 'answers' in entry:
             _validate_answers(topics[topic_id], blobs[entry['answers']])
         expected_files.update(entry.values())
-    guide_files = set(blobs) - expected_files
-    if guide_files:
-        if 'guide/guide.md' not in guide_files or len(blobs['guide/guide.md']) > GuideReader.MAX_SOURCE_BYTES:
+    guide_roots = {'guide': 'guide/guide.md'}
+    if 'subjects.json' in blobs:
+        if len(blobs['subjects.json']) > 1024 * 1024:
+            raise ValueError('Subject configuration too large')
+        subject_data = json.loads(blobs['subjects.json'])
+        probe_settings = SimpleNamespace(data_dir=Path.cwd() / '.portable-subject-validation', guide_path=Path('guide/guide.md'))
+        Subjects(probe_settings, SimpleNamespace(courses={course['id']: course for course in portable['courses']}), subject_data)
+        for subject in subject_data['subjects']:
+            if 'guide_path' in subject:
+                path = subject['guide_path']
+                expected = f"subject-guides/{subject['id']}/guide.md"
+                if path != expected and not (subject['id'] == 'math' and path == 'guide/guide.md'):
+                    raise ValueError('Invalid portable subject guide path')
+                guide_roots[str(PurePosixPath(path).parent)] = path
+        expected_files.add('subjects.json')
+    for name in set(blobs) - expected_files:
+        root = next((root for root in guide_roots if name.startswith(root + '/')), None)
+        if root is None or guide_roots[root] not in blobs:
             raise ValueError('Unexpected backup member')
-        for name in guide_files:
-            if name == 'guide/guide.md':
-                blobs[name].decode('utf-8-sig')
-            elif (not name.startswith('guide/') or PurePosixPath(name).suffix.lower() not in GuideReader.ASSET_SUFFIXES
-                  or len(blobs[name]) > GuideReader.MAX_ASSET_BYTES):
-                raise ValueError('Invalid guide asset')
+        if name == guide_roots[root]:
+            if len(blobs[name]) > GuideReader.MAX_SOURCE_BYTES:
+                raise ValueError('Guide too large')
+            blobs[name].decode('utf-8-sig')
+        elif PurePosixPath(name).suffix.lower() not in GuideReader.ASSET_SUFFIXES or len(blobs[name]) > GuideReader.MAX_ASSET_BYTES:
+            raise ValueError('Invalid guide asset')
     return default_id, topics
 
 
 def backup_site(settings, destination=None):
     catalog = Catalog.load(settings)
+    subjects = Subjects(settings, catalog)
+    subject_file = settings.data_dir / 'subjects.json'
+    subject_bytes = subject_file.read_bytes() if subject_file.is_file() else None
     stamp = datetime.now().strftime('%Y%m%d-%H%M%S-%f')
     target = Path(destination or settings.data_dir / 'backups' / f'learning-{stamp}.zip')
     if target.exists():
@@ -173,20 +193,40 @@ def backup_site(settings, destination=None):
     portable = {'courses': [{**course, 'topics': [{**topic, 'path': f"courses/{topic['id']}.json"}
                                                 for topic in course['topics']]} for course in catalog.courses.values()]}
     blobs['catalog.json'] = _json(portable)
-    if settings.guide_path.is_file():
-        blobs['guide/guide.md'] = settings.guide_path.read_bytes()
-        reader = GuideReader(settings.guide_path)
+    def include_guide(source, prefix):
+        if not source.is_file():
+            return
+        name = prefix + '/guide.md'
+        blobs[name] = source.read_bytes()
+        reader = GuideReader(source)
         if reader.read('https://guide-assets.invalid')['status'] == 'unavailable':
             raise DomainError('guide_unavailable', '指南暂时无法读取，未创建不完整备份。', 422)
         for relative in reader._resources:
             try:
                 resource = reader._resource(relative)
                 # Keep the path used by Markdown even for an in-directory symlink.
-                blobs['guide/' + relative] = resource.read_bytes()
+                blobs[prefix + '/' + relative] = resource.read_bytes()
             except (OSError, ValueError):
                 pass  # A missing guide image is retained as a missing image, not a fabricated file.
-        if settings.guide_path.read_bytes() != blobs['guide/guide.md']:
+        if source.read_bytes() != blobs[name]:
             raise DomainError('backup_version_changed', '备份期间指南发生变化，请重新备份。', 409)
+    include_guide(settings.guide_path, 'guide')
+    if subject_bytes is not None:
+        declarations = []
+        for subject_id, subject in subjects.subjects.items():
+            declaration = {**subject, 'course_ids': sorted(subjects.course_ids(subject_id))}
+            if subject_id in subjects.guide_paths:
+                source = subjects.guide_paths[subject_id]
+                if subject_id == 'math' and subject_id not in subjects.explicit_guides:
+                    prefix = 'guide'
+                else:
+                    prefix = 'subject-guides/' + subject_id
+                    include_guide(source, prefix)
+                declaration['guide_path'] = prefix + '/guide.md'
+            declarations.append(declaration)
+        blobs['subjects.json'] = _json({'subjects': declarations})
+        if subject_file.read_bytes() != subject_bytes:
+            raise DomainError('backup_version_changed', '备份期间学科配置发生变化，请重新备份。', 409)
     if len({name.casefold() for name in blobs}) != len(blobs):
         raise DomainError('invalid_backup', '课程文件名在本机存在大小写冲突。', 422)
     manifest = {'format': 2, 'created_at': stamp, 'default_topic_id': catalog.default_topic_id,
@@ -226,6 +266,7 @@ def restore_site(backup, destination):
                 target.write_bytes(data)
             settings = Settings(data_dir=staged, course_path=staged / f'courses/{default_id}.json')
             catalog = Catalog.load(settings)
+            Subjects(settings, catalog)
             with closing(sqlite3.connect(staged / 'learning.sqlite3')) as con:
                 if con.execute('PRAGMA integrity_check').fetchone()[0] != 'ok' or con.execute('PRAGMA foreign_key_check').fetchone():
                     raise ValueError('Invalid database integrity')

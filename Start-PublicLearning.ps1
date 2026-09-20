@@ -115,7 +115,7 @@ try {
         for ($attempt = 0; $attempt -lt 40; $attempt++) {
             try {
                 $allMatch = $true
-                foreach ($asset in @('deployment.json', 'app.js', 'index.html', 'styles.css', 'portal.js', 'review.js', 'portal.css', 'favicon.svg', 'i18n.js', 'reader-messages.js', 'portal-messages.js', 'static-messages.js')) {
+                foreach ($asset in @('deployment.json', 'app.js', 'index.html', 'styles.css', 'portal.js', 'review.js', 'portal.css', 'subjects.js', 'subjects.css', 'favicon.svg', 'i18n.js', 'reader-messages.js', 'portal-messages.js', 'static-messages.js')) {
                     $response = Invoke-WebRequest -Uri ($receipt.url + $asset + '?release=' + $receipt.commit) -TimeoutSec 10
                     $remoteBytes = if ($response.Content -is [byte[]]) { $response.Content } else { [Text.Encoding]::UTF8.GetBytes($response.Content) }
                     $remoteHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($remoteBytes))

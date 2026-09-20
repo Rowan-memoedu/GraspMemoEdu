@@ -1,5 +1,6 @@
 import { t, getLanguage, setLanguage, locale, translateMessage } from "./i18n.js";
 import { createReviewView } from "./review.js";
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel } from "./subjects.js";
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -8,7 +9,6 @@ const node = (tag, className = "", text) => {
   if (text !== undefined && text !== null) item.textContent = text;
   return item;
 };
-const link = (text, href, className = "") => { const item = node("a", className, text); item.href = href; return item; };
 const control = (text, className, action) => { const item = node("button", className, text); item.type = "button"; item.addEventListener("click", action); return item; };
 const percent = (value) => Number.isFinite(Number(value)) && value !== null ? Math.max(0, Math.min(100, Number(value))) : null;
 const percentLabel = (value) => percent(value) === null ? "—" : `${Math.round(percent(value)).toLocaleString(locale())}%`;
@@ -20,18 +20,28 @@ const roundButton = (text, action) => control(text, "portalStart", action);
 export function initPortal(bridge) {
   const root = $("portalContent");
   let catalog = null, profile = null, identity = null, selectedCourse = null;
+  let subjects = null, catalogSubject = null, activeSubject = null;
   let sequence = 0, currentHash = "", currentRoute = null, busyCourse = false;
   let expandedTask = null, paging = false, historyError = null, guideVersion = null, guideLoaded = false;
   let refreshTimer = null, menuTimer = null, popoverTimer = null, pageTimer = null;
   let graphScroll = 0, feedbackContext = {}, feedbackBusy = false, renderedDay = null;
   const dashboards = new Map(), scrolls = new Map(), answerCache = new Map();
-  const routeKey = () => location.hash || "#/learn";
+  const routeKey = () => location.hash || "#/";
   const selectedDashboard = () => dashboards.get(selectedCourse);
   const timezone = () => profile?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   const query = (fields) => new URLSearchParams(Object.entries(fields).filter(([, value]) => value !== null && value !== undefined && value !== "")).toString();
-  const call = (path, options) => bridge.request(path, options);
+  const scopedRequest = (path, options, subjectId) => bridge.request(
+    subjectId ? `${path}${path.includes("?") ? "&" : "?"}subject_id=${encode(subjectId)}` : path, options);
+  const call = (path, options) => scopedRequest(path, options, currentRoute?.subjectId);
   const allowed = (feature) => Boolean(bridge.getAccess()?.features?.includes(feature));
-  const learnHref = () => "#/learn";
+  const learnHref = () => subjectHref(currentRoute?.subjectId || "math", "/learn");
+  const localHref = (path) => {
+    const raw = path.replace(/^#/, "");
+    return /^\/(learn|courses|guide|topic|review)(\/|\?|$)/.test(raw)
+      ? subjectHref(currentRoute?.subjectId || "math", raw) : `#${raw}`;
+  };
+  const link = (text, href, className = "") => { const item = node("a", className, text); item.href = localHref(href); return item; };
+  const pageTitle = (label) => `${label}${activeSubject ? ` · ${subjectLabel(activeSubject)}` : ""} · GraspMemoEdu`;
   const apiDate = (value, withTime = false) => {
     if (!value || !Number.isFinite(Date.parse(value))) return "—";
     return new Intl.DateTimeFormat(locale(), { timeZone: timezone(), year: "numeric", month: "2-digit", day: "2-digit", ...(withTime ? { hour: "2-digit", minute: "2-digit" } : {}) }).format(new Date(value));
@@ -39,7 +49,7 @@ export function initPortal(bridge) {
   const dayKey = (value) => new Intl.DateTimeFormat("en-CA", { timeZone: timezone(), year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
   const clockTime = (value) => value && Number.isFinite(Date.parse(value)) ? new Intl.DateTimeFormat(locale(), { timeZone: timezone(), hour: "2-digit", minute: "2-digit" }).format(new Date(value)) : "—";
   const review = createReviewView({
-    ...bridge, root, formatDate: value => apiDate(value, true), showFeedback,
+    ...bridge, request: call, root, homeHref: learnHref, formatDate: value => apiDate(value, true), showFeedback,
     progressChanged: () => { dashboards.clear(); answerCache.clear(); },
     setSession: id => {
       history.replaceState(null, "", `${location.hash.split("?")[0]}?session=${encode(id)}`);
@@ -48,15 +58,13 @@ export function initPortal(bridge) {
   });
 
   function navigate(path, replace = false) {
-    const hash = path.startsWith("#") ? path : `#${path}`;
+    const hash = localHref(path);
     if (location.hash === hash) return route();
     if (replace) { history.replaceState(null, "", hash); return route(); }
     location.hash = hash;
   }
   function parseRoute() {
-    const raw = routeKey().replace(/^#/, "");
-    const [path, search = ""] = raw.split("?");
-    return { path, params: new URLSearchParams(search) };
+    return parsePlatformRoute(routeKey());
   }
   function loading(text = t("portal.loading.learning.materials.7")) {
     const box = node("section", "portalLoading");
@@ -80,6 +88,20 @@ export function initPortal(bridge) {
       item.classList.toggle("active", active);
       if (active) item.setAttribute("aria-current", "page"); else item.removeAttribute("aria-current");
     }
+  }
+  function updateSubjectContext(subject) {
+    activeSubject = subject;
+    applySubjectTheme(subject);
+    const context = $("subjectContext");
+    context.hidden = !subject;
+    context.textContent = subject ? subjectLabel(subject) : "";
+    context.href = subject ? subjectHref(subject.id) : "#/";
+    for (const item of document.querySelectorAll(".mainNavigation [data-navigation]")) {
+      const section = item.dataset.navigation;
+      item.hidden = section !== "subjects" && !subject;
+      item.href = section === "subjects" ? "#/" : subjectHref(subject?.id || "math", `/${section}`);
+    }
+    $("topicHomeLink").href = learnHref();
   }
   function updateUser() {
     const current = bridge.getAccess();
@@ -113,12 +135,22 @@ export function initPortal(bridge) {
   });
   document.addEventListener("keydown", (event) => { if (event.key === "Escape") { showMenu(false); hidePopovers(); collapseTasks(); } });
 
-  async function basics() {
-    const [nextCatalog, nextProfile] = await Promise.all([call("catalog"), call("profile")]);
-    if (!Array.isArray(nextCatalog.courses)) throw new Error(t("portal.the.course.catalog.is.temporarily.unavailable.17"));
-    catalog = nextCatalog; profile = nextProfile; selectedCourse = catalog.selected_course_id || null;
+  async function basics(ticket, subjectId) {
+    const [nextSubjects, nextProfile, nextCatalog] = await Promise.all([
+      subjects ? { subjects } : bridge.request("subjects"),
+      profile || bridge.request("profile"),
+      subjectId ? catalog && catalogSubject === subjectId ? catalog : scopedRequest("catalog", undefined, subjectId) : null,
+    ]);
+    if (ticket !== sequence) return;
+    if (!Array.isArray(nextSubjects.subjects) || (subjectId && !Array.isArray(nextCatalog?.courses))) throw new Error(t("portal.the.course.catalog.is.temporarily.unavailable.17"));
+    subjects = nextSubjects.subjects; profile = nextProfile; catalog = nextCatalog; catalogSubject = subjectId;
+    selectedCourse = catalog?.selected_course_id || null;
     if (!profile.timezone) {
-      try { profile = await call("profile", { method: "POST", body: { timezone: timezone() } }); } catch { /* Use browser time while a later settings save can retry. */ }
+      try {
+        const next = await bridge.request("profile", { method: "POST", body: { timezone: timezone() } });
+        if (ticket !== sequence) return;
+        profile = next;
+      } catch { /* Use browser time while a later settings save can retry. */ }
     }
     updateUser();
   }
@@ -142,21 +174,32 @@ export function initPortal(bridge) {
   function stopPageWork() { clearTimeout(refreshTimer); clearTimeout(pageTimer); review.stop(); hidePopovers(); }
   async function route() {
     if (currentHash) scrolls.set(currentHash, window.scrollY);
-    currentHash = routeKey(); currentRoute = parseRoute();
+    currentRoute = parseRoute();
+    if (currentRoute.canonicalHash && currentRoute.canonicalHash !== location.hash) history.replaceState(null, "", currentRoute.canonicalHash);
+    currentHash = routeKey();
     const ticket = ++sequence;
     stopPageWork(); showMenu(false); collapseTasks();
     if (graphDialog.open) graphDialog.close();
     root.hidden = false; bridge.leaveTopic();
     root.classList.toggle("reviewShell", currentRoute.path.startsWith("/review/"));
     if (bridge.getIdentityProblem()) { root.hidden = true; root.replaceChildren(); return; }
-    setNavigation(currentRoute.path.startsWith("/courses") ? "courses" : currentRoute.path === "/guide" ? "guide" : "learn");
+    updateSubjectContext(subjects?.find(subject => subject.id === currentRoute.subjectId) || null);
+    setNavigation(!currentRoute.subjectId ? "subjects" : currentRoute.path.startsWith("/courses") ? "courses" : currentRoute.path === "/guide" ? "guide" : "learn");
     root.replaceChildren(loading()); window.scrollTo(0, 0);
     try {
-      if (catalog && profile) await bridge.refreshAccess();
-      if (!catalog || !profile) await basics();
+      if (profile) await bridge.refreshAccess();
       if (ticket !== sequence) return;
-      const { path, params } = currentRoute;
-      if (path === "/learn" || path === "/") {
+      await basics(ticket, currentRoute.subjectId);
+      if (ticket !== sequence) return;
+      const { path, params, subjectId } = currentRoute;
+      const subject = subjects.find(item => item.id === subjectId);
+      if (subjectId && !subject) throw new Error(t("platform.unknownSubject"));
+      updateSubjectContext(subject || null);
+      if (path === "/" && !subjectId) {
+        document.title = "GraspMemoEdu"; root.replaceChildren(renderSubjectHome(subjects));
+      } else if (path === "/learn") {
+        document.title = pageTitle(t("nav.learn"));
+        if (!catalog.courses.length) { root.replaceChildren(renderSubjectEmpty(subject)); return; }
         let viewedCourse = selectedCourse;
         if (!viewedCourse && params.get("taskId")) {
           const result = await call(`tasks/${encode(params.get("taskId"))}/answers`);
@@ -164,18 +207,17 @@ export function initPortal(bridge) {
           answerCache.set(params.get("taskId"), result); viewedCourse = result.task?.course_id;
         }
         if (!viewedCourse) { navigate("/courses", true); return; }
-        document.title = t("portal.learn.math.learning.19");
         const data = mergeDashboard(viewedCourse, await dashboard(viewedCourse));
         if (ticket !== sequence) return;
         renderLearn(data, params.get("taskId"), ticket);
       } else if (path === "/courses") {
-        document.title = t("portal.courses.math.learning.20"); renderCourses();
+        document.title = pageTitle(t("nav.courses")); renderCourses();
       } else if (path === "/guide") {
-        document.title = t("portal.guide.math.learning.21"); await renderGuide(ticket);
+        document.title = pageTitle(t("nav.guide")); await renderGuide(ticket);
       } else if (path === "/help") {
-        document.title = t("portal.q.a.math.learning.22"); renderHelp();
+        document.title = pageTitle(t("nav.help")); renderHelp();
       } else if (path === "/settings") {
-        document.title = t("portal.settings.math.learning.23"); renderSettings();
+        document.title = pageTitle(t("nav.settings")); renderSettings();
       } else if (/^\/courses\/[^/]+\/progress$/.test(path)) {
         const id = decodeURIComponent(path.split("/")[2]);
         const data = await dashboard(id);
@@ -183,10 +225,10 @@ export function initPortal(bridge) {
         dashboards.set(id, data); renderCourseProgress(data, params);
       } else if (/^\/topic\/[^/]+$/.test(path)) {
         root.hidden = true;
-        await bridge.openTopic(decodeURIComponent(path.split("/")[2]));
+        await bridge.openTopic(decodeURIComponent(path.split("/")[2]), subjectId);
       } else if (/^\/review\/[^/]+\/[^/]+$/.test(path)) {
         await review.open(decodeURIComponent(path.split("/")[2]), decodeURIComponent(path.split("/")[3]), params.get("session"));
-      } else root.replaceChildren(errorBox(t("portal.this.page.does.not.exist.24"), () => navigate("/learn"), t("portal.page.not.found.25")));
+      } else root.replaceChildren(errorBox(t("portal.this.page.does.not.exist.24"), () => navigate("/"), t("portal.page.not.found.25")));
       if (ticket !== sequence) return;
       const target = params.get("unitId") || params.get("topicId");
       requestAnimationFrame(() => {
@@ -205,20 +247,23 @@ export function initPortal(bridge) {
   function renderCourses() {
     const heading = node("h1", "portalPageTitle", t("portal.courses.28")), grid = node("div", "courseGrid");
     root.replaceChildren(heading, grid);
-    if (!catalog.courses.length) { grid.append(emptyBox(bridge.getAccess()?.role === "account" ? t("portal.no.courses.are.enabled.for.your.account.please.contact.your.admin.29") : t("portal.no.courses.are.available.yet.30"))); return; }
+    if (!catalog.courses.length) { root.replaceChildren(renderSubjectEmpty(activeSubject)); return; }
     if (bridge.getAccess()?.role === "account" && !catalog.courses.some((course) => course.available)) root.insertBefore(emptyBox(t("portal.no.courses.are.enabled.for.your.account.please.contact.your.admin.29")), grid);
     for (const course of catalog.courses) {
       const card = node("article", "courseChoice"); card.dataset.courseId = course.id;
       card.append(node("h2", "", course.title), node("p", "courseDescription", course.description || ""));
       const learn = control(t("portal.learn.31"), "primaryButton courseLearn", async () => {
         if (busyCourse) return; busyCourse = true;
+        const ticket = sequence, subjectId = currentRoute.subjectId;
         for (const item of root.querySelectorAll(".courseLearn")) item.disabled = true;
         learn.textContent = t("portal.selecting.32"); card.querySelector(".fieldError")?.remove();
         try {
-          await call("catalog/select", { method: "POST", body: { course_id: course.id } });
-          selectedCourse = course.id; catalog.selected_course_id = course.id; scrolls.delete("#/learn");
+          await scopedRequest("catalog/select", { method: "POST", body: { course_id: course.id } }, subjectId);
+          if (ticket !== sequence) return;
+          selectedCourse = course.id; catalog.selected_course_id = course.id; scrolls.delete(learnHref());
           navigate("/learn");
         } catch (error) {
+          if (ticket !== sequence) return;
           card.append(node("p", "fieldError", translateMessage(error.message))); learn.textContent = t("portal.learn.31");
           for (const item of root.querySelectorAll(".courseLearn")) item.disabled = item.dataset.available === "false";
         } finally { busyCourse = false; }
@@ -470,7 +515,7 @@ export function initPortal(bridge) {
   }
 
   async function renderAnswers(target, taskId, ticket) {
-    const back = control(t("portal.back.to.learning.records.74"), "taskBackButton", () => { if (scrolls.has("#/learn")) history.back(); else navigate("/learn"); });
+    const back = control(t("portal.back.to.learning.records.74"), "taskBackButton", () => { if (scrolls.has(learnHref())) history.back(); else navigate("/learn"); });
     if (!allowed("review_history")) { target.replaceChildren(back, emptyBox(t("portal.review.is.not.enabled.for.your.account.please.contact.your.admini.61"))); return; }
     target.replaceChildren(back, loading(t("portal.loading.answers.75")));
     try {
@@ -515,7 +560,7 @@ export function initPortal(bridge) {
   }
 
   function renderCourseProgress(data, params) {
-    document.title = t("portal.courseProgressTitle", { title: data.course.title });
+    document.title = pageTitle(data.course.title);
     const header = node("div", "progressPageHeading"); header.append(link(t("portal.back.to.learning.home.90"), learnHref(), "textButton"), node("h1", "portalPageTitle", data.course.title));
     const details = node("section", "courseProgressSummary"); details.append(infoRow(t("portal.progress.36"), percentLabel(data.course.progress)), infoRow(t("portal.start.date.37"), apiDate(data.course.start_date)), infoRow(t("portal.end.date.38"), apiDate(data.course.end_date)), infoRow(t("portal.estimated.completion.39"), apiDate(data.course.estimated_completion)), control(t("portal.view.knowledge.map.91"), "textButton", () => openGraph(data)));
     root.replaceChildren(header, details);

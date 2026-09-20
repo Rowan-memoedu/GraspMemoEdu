@@ -143,7 +143,7 @@ export function createReviewView(bridge) {
     write(submissionKey(), JSON.stringify(body));
     void mutate('submit', body);
   }
-  function home() { const item = node('a', 'primaryButton', t('nav.backHome')); item.href = '#/learn'; return item; }
+  function home() { const item = node('a', 'primaryButton', t('nav.backHome')); item.href = bridge.homeHref(); return item; }
   function choose(question) { selected = question; tick(true); render(); tick(); }
   function pages() {
     const prior = can('review_history') ? state.answers || [] : [];
@@ -172,7 +172,7 @@ export function createReviewView(bridge) {
     const focus = oldInput && document.activeElement === oldInput ? [oldInput.selectionStart, oldInput.selectionEnd] : null;
     rendered = JSON.stringify([state.revision, state.access?.features, state.access?.topics]);
     const layout = node('div', 'reviewLayout'), main = node('section', 'reviewMain'); main.id = 'reviewContent'; main.tabIndex = -1;
-    const back = node('a', '', t('nav.backHome')); back.href = '#/learn';
+    const back = node('a', '', t('nav.backHome')); back.href = bridge.homeHref();
     const breadcrumb = node('div', 'topicBreadcrumb'); breadcrumb.append(back, button(t('lesson.feedback'), 'textButton', () => bridge.showFeedback({topic_id: topic, task_id: `review:${state.session_id}`, question_id: selected || state.practice.id})));
     main.append(breadcrumb, node('p', 'eyebrow', t('portal.review')), node('h1', 'lessonTitle', state.module_title || state.topic_title), node('p', 'reviewTopicTitle', state.topic_title));
     const count = node('p', 'reviewProgress', t('review.progress', {done: state.practice_answered_count, total: state.practice_target_count, errors: state.practice_error_count})); count.setAttribute('aria-live', 'polite'); main.append(count);

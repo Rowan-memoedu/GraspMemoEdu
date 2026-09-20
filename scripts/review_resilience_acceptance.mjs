@@ -26,7 +26,7 @@ async function device(){
  page.on('pageerror',e=>report.errors.push(e.message));
  page.on('request',r=>{d.token=r.headers()['x-learning-identity']||d.token;});
  await page.addInitScript(()=>{const original=window.setTimeout;window.setTimeout=(fn,delay,...args)=>original(fn,delay===15000?300:delay,...args);});
- await page.goto(base);await page.locator('.courseLearn').first().click();await page.locator('#dashboardTasks').waitFor();
+ await page.goto(base+'#/subjects/math/courses');await page.locator('.courseLearn').first().click();await page.locator('#dashboardTasks').waitFor();
  return d;
 }
 try{

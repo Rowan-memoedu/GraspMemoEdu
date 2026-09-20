@@ -1,0 +1,99 @@
+/* The subject landing pages and shared masthead; reader geometry stays intact. */
+:root {
+  --subject-accent: #785744;
+  --subject-accent-soft: #78574412;
+  --platform-paper: #faf8f3;
+  --platform-ink: #302e29;
+  --platform-muted: #746e64;
+  --platform-rule: #dfd9ce;
+  --platform-serif: Georgia, "Times New Roman", "Noto Serif SC", "Source Han Serif SC", "Songti SC", SimSun, serif;
+}
+body.platformTheme { background: var(--platform-paper); }
+.subjectHome, .subjectEmpty { font-family: var(--platform-serif); }
+.platformTheme .topRibbon { background: #fdfbf7; border-bottom-color: var(--platform-rule); }
+.platformTheme .topBarContainer { gap: 0; }
+.platformTheme .portalLogo { font: 600 18px/1 var(--platform-serif); letter-spacing: -.45px; color: var(--platform-ink); margin-right: 25px; }
+.platformTheme .portalLogo img { width: 30px; height: 30px; }
+.platformTheme .portalLogo span { display: inline; }
+.platformTheme #subjectContext { margin: 0 22px 0 -8px; padding: 4px 0 4px 14px; border-left: 1px solid var(--platform-rule); color: var(--subject-accent); font: 15px/1.3 var(--platform-serif); text-decoration: none; white-space: nowrap; }
+.platformTheme #subjectContext[hidden] { display: none; }
+.platformTheme .mainNavigation a { margin-right: 15px; padding-inline: 9px; font-size: 13px; color: var(--platform-muted); }
+.platformTheme .mainNavigation a:hover,
+.platformTheme .mainNavigation a.active { color: var(--subject-accent); }
+.platformTheme .mainNavigation a.active { border-bottom-color: var(--subject-accent); }
+.platformTheme .userAvatar { color: var(--subject-accent); background: #eee9df; }
+.subjectHome { max-width: 1010px; margin: 0 auto; padding: 48px 0 24px; color: var(--platform-ink); }
+.subjectHomeHeading { text-align: center; margin: 0 auto 50px; }
+.subjectKicker { margin: 0 0 18px; color: var(--platform-muted); font-size: 11px; letter-spacing: .19em; }
+.subjectBrand { margin: 0; font: 400 clamp(34px, 5vw, 58px)/1.18 var(--platform-serif); letter-spacing: -1.8px; overflow-wrap: anywhere; }
+.subjectWelcome { margin: 18px 0 0; color: var(--platform-muted); font: 16px/1.8 var(--platform-serif); }
+.subjectGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.subjectCard { display: flex; flex-direction: column; min-width: 0; min-height: 254px; padding: 27px 27px 22px; background: #fdfcf8; border: 1px solid var(--platform-rule); border-top: 2px solid var(--card-accent, var(--subject-accent)); border-radius: 2px; color: var(--platform-ink); text-decoration: none; transition: background .16s ease, border-color .16s ease; }
+.subjectCard:hover { background: #fffefa; border-color: var(--card-accent, var(--subject-accent)); }
+.subjectCard:focus-visible, .subjectEmpty a:focus-visible, .platformTheme #subjectContext:focus-visible { outline: 2px solid var(--card-accent, var(--subject-accent)); outline-offset: 4px; }
+.subjectCardTop { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; }
+.subjectEmblem { display: block; color: var(--card-accent, var(--subject-accent)); font: 400 31px/1.1 var(--platform-serif); min-height: 35px; }
+.subjectCardArrow { color: var(--card-accent, var(--subject-accent)); font: 21px/1 var(--platform-serif); opacity: .65; }
+.subjectName { margin: 0; font: 500 25px/1.35 var(--platform-serif); }
+.subjectSecondaryName { margin: 4px 0 0; color: var(--card-accent, var(--subject-accent)); font: 13px/1.4 var(--platform-serif); letter-spacing: .025em; }
+.subjectDescription { margin: 15px 0 0; color: var(--platform-muted); font-size: 13px; line-height: 1.8; overflow-wrap: anywhere; }
+.subjectCardStatus { display: block; margin-top: auto; padding-top: 24px; color: var(--platform-muted); font-size: 11px; letter-spacing: .04em; }
+.subjectEmpty { max-width: 860px; margin: 0 auto; padding: 20px 0; color: var(--platform-ink); }
+.subjectBack { display: inline-block; margin-bottom: 24px; font-size: 13px; color: var(--platform-muted); text-decoration: none; }
+.subjectBack:hover { color: var(--subject-accent); }
+.subjectEmptyPanel { padding: 66px 28px; text-align: center; border: 1px solid var(--platform-rule); border-top: 2px solid var(--card-accent, var(--subject-accent)); background: #fdfcf8; }
+.subjectEmptyPanel .subjectEmblem { font-size: 42px; }
+.subjectEmptyTitle { margin: 25px 0 12px; font: 400 36px/1.3 var(--platform-serif); }
+.subjectEmptyMessage { color: var(--platform-muted); font: 16px/1.8 var(--platform-serif); }
+.subjectEmptyActions { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 18px; margin-top: 30px; }
+.subjectEmptyActions a { font-size: 13px; }
+.subjectGuideLink { padding: 10px 17px; border: 1px solid var(--card-accent, var(--subject-accent)); color: var(--card-accent, var(--subject-accent)); text-decoration: none; }
+.subjectGuideLink:hover { background: var(--subject-accent-soft); }
+.subjectAllLink { color: var(--platform-muted); text-underline-offset: 4px; }
+@media (max-width: 960px) {
+  .platformTheme .portalLogo { margin-right: 18px; font-size: 17px; }
+  .platformTheme #subjectContext { margin-right: 12px; padding-left: 10px; font-size: 14px; }
+  .platformTheme .mainNavigation a { margin-right: 4px; padding-inline: 8px; }
+}
+@media (max-width: 700px) {
+  .subjectHome { padding-top: 30px; }
+  .subjectHomeHeading { margin-bottom: 32px; }
+  .subjectGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .subjectCard { padding: 23px 20px 20px; min-height: 245px; }
+  .platformTheme .portalLogo { margin-right: 20px; }
+  .platformTheme .mainNavigation a { margin-right: 12px; padding-inline: 10px; }
+}
+@media (max-width: 760px) {
+  .platformTheme .topBarContainer { position: relative; }
+  .platformTheme .guestDemoOption { position: absolute; top: 64px; right: 12px; margin: 0; gap: 4px; font-size: 10px; }
+  .platformTheme .guestDemoOption input { width: 12px; height: 12px; }
+  .platformTheme .topBarContainer:has(.guestDemoOption:not([hidden])) .mainNavigation { justify-content: flex-start; padding-right: 112px; }
+  .platformTheme .topBarContainer:has(.guestDemoOption:not([hidden])) .mainNavigation a { margin-right: 2px; padding-inline: 6px; font-size: 11px; }
+}
+@media (max-width: 480px) {
+  .platformTheme .portalLogo { font-size: 17px; margin-right: 13px; gap: 6px; }
+  .platformTheme .portalLogo img { width: 27px; height: 27px; }
+  .platformTheme #subjectContext { margin: 0 8px 0 0; padding-left: 10px; font-size: 12px; max-width: 80px; overflow: hidden; text-overflow: ellipsis; }
+  .platformTheme .mainNavigation a { margin-right: 8px; padding-inline: 10px; font-size: 12px; }
+  .subjectHome { padding: 20px 0 0; }
+  .subjectBrand { font-size: 35px; letter-spacing: -1.4px; }
+  .subjectWelcome { font-size: 14px; padding: 0 14px; }
+  .subjectKicker { font-size: 10px; letter-spacing: .12em; }
+  .subjectGrid { gap: 12px; }
+  .subjectCard { padding: 20px 17px 17px; min-height: 236px; }
+  .subjectCardTop { margin-bottom: 19px; }
+  .subjectName { font-size: 23px; }
+  .subjectDescription { font-size: 12px; line-height: 1.7; }
+  .subjectSecondaryName { font-size: 12px; }
+  .subjectCardStatus { padding-top: 20px; font-size: 10px; }
+  .subjectEmptyPanel { padding: 46px 20px; }
+  .subjectEmptyActions { flex-direction: column; gap: 20px; }
+}
+@media (max-width: 350px) {
+  .platformTheme #subjectContext { max-width: 53px; padding-left: 7px; margin-right: 5px; }
+  .platformTheme .portalLogo { font-size: 15px; margin-right: 9px; }
+  .platformTheme .portalLogo img { width: 23px; height: 23px; }
+  .subjectBrand { font-size: 31px; }
+  .subjectGrid { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { .subjectCard { transition: none; } }

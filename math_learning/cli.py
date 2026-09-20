@@ -130,7 +130,7 @@ def server_lock(root):
 
 
 def backup_bundle(settings, destination=None):
-    if settings.catalog_path.exists() or settings.guide_path.exists():
+    if settings.catalog_path.exists() or settings.guide_path.exists() or (settings.data_dir / 'subjects.json').exists():
         from .site_backup import backup_site
         return backup_site(settings, destination)
     service = make_service(settings)

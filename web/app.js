@@ -83,6 +83,7 @@ let mathStyleVersion = null;
 let channel = null;
 let portal = null;
 let topicId = null;
+let topicSubjectId = null;
 let pageActive = document.hasFocus();
 let answerClock = { key: null, total: 0, started: null };
 let historyOpen = true;
@@ -424,7 +425,7 @@ function clearLearningView() {
   $("courseShell").hidden = true;
   $("stepCard").replaceChildren();
   $("moduleResult").replaceChildren();
-  $("lessonTitle").textContent = t("数学学习");
+  $("lessonTitle").textContent = t("site.title");
   $("lessonProgress").hidden = true;
   $("progressCaption").hidden = true;
   $("historyPanel").replaceChildren(el("p", "historyHint", t("正在读取学习记录…")));
@@ -561,7 +562,8 @@ function notifyOtherTabs() {
 
 function topicRequest(path, options) {
   if (!topicId) throw new ApiError(t("请先选择学习内容。"), 0, "topic_required");
-  return request(`${path}${path.includes("?") ? "&" : "?"}topic_id=${encodeURIComponent(topicId)}`, options);
+  const subject = topicSubjectId ? `&subject_id=${encodeURIComponent(topicSubjectId)}` : "";
+  return request(`${path}${path.includes("?") ? "&" : "?"}topic_id=${encodeURIComponent(topicId)}${subject}`, options);
 }
 
 function syncAnswerClock(forcePause = false) {
@@ -1347,14 +1349,16 @@ function leaveTopic() {
   syncAnswerClock(true);
   connectionGeneration += 1;
   topicId = null;
+  topicSubjectId = null;
   clearLearningView();
   $("appLayout").hidden = true;
   document.body.classList.remove("historyDrawerOpen", "topicPage");
 }
 
-async function openTopic(id) {
+async function openTopic(id, subjectId) {
   leaveTopic();
   topicId = id;
+  topicSubjectId = subjectId;
   $("appLayout").hidden = false;
   document.body.classList.add("topicPage");
   setHistoryOpen(historyOpen);

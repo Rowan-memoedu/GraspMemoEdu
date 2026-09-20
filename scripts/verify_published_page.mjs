@@ -51,8 +51,13 @@ try {
   assert.equal(response.status(), 200);
   assert.equal(page.url().split('#')[0], url.split('#')[0]);
   report.checks.push('Actual HTTPS document and relative assets loaded');
+  await page.locator('.subjectCard[data-subject-id="math"]').waitFor();
+  assert.equal(await page.locator('.subjectCard').count(), 6);
+  assert.equal(await page.title(), 'GraspMemoEdu');
+  await screenshot('00-subjects');
+  await page.locator('.subjectCard[data-subject-id="math"]').click();
   await page.locator('.courseChoice').filter({hasText:'再探小学算术'}).waitFor();
-  assert.equal(await page.locator('.mainNavigation a').count(), 3);
+  assert.equal(await page.locator('.mainNavigation a:visible').count(), 4);
   await screenshot('00-courses');
   await page.locator('.courseChoice').filter({hasText:'再探小学算术'}).getByRole('button',{name:/^(学习|Learn)$/}).click();
   await page.locator('.taskToggle').filter({hasText:course.title}).click();

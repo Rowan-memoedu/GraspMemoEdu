@@ -17,8 +17,9 @@ from .service import DomainError, now
 
 
 class DashboardStore:
-    def __init__(self, catalog, access_store):
+    def __init__(self, catalog, access_store, subjects=None):
         self.catalog, self.access_store = catalog, access_store
+        self.subjects = subjects
         with closing(access_store._connect()) as con:
             con.executescript('''
                 CREATE TABLE IF NOT EXISTS learner_preferences (
@@ -31,6 +32,10 @@ class DashboardStore:
                     task_id TEXT, question_id TEXT, created_at TEXT NOT NULL);
                 CREATE INDEX IF NOT EXISTS feedback_learner_created
                     ON feedback(learner_id, created_at);
+                CREATE TABLE IF NOT EXISTS learner_subject_preferences (
+                    learner_id TEXT NOT NULL REFERENCES access_principals(learner_id),
+                    subject_id TEXT NOT NULL, selected_course_id TEXT NOT NULL, updated_at TEXT NOT NULL,
+                    PRIMARY KEY(learner_id,subject_id));
             ''')
 
     def _allowed_topics(self, access):
@@ -41,7 +46,9 @@ class DashboardStore:
         if feature not in access['features']:
             raise DomainError('feature_forbidden', '当前账号没有使用此功能的权限。', 403)
 
-    def _course(self, access, course_id):
+    def _course(self, access, course_id, subject_id=None):
+        if self.subjects:
+            self.subjects.authorize_course(subject_id, course_id)
         course = self.catalog.course(course_id)
         if not self._allowed_topics(access).intersection(topic['id'] for topic in course['topics']):
             raise DomainError('course_forbidden', '当前身份没有访问此课程的权限。', 403)
@@ -83,17 +90,36 @@ class DashboardStore:
                         (access['learner_id'], values.get('timezone'), now(), 'timezone' in values))
         return self.profile({**access, 'display_name': values.get('display_name', access['display_name'])})
 
-    def catalog_view(self, access):
+    def _selection(self, access, subject_id=None):
+        if subject_id is None or not self.subjects:
+            return self.profile(access)['selected_course_id']
+        ids = self.subjects.course_ids(subject_id)
+        with closing(self.access_store._connect()) as con:
+            row = con.execute('SELECT selected_course_id FROM learner_subject_preferences WHERE learner_id=? AND subject_id=?',
+                              (access['learner_id'], subject_id)).fetchone()
+        selected = row['selected_course_id'] if row else self.profile(access)['selected_course_id'] if subject_id == 'math' else None
+        if selected not in ids or not self._allowed_topics(access).intersection(
+                topic['id'] for topic in self.catalog.courses[selected]['topics']):
+            return None
+        return selected
+
+    def catalog_view(self, access, subject_id=None):
         allowed = self._allowed_topics(access)
+        ids = self.subjects.course_ids(subject_id) if subject_id is not None and self.subjects else set(self.catalog.courses)
         return {'courses': [{'id': course['id'], 'title': course['title'], 'description': course['description'],
                              'available': bool(allowed.intersection(topic['id'] for topic in course['topics'])),
-                             'topic_count': len(course['topics'])} for course in self.catalog.courses.values()],
-                'selected_course_id': self.profile(access)['selected_course_id']}
+                             'topic_count': len(course['topics'])} for course in self.catalog.courses.values() if course['id'] in ids],
+                'selected_course_id': self._selection(access, subject_id)}
 
-    def select_course(self, access, course_id):
-        self._course(access, course_id)
+    def select_course(self, access, course_id, subject_id=None):
+        self._course(access, course_id, subject_id)
         with self.access_store._transaction() as con:
-            con.execute('''INSERT INTO learner_preferences (learner_id,selected_course_id,updated_at) VALUES (?,?,?)
+            if subject_id is not None and self.subjects:
+                con.execute('''INSERT INTO learner_subject_preferences VALUES (?,?,?,?)
+                            ON CONFLICT(learner_id,subject_id) DO UPDATE SET selected_course_id=excluded.selected_course_id,
+                            updated_at=excluded.updated_at''', (access['learner_id'], subject_id, course_id, now()))
+            else:
+                con.execute('''INSERT INTO learner_preferences (learner_id,selected_course_id,updated_at) VALUES (?,?,?)
                         ON CONFLICT(learner_id) DO UPDATE SET selected_course_id=excluded.selected_course_id,
                         updated_at=excluded.updated_at''', (access['learner_id'], course_id, now()))
         return {'selected_course_id': course_id}
@@ -211,11 +237,13 @@ class DashboardStore:
         except (ValueError, TypeError, UnicodeDecodeError):
             raise DomainError('invalid_cursor', '历史分页位置无效，请重新加载。', 422)
 
-    def dashboard(self, access, course_id=None, cursor=None, limit=25):
-        course_id = course_id or self.profile(access)['selected_course_id']
+    def dashboard(self, access, course_id=None, cursor=None, limit=25, subject_id=None):
+        if subject_id is not None and self.subjects:
+            self.subjects.require(subject_id)
+        course_id = course_id or self._selection(access, subject_id)
         if not course_id:
             raise DomainError('course_required', '请先选择课程。', 409)
-        course = self._course(access, course_id)
+        course = self._course(access, course_id, subject_id)
         allowed = self._allowed_topics(access)
         visible = [topic for topic in course['topics'] if topic['id'] in allowed]
         boundary = self._decode_cursor(cursor, course_id, access['learner_id'])
@@ -291,9 +319,11 @@ class DashboardStore:
         self.access_store.authorize(access, topic_id)
         return topic_id
 
-    def answers(self, access, task_id):
+    def answers(self, access, task_id, subject_id=None):
         self._feature(access, 'review_history')
         topic_id = self._task_topic(access, task_id)
+        if self.subjects:
+            self.subjects.authorize_topic(subject_id, topic_id)
         if task_id.startswith('review:'):
             return self._review_answers(access, task_id, topic_id)
         topic = self.catalog.topic(topic_id)

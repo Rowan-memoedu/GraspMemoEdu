@@ -469,8 +469,8 @@ export const readerMessages = {
     "The administrator has not enabled {feature}. Please contact them."
   ],
   "reader.pageTitle": [
-    "{title} · 数学学习",
-    "{title} · Math Learning"
+    "{title} · GraspMemoEdu",
+    "{title} · GraspMemoEdu"
   ],
   "reader.modulePosition": [
     "模块 {current} / {total}",

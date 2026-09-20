@@ -23,7 +23,7 @@ try {
    const device={context,page,token:null};
    page.on('pageerror',e=>report.errors.push(e.message));
    page.on('request',r=>{const token=r.headers()['x-learning-identity'];if(token)device.token=token;});
-   await page.goto(base,{waitUntil:'networkidle'});
+   await page.goto(base+'#/subjects/math/courses',{waitUntil:'networkidle'});
    await page.locator('.courseLearn').first().click();
    await page.waitForFunction(()=>!!document.querySelector('#dashboardTasks'));
    for(let i=0;!device.token&&i<50;i++)await sleep(100);
