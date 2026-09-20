@@ -83,6 +83,8 @@ export function subjectPalette(subjectId = 'math') {
 }
 const accent = subject => subjectPalette(subject?.id)['--link-color'];
 const emblems = { math: '∑', physics: 'φ', english: 'Aa', chinese: '文', biology: '叶', chemistry: '⚗' };
+// Selected together for homepage cards and the subject navbar: P2 / B3 / C2.
+const subjectMarks = {"physics":"<path d=\"M9 8h22M20 8v3l9 17M10 28a19 19 0 0 0 17 4\" /><circle cx=\"29\" cy=\"28\" r=\"4\" fill=\"currentColor\" stroke=\"none\"/>","biology":"<path d=\"M33 20c0 9-5 14-14 13S6 30 6 21 9 7 18 7 33 10 33 20Z\"/><circle cx=\"20\" cy=\"20\" r=\"5\"/><path d=\"m11 16 2-2m13 13 2-2m-15 2 2 1\"/>","chemistry":"<path d=\"m20 5 13 7v16l-13 7-13-7V12ZM20 10l8 5m0 10-8 5M12 15v10\"/>"};
 
 export const subjectLabel = subject => (getLanguage() === 'en' && subject.title_en) || subject.title;
 
@@ -184,8 +186,10 @@ export function applySubjectTheme(subject, { home = false } = {}) {
 
 export function subjectLogo(subject) {
   if (!subject) return './favicon.svg';
-  const color = subjectPalette(subject.id)['--ma-navy'];
-  const mark = subject.id === 'math'
+  const color = subjectPalette(subject.id)[subjectMarks[subject.id] ? '--link-color' : '--ma-navy'];
+  const mark = subjectMarks[subject.id]
+    ? '<g stroke="' + color + '" color="' + color + '" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + subjectMarks[subject.id] + '</g>'
+    : subject.id === 'math'
     ? '<path d="M12 11h17M12 29h17M27 11 17 20l10 9" fill="none" stroke="' + color + '" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>'
     : '<text x="20" y="27" text-anchor="middle" font-family="Arial,sans-serif" font-size="22" fill="' + color + '">' + (emblems[subject.id] || '·') + '</text>';
   return 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect x="1" y="1" width="38" height="38" rx="7" fill="#fff" stroke="#e0e0e0"/>' + mark + '</svg>');
