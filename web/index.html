@@ -7,18 +7,18 @@
     <meta name="referrer" content="no-referrer">
     <meta name="description" data-i18n-content="site.description" content="选择学科，按自己的进度阅读、练习与复习。">
     <title data-i18n="site.title">GraspMemoEdu</title>
-    <link rel="icon" href="./favicon.svg?v=9e6bf2e118b0c848" type="image/svg+xml">
-    <link rel="stylesheet" href="./styles.css?v=9e6bf2e118b0c848">
-    <link rel="stylesheet" href="./portal.css?v=9e6bf2e118b0c848">
-    <link rel="stylesheet" href="./subjects.css?v=9e6bf2e118b0c848">
-    <script type="module" src="./app.js?v=9e6bf2e118b0c848"></script>
+    <link rel="icon" href="./favicon.svg?v=68a9fa87b0a7385b" type="image/svg+xml">
+    <link rel="stylesheet" href="./styles.css?v=68a9fa87b0a7385b">
+    <link rel="stylesheet" href="./portal.css?v=68a9fa87b0a7385b">
+    <link rel="stylesheet" href="./subjects.css?v=68a9fa87b0a7385b">
+    <script type="module" src="./app.js?v=68a9fa87b0a7385b"></script>
   </head>
   <body>
     <a class="skipLink" id="skipContent" href="#portalContent" data-i18n="nav.skip">跳到主要内容</a>
     <header class="topRibbon">
       <div class="topBarContainer">
-        <a class="platformHomeLink" href="#/" aria-label="GraspMemoEdu 主页" data-i18n-aria-label="nav.home"><img src="./favicon.svg?v=9e6bf2e118b0c848" width="34" height="34" alt=""><span>GraspMemoEdu</span></a>
-        <a class="portalLogo" href="#/" aria-label="GraspMemoEdu 主页" data-i18n-aria-label="nav.home"><img src="./favicon.svg?v=9e6bf2e118b0c848" width="34" height="34" alt=""><span data-i18n="site.title">GraspMemoEdu</span></a>
+        <a class="platformHomeLink" href="#/" aria-label="GraspMemoEdu 主页" data-i18n-aria-label="nav.home"><img src="./favicon.svg?v=68a9fa87b0a7385b" width="34" height="34" alt=""><span>GraspMemoEdu</span></a>
+        <a class="portalLogo" href="#/" aria-label="GraspMemoEdu 主页" data-i18n-aria-label="nav.home"><img src="./favicon.svg?v=68a9fa87b0a7385b" width="34" height="34" alt=""><span data-i18n="site.title">GraspMemoEdu</span></a>
         <a id="subjectContext" class="subjectContext" href="#/" hidden></a>
         <nav class="mainNavigation" aria-label="主要导航" data-i18n-aria-label="nav.main">
           <a href="#/" data-navigation="subjects" data-i18n="nav.subjects">学科</a>
@@ -73,14 +73,14 @@
         <section class="emptyState" id="loadingState" aria-live="polite">
           <span class="spinner" aria-hidden="true"></span>
           <h2 data-i18n="loading.progress">正在读取学习进度</h2>
-          <p data-i18n="loading.wait">稍等片刻，课程将在这里打开。</p>
+          <p data-i18n="loading.wait">稍等片刻，学习内容将在这里打开。</p>
         </section>
 
         <div id="courseShell" hidden>
           <section id="pauseNotice" class="pauseNotice" role="status" hidden></section>
           <div class="lessonToolbar">
             <div id="pauseControl" class="pauseControl">
-              <button id="pauseButton" class="textButton pauseButton" type="button" aria-describedby="pauseHint" title="暂时终止整个主题的作答，等待管理者解锁" data-i18n-title="lesson.pauseTitle">
+              <button id="pauseButton" class="textButton pauseButton" type="button" aria-describedby="pauseHint" title="暂时终止整个主题的作答，等待管理员解锁" data-i18n-title="lesson.pauseTitle">
                 <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4v12M13 4v12"/></svg>
                 <span data-i18n="lesson.pause">暂时终止学习</span>
               </button>

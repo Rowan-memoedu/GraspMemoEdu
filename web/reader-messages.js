@@ -5,16 +5,16 @@ export const readerMessages = {
     "The service is temporarily unavailable. Please try again later."
   ],
   "身份或学习页面已更新，请重试。": [
-    "身份或学习页面已更新，请重试。",
-    "Your identity or lesson has changed. Please try again."
+    "登录状态或学习页面已更新，请重试。",
+    "Your sign-in status or learning page has changed. Please try again."
   ],
   "服务暂时无法返回学习内容，请稍后重试。": [
     "服务暂时无法返回学习内容，请稍后重试。",
     "Learning content is temporarily unavailable. Please try again later."
   ],
   "身份或学习页面已更新。": [
-    "身份或学习页面已更新。",
-    "Your identity or lesson has changed."
+    "登录状态或学习页面已更新。",
+    "Your sign-in status or learning page has changed."
   ],
   "操作未完成，请刷新学习进度后重试。": [
     "操作未完成，请刷新学习进度后重试。",
@@ -25,8 +25,8 @@ export const readerMessages = {
     "The service took too long to respond. Your saved progress is safe. Please try again."
   ],
   "服务未提供有效的会话信息。": [
-    "服务未提供有效的会话信息。",
-    "The session could not be started. Please try again."
+    "暂时无法连接学习服务，请重试。",
+    "Unable to connect to the learning service. Please try again."
   ],
   "账号登录已到期，请重新登录。原游客记录仍可使用。": [
     "账号登录已到期，请重新登录。原游客记录仍可使用。",
@@ -41,8 +41,8 @@ export const readerMessages = {
     "Sign in again"
   ],
   "使用原游客身份": [
-    "使用原游客身份",
-    "Return to original guest"
+    "返回原游客模式",
+    "Return to your guest session"
   ],
   "账号需要重新登录": [
     "账号需要重新登录",
@@ -61,8 +61,8 @@ export const readerMessages = {
     "Loading your progress"
   ],
   "稍等片刻，课程将在这里打开。": [
-    "稍等片刻，课程将在这里打开。",
-    "Your lesson will open here shortly."
+    "稍等片刻，学习内容将在这里打开。",
+    "Your learning content will open here shortly."
   ],
   "未登录": [
     "未登录",
@@ -78,7 +78,7 @@ export const readerMessages = {
   ],
   "邀请码登录": [
     "邀请码登录",
-    "Sign in with invitation code"
+    "Sign in with an invitation code"
   ],
   "切换账号": [
     "切换账号",
@@ -110,7 +110,7 @@ export const readerMessages = {
   ],
   "回看": [
     "回看",
-    "history review"
+    "learning history"
   ],
   "暂时终止学习": [
     "暂时终止学习",
@@ -141,24 +141,24 @@ export const readerMessages = {
     "No learning history yet."
   ],
   "当前身份已更新，请重新读取。": [
-    "当前身份已更新，请重新读取。",
-    "Your identity has changed. Please reload."
+    "登录状态已变化，请重新加载。",
+    "Your sign-in status has changed. Please reload."
   ],
   "标准答案暂时无法填入，可重新勾选或自行作答。": [
-    "标准答案暂时无法填入，可重新勾选或自行作答。",
-    "The model answer could not be filled in. Toggle the checkbox again or enter your own answer."
+    "暂时无法填入参考答案，可重新勾选或自行作答。",
+    "The reference answer could not be filled in. Toggle the checkbox again or enter your own answer."
   ],
   "请先选择学习内容。": [
     "请先选择学习内容。",
     "Please choose a lesson first."
   ],
   "课程数据不完整，请重新连接。": [
-    "课程数据不完整，请重新连接。",
-    "The lesson could not be fully loaded. Please reconnect."
+    "学习内容未能完整加载，请重试。",
+    "The learning content could not be fully loaded. Please try again."
   ],
   "此学习记录不属于当前身份，请刷新。": [
-    "此学习记录不属于当前身份，请刷新。",
-    "This progress belongs to a different identity. Please refresh."
+    "这份学习记录不属于当前账号或游客，请刷新。",
+    "This learning history belongs to another account or guest. Please refresh."
   ],
   "学习进度已更新": [
     "学习进度已更新",
@@ -197,7 +197,7 @@ export const readerMessages = {
     "Your learning history will appear when the service recovers."
   ],
   "已暂时终止学习，等待管理者解锁。": [
-    "已暂时终止学习，等待管理者解锁。",
+    "已暂时终止学习，等待管理员解锁。",
     "Learning paused. Please wait for the administrator to unlock it."
   ],
   "学习进度已在另一个窗口更新，已同步到最新步骤。": [
@@ -265,8 +265,8 @@ export const readerMessages = {
     "Learning paused"
   ],
   "请等待管理者解锁。已完成模块的评分和学习记录已保留，仍可回看已学内容。": [
-    "请等待管理者解锁。已完成模块的评分和学习记录已保留，仍可回看已学内容。",
-    "Please wait for the administrator to unlock learning. Completed module scores and history are saved, and you can review previous content."
+    "请等待管理员解锁。已完成模块的评分和学习记录已保留，仍可回看已学内容。",
+    "Please wait for the administrator to unlock learning. Completed module scores and history are saved, and you can view previously studied content."
   ],
   "已读": [
     "已读",
@@ -297,7 +297,7 @@ export const readerMessages = {
     "Learning results"
   ],
   " · 讲解": [
-    " · 讲解",
+    " · 解析",
     " · Explanation"
   ],
   "当前": [
@@ -314,7 +314,7 @@ export const readerMessages = {
   ],
   "正在回看已学内容": [
     "正在回看已学内容",
-    "Reviewing previous content"
+    "Viewing previously studied content"
   ],
   "返回当前步骤": [
     "返回当前步骤",
@@ -361,8 +361,8 @@ export const readerMessages = {
     "Not yet, learn first"
   ],
   "已选择未掌握。点击下一页，开始阅读相关讲解。": [
-    "已选择未掌握。点击下一页，开始阅读相关讲解。",
-    "You chose to learn first. Select Next to read the explanation."
+    "已选择未掌握。点击“继续学习”，阅读相关指导。",
+    "You chose to learn first. Select Continue learning to read the guidance."
   ],
   "正在判题，请稍候。你仍可暂时终止学习或回看已学内容。": [
     "正在判题，请稍候。你仍可暂时终止学习或回看已学内容。",
@@ -429,7 +429,7 @@ export const readerMessages = {
     "Results for all modules are saved. Use your learning history to review questions and explanations."
   ],
   "暂时终止整个 Topic 的作答，等待管理者解锁": [
-    "暂时终止整个主题的作答，等待管理者解锁",
+    "暂时终止整个主题的作答，等待管理员解锁",
     "Pause this entire topic until the administrator unlocks it"
   ],
   "退出尚未确认，请重试。": [
@@ -449,7 +449,7 @@ export const readerMessages = {
     "Submit"
   ],
   "Introduction": [
-    "课程介绍",
+    "指导",
     "Introduction"
   ],
   "Practice": ["练习", "Practice"],
@@ -458,8 +458,8 @@ export const readerMessages = {
     "Example"
   ],
   "reader.identityAria": [
-    "{action}，当前{name}",
-    "{action}, currently {name}"
+    "{action}，当前身份：{name}",
+    "{action}. Current user: {name}"
   ],
   "reader.currentAccount": [
     "当前账号：{name}{purpose}",

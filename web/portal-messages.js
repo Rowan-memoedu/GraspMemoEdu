@@ -1,11 +1,11 @@
 export const portalMessages = {
   "portal.diagnostic.0": [
-    "诊断",
+    "诊断测评",
     "Diagnostic"
   ],
   "portal.supplemental.diagnostic.1": [
-    "补充诊断",
-    "Supplemental Diagnostic"
+    "补充诊断测评",
+    "Supplemental diagnostic"
   ],
   "portal.assessment.2": [
     "测评",
@@ -20,7 +20,7 @@ export const portalMessages = {
     "In progress"
   ],
   "portal.paused.5": [
-    "已暂时终止",
+    "已暂停",
     "Paused"
   ],
   "portal.completed.6": [
@@ -45,7 +45,7 @@ export const portalMessages = {
   ],
   "portal.not.signed.in.11": [
     "未登录",
-    "Not signed in"
+    "Signed out"
   ],
   "portal.guest.12": [
     "游客",
@@ -64,7 +64,7 @@ export const portalMessages = {
     "Learning account"
   ],
   "portal.guest.16": [
-    "游客身份",
+    "游客",
     "Guest"
   ],
   "portal.the.course.catalog.is.temporarily.unavailable.17": [
@@ -92,7 +92,7 @@ export const portalMessages = {
     "Q&A · Math Learning"
   ],
   "portal.settings.math.learning.23": [
-    "个人设置 · 数学学习",
+    "设置 · 数学学习",
     "Settings · Math Learning"
   ],
   "portal.this.page.does.not.exist.24": [
@@ -176,12 +176,12 @@ export const portalMessages = {
     "Under maintenance"
   ],
   "portal.available.44": [
-    "可查看",
+    "可学习",
     "Available"
   ],
   "portal.this.task.was.selected.by.the.course.schedule.45": [
-    "这项任务由课程学习安排选出。",
-    "This task was selected by the course schedule."
+    "系统根据课程进度安排了这项任务。",
+    "This task was selected based on your course progress."
   ],
   "portal.this.content.is.under.maintenance.and.cannot.be.started.yet.46": [
     "此内容正在维护，暂时无法开始。",
@@ -217,7 +217,7 @@ export const portalMessages = {
   ],
   "portal.review.54": [
     "回看",
-    "Review"
+    "View history"
   ],
   "portal.learning.is.not.enabled.for.your.account.please.contact.your.admi.55": [
     "管理员尚未开放学习功能，请联系管理员。",
@@ -240,12 +240,12 @@ export const portalMessages = {
     "Progress has been reset. You can start again."
   ],
   "portal.reset.this.lesson.s.progress.and.start.again.60": [
-    "重置本课的学习进度，从头开始",
-    "Reset this lesson's progress and start again"
+    "重置本主题的学习进度，从头开始",
+    "Reset this topic’s progress and start again"
   ],
   "portal.review.is.not.enabled.for.your.account.please.contact.your.admini.61": [
     "管理员尚未开放回看功能，请联系管理员。",
-    "Review is not enabled for your account. Please contact your administrator."
+    "Learning history is not enabled for your account. Please contact your administrator."
   ],
   "portal.today.62": [
     "今天",
@@ -328,11 +328,11 @@ export const portalMessages = {
     "Incorrect"
   ],
   "portal.full.credit.82": [
-    "得满分",
+    "满分",
     "Full credit"
   ],
   "portal.partial.credit.83": [
-    "得部分分",
+    "部分得分",
     "Partial credit"
   ],
   "portal.no.credit.84": [
@@ -380,15 +380,15 @@ export const portalMessages = {
     "Close knowledge map"
   ],
   "portal.initializing.95": [
-    "正在初始化…",
-    "Initializing…"
+    "正在加载…",
+    "Loading…"
   ],
   "portal.no.knowledge.map.is.available.for.this.course.96": [
     "当前课程尚无知识图谱数据。",
     "No knowledge map is available for this course."
   ],
   "portal.topics.and.prerequisites.arranged.from.bottom.to.top.97": [
-    "主题及其先修关系，自下向上排列",
+    "主题及其前置关系，自下向上排列",
     "Topics and prerequisites, arranged from bottom to top"
   ],
   "portal.dark.blue.completed.light.blue.in.progress.pale.blue.ready.to.sta.98": [
@@ -408,16 +408,16 @@ export const portalMessages = {
     "How do I use demo browsing?"
   ],
   "portal.as.a.guest.select.demo.browsing.beside.your.avatar.to.fill.answer.102": [
-    "游客勾选右上角的“体验专用浏览版”后，作答框会自动填入标准答案，点击“提交”即可。你也可以修改答案，系统仍会正常判对错；取消勾选后，后续题目需要自行作答。",
-    "As a guest, select Demo browsing beside your avatar to fill answer fields with the standard answer, then click Submit. You can edit the answer, and it will still be graded normally. Turn the option off to answer subsequent questions yourself."
+    "游客勾选右上角的“体验专用浏览版”后，作答框会自动填入参考答案，点击“提交”即可。你也可以修改答案，系统仍会正常判对错；取消勾选后，后续题目需要自行作答。",
+    "As a guest, select Demo browsing beside your avatar to fill answer fields with a reference answer, then click Submit. You can edit the answer, and it will still be checked normally. Turn the option off to answer subsequent questions yourself."
   ],
   "portal.what.does.reset.clear.103": [
     "“重置”会清除什么？",
     "What does Reset clear?"
   ],
   "portal.as.a.guest.click.the.yellow.reset.button.beside.a.lesson.to.clear.104": [
-    "游客点击某课旁的黄色“重置”，会立即清空该课当前显示的学习进度和作答记录，让你从头开始。其他课和其他人的进度不受影响。",
-    "As a guest, click the yellow Reset button beside a lesson to clear its current progress and answer records and start again. Other lessons and other people's progress are unaffected."
+    "游客点击学习任务旁的黄色“重置”，会清空该主题的学习进度和作答记录，让你从头开始。其他主题和其他人的进度不受影响。",
+    "As a guest, click the yellow Reset button beside a lesson to clear that topic’s progress and answer records and start again. Other topics and other people’s progress are unaffected."
   ],
   "portal.what.if.i.find.a.problem.or.need.help.105": [
     "题目有问题，或者不知道怎么操作怎么办？",
@@ -452,15 +452,15 @@ export const portalMessages = {
     "The guide has not been written yet."
   ],
   "portal.the.guide.returned.an.unrecognized.status.113": [
-    "指南返回了无法识别的状态。",
-    "The guide returned an unrecognized status."
+    "暂时无法显示指南，请重试。",
+    "The guide could not be displayed. Please try again."
   ],
   "portal.unable.to.update.the.guide.114": [
     "暂时无法更新指南",
     "Unable to update the guide"
   ],
   "portal.settings.115": [
-    "个人设置",
+    "设置",
     "Settings"
   ],
   "portal.display.name.116": [
@@ -472,8 +472,8 @@ export const portalMessages = {
     "Time zone"
   ],
   "portal.history.dates.completion.times.and.answer.times.use.this.time.zon.118": [
-    "历史日期、完成时间与作答时间按此时区显示。",
-    "History dates, completion times, and answer times use this time zone."
+    "学习记录中的日期、完成时间和作答时间均按此时区显示。",
+    "Dates, completion times, and answer times in your learning history use this time zone."
   ],
   "portal.save.119": [
     "保存",
@@ -484,7 +484,7 @@ export const portalMessages = {
     "Saving…"
   ],
   "portal.settings.saved.121": [
-    "个人设置已保存。",
+    "设置已保存。",
     "Settings saved."
   ],
   "portal.feedback.122": [
@@ -516,8 +516,8 @@ export const portalMessages = {
     "Saving feedback…"
   ],
   "portal.feedback.was.not.confirmed.as.saved.please.try.again.129": [
-    "反馈尚未确认保存，请重试。",
-    "Feedback was not confirmed as saved. Please try again."
+    "暂时无法确认反馈是否已保存，请重试。",
+    "We could not confirm that your feedback was saved. Please try again."
   ],
   "portal.feedback.saved.thank.you.130": [
     "反馈已保存，谢谢。",
@@ -540,7 +540,7 @@ export const portalMessages = {
     "Course {progress} complete, view knowledge map"
   ],
   "portal.lesson": [
-    "课",
+    "学习任务",
     "Lesson"
   ],
   "portal.review": [
@@ -548,7 +548,7 @@ export const portalMessages = {
     "Review"
   ],
   "portal.retake": [
-    "（重修）",
+    "（重新学习）",
     " (Retake)"
   ],
   "portal.completedAt": [

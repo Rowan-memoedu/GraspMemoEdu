@@ -1,7 +1,7 @@
 // UI strings only. Course HTML, names, answers and explanations never enter this module.
-import {readerMessages} from './reader-messages.js?v=9e6bf2e118b0c848';
-import {portalMessages} from './portal-messages.js?v=9e6bf2e118b0c848';
-import {staticMessages} from './static-messages.js?v=9e6bf2e118b0c848';
+import {readerMessages} from './reader-messages.js?v=68a9fa87b0a7385b';
+import {portalMessages} from './portal-messages.js?v=68a9fa87b0a7385b';
+import {staticMessages} from './static-messages.js?v=68a9fa87b0a7385b';
 
 export const LANGUAGE_KEY = 'math-learning-web:ui-language';
 export const messages = {...staticMessages, ...readerMessages, ...portalMessages};
@@ -73,18 +73,22 @@ const errors = {
   '同一请求标识不能对应不同操作。': 'This request conflicts with an earlier action. Refresh and try again.',
   '请求标识已用于答案提交。': 'This request was already used to submit an answer. Refresh and try again.',
 };
+export const errorMessages = Object.fromEntries(Object.entries(errors).map(([source, en]) =>
+  [source, [source.replace(/Topic/g, '主题').replace(/管理者/g, '管理员'), en]]));
+for (const pair of Object.values(errorMessages)) {
+  for (const value of pair) translatedMessages.set(value, pair);
+}
 export function translateMessage(message) {
-  if (typeof message !== 'string' || !message.trim()) return language === 'en' ? 'Something went wrong. Please try again.' : '操作未完成，请稍后重试。';
+  if (typeof message !== 'string' || !message.trim()) return t('error.retry');
   if (messages[message]) return t(message);
   const translated = translatedMessages.get(message);
   if (translated) return translated[language === 'en' ? 1 : 0];
+  if (errorMessages[message]) return errorMessages[message][language === 'en' ? 1 : 0];
   if (language === 'en') {
-    if (errors[message]) return errors[message];
-    if (/[\u3400-\u9fff]/.test(message)) return 'This action could not be completed. Please refresh and try again.';
-    return 'This action could not be completed. Please refresh and try again.';
+    return t('error.refresh');
   }
-  if (/[\u3400-\u9fff]/.test(message)) return message.replace(/Topic/g, '主题');
-  return '操作未完成，请刷新后重试。';
+  if (/[\u3400-\u9fff]/.test(message)) return message.replace(/Topic/g, '主题').replace(/管理者/g, '管理员');
+  return t('error.refresh');
 }
 export function applyStaticTranslations(root = document) {
   document.documentElement.lang = locale();

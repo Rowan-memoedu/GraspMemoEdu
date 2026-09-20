@@ -1,6 +1,6 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=9e6bf2e118b0c848";
-import { createReviewView } from "./review.js?v=9e6bf2e118b0c848";
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=9e6bf2e118b0c848";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=68a9fa87b0a7385b";
+import { createReviewView } from "./review.js?v=68a9fa87b0a7385b";
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=68a9fa87b0a7385b";
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -98,7 +98,7 @@ export function initPortal(bridge) {
     logo.hidden = !subject;
     logo.href = subject ? subjectHref(subject.id) : '#/';
     logo.querySelector('img').src = subjectLogo(subject);
-    logo.querySelector('span').textContent = subject ? getLanguage() === 'en' ? `${subject.id === 'math' ? 'Math' : subjectLabel(subject)} Learning` : `${subjectLabel(subject)}学习` : 'GraspMemoEdu';
+    logo.querySelector('span').textContent = subject ? t('platform.learningName', {subject: getLanguage() === 'en' && subject.id === 'math' ? 'Math' : subjectLabel(subject)}) : 'GraspMemoEdu';
     logo.setAttribute('aria-label', subject ? subjectLabel(subject) + ' · ' + t('nav.learn') : t('nav.home'));
     const context = $("subjectContext");
     context.hidden = true;

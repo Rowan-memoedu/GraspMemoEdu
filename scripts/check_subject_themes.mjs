@@ -22,7 +22,7 @@ assert.equal(subjectPalette('chemistry')['--link-color'],'#111111');
 assert.equal(subjectPalette('physics')['--link-color'],'#E67E00');
 for(const id of ['biology','chinese'])assert.ok(luminance(subjectPalette(id)['--link-color'])<luminance(mathPalette['--link-color'])*.8);
 globalThis.document={documentElement:{}};
-setLanguage('zh-CN');assert.equal(t('Introduction'),'课程介绍');
+setLanguage('zh-CN');assert.equal(t('Introduction'),'指导');
 assert.deepEqual(['again','hard','good','easy'].map(key=>t('review.'+key)),['需再练习','较难','良好','轻松']);
 assert.equal(learningTitle('Example 1: 原样标题'),'例题 1: 原样标题');
 assert.equal(learningTitle('Practice 2.1： Original title'),'练习 2.1： Original title');

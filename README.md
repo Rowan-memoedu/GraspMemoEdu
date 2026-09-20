@@ -8,11 +8,13 @@
 
 每个学科的顶部提供学习、课程、指南入口，并可返回所有学科。数学当前课程为「再探小学算术」，包含 Topic「数字化为字母」：6 个 Example、每模块 15 道 Practice，合计 96 道题。原有逐块学习、真实 MathAnswerJudge 判题、练习补题、模块评分、暂停与恢复继续使用同一份进度。
 
+界面默认中文，可在设置切换英文。统一译法与内容边界见 [界面语言规范](docs/ui-language.md)，完整文案见 [中英对照表](docs/ui-language-table.md)。
+
 公开入口：[GraspMemoEdu](https://amymiller76717-sudo.github.io/GraspMemoEdu-Pages/)。其他电脑、手机可直接打开，自动进入游客模式，无需填写服务地址、配对码或授予本地网络权限。后端仍运行在当前电脑，通过免费 Cloudflare 临时隧道接入；课程、答案、学习记录和邀请码资料仍保存在本机。源码仓库已更名为私有 `amymiller76717-sudo/GraspMemoEdu`；本机目录保留原名。
 
 游客目前只能进入数学，可学习、提交答案和回看内容；进入其他学科或主动暂停会提示「该功能需注册账号才能使用」，后端同样限制。邀请码账号在全部学科通用，默认开放全部 Topic 和功能并自动继承新增内容；管理员明确设置的 Topic 或功能列表分别覆盖默认权限，见 [账号管理](docs/accounts.md)。
 
-游客菜单中的「体验专用浏览版」默认关闭。勾选后，后续尚未填写的答案框会预填当前题的标准答案，可修改后正常提交判题；已有草稿与手动输入不会被覆盖。它便于体验页面流程，不代替实际学习或测评。
+游客头像右侧的「体验专用浏览版」默认关闭。勾选后，后续尚未填写的答案框会预填当前题的标准答案，可修改后正常提交判题；已有草稿与手动输入不会被覆盖。它便于体验页面流程，不代替实际学习或测评。
 
 ## 打开与启动
 
@@ -56,7 +58,7 @@ pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Stop-Learning.ps1'
 
 复习先随机抽 1 题，每错 1 题追加 2 题，已抽题目不重复。首题正确返回 4（Easy）；累计错 1 题并完成共 3 题返回 2（Hard）；累计错 2 题并完成共 5 题返回 1（Again）。第 3 次错误或主动暂停立即终止本轮，不评分、不更新 FSRS。当前没有返回 3（Good）的复习路径。游客不能主动暂停，自动暂停仍有效。以后调整 `math_learning/practice.py` 中的 `REVIEW_POLICY` 并递增版本；进行中的轮次继续使用原规则快照。
 
-用户菜单的 Settings 仅修改显示名和时区，Help 打开常见问题 Q&A，Support 提交站内反馈。GUIDE 保留在顶部导航。游客可在头像右侧开启「体验专用浏览版」，Lesson 的学习按钮旁可用黄色 reset 重置当前游客的该 Topic；账号不显示这两个游客入口。题目记录中的 Report a content error 会附上课程与题目位置。反馈保存于本机数据库，管理员查看：
+用户菜单的「设置」可修改显示名、时区和界面语言，默认中文，可切换英文；课程正文不随 UI 语言翻译。「帮助」打开常见问题 Q&A，「反馈」提交站内反馈，指南保留在顶部导航。游客可在头像右侧开启「体验专用浏览版」，学习任务的学习按钮旁可用黄色「重置」按钮重置当前游客的该主题；账号不显示这两个游客入口。题目记录中的内容纠错会附上课程与题目位置。反馈保存于本机数据库，管理员查看：
 
 ```powershell
 pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' feedback-list --limit 30
@@ -76,7 +78,7 @@ pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' feedback
 
 ## 邀请码与账号权限
 
-管理员在本机管理入口创建账号并生成专属邀请码。邀请码可重复登录同一账号，跨设备共享该账号的进度；数据库仅保存凭据哈希，原始邀请码清单单独保存在本机私密管理目录。账号按 Topic 与功能授权，当前可用 Topic 为 `digits-to-letters`。完整批次创建、停用、换码和会话管理见 [本机账号管理](docs/accounts.md)。
+管理员在本机管理入口创建账号并生成专属邀请码。邀请码可重复登录同一账号，跨设备共享该账号的进度；数据库仅保存凭据哈希，原始邀请码清单单独保存在本机私密管理目录。账号按 Topic 与功能授权，Topic 清单以当前课程目录为准，以下用 `digits-to-letters` 举例。完整批次创建、停用、换码和会话管理见 [本机账号管理](docs/accounts.md)。
 
 ```powershell
 pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' account-list
@@ -93,9 +95,9 @@ pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' account-
 | `review_history` | 学习记录、上一页和下一页 |
 | `pause_topic` | 主动暂时终止学习 |
 
-游客固定开放前三项及所有已配置 Topic。网页退出账号会在服务端撤销当前登录会话，并切回原游客身份；其他设备的登录保留。账号会话 30 天后到期，页面明确提示重新登录。停用账号、更换邀请码或管理员撤销会话会使相关旧登录失效；恢复账号不会复活旧会话。游客与账号的进度不自动合并。
+游客固定开放前三项功能及数学学科的已配置 Topic，不能访问其他学科。网页退出账号会在服务端撤销当前登录会话，并切回原游客身份；其他设备的登录保留。账号会话 30 天后到期，页面明确提示重新登录。停用账号、更换邀请码或管理员撤销会话会使相关旧登录失效；恢复账号不会复活旧会话。游客与账号的进度不自动合并。
 
-初始批次为 10 个正式使用账号与 5 个固定标记的测试账号。测试标记不能从个人设置修改，公开验收只能使用测试账号。新 Topic 不会自动授予既有账号，管理员按需补充授权。
+初始批次为 10 个正式使用账号与 5 个固定标记的测试账号。测试标记不能从个人设置修改，公开验收只能使用测试账号。采用默认权限的账号会继承新增 Topic；采用明确 Topic 列表的账号只开放列表中的内容。
 
 ## 管理解锁
 
@@ -190,13 +192,16 @@ node scripts/inspect_page.mjs
 
 前端发布仓库为 `amymiller76717-sudo/GraspMemoEdu-Pages`，与私有源码仓库独立。正式服务只允许已配置网页来源及自身公开来源。`settings.json` 的 `public_api_origin` 指定精确公开 HTTPS 地址；隧道默认保留 Host，后端据此识别公开请求。本机仍只监听 `127.0.0.1`，不开放路由器或局域网入站端口。
 
-发布更新时，先导出到新的构建目录，再传给发布脚本。脚本验证导出与源码一致、检查远端完整文件清单，遇到额外文件会停止：
+修改前端后，先应用 `python scripts/version_web_assets.py --patch` 输出的补丁，为 HTML、CSS 和整套模块引用生成同一内容版本号；再导出到新的构建目录。脚本验证版本号和源码、导出一致，并检查远端完整文件清单，遇到额外文件会停止：
 
 ```powershell
+python scripts/version_web_assets.py
 pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' export-web --output '<新的构建目录>' --api-origin '<本机配置中的公开HTTPS地址>'
 pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Publish-Frontend.ps1' -ExportDirectory '<新的构建目录>'
 ```
 
+发布回执的 `submitted` 仅表示已提交，不能作为上线验收。等待公开资源与导出哈希一致，并在真实浏览器中检查首页和受影响页面；同时验证已缓存页面能加载新版本。GitHub Pages 的 HTML 可缓存 10 分钟，刚发布的入口可附 `?v=<资源版本号>`。主题、标志及双语边界的唯一说明见 [学科配置](docs/subjects.md)。
+
 公开后端校验精确 Host、来源和学习者身份，不再要求访客共享配对码。每位访客仍按身份隔离进度，Topic 和功能授权由后端执行；管理解锁与账号授权仅在本机命令入口。请求正文上限 16 KiB，游客创建每分钟最多 20 次、邀请码请求每分钟最多 10 次、新判题每位学习者每分钟最多 12 次；全局最多 8 个在途判题。达到限制返回 429，未接受的请求不计入作答。公开健康检查不返回本机实例标识，公开入口不提供本机会话或管理接口。
 
-免费入口用于测试，无需 Cloudflare 账号或自有域名；临时隧道重建会更换后端地址，重新运行公开启动入口可更新网页配置。Cloudflare 不为 Quick Tunnel 提供可用性保证，后续可替换为独立服务器，保持前端学习网址。参见 [Cloudflare 官方 Quick Tunnel 说明](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/)。复习调度、XP、云服务器迁移和管理员网页不在本轮范围内。
+免费入口用于测试，无需 Cloudflare 账号或自有域名；临时隧道重建会更换后端地址，重新运行公开启动入口可更新网页配置。Cloudflare 不为 Quick Tunnel 提供可用性保证，后续可替换为独立服务器，保持前端学习网址。参见 [Cloudflare 官方 Quick Tunnel 说明](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/)。FSRS 复习调度已接入；XP、云服务器迁移和管理员网页尚未实现。

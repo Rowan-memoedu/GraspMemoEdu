@@ -1,6 +1,5 @@
-import { getLanguage } from './i18n.js?v=9e6bf2e118b0c848';
+import { getLanguage, t } from './i18n.js?v=68a9fa87b0a7385b';
 
-const copy = (zh, en) => getLanguage() === 'en' ? en : zh;
 const element = (tag, className, text) => {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -124,9 +123,9 @@ export function renderSubjectHome(subjects, { onRestricted } = {}) {
   const section = element('section', 'subjectHome');
   section.setAttribute('aria-labelledby', 'subjectHomeTitle');
   const heading = element('header', 'subjectHomeHeading');
-  heading.append(element('p', 'subjectKicker', copy('学科 · 学习 · 复习', 'SUBJECTS · STUDY · REVIEW')));
+  heading.append(element('p', 'subjectKicker', t('platform.kicker')));
   const title = element('h1', 'subjectBrand', 'GraspMemoEdu'); title.id = 'subjectHomeTitle';
-  heading.append(title, element('p', 'subjectWelcome', copy('欢迎回来。选择一门学科，开始今天的学习。', 'Welcome back. Choose a subject to begin.')));
+  heading.append(title, element('p', 'subjectWelcome', t('platform.welcome')));
   const grid = element('div', 'subjectGrid');
   for (const subject of subjects) {
     const card = link('', subjectHref(subject.id), 'subjectCard');
@@ -146,8 +145,8 @@ export function renderSubjectHome(subjects, { onRestricted } = {}) {
     if (description) card.append(element('p', 'subjectDescription', description));
     const count = Number.isInteger(subject.course_count) && subject.course_count > 0 ? subject.course_count : 0;
     card.append(element('span', 'subjectCardStatus', count
-      ? copy(`${count} 门课程`, `${count} ${count === 1 ? 'course' : 'courses'}`)
-      : copy('暂无课程', 'No courses yet')));
+      ? t(count === 1 ? 'platform.courseCountOne' : 'platform.courseCountMany', {count})
+      : t('platform.noCourses')));
     grid.append(card);
   }
   section.append(heading, grid);
@@ -158,14 +157,14 @@ export function renderSubjectEmpty(subject) {
   const section = element('section', 'subjectEmpty');
   section.style.setProperty('--card-accent', accent(subject));
   section.setAttribute('aria-labelledby', 'subjectEmptyTitle');
-  const back = link(copy('← 所有学科', '← All subjects'), '#/', 'subjectBack');
+  const back = link(t('platform.allSubjectsBack'), '#/', 'subjectBack');
   const panel = element('div', 'subjectEmptyPanel');
   panel.append(emblem(subject));
   const title = element('h1', 'subjectEmptyTitle', subjectLabel(subject)); title.id = 'subjectEmptyTitle';
-  panel.append(title, element('p', 'subjectEmptyMessage', copy('这门学科暂无课程。', 'There are no courses in this subject yet.')));
+  panel.append(title, element('p', 'subjectEmptyMessage', t('platform.emptySubject')));
   const actions = element('div', 'subjectEmptyActions');
-  actions.append(link(copy('查看学科指南', 'Subject guide'), subjectHref(subject.id, '/guide'), 'subjectGuideLink'),
-    link(copy('返回所有学科', 'All subjects'), '#/', 'subjectAllLink'));
+  actions.append(link(t('platform.subjectGuide'), subjectHref(subject.id, '/guide'), 'subjectGuideLink'),
+    link(t('platform.allSubjects'), '#/', 'subjectAllLink'));
   panel.append(actions); section.append(back, panel);
   return section;
 }
@@ -186,7 +185,7 @@ export function applySubjectTheme(subject, { home = false } = {}) {
 }
 
 export function subjectLogo(subject) {
-  if (!subject) return './favicon.svg?v=9e6bf2e118b0c848';
+  if (!subject) return './favicon.svg?v=68a9fa87b0a7385b';
   const color = subjectPalette(subject.id)[subjectMarks[subject.id] ? '--link-color' : '--ma-navy'];
   const mark = subjectMarks[subject.id]
     ? '<g stroke="' + color + '" color="' + color + '" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + subjectMarks[subject.id] + '</g>'

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
-import {messages, t, getLanguage, setLanguage, LANGUAGE_KEY, translateMessage} from '../web/i18n.js';
+import {messages, errorMessages, t, getLanguage, setLanguage, LANGUAGE_KEY, translateMessage} from '../web/i18n.js';
 assert.equal(getLanguage(), 'zh-CN', 'Fresh browsers default to Chinese regardless of browser locale');
 globalThis.document = {documentElement:{}};
 const stored = new Map(); globalThis.localStorage = {setItem:(key,value)=>stored.set(key,value)};
@@ -10,7 +10,7 @@ for (const [key,pair] of Object.entries(messages)) {
   assert.ok(pair.every(value=>typeof value === 'string' && value.trim()),key);
   assert.deepEqual(placeholders(pair[0]),placeholders(pair[1]),`Interpolation mismatch: ${key}`);
 }
-for (const file of ['app.js','portal.js','review.js']) {
+for (const file of ['app.js','portal.js','review.js','subjects.js']) {
   const source = await fs.readFile(new URL(`../web/${file}`,import.meta.url),'utf8');
   for (const match of source.matchAll(/\bt\("([^"\\]*(?:\\.[^"\\]*)*)"/g)) {
     const key=JSON.parse(`"${match[1]}"`); assert.ok(key in messages,`Missing UI key in ${file}: ${key}`);
@@ -24,4 +24,17 @@ assert.equal(translateMessage('邀请码无效，请联系管理者。'),'The in
 assert.ok(!translateMessage('UnknownInternalError').includes('UnknownInternalError'));
 for(const [key,pair] of Object.entries(messages)) assert.equal(t(key),pair[1],key);
 setLanguage('zh-CN'); for(const [key,pair] of Object.entries(messages)) assert.equal(t(key),pair[0],key);
+assert.equal(t('Introduction'),'指导');
+assert.equal(t('portal.lesson'),'学习任务');
+assert.equal(t('portal.partial.credit.83'),'部分得分');
+for(const language of ['zh-CN','en']){
+ setLanguage(language);
+ for(const [source,pair] of Object.entries(errorMessages)){
+   const expected=pair[language==='en'?1:0];
+   assert.equal(translateMessage(source),expected);
+   assert.equal(translateMessage(expected),expected,'Repeated error translation must preserve the message');
+ }
+}
+setLanguage('en');assert.equal(t('portal.review.54'),'View history');assert.equal(t('portal.review'),'Review');
+setLanguage('zh-CN');
 console.log(`PASS ${Object.keys(messages).length} bilingual UI keys, interpolation, static/dynamic key coverage, Chinese default and language persistence`);
