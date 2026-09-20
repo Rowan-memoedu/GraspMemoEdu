@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 import re
 
-from verify_content import collect_questions, parse_outline, sha256, verify
+from verify_content import collect_questions, parse_outline, practice_nodes, sha256, verify
 
 MATH = re.compile(r"\$\$([\s\S]*?)\$\$|\$([^$\n]+)\$")
 
@@ -84,6 +84,9 @@ def audit(source_path: Path, sidecar_path: Path, course_path: Path) -> dict:
     for question, imported in zip(questions, imported_questions):
         if question["question"] != imported["question"]:
             raise ValueError(f"Question text changed: {question['id']}")
+        if "source_practice" in question and (imported.get("source_practice") != question["source_practice"]
+                or imported["title"] != f"Practice {question['id'].rsplit('-', 1)[1]}"):
+            raise ValueError(f"Grouped Practice numbering changed: {question['id']}")
         for key in ["reference_answer", "answer_type", "constraints"]:
             if imported[key] != sidecar["answers"][question["id"]][key]:
                 raise ValueError(f"Answer metadata changed: {question['id']}/{key}")
@@ -103,10 +106,10 @@ def audit(source_path: Path, sidecar_path: Path, course_path: Path) -> dict:
     visit(introduction.children)
     for module in [node for node in topic.children if node.head.startswith("Example ")]:
         module_number = re.search(r"\d+", module.head)[0]
-        practices = [node for node in module.children if re.match(r"Practice\s+\d+$", node.head)]
+        practices = practice_nodes(module)
         for index, section in enumerate([module, *practices]):
             question_id = f"example-{module_number}-question" if index == 0 else f"example-{module_number}-practice-{index}"
-            visit([node for node in section.children if node.head != "Explanation" and not re.match(r"Practice\s+\d+$", node.head)])
+            visit([node for node in section.children if node.head != "Explanation" and node not in practices])
             explanation = next(node for node in section.children if node.head == "Explanation")
             visit(explanation.children, [entry for entry in sidecar.get("errata", []) if entry["question_id"] == question_id])
     rendered = CourseHTML()

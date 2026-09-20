@@ -40,6 +40,10 @@ pwsh -NoProfile -File 'D:/Projects/MathLearningWeb/Start-PublicLearning.ps1' -Re
 
 上例仅展示层级；实际文件须继续到 Practice 7 或更多。支持原有 Markdown/LaTeX；主动 HTML、脚本、远程图片等不属于输入合同。字段不齐或题量不足会在调用 API 前失败。不会自动补题、改写源稿或猜测缺失条件。
 
+支持分组生产稿：每个 Example 下共 5 组、每组 3 道，依次标为 `Practice 1.1`、`Practice 1.2`、`Practice 1.3`、`Practice 2.1`，直到 `Practice 5.3`。所有 Practice 仍是 Example 的直接子节点，不增加分组容器。每个 Example 的分组编号从 1.1 重新开始；同一 Example 内不混用整数与分组编号，重复、缺号、乱序或不完整分组均拒绝导入。
+
+导入保持源顺序和正文不变，将分组编号映射到普通连续编号：1.1→1、1.3→3、2.1→4、5.3→15。网站题目标题为 `Practice 1` 到 `Practice 15`，题目 ID 继续使用 `example-N-practice-M`。原始分组编号存入题目的 `source_practice` 元数据，包含 `label`、`group`、`member`，不显示在学生题面中。原有连续整数编号输入仍兼容，已有 Topic 和学习抽题机制不因这项导入支持改变。
+
 ## 标准流程与字段
 
 1. 保存原始文件快照，脚本解析结构并生成稳定题目 ID、源码行号和题面哈希。

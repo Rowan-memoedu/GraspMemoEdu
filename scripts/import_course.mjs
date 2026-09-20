@@ -41,6 +41,23 @@ function text(node) {
   return body + (node.children.length ? '\n' + node.children.map(text).join('\n') : '');
 }
 
+const practiceHead = /^Practice\s+(\d+)(?:\.(\d+))?$/i;
+
+function practiceNodes(module) {
+  const nodes = module.children.filter(node => /^Practice(?:\s|$)/i.test(node.head));
+  const matches = nodes.map(node => node.head.match(practiceHead));
+  if (matches.some(match => !match)) throw new Error(`Invalid Practice heading in ${module.head}`);
+  if (matches.some(match => match[2] !== undefined)) {
+    if (nodes.length !== 15 || matches.some((match, index) =>
+      Number(match[1]) !== Math.floor(index / 3) + 1 || Number(match[2]) !== index % 3 + 1)) {
+      throw new Error(`Grouped Practice numbers must be consecutive 1.1 through 5.3 in ${module.head}`);
+    }
+  } else if (matches.some((match, index) => Number(match[1]) !== index + 1)) {
+    throw new Error(`Practice numbers must be consecutive in ${module.head}`);
+  }
+  return nodes;
+}
+
 export function sourceQuestions(topic) {
   const introduction = topic.children.filter(node => /^Introduction$/i.test(node.head));
   if (introduction.length !== 1) throw new Error('Expected one Introduction');
@@ -50,15 +67,18 @@ export function sourceQuestions(topic) {
   for (const [index, module] of modules.entries()) {
     const moduleId = `example-${index + 1}`;
     if (Number(module.head.match(/^Example\s+(\d+)/i)[1]) !== index + 1) throw new Error('Example numbers must be consecutive');
-    const practices = module.children.filter(node => /^Practice\s+\d+$/i.test(node.head));
+    const practices = practiceNodes(module);
     for (const [i, node] of [module, ...practices].entries()) {
       const id = i === 0 ? `${moduleId}-question` : `${moduleId}-practice-${i}`;
-      if (i && Number(node.head.match(/\d+/)[0]) !== i) throw new Error(`Practice numbers must be consecutive: ${id}`);
       const explanation = node.children.filter(child => /^Explanation$/i.test(child.head));
-      const question = node.children.filter(child => !/^Explanation$|^Practice\s+\d+$/i.test(child.head));
+      const question = node.children.filter(child => !/^Explanation$/i.test(child.head) && !practices.includes(child));
       if (explanation.length !== 1 || !question.length) throw new Error(`Missing question or Explanation: ${id}`);
       if (!explanation[0].children.length) throw new Error(`Empty Explanation: ${id}`);
-      questions.push({id, moduleId, title:node.head, line:node.line, node, questionNodes:question,
+      const match = i ? node.head.match(practiceHead) : null;
+      const grouped = match && match[2] !== undefined;
+      questions.push({id, moduleId, title:grouped ? `Practice ${i}` : node.head,
+        ...(grouped ? {source_practice:{label:`${match[1]}.${match[2]}`, group:Number(match[1]), member:Number(match[2])}} : {}),
+        line:node.line, node, questionNodes:question,
         explanationNodes:explanation[0].children, question:question.map(text).join('\n')});
     }
   }
@@ -158,6 +178,7 @@ export async function inspectCourse(sourcePath) {
     modules:content.modules.map((module, index) => ({id:`example-${index + 1}`, title:module.head,
       question_ids:content.questions.filter(q => q.moduleId === `example-${index + 1}`).map(q => q.id)})),
     questions:content.questions.map(q => ({id:q.id, module_id:q.moduleId, title:q.title, line:q.line,
+      ...(q.source_practice ? {source_practice:q.source_practice} : {}),
       question:q.question, explanation:q.explanationNodes.map(text).join('\n'), question_sha256:digest(q.question)}))};
 }
 
@@ -201,7 +222,8 @@ export async function importCourse(sourcePath, sidecarPath, outputPath, auditPat
       return {id:question.id, title:question.title, question:question.question, html,
         explanation_html:notice + render.nodes(explanationNodes), reference_answer:answer.reference_answer,
         answer_type:answer.answer_type, constraints:answer.constraints,
-        source_line:question.line, ...(corrections.length ? {errata:corrections.map(c => ({original:c.original, replacement:c.replacement, reason:c.reason}))} : {})};
+        source_line:question.line, ...(question.source_practice ? {source_practice:question.source_practice} : {}),
+        ...(corrections.length ? {errata:corrections.map(c => ({original:c.original, replacement:c.replacement, reason:c.reason}))} : {})};
     });
     course.modules.push({id:moduleId, title:module.head, example:built[0], practices:built.slice(1)});
   }

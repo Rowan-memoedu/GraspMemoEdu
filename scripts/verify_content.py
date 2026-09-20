@@ -57,6 +57,24 @@ def node_text(node: Node) -> str:
     return text + ("\n" + "\n".join(node_text(n) for n in node.children) if node.children else "")
 
 
+PRACTICE_HEAD = re.compile(r"^Practice\s+(\d+)(?:\.(\d+))?$", re.I)
+
+
+def practice_nodes(module: Node) -> list[Node]:
+    nodes = [n for n in module.children if re.match(r"^Practice(?:\s|$)", n.head, re.I)]
+    matches = [PRACTICE_HEAD.fullmatch(n.head) for n in nodes]
+    if any(m is None for m in matches):
+        raise ValueError(f"Invalid Practice heading in {module.head}")
+    if any(m[2] is not None for m in matches):
+        numbers = [(int(m[1]), int(m[2]) if m[2] is not None else None) for m in matches]
+        expected = [(group, member) for group in range(1, 6) for member in range(1, 4)]
+        if numbers != expected:
+            raise ValueError(f"Grouped Practice numbers must be consecutive 1.1 through 5.3 in {module.head}")
+    elif [int(m[1]) for m in matches] != list(range(1, len(nodes) + 1)):
+        raise ValueError(f"Practice numbers must be consecutive in {module.head}")
+    return nodes
+
+
 def collect_questions(topic: Node) -> list[dict]:
     result = []
     intro = [n for n in topic.children if n.head.lower() == "introduction"]
@@ -72,20 +90,21 @@ def collect_questions(topic: Node) -> list[dict]:
         number = int(found[1])
         module_numbers.append(number)
         module_id = f"example-{number}"
-        practices = [n for n in module.children if re.match(r"^Practice\s+\d+$", n.head, re.I)]
-        practice_numbers = [int(re.search(r"\d+", n.head)[0]) for n in practices]
-        if practice_numbers != list(range(1, len(practices) + 1)):
-            raise ValueError(f"Practice numbers must be consecutive in {module_id}")
-        for node in [module, *practices]:
-            practice_number = re.search(r"\d+", node.head)[0]
-            question_id = f"{module_id}-question" if node is module else f"{module_id}-practice-{practice_number}"
+        practices = practice_nodes(module)
+        for ordinal, node in enumerate([module, *practices]):
+            question_id = f"{module_id}-question" if ordinal == 0 else f"{module_id}-practice-{ordinal}"
             explanation = [n for n in node.children if n.head.lower() == "explanation"]
-            question = [n for n in node.children if n.head.lower() != "explanation" and not re.match(r"^Practice\s+\d+$", n.head, re.I)]
+            question = [n for n in node.children if n.head.lower() != "explanation" and n not in practices]
             if len(explanation) != 1 or not question:
                 raise ValueError(f"Missing question or Explanation in {question_id}")
-            result.append({"id": question_id, "module_id": module_id, "line": node.line,
+            record = {"id": question_id, "module_id": module_id, "line": node.line,
                            "question": "\n".join(node_text(n) for n in question),
-                           "explanation": "\n".join(node_text(n) for n in explanation[0].children)})
+                           "explanation": "\n".join(node_text(n) for n in explanation[0].children)}
+            match = PRACTICE_HEAD.fullmatch(node.head) if ordinal else None
+            if match and match[2] is not None:
+                record["source_practice"] = {"label": f"{match[1]}.{match[2]}",
+                                             "group": int(match[1]), "member": int(match[2])}
+            result.append(record)
     if module_numbers != list(range(1, len(module_numbers) + 1)):
         raise ValueError("Example numbers must be consecutive")
     return result
