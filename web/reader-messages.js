@@ -449,9 +449,10 @@ export const readerMessages = {
     "Submit"
   ],
   "Introduction": [
-    "导入",
+    "课程介绍",
     "Introduction"
   ],
+  "Practice": ["练习", "Practice"],
   "Example": [
     "例题",
     "Example"

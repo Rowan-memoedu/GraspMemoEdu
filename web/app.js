@@ -1,4 +1,4 @@
-import { t, translateMessage, applyStaticTranslations } from "./i18n.js";
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js";
 
 applyStaticTranslations();
 
@@ -105,11 +105,11 @@ const selectedStep = () => state?.steps?.find((step) => step.id === state.curren
   || state?.steps?.find((step) => step.current)
   || state?.steps?.find((step) => step.id === state.active_step_id);
 const activeStep = () => state?.steps?.find((step) => step.id === state.active_step_id);
-// Only system page names are UI; question titles remain course content.
+// Translate system names and structural heading prefixes; preserve authored title text.
 function readerStepTitle(step) {
   if (step?.kind === "introduction") return t("Introduction");
   if (step?.kind === "completion") return t("学习结果");
-  return step?.title || "";
+  return learningTitle(step?.title || "");
 }
 function readingSteps() {
   const visited = (state?.steps || []).filter((step) => step.visited && step.unlocked);
@@ -933,7 +933,7 @@ function renderProgress() {
   target.setAttribute("aria-valuetext", t("reader.modulesCompleted", { completed, total: state.modules.length }));
   target.replaceChildren(...state.modules.map((module) => {
     const segment = el("span", `progressSegment ${module.status}`);
-    segment.title = module.title;
+    segment.title = learningTitle(module.title);
     return segment;
   }));
 }
@@ -963,7 +963,7 @@ function renderHistory() {
     const steps = visited.filter((step) => step.module_id === module.id && !["introduction", "completion"].includes(step.kind));
     const status = module.status === "completed" ? t("reader.completedMastery", { score: module.mastery })
       : module.status === "paused" ? t("已暂停") : steps.length ? t("学习中") : t("尚未学习");
-    nodes.push(historyGroup(module.title, status, steps, module.status, module.attempt_id));
+    nodes.push(historyGroup(learningTitle(module.title), status, steps, module.status, module.attempt_id));
   }
   const completion = visited.filter((step) => step.kind === "completion");
   if (completion.length) nodes.push(historyGroup(t("Topic 完成"), t("已完成"), completion, "completed"));
@@ -979,7 +979,7 @@ function historyGroup(title, status, steps, className = "", currentAttempt = nul
     const items = el("div", "historyItems");
     const attempts = [...new Set(steps.map((step) => step.attempt_id).filter(Boolean))];
     for (const step of steps) {
-      let label = step.kind === "introduction" ? t("Introduction") : step.kind === "completion" ? t("学习结果") : step.kind === "example" ? t("Example") : step.title;
+      let label = step.kind === "introduction" ? t("Introduction") : step.kind === "completion" ? t("学习结果") : step.kind === "example" ? t("Example") : learningTitle(step.title);
       if (step.kind === "example" && step.phase === "reading") label += t(" · 讲解");
       const item = button(label, "historyItem", () => selectStep(step.id), actionBusy);
       if (step.id === state.current_step_id) item.setAttribute("aria-current", "step");
@@ -1220,7 +1220,7 @@ function renderCompletion(target) {
   const list = el("div", "completionList");
   for (const module of state.modules) {
     const row = el("div", "completionRow");
-    row.append(el("span", "completionRowTitle", module.title), masteryBadge(module.mastery));
+    row.append(el("span", "completionRowTitle", learningTitle(module.title)), masteryBadge(module.mastery));
     list.append(row);
   }
   target.append(list);

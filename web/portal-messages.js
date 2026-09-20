@@ -392,8 +392,8 @@ export const portalMessages = {
     "Topics and prerequisites, arranged from bottom to top"
   ],
   "portal.dark.blue.completed.light.blue.in.progress.pale.blue.ready.to.sta.98": [
-    "深蓝：已完成　浅蓝：学习中　淡蓝：可开始　灰色：尚未学习",
-    "Dark blue: completed · Light blue: in progress · Pale blue: ready to start · Gray: not started"
+    "深色：已完成　浅色：学习中　淡色：可开始　灰色：尚未学习",
+    "Dark: completed · Light: in progress · Pale: ready to start · Gray: not started"
   ],
   "portal.is.my.progress.saved.99": [
     "学习进度会保存吗？",

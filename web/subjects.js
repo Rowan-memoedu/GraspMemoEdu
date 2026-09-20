@@ -11,10 +11,66 @@ const link = (text, href, className) => {
   const node = element('a', className, text); node.href = href; return node;
 };
 const decode = value => { try { return decodeURIComponent(value); } catch { return value; } };
-const accent = subject => {
-  const value = /^#[\da-f]{3}(?:[\da-f]{3})?$/i.test(subject?.accent || '') ? subject.accent : '#785744';
-  return value.length === 4 ? '#' + [...value.slice(1)].map(letter => letter + letter).join('') : value;
+// One Math reference palette; change hue/chroma while preserving each token's
+// luminance, so every subject retains the same text/background contrast.
+export const subjectHues = {math: null, physics: 26, biology: 145, english: 275, chinese: 9, chemistry: 0};
+// Violet needs less chroma to remain a restrained deep purple at the same luminance.
+const subjectChroma = {english: .55};
+export const mathPalette = {
+  "--ma-navy": "#1e194e",
+  "--ma-blue": "#096bb7",
+  "--soft-blue": "#f3f8fc",
+  "--link-color": "#0577c7",
+  "--link-hover": "#0864a6",
+  "--button-hover": "#075892",
+  "--button-active": "#084f85",
+  "--score-color": "#0877bf",
+  "--progress-complete": "#176bb5",
+  "--progress-active": "#78b6ed",
+  "--progress-paused": "#a5cff3",
+  "--progress-ready": "#c9e4ff",
+  "--selection-border": "#98c6e9",
+  "--lesson-progress": "#a8cae4",
+  "--muted-accent-border": "#9db9cf",
+  "--control-hover-border": "#c4d9e8",
+  "--control-border": "#d6e4ef",
+  "--intro-border": "#d7e7f2",
+  "--intro-background": "#daebf7",
+  "--task-hover-border": "#c7dbe9",
+  "--answer-help-background": "#f5f9fc",
+  "--subtle-accent-border": "#dce6ed",
+  "--subtle-accent-background": "#f7fafc",
+  "--answer-background": "#f8fafb"
 };
+const linear = value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4;
+const luminance = rgb => rgb.reduce((sum, value, index) => sum + linear(value) * [.2126, .7152, .0722][index], 0);
+const hsl = (hue, saturation, lightness) => {
+  const a = saturation * Math.min(lightness, 1 - lightness);
+  return [0, 8, 4].map(n => {
+    const k = (n + hue / 30) % 12;
+    return lightness - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+  });
+};
+function recolor(hex, subjectId) {
+  if (subjectId === 'math') return hex;
+  const rgb = [1, 3, 5].map(index => parseInt(hex.slice(index, index + 2), 16) / 255);
+  const high = Math.max(...rgb), low = Math.min(...rgb), lightness = (high + low) / 2;
+  const saturation = subjectId === 'chemistry' ? 0 : (high - low) / (1 - Math.abs(2 * lightness - 1) || 1) * (subjectChroma[subjectId] ?? 1);
+  const target = luminance(rgb);
+  let lower = 0, upper = 1;
+  for (let index = 0; index < 28; index++) {
+    const mid = (lower + upper) / 2;
+    if (luminance(hsl(subjectHues[subjectId], saturation, mid)) < target) lower = mid;
+    else upper = mid;
+  }
+  return '#' + hsl(subjectHues[subjectId], saturation, (lower + upper) / 2)
+    .map(value => Math.round(value * 255).toString(16).padStart(2, '0')).join('');
+}
+export function subjectPalette(subjectId = 'math') {
+  const id = Object.hasOwn(subjectHues, subjectId) ? subjectId : 'math';
+  return Object.fromEntries(Object.entries(mathPalette).map(([token, value]) => [token, recolor(value, id)]));
+}
+const accent = subject => subjectPalette(subject?.id)['--link-color'];
 const emblems = { math: '∑', physics: 'φ', english: 'Aa', chinese: '文', biology: '叶', chemistry: '⚗' };
 
 export const subjectLabel = subject => (getLanguage() === 'en' && subject.title_en) || subject.title;
@@ -100,18 +156,13 @@ export function renderSubjectEmpty(subject) {
 }
 
 export function applySubjectTheme(subject, { home = false } = {}) {
-  const color = subject?.id === 'math' ? '#096bb7' : accent(subject);
+  const palette = subjectPalette(subject?.id);
+  const color = palette['--link-color'];
   document.documentElement.style.setProperty('--subject-accent', color);
   document.documentElement.style.setProperty('--subject-accent-soft', color + '12');
-  // Only the all-subject landing page uses the classical design. Keep the
-  // existing reader/dashboard variables untouched for Math and global settings.
-  const themed = subject && subject.id !== 'math';
-  for (const [name, value] of [['--ma-blue', color], ['--ma-navy', color], ['--soft-blue', color + '0d']]) {
-    if (themed) document.documentElement.style.setProperty(name, value);
-    else document.documentElement.style.removeProperty(name);
-  }
+  for (const [name, value] of Object.entries(palette)) document.documentElement.style.setProperty(name, value);
   document.body.classList.toggle('platformTheme', home);
-  document.body.classList.toggle('subjectTemplate', Boolean(themed));
+  document.body.classList.toggle('subjectTemplate', Boolean(subject));
   document.body.classList.toggle('hasSubjectContext', Boolean(subject));
   document.body.dataset.subject = subject?.id || '';
   document.body.dataset.platformContext = subject ? 'subject' : 'platform';
@@ -119,7 +170,7 @@ export function applySubjectTheme(subject, { home = false } = {}) {
 
 export function subjectLogo(subject) {
   if (!subject) return './favicon.svg';
-  const color = subject.id === 'math' ? '#1e194e' : accent(subject);
+  const color = subjectPalette(subject.id)['--ma-navy'];
   const mark = subject.id === 'math'
     ? '<path d="M12 11h17M12 29h17M27 11 17 20l10 9" fill="none" stroke="' + color + '" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>'
     : '<text x="20" y="27" text-anchor="middle" font-family="Arial,sans-serif" font-size="22" fill="' + color + '">' + (emblems[subject.id] || '·') + '</text>';

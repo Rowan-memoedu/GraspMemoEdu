@@ -1,4 +1,4 @@
-import { t, translateMessage } from './i18n.js';
+import { t, translateMessage, learningTitle } from './i18n.js';
 
 const node = (tag, cls = '', text) => {
   const item = document.createElement(tag); item.className = cls;
@@ -104,7 +104,7 @@ export function createReviewView(bridge) {
       if (!active(ticket)) return;
       if (result.module_id !== module) throw new Error(t('review.invalidState'));
       bridge.setSession(result.session_id);
-      document.title = `${t('portal.review')} · ${result.module_title || result.topic_title}`;
+      document.title = `${t('portal.review')} · ${result.module_title ? learningTitle(result.module_title) : result.topic_title}`;
       accept(result, true);
       const saved = json(submissionKey());
       if (saved?.question_id === state.practice.id && !state.pending_submission_id && state.phase === 'answer') {
@@ -174,7 +174,7 @@ export function createReviewView(bridge) {
     const layout = node('div', 'reviewLayout'), main = node('section', 'reviewMain'); main.id = 'reviewContent'; main.tabIndex = -1;
     const back = node('a', '', t('nav.backHome')); back.href = bridge.homeHref();
     const breadcrumb = node('div', 'topicBreadcrumb'); breadcrumb.append(back, button(t('lesson.feedback'), 'textButton', () => bridge.showFeedback({topic_id: topic, task_id: `review:${state.session_id}`, question_id: selected || state.practice.id})));
-    main.append(breadcrumb, node('p', 'eyebrow', t('portal.review')), node('h1', 'lessonTitle', state.module_title || state.topic_title), node('p', 'reviewTopicTitle', state.topic_title));
+    main.append(breadcrumb, node('p', 'eyebrow', t('portal.review')), node('h1', 'lessonTitle', state.module_title ? learningTitle(state.module_title) : state.topic_title), node('p', 'reviewTopicTitle', state.topic_title));
     const count = node('p', 'reviewProgress', t('review.progress', {done: state.practice_answered_count, total: state.practice_target_count, errors: state.practice_error_count})); count.setAttribute('aria-live', 'polite'); main.append(count);
     const message = node('div', 'notice'); message.id = 'reviewNoticeBox'; message.setAttribute('role', 'status'); message.hidden = !failure; message.textContent = failure || ''; main.append(message);
     if (state.status === 'in_progress') {
@@ -188,7 +188,7 @@ export function createReviewView(bridge) {
       const outcome = node('section', state.status === 'completed' ? 'moduleResult' : 'pauseNotice'); outcome.id = 'reviewResult'; outcome.setAttribute('role', 'status');
       const copy = node('div');
       if (state.status === 'completed') {
-        const labels = {1: 'Again', 2: 'Hard', 3: 'Good', 4: 'Easy'};
+        const labels = {1: t('review.again'), 2: t('review.hard'), 3: t('review.good'), 4: t('review.easy')};
         copy.append(node('h2', 'resultTitle', t('review.completed')), node('p', 'resultDetail', t('review.nextDue', {time: bridge.formatDate(state.due_at)})));
         outcome.append(copy, node('strong', 'reviewMastery', t('review.rating', {rating: state.mastery, label: labels[state.mastery]})));
       } else {

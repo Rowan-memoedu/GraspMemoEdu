@@ -1,5 +1,9 @@
 // Static interface labels only. Course content and learner names are not translated.
 export const staticMessages = {
+  "review.again": ["需再练习", "Again"],
+  "review.hard": ["较难", "Hard"],
+  "review.good": ["良好", "Good"],
+  "review.easy": ["轻松", "Easy"],
   "platform.courseProgress": ["学习进度", "Learning progress"],
   "review.loading": ["正在读取复习…", "Loading review…"],
   "review.unavailable": ["暂时无法打开复习", "Review unavailable"],

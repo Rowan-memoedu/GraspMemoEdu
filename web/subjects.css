@@ -57,47 +57,7 @@ body.platformTheme { background: var(--platform-paper); }
 .courseTools a { text-decoration: none; }
 .courseProgressLink[aria-disabled="true"] { opacity: .5; cursor: default; }
 .courseGraphStatus { font-size: 13px; margin: 0 0 12px; }
-/* Non-Math subjects share the original template, with only their accent changed.
-   Math and global settings match the existing styles.css / portal.css rules. */
-.subjectTemplate .portalLogo,
-.subjectTemplate .portalPageTitle,
-.subjectTemplate .courseChoice h2,
-.subjectTemplate .courseNameLink,
-.subjectTemplate .guideBody :is(h1,h2,h3),
-.subjectTemplate .profileForm label,
-.subjectTemplate .taskTitle,
-.subjectTemplate .taskHeading,
-.subjectTemplate .taskIcon.unlocked,
-.subjectTemplate .taskPrerequisites h3,
-.subjectTemplate .answerGroupTitle,
-.subjectTemplate .sequenceTab.selected,
-.subjectTemplate .userMenuIdentity strong,
-.subjectTemplate .identityNotice h2,
-.subjectTemplate .portalMessage h2,
-.subjectTemplate .feedbackDialog label,
-.subjectTemplate .answerExplanation h3,
-.subjectTemplate .progressUnit h2 { color: var(--ma-navy); }
-.subjectTemplate .mainNavigation a.active { color: var(--ma-blue); border-bottom-color: var(--ma-blue); }
-.subjectTemplate .mainNavigation a:hover,
-.subjectTemplate .guideBody a,
-.subjectTemplate .topicBreadcrumb a,
-.subjectTemplate .unitRow a:hover,
-.subjectTemplate .prerequisiteRow a:hover,
-.subjectTemplate .courseNameLink:hover { color: var(--ma-blue); }
-.subjectTemplate .portalStart:not(.guestReset),
-.subjectTemplate .courseLearn,
-.subjectTemplate .taskProgress > span,
-.subjectTemplate .unitProgress .completed { background: var(--ma-blue); border-color: var(--ma-blue); }
-.subjectTemplate .portalStart:not(.guestReset):hover,
-.subjectTemplate .courseLearn:hover { background: color-mix(in srgb, var(--ma-blue) 82%, #000); }
-.subjectTemplate .primaryButton:hover:not(:disabled) { background: color-mix(in srgb, var(--ma-blue) 82%, #000); border-color: var(--ma-blue); }
-.subjectTemplate .historyItem:hover { background: var(--soft-blue); border-color: color-mix(in srgb, var(--ma-blue) 25%, #fff); }
-.subjectTemplate .graphViewport rect[fill="#176bb5"] { fill: var(--ma-blue); }
-.subjectTemplate .graphViewport rect[fill="#a5cff3"] { fill: color-mix(in srgb, var(--ma-blue) 35%, #fff); }
-.subjectTemplate .graphViewport rect[fill="#c9e4ff"] { fill: color-mix(in srgb, var(--ma-blue) 18%, #fff); }
-.subjectTemplate .unitProgress .in_progress { background: color-mix(in srgb, var(--ma-blue) 58%, #fff); }
-.subjectTemplate .unitProgress .paused { background: color-mix(in srgb, var(--ma-blue) 35%, #fff); }
-.subjectTemplate .guestDemoOption input { accent-color: var(--ma-blue); }
+/* All six subjects use the same component rules; subjects.js injects color tokens only. */
 @media (max-width: 960px) {
   .platformTheme .portalLogo { margin-right: 18px; font-size: 17px; }
   .platformTheme #subjectContext { margin-right: 12px; padding-left: 10px; font-size: 14px; }

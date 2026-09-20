@@ -2,12 +2,12 @@
 body { padding-top: 50px; }
 .topRibbon { position: fixed; inset: 0 0 auto; height: 50px; background: #fff; border-bottom: 1px solid #e0e0e0; z-index: 40; }
 .topBarContainer { width: 100%; max-width: 1110px; height: 50px; margin: 0 auto; padding: 0 20px; display: flex; align-items: center; }
-.portalLogo { display: inline-flex; align-items: center; gap: 8px; color: #1e194e; text-decoration: none; font-size: 12px; font-weight: 700; margin-right: 54px; white-space: nowrap; }
+.portalLogo { display: inline-flex; align-items: center; gap: 8px; color: var(--ma-navy); text-decoration: none; font-size: 12px; font-weight: 700; margin-right: 54px; white-space: nowrap; }
 .portalLogo img { display: block; }
 .mainNavigation { height: 100%; display: flex; align-items: stretch; }
 .mainNavigation a { display: flex; align-items: center; padding: 0 10px; margin-right: 40px; border-bottom: 3px solid transparent; padding-top: 3px; color: #a4a4a4; text-decoration: none; font-size: 14px; }
-.mainNavigation a.active { border-bottom-color: #0577c7; color: #0577c7; }
-.mainNavigation a:hover { color: #0577c7; }
+.mainNavigation a.active { border-bottom-color: var(--link-color); color: var(--link-color); }
+.mainNavigation a:hover { color: var(--link-color); }
 .userMenuHost { position: relative; margin-left: auto; height: 50px; display: flex; align-items: center; }
 .userAvatar { width: 38px; height: 38px; padding: 0; border: 0; border-radius: 50%; background: #f5f5f5; color: #727272; font-size: 15px; }
 .portalStart.guestReset { margin-left: 12px; background: #f4c744; border-color: #d4a626; color: #493a0b; }
@@ -17,11 +17,11 @@ body { padding-top: 50px; }
 .userMenu { position: absolute; right: 0; top: 49px; min-width: 225px; padding: 10px 0; border: 1px solid #e0e0e0; border-radius: 2px; background: #fff; box-shadow: 0 1px 1px #00000013, 0 2px 2px #00000013, 0 4px 4px #00000013, 0 8px 8px #00000013, 0 16px 16px #00000013; }
 .userMenuIdentity { padding: 8px 18px 16px; margin-bottom: 6px; border-bottom: 1px solid #eee; }
 .userMenuIdentity strong, .userMenuIdentity > span { display: block; overflow-wrap: anywhere; }
-.userMenuIdentity strong { color: #1e194e; font-size: 14px; }
+.userMenuIdentity strong { color: var(--ma-navy); font-size: 14px; }
 .userMenuIdentity > span { color: #909090; font-size: 12px; margin-top: 2px; }
 .userMenuIdentity > .accountPurpose { color: #8a632e; }
 .identityNotice { max-width: 1070px; margin: 28px auto; padding: 22px; border: 1px solid #e8ddd2; background: #fdfbf8; }
-.identityNotice h2 { margin: 0 0 10px; color: #1e194e; font-size: 18px; font-weight: 400; }
+.identityNotice h2 { margin: 0 0 10px; color: var(--ma-navy); font-size: 18px; font-weight: 400; }
 .identityNotice p { margin: 0 0 16px; line-height: 1.6; }
 .identityNotice .noticeActions { flex-wrap: wrap; }
 @media (max-width: 1110px) { .identityNotice { margin-left: 20px; margin-right: 20px; } }
@@ -39,7 +39,7 @@ body { padding-top: 50px; }
 .reviewHistory .historyItem { display: flex; align-items: center; justify-content: space-between; width: 100%; }
 .reviewTopicTitle { margin: 9px 0; color: #717f8a; font-size: 13px; }
 .reviewProgress { color: #627584; font-size: 13px; margin: 18px 0 26px; }
-.reviewMastery { font-size: 17px; color: #0877bf; white-space: nowrap; }
+.reviewMastery { font-size: 17px; color: var(--score-color); white-space: nowrap; }
 .taskDueAt, .reviewNextDue { font-size: 12px; color: #687e8c; margin-top: 12px; }
 @media (max-width: 900px) {
   .reviewLayout { grid-template-columns: 145px minmax(0, 1fr); gap: 22px; }
@@ -51,28 +51,28 @@ body { padding-top: 50px; }
   .reviewHistoryList { grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); }
   .reviewMain .moduleResult { flex-wrap: wrap; }
 }
-.portalPageTitle { color: #1e194e; font-size: 22px; font-weight: 400; margin: 0 0 28px; line-height: 1.4; }
+.portalPageTitle { color: var(--ma-navy); font-size: 22px; font-weight: 400; margin: 0 0 28px; line-height: 1.4; }
 .portalLoading { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 35px 16px; color: #818181; font-size: 14px; }
 .portalLoading .spinner { width: 18px; height: 18px; flex: 0 0 18px; }
 .portalLoading p { margin: 0; }
 .portalMessage { border: 1px solid #e8ddd2; background: #fdfbf8; padding: 23px; margin: 0 0 20px; }
-.portalMessage h2 { color: #1e194e; font-size: 17px; font-weight: 400; margin: 0 0 8px; }
+.portalMessage h2 { color: var(--ma-navy); font-size: 17px; font-weight: 400; margin: 0 0 8px; }
 .portalMessage p { color: #767676; font-size: 13px; margin: 0 0 16px; }
 .portalEmpty { border: 1px solid #eaeaea; padding: 28px 20px; font-size: 14px; color: #808080; }
 .portalEmpty p { margin: 0; }
 .portalEmpty .textButton { margin-top: 12px; }
 .courseGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .courseChoice { display: flex; flex-direction: column; min-height: 212px; padding: 20px; border: 1px solid #eaeaea; border-radius: 3px; }
-.courseChoice h2 { color: #1e194e; font-size: 18px; line-height: 1.5; margin: 0 0 12px; }
+.courseChoice h2 { color: var(--ma-navy); font-size: 18px; line-height: 1.5; margin: 0 0 12px; }
 .courseDescription { color: #747474; font-size: 15px; margin: 0 0 24px; flex: 1; }
-.courseLearn { width: 100%; background: #0577c7; border-color: #0577c7; }
+.courseLearn { width: 100%; background: var(--link-color); border-color: var(--link-color); }
 .courseAvailability { color: #909090; font-size: 12px; margin: 10px 0 0; }
 .dashboardLayout { display: grid; grid-template-columns: 350px minmax(0, 680px); gap: 40px; align-items: start; }
 .courseSidebar { min-width: 0; }
 .courseOverview { border: 1px solid #e0e0e0; border-radius: 3px; position: relative; }
 .courseOverviewTop { display: flex; gap: 12px; align-items: center; justify-content: space-between; min-height: 112px; padding: 26px 15px; }
-.courseNameLink { color: #1e194e; font-size: 15px; font-weight: 700; line-height: 1.45; text-transform: uppercase; text-decoration: none; }
-.courseNameLink:hover { color: #0577c7; }
+.courseNameLink { color: var(--ma-navy); font-size: 15px; font-weight: 700; line-height: 1.45; text-transform: uppercase; text-decoration: none; }
+.courseNameLink:hover { color: var(--link-color); }
 .coursePercent { width: 56px; height: 56px; flex: 0 0 56px; padding: 0; border: 0; border-radius: 50%; background: #f0f1f2; font-size: 15px; color: #555; }
 .estimatedCompletion { border-top: 1px solid #e0e0e0; padding: 23px 15px; color: #808080; font-size: 14px; }
 .estimatedCompletion span { display: block; }
@@ -81,17 +81,17 @@ body { padding-top: 50px; }
 .sequenceUnits { width: 510px; max-width: calc(100vw - 40px); }
 .sequenceTabs { display: flex; overflow-x: auto; padding: 14px 15px; border-bottom: 1px solid #eaeaea; gap: 18px; }
 .sequenceTab { display: flex; align-items: center; gap: 10px; border: 0; padding: 6px 0; background: #fff; text-transform: uppercase; font-size: 13px; font-weight: 700; color: #aaa; text-align: left; min-width: max-content; }
-.sequenceTab.selected { color: #1e194e; }
+.sequenceTab.selected { color: var(--ma-navy); }
 .sequencePercent { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%; background: #f0f1f2; font-size: 12px; font-weight: 400; }
 .unitList { padding: 0 15px 22px; }
 .unitRow { margin-top: 20px; font-size: 14px; }
 .unitRow a { color: #404040; text-decoration: none; }
-.unitRow a:hover { color: #0577c7; }
+.unitRow a:hover { color: var(--link-color); }
 .unitProgress { display: flex; height: 5px; margin-top: 9px; border: 1px solid #d7dfe7; min-width: 1px; background: #fff; max-width: 480px; }
 .unitProgress > span { height: 100%; }
-.unitProgress .completed { background: #176bb5; }
-.unitProgress .in_progress { background: #78b6ed; }
-.unitProgress .paused { background: #a5cff3; }
+.unitProgress .completed { background: var(--progress-complete); }
+.unitProgress .in_progress { background: var(--progress-active); }
+.unitProgress .paused { background: var(--progress-paused); }
 .unitProgress .not_started { background: #fff; }
 .progressDetails { width: 351px; max-width: calc(100vw - 40px); padding: 16px 15px; }
 .portalInfoRow { display: flex; justify-content: space-between; align-items: baseline; gap: 24px; font-size: 14px; padding: 5px 0; }
@@ -100,11 +100,11 @@ body { padding-top: 50px; }
 .portalTask { width: 100%; display: block; border: 1px solid #eaeaea; background: #fff; border-radius: 2px; margin: 0 0 12px; color: #404040; text-align: left; }
 .taskToggle { display: block; width: 100%; border: 0; padding: 0; background: transparent; color: inherit; text-align: left; }
 .taskSummaryContent { padding: 20px 15px 16px; }
-.taskHeading { display: flex; align-items: center; gap: 10px; color: #1e194e; margin-bottom: 22px; min-height: 22px; line-height: 22px; }
+.taskHeading { display: flex; align-items: center; gap: 10px; color: var(--ma-navy); margin-bottom: 22px; min-height: 22px; line-height: 22px; }
 .taskHeading strong { font-size: 16px; font-weight: 700; }
 .taskIcon { display: inline-flex; width: 22px; flex: 0 0 22px; align-items: center; justify-content: center; font-size: 24px; line-height: 22px; color: #aaa; }
 .taskIcon svg { width: 20px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.5; }
-.taskIcon.unlocked { color: #1e194e; }
+.taskIcon.unlocked { color: var(--ma-navy); }
 .taskIcon.passed { color: #59a65c; }
 .taskIcon.ended, .taskIcon.locked { color: #b1b1b1; }
 .taskReason { font-size: 9px; color: #303030; cursor: help; }
@@ -112,23 +112,23 @@ body { padding-top: 50px; }
 .taskTitle { font-size: 16px; line-height: 1.5; overflow-wrap: anywhere; }
 .taskProgressRow { display: flex; align-items: center; gap: 10px; margin-top: 15px; font-size: 13px; color: #828282; }
 .taskProgress { height: 4px; background: #f0f1f2; flex: 1; }
-.taskProgress > span { display: block; background: #0577c7; height: 100%; }
+.taskProgress > span { display: block; background: var(--link-color); height: 100%; }
 .taskDetails { border-top: 1px solid #ececec; margin-top: 4px; }
 .taskPrerequisites { padding: 23px 15px 17px; font-size: 13px; }
-.taskPrerequisites h3 { font-size: 13px; text-transform: uppercase; color: #1e194e; margin: 0 0 13px; }
+.taskPrerequisites h3 { font-size: 13px; text-transform: uppercase; color: var(--ma-navy); margin: 0 0 13px; }
 .taskPrerequisites p { margin: 0; color: #808080; }
 .prerequisiteRow { display: flex; align-items: baseline; gap: 7px; margin-bottom: 5px; }
 .prerequisiteRow a { color: #4e4e4e; text-decoration: none; }
-.prerequisiteRow a:hover { color: #0577c7; }
+.prerequisiteRow a:hover { color: var(--link-color); }
 .prerequisiteCheck { color: #aaa; }
 .prerequisiteCheck.complete { color: #59a65c; }
 .taskStartRow { border-top: 1px solid #ececec; padding: 23px 15px 20px; }
 .taskStartRow p, .taskStatusNote, .maintenanceNote { color: #878787; font-size: 13px; margin: 12px 15px; }
 .maintenanceNote { margin: 17px 0 0; }
-.portalStart { border: 0; border-radius: 17px; padding: 7px 20px; background: #0577c7; color: #fff; font-size: 14px; line-height: 20px; }
-.portalStart:hover { background: #0864a6; }
+.portalStart { border: 0; border-radius: 17px; padding: 7px 20px; background: var(--link-color); color: #fff; font-size: 14px; line-height: 20px; }
+.portalStart:hover { background: var(--link-hover); }
 .taskCompleted { border-radius: 0; padding: 0; }
-button.taskCompleted:hover { border-color: #c7dbe9; }
+button.taskCompleted:hover { border-color: var(--task-hover-border); }
 .taskCompletedAt { color: #808080; font-size: 13px; margin-top: 30px; }
 .completedTasksDate { color: #949494; text-align: center; font-size: 16px; font-weight: 400; margin: 42px 0 20px; }
 .historyMore { text-align: center; margin: 20px 0; }
@@ -136,7 +136,7 @@ button.taskCompleted:hover { border-color: #c7dbe9; }
 .taskBackButton { height: 40px; display: block; padding: 0; margin: 0 0 12px; color: #777; border: 0; background: #fff; font-size: 13px; }
 .answerTaskSummary { margin-bottom: 28px; }
 .answerGroup { margin-bottom: 30px; }
-.answerGroupTitle { border: 1px solid #eaeaea; padding: 15px; color: #1e194e; font-size: 14px; font-weight: 400; margin: 0; }
+.answerGroupTitle { border: 1px solid #eaeaea; padding: 15px; color: var(--ma-navy); font-size: 14px; font-weight: 400; margin: 0; }
 .answerRecord { margin: 20px 0; border: 1px solid #eaeaea; }
 .answerRecordHeader { display: flex; justify-content: space-between; align-items: center; padding: 11px 15px; color: #6f6f6f; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
 .answerHelp { width: 22px; height: 22px; border: 1px solid #d4dbe0; border-radius: 50%; color: #818181; background: #fff; padding: 0; font-size: 13px; }
@@ -151,16 +151,16 @@ button.taskCompleted:hover { border-color: #c7dbe9; }
 .answerOutcome.incorrect { color: #a55f41; }
 .answerExplanationToggle { margin: 0 15px 10px; font-size: 12px; }
 .answerExplanation { border-top: 1px solid #eaeaea; padding: 15px; }
-.answerExplanation h3 { color: #1e194e; font-size: 13px; margin: 20px 0 7px; }
+.answerExplanation h3 { color: var(--ma-navy); font-size: 13px; margin: 20px 0 7px; }
 .historyYourAnswer { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: 14px; padding: 10px 12px; margin: 0; background: #fafafa; }
 .progressPageHeading .textButton { margin-bottom: 14px; }
 .courseProgressSummary { max-width: 680px; border: 1px solid #eaeaea; padding: 20px; margin-bottom: 26px; }
 .progressUnit { border: 1px solid #eaeaea; padding: 20px; margin-bottom: 18px; scroll-margin-top: 72px; }
-.progressUnit h2 { font-size: 16px; color: #1e194e; font-weight: 400; margin: 0 0 14px; }
+.progressUnit h2 { font-size: 16px; color: var(--ma-navy); font-weight: 400; margin: 0 0 14px; }
 .progressUnit > .unitProgress { margin-bottom: 23px; }
 .progressTopic { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 20px; font-size: 14px; padding: 13px 0; border-top: 1px solid #ededed; scroll-margin-top: 80px; }
 .progressTopic > :not(:first-child) { color: #898989; font-size: 12px; }
-.progressTopic.highlighted { background: #f5f9fc; padding-inline: 10px; }
+.progressTopic.highlighted { background: var(--answer-help-background); padding-inline: 10px; }
 .graphDialog { width: min(1180px, calc(100vw - 40px)); max-height: calc(100dvh - 40px); padding: 24px; border: 1px solid #d9d9d9; border-radius: 3px; color: #404040; }
 .graphDialog::backdrop, .feedbackDialog::backdrop { background: #13233145; }
 .graphViewport { overflow: auto; max-height: calc(100dvh - 190px); background: #fff; }
@@ -169,16 +169,16 @@ button.taskCompleted:hover { border-color: #c7dbe9; }
 body.portalModalOpen { overflow: hidden; }
 .guidePage { max-width: 732px; margin: 0 auto; }
 .guideBody { overflow-wrap: anywhere; font-size: 15px; }
-.guideBody h1, .guideBody h2, .guideBody h3 { color: #1e194e; }
+.guideBody h1, .guideBody h2, .guideBody h3 { color: var(--ma-navy); }
 .guideBody h2 { padding-top: 24px; border-top: 1px solid #eaeaea; margin-top: 36px; }
 .guideBody pre { max-width: 100%; overflow-x: auto; padding: 15px; background: #f7f8fa; font-size: 13px; }
 .guideBody table { display: block; max-width: 100%; overflow-x: auto; }
 .guideBody img { max-width: 100%; height: auto; }
-.guideBody a { color: #0577c7; }
+.guideBody a { color: var(--link-color); }
 .guideUpdated { color: #969696; font-size: 12px; margin-top: 32px; padding-top: 16px; border-top: 1px solid #ececec; }
 .settingsPage { max-width: 560px; margin: 0 auto; }
 .profileForm { border: 1px solid #eaeaea; padding: 24px; }
-.profileForm label, .feedbackDialog label { display: block; color: #1e194e; font-size: 14px; margin: 18px 0 7px; }
+.profileForm label, .feedbackDialog label { display: block; color: var(--ma-navy); font-size: 14px; margin: 18px 0 7px; }
 .profileForm label:first-child { margin-top: 0; }
 .profileForm input, .profileForm select, .feedbackDialog textarea { width: 100%; border: 1px solid #cbd2d8; border-radius: 3px; padding: 9px 11px; color: #404040; background: #fff; font: inherit; }
 .profileStatus, .feedbackStatus { font-size: 13px; color: #777; margin: 18px 0; }
@@ -186,7 +186,7 @@ body.portalModalOpen { overflow: hidden; }
 .feedbackDialog h2 { font-size: 20px; font-weight: 400; }
 .feedbackDialog textarea { min-height: 145px; resize: vertical; }
 .topicBreadcrumb { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 18px 0 10px; font-size: 13px; border-bottom: 1px solid #ececec; }
-.topicBreadcrumb a { color: #0577c7; text-decoration: none; }
+.topicBreadcrumb a { color: var(--link-color); text-decoration: none; }
 .topicBreadcrumb a:hover { text-decoration: underline; }
 .topicPage .historySidebar { top: 74px; max-height: calc(100dvh - 98px); }
 .topicPage .lesson { margin-top: 26px; }

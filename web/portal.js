@@ -1,4 +1,4 @@
-import { t, getLanguage, setLanguage, locale, translateMessage } from "./i18n.js";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js";
 import { createReviewView } from "./review.js";
 import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js";
 
@@ -405,7 +405,7 @@ export function initPortal(bridge) {
     }
     wrap.append(heading);
     if (task.course_title) wrap.append(node("div", "taskCourse", task.course_title));
-    wrap.append(node("div", "taskTitle", task.title));
+    wrap.append(node("div", "taskTitle", task.type === 'Review' ? learningTitle(task.title) : task.title));
     const p = percent(task.progress);
     if (!history && p > 0 && p < 100) { const row = node("div", "taskProgressRow"), bar = node("div", "taskProgress"), fill = node("span"); fill.style.width = `${p}%`; bar.append(fill); row.append(bar, node("span", "", percentLabel(p))); wrap.append(row); }
     if (task.maintenance) wrap.append(node("p", "maintenanceNote", task.maintenance_message ? translateMessage(task.maintenance_message) : t("portal.this.content.is.under.maintenance.and.cannot.be.started.yet.46")));
@@ -579,7 +579,7 @@ export function initPortal(bridge) {
       target.replaceChildren(back, summary);
       if (!result.groups?.some((group) => group.answers?.length)) target.append(emptyBox(t("portal.no.answer.records.are.available.76")));
       for (const group of result.groups || []) {
-        const section = node("section", "answerGroup"); section.append(node("h2", "answerGroupTitle", group.title));
+        const section = node("section", "answerGroup"); section.append(node("h2", "answerGroupTitle", learningTitle(group.title)));
         for (const [index, answer] of (group.answers || []).entries()) section.append(answerCard(answer, index, result.task));
         target.append(section);
       }
@@ -662,10 +662,10 @@ export function initPortal(bridge) {
     }
     for (const topic of topics) {
       const p = positions.get(topic.id), group = make("g"), completed = topic.status === "completed";
-      const fill = completed ? "#176bb5" : topic.status === "in_progress" || topic.status === "paused" ? "#a5cff3" : topic.frontier ? "#c9e4ff" : "#f2f2f2";
+      const fill = completed ? "var(--progress-complete)" : topic.status === "in_progress" || topic.status === "paused" ? "var(--progress-paused)" : topic.frontier ? "var(--progress-ready)" : "#f2f2f2";
       group.append(make("rect", { x: p.x - 86, y: p.y - 24, width: 172, height: 48, rx: 3, fill, stroke: "#c9d2da" }));
       const title = make("title"); title.textContent = `${topic.title} · ${statusNames[topic.status] || t("portal.not.started.3")}`; group.append(title);
-      const label = make("text", { x: p.x, y: p.y + 5, "text-anchor": "middle", fill: completed ? "#fff" : "#1e194e", "font-size": 13 }); label.textContent = [...topic.title].length > 13 ? [...topic.title].slice(0, 12).join("") + "…" : topic.title; group.append(label); svg.append(group);
+      const label = make("text", { x: p.x, y: p.y + 5, "text-anchor": "middle", fill: completed ? "#fff" : "var(--ma-navy)", "font-size": 13 }); label.textContent = [...topic.title].length > 13 ? [...topic.title].slice(0, 12).join("") + "…" : topic.title; group.append(label); svg.append(group);
     }
     const viewport = node("div", "graphViewport"); viewport.append(svg);
     graphContent.replaceChildren(viewport, node("p", "graphLegend", t("portal.dark.blue.completed.light.blue.in.progress.pale.blue.ready.to.sta.98")));

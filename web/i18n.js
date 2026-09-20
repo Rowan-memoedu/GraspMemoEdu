@@ -11,6 +11,12 @@ let language = 'zh-CN';
 try { language = validLanguage(localStorage.getItem(LANGUAGE_KEY)); } catch { /* Chinese is the default when storage is unavailable. */ }
 export const getLanguage = () => language;
 export const locale = () => language === 'en' ? 'en-US' : 'zh-CN';
+// Imported module/question headings have a structural label followed by an
+// authored title. Localize only the label; keep the title and all body HTML verbatim.
+export function learningTitle(value = '') {
+  return String(value).replace(/^(Example|Practice|例题|练习)(\s*\d+(?:[.-]\d+)*)(?=\s*[:：]|$)/i,
+    (_, label, number) => `${t(/^(Example|例题)$/i.test(label) ? 'Example' : 'Practice')} ${number.trim()}`);
+}
 export function setLanguage(value) {
   language = validLanguage(value);
   try { localStorage.setItem(LANGUAGE_KEY, language); } catch { /* Keep the preference for this page session. */ }

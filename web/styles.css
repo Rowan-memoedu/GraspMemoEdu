@@ -1,5 +1,26 @@
 /* Geometry and type adapted from the existing Math Academy lesson template. */
 :root {
+  --link-color: #0577c7;
+  --link-hover: #0864a6;
+  --button-hover: #075892;
+  --button-active: #084f85;
+  --score-color: #0877bf;
+  --progress-complete: #176bb5;
+  --progress-active: #78b6ed;
+  --progress-paused: #a5cff3;
+  --progress-ready: #c9e4ff;
+  --selection-border: #98c6e9;
+  --lesson-progress: #a8cae4;
+  --muted-accent-border: #9db9cf;
+  --control-hover-border: #c4d9e8;
+  --control-border: #d6e4ef;
+  --intro-border: #d7e7f2;
+  --intro-background: #daebf7;
+  --task-hover-border: #c7dbe9;
+  --answer-help-background: #f5f9fc;
+  --subtle-accent-border: #dce6ed;
+  --subtle-accent-background: #f7fafc;
+  --answer-background: #f8fafb;
   --ma-ink: #404040;
   --ma-navy: #1e194e;
   --ma-blue: #096bb7;
@@ -11,7 +32,7 @@
   font-synthesis: none;
 }
 .guestDemoOption { display: inline-flex; align-items: center; flex-shrink: 0; gap: 7px; margin-left: 12px; font-size: 14px; color: #626262; cursor: pointer; white-space: nowrap; }
-.guestDemoOption input { width: 15px; height: 15px; margin: 0; accent-color: #096bb7; }
+.guestDemoOption input { width: 15px; height: 15px; margin: 0; accent-color: var(--ma-blue); }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html { background: #fff; scrollbar-gutter: stable; }
@@ -27,7 +48,7 @@ button, input, textarea { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: default; opacity: .5; }
 button, a, input, textarea, summary { -webkit-tap-highlight-color: transparent; }
-:focus-visible { outline: 3px solid #98c6e9; outline-offset: 3px; }
+:focus-visible { outline: 3px solid var(--selection-border); outline-offset: 3px; }
 button { transition: background-color .12s, border-color .12s; }
 button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
 .appLayout { display: grid; grid-template-columns: calc(232px * 4 / 3) minmax(0, 1fr); column-gap: 36px; padding: 0 28px; }
@@ -46,7 +67,7 @@ button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke
 #identityName { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #6a6a6a; }
 .identityAction { color: var(--ma-blue); white-space: nowrap; }
 .textButton { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 3px; background: transparent; color: var(--ma-blue); padding: 8px 2px; font-size: 13px; line-height: 1.5; }
-.textButton:hover { color: #084f85; text-decoration: underline; text-underline-offset: 3px; }
+.textButton:hover { color: var(--button-active); text-decoration: underline; text-underline-offset: 3px; }
 .lesson { margin: 35px 0 70px; outline: 0; }
 .eyebrow { margin: 0 0 5px; font-size: 10px; font-weight: 700; letter-spacing: .14em; color: #868686; }
 .lessonTitle { margin: 0 0 13px; color: var(--ma-navy); font-size: 26px; line-height: 1.35; font-weight: 700; }
@@ -54,7 +75,7 @@ button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke
 .lessonProgress { display: flex; gap: 4px; height: 6px; margin: 0 0 26px; }
 .progressSegment { flex: 1; background: #e7edf2; border-radius: 3px; }
 .progressSegment.completed { background: var(--ma-blue); }
-.progressSegment.in_progress, .progressSegment.paused { background: #a8cae4; }
+.progressSegment.in_progress, .progressSegment.paused { background: var(--lesson-progress); }
 .lessonToolbar { display: flex; justify-content: flex-end; align-items: center; margin: 0 0 17px; }
 .historyButton { color: #626262; }
 .chevron { width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); margin: -3px 2px 0 6px; }
@@ -71,8 +92,8 @@ button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke
 .historyStatus.completed { color: var(--green); }
 .historyItems { display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; padding-bottom: 12px; }
 .historyItem { padding: 7px 9px; border: 1px solid transparent; border-radius: 3px; text-align: left; background: #f8f8f8; font-size: 12px; color: #666; overflow-wrap: anywhere; }
-.historyItem:hover { border-color: #c4d9e8; background: #f3f8fc; }
-.historyItem[aria-current="step"] { border-color: #a8cae4; background: var(--soft-blue); color: var(--ma-blue); }
+.historyItem:hover { border-color: var(--control-hover-border); background: var(--soft-blue); }
+.historyItem[aria-current="step"] { border-color: var(--lesson-progress); background: var(--soft-blue); color: var(--ma-blue); }
 .historyItem .historyMark { display: inline-block; margin-left: 5px; font-size: 10px; color: #808080; }
 .historyHint { font-size: 11px; color: #858585; margin: 8px 0 1px; }
 .reviewNotice { display: flex; justify-content: space-between; align-items: center; gap: 15px; color: #626262; font-size: 12px; margin: 0 0 10px; padding: 8px 12px; background: #f7f8fa; border-radius: 3px; }
@@ -100,7 +121,7 @@ button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke
 .courseContent img { max-width: 100%; height: auto; }
 .courseContent a { color: var(--ma-blue); }
 .courseContent code { font-family: Consolas, monospace; font-size: .93em; }
-.courseContent blockquote { border-left: 3px solid #d6e4ef; margin: 18px 0; padding-left: 15px; color: #666; }
+.courseContent blockquote { border-left: 3px solid var(--control-border); margin: 18px 0; padding-left: 15px; color: #666; }
 .exampleExplanationHeader { font-size: 15px; font-weight: 700; color: var(--ma-navy); margin: 27px 0 20px; padding-top: 20px; border-top: 1px solid var(--ma-border); }
 .mathDisplay { margin: 20px 0; text-align: center; overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
 .mathDisplay mjx-container { display: block; margin: 0 !important; }
@@ -114,12 +135,12 @@ mjx-container[jax="SVG"] text { font-family: "Microsoft YaHei", sans-serif; }
 .choiceActions { display: flex; flex-wrap: wrap; gap: 10px; }
 .primaryButton, .secondaryButton { display: inline-flex; justify-content: center; align-items: center; gap: 8px; min-height: 41px; border: 1px solid transparent; border-radius: 3px; padding: 9px 22px; font-size: 14px; line-height: 1.5; }
 .primaryButton { background: var(--ma-blue); color: white; border-color: var(--ma-blue); }
-.primaryButton:hover:not(:disabled) { background: #075892; border-color: #075892; }
+.primaryButton:hover:not(:disabled) { background: var(--button-hover); border-color: var(--button-hover); }
 .secondaryButton { background: white; color: var(--ma-navy); border-color: #cdd3d9; }
-.secondaryButton:hover:not(:disabled) { border-color: #9db9cf; background: #f7fafc; }
+.secondaryButton:hover:not(:disabled) { border-color: var(--muted-accent-border); background: var(--subtle-accent-background); }
 .answerForm label { display: block; margin-bottom: 9px; color: var(--ma-navy); font-size: 14px; font-weight: 700; }
 .answerInput { display: block; width: 100%; min-height: 91px; resize: vertical; padding: 11px 13px; border: 1px solid #bdc7cf; border-radius: 3px; background: #fff; color: var(--ma-ink); line-height: 1.6; }
-.answerInput:focus { border-color: var(--ma-blue); outline: 2px solid #daebf7; outline-offset: 0; }
+.answerInput:focus { border-color: var(--ma-blue); outline: 2px solid var(--intro-background); outline-offset: 0; }
 .answerInput:disabled { background: #fafafa; color: #757575; }
 .answerBottom { display: flex; justify-content: space-between; align-items: center; gap: 18px; margin-top: 13px; }
 .inputHint { color: #7c7c7c; font-size: 11px; margin: 0 !important; max-width: 410px; }
@@ -140,10 +161,10 @@ mjx-container[jax="SVG"] text { font-family: "Microsoft YaHei", sans-serif; }
 .feedbackReason { line-height: 1.65; white-space: pre-wrap; }
 .submittedAnswer { margin: 22px 0 0; color: #777; font-size: 12px; }
 .submittedAnswer summary { cursor: pointer; width: fit-content; }
-.submittedAnswer pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ma-ink); background: #fafafa; border-left: 2px solid #dce6ed; margin: 9px 0 0; padding: 9px 12px; font: inherit; font-size: 13px; }
+.submittedAnswer pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ma-ink); background: #fafafa; border-left: 2px solid var(--subtle-accent-border); margin: 9px 0 0; padding: 9px 12px; font: inherit; font-size: 13px; }
 .waiting { display: flex; align-items: center; gap: 10px; margin-top: 22px; color: #657787; font-size: 13px; }
 .waiting .spinner { width: 15px; height: 15px; border-width: 2px; }
-.moduleResult { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 22px; padding: 14px 16px; background: #f8fafb; border: 1px solid #e6ebee; border-radius: 3px; }
+.moduleResult { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 22px; padding: 14px 16px; background: var(--answer-background); border: 1px solid #e6ebee; border-radius: 3px; }
 .resultTitle { color: var(--ma-navy); font-size: 13px; margin: 0 0 3px; }
 .resultDetail { color: #787878; font-size: 11px; margin: 0; }
 .mastery { display: flex; align-items: center; gap: 8px; white-space: nowrap; color: #6d7780; font-size: 11px; }
@@ -168,7 +189,7 @@ mjx-container[jax="SVG"] text { font-family: "Microsoft YaHei", sans-serif; }
 .emptyState h2 { color: var(--ma-navy); font-weight: 400; font-size: 17px; margin: 14px 0 7px; }
 .emptyState p { color: #858585; font-size: 13px; margin: 0; }
 .emptyState .primaryButton { margin-top: 20px; }
-.spinner { display: inline-block; width: 22px; height: 22px; border: 2px solid #d7e7f2; border-top-color: var(--ma-blue); border-radius: 50%; animation: spin .85s linear infinite; }
+.spinner { display: inline-block; width: 22px; height: 22px; border: 2px solid var(--intro-border); border-top-color: var(--ma-blue); border-radius: 50%; animation: spin .85s linear infinite; }
 .lessonFooter { display: flex; justify-content: space-between; align-items: center; gap: 15px; color: #979797; font-size: 11px; }
 .completionHeading { color: var(--ma-navy); font-size: 21px; font-weight: 400; margin: 0 0 9px; }
 .completionIntro { color: #777; font-size: 13px; }
