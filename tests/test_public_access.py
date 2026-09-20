@@ -555,7 +555,7 @@ class PublicAccessAcceptanceTests(unittest.TestCase):
         # Inspect route registration without invoking any account-login or
         # account-creation behavior, even against the temporary fixture.
         allowed = {"", "/", "/deployment.json", "/api/health", "/api/session", "/api/access", "/api/access/guest",
-                   "/api/access/login", "/api/state", "/api/demo-answer", "/api/choose", "/api/continue",
+                   "/api/access/login", "/api/access/logout", "/api/state", "/api/demo-answer", "/api/guest/reset", "/api/choose", "/api/continue",
                    "/api/select", "/api/pause", "/api/submit", "/api/submissions/{submission_id}",
                    "/api/catalog", "/api/catalog/select", "/api/dashboard", "/api/profile", "/api/feedback",
                    "/api/tasks/{task_id}/answers", "/api/guide", "/guide-assets/{relative:path}"}

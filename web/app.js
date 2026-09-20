@@ -58,6 +58,10 @@ let identityPromise = null;
 let identityBusy = false;
 let identityRecoveryAllowed = true;
 let identityRecoveryPromise = null;
+let identityGeneration = 0;
+let identityProblem = null;
+let identitySyncTimer = null;
+let identitySyncPromise = null;
 let state = null;
 let actionBusy = false;
 let pauseBusy = false;
@@ -84,11 +88,14 @@ const drafts = new Map();
 const scope = () => apiBase || window.location.origin;
 const identityKey = () => `identity:${scope()}`;
 const guestIdentityKey = () => `guest-identity:${scope()}`;
+const identityRoleKey = () => `identity-role:${scope()}`;
+const identityProblemKey = () => `identity-problem:${scope()}`;
 const learnerScope = () => access?.learner_id || state?.learner_id || "pending";
 const recordKey = () => `submission:${scope()}:${learnerScope()}:${topicId}`;
 const draftKey = (step) => `draft:${scope()}:${learnerScope()}:${topicId}:${state.course_version}:${step.attempt_id || state.attempt_id}:${step.id}`;
 const can = (feature) => Boolean(access?.features?.includes(feature));
-const identityFailure = (error) => error.status === 401 && ["identity_required", "invalid_identity"].includes(error.code);
+const identityFailure = (error) => error.status === 401 && ["identity_required", "invalid_identity", "identity_expired"].includes(error.code);
+const permissionFailure = (error) => error.status === 403 && ["feature_forbidden", "topic_forbidden", "course_forbidden"].includes(error.code);
 const selectedStep = () => state?.steps?.find((step) => step.id === state.current_step_id)
   || state?.steps?.find((step) => step.current)
   || state?.steps?.find((step) => step.id === state.active_step_id);
@@ -150,7 +157,10 @@ async function ensureDeployment() {
         apiBase = origin;
         publicMode = Boolean(configured);
         identityToken = storageRead(localStorage, identityKey(), "");
+        const savedProblem = storageRead(localStorage, identityProblemKey());
+        identityProblem = ["invalid_identity", "identity_expired"].includes(savedProblem) ? savedProblem : null;
         deploymentReady = true;
+        renderIdentity();
       } catch (error) {
         throw new ApiError("服务暂不可用，请稍后重试。", 0, error.message === "deployment_invalid" ? "deployment_invalid" : "deployment_unavailable");
       } finally { clearTimeout(timer); }
@@ -170,14 +180,18 @@ function retireLegacyConnection() {
   legacyGuestIdentities = [];
 }
 
-async function request(path, { method = "GET", body, bootstrap = false, timeout = REQUEST_TIMEOUT, reauthenticated = false, skipIdentity = false, suppressIdentity = false, identityOverride } = {}) {
+async function request(path, { method = "GET", body, bootstrap = false, timeout = REQUEST_TIMEOUT, reauthenticated = false, skipIdentity = false, suppressIdentity = false, identityOverride, identityOperation = false } = {}) {
+  const identityEpoch = identityGeneration;
   if (!deploymentReady) await ensureDeployment();
   if (!bootstrap && !skipIdentity) await ensureIdentity();
   const generation = connectionGeneration;
+  const storedIdentity = storageRead(localStorage, identityKey(), "");
   const base = apiBase;
   const local = !publicMode;
   if (!bootstrap && local && !sessionToken) await ensureSession();
-  if (generation !== connectionGeneration) throw new ApiError("服务连接已更新，请重试。", 0, "connection_changed");
+  const changed = () => identityEpoch !== identityGeneration || (!identityOperation && generation !== connectionGeneration)
+    || (!bootstrap && storedIdentity !== storageRead(localStorage, identityKey(), ""));
+  if (changed()) throw new ApiError("身份或学习页面已更新，请重试。", 0, "connection_changed");
   const headers = { Accept: "application/json" };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (!bootstrap) {
@@ -201,17 +215,18 @@ async function request(path, { method = "GET", body, bootstrap = false, timeout 
     try { result = await response.json(); } catch {
       throw new ApiError("服务暂时无法返回学习内容，请稍后重试。", response.status, "invalid_response");
     }
+    if (changed()) throw new ApiError("身份或学习页面已更新。", 0, "connection_changed");
     if (!response.ok) {
       const detail = result?.detail;
       if (local && !bootstrap && !reauthenticated && response.status === 401 && ["authentication_required", "invalid_session"].includes(detail?.code)) {
         sessionToken = null;
         await ensureSession();
-        return request(path, { method, body, timeout, skipIdentity, suppressIdentity, identityOverride, reauthenticated: true });
+        return request(path, { method, body, timeout, skipIdentity, suppressIdentity, identityOverride, identityOperation, reauthenticated: true });
       }
       const message = ["authentication_required", "invalid_session"].includes(detail?.code) ? "服务暂不可用，请稍后重试。" : typeof detail === "string" ? detail : detail?.message || "操作未完成，请刷新学习进度后重试。";
       throw new ApiError(message, response.status, detail?.code || "request_error");
     }
-    if (generation !== connectionGeneration) throw new ApiError("服务连接已更新。", 0, "connection_changed");
+    if (!bootstrap && !skipIdentity) identityRecoveryAllowed = true;
     return result;
   } catch (error) {
     if (error instanceof ApiError) throw error;
@@ -237,8 +252,11 @@ function rememberIdentity(result) {
   if (!result?.identity_token || !["guest", "account"].includes(result.access?.role) || !Array.isArray(result.access.features) || !Array.isArray(result.access.topics)) throw new ApiError("服务暂不可用，请稍后重试。", 0, "invalid_access");
   identityToken = result.identity_token;
   access = result.access;
-  storageWrite(localStorage, identityKey(), identityToken);
+  identityProblem = null;
+  storageWrite(localStorage, identityProblemKey(), null);
+  storageWrite(localStorage, identityRoleKey(), access.role);
   if (access.role === "guest") storageWrite(localStorage, guestIdentityKey(), identityToken);
+  storageWrite(localStorage, identityKey(), identityToken);
   renderIdentity();
 }
 
@@ -248,7 +266,7 @@ async function obtainGuestIdentity({ createIfMissing = true } = {}) {
   const candidates = [...new Set([savedGuest, ...legacyGuestIdentities].filter(Boolean))];
   for (const token of candidates) {
     try {
-      const guestAccess = await request("access", { skipIdentity: true, identityOverride: token, timeout: STATE_TIMEOUT });
+      const guestAccess = await request("access", { skipIdentity: true, identityOverride: token, timeout: STATE_TIMEOUT, identityOperation: true });
       if (guestAccess.role === "guest") return { identity_token: token, access: guestAccess };
     } catch (error) {
       if (!identityFailure(error)) throw error;
@@ -257,18 +275,19 @@ async function obtainGuestIdentity({ createIfMissing = true } = {}) {
     legacyGuestIdentities = legacyGuestIdentities.filter((candidate) => candidate !== token);
   }
   if (!createIfMissing) return null;
-  return request("access/guest", { method: "POST", body: {}, skipIdentity: true, suppressIdentity: true });
+  return request("access/guest", { method: "POST", body: {}, skipIdentity: true, suppressIdentity: true, identityOperation: true });
 }
 
 async function ensureIdentity() {
   if (!deploymentReady) await ensureDeployment();
+  if (identityProblem) throw new ApiError(identityProblemMessage(), 401, identityProblem);
   if (identityToken && access) return;
   if (!identityPromise) {
     const pending = (async () => {
       const candidates = [...new Set([identityToken, ...legacyCurrentIdentities].filter(Boolean))];
       for (const token of candidates) {
         try {
-          const currentAccess = await request("access", { skipIdentity: true, identityOverride: token, timeout: STATE_TIMEOUT });
+          const currentAccess = await request("access", { skipIdentity: true, identityOverride: token, timeout: STATE_TIMEOUT, identityOperation: true });
           if (currentAccess.role === "account") {
             const guest = await obtainGuestIdentity({ createIfMissing: false });
             if (guest) storageWrite(localStorage, guestIdentityKey(), guest.identity_token);
@@ -278,6 +297,10 @@ async function ensureIdentity() {
           return;
         } catch (error) {
           if (!identityFailure(error)) throw error;
+          if (accountIdentity(token) || error.code === "identity_expired") {
+            blockAccountIdentity(error);
+            throw error;
+          }
           if (identityToken === token) forgetInvalidIdentity();
           legacyCurrentIdentities = legacyCurrentIdentities.filter((candidate) => candidate !== token);
           legacyGuestIdentities = legacyGuestIdentities.filter((candidate) => candidate !== token);
@@ -301,6 +324,81 @@ function forgetInvalidIdentity() {
   access = null;
 }
 
+function accountIdentity(token = identityToken) {
+  if (!token) return false;
+  if (token === identityToken && access?.role === "account") return true;
+  for (const source of new Set([scope(), ...legacyScopes])) {
+    if (storageRead(localStorage, `identity:${source}`) === token && storageRead(localStorage, `identity-role:${source}`) === "account") return true;
+  }
+  const guests = [storageRead(localStorage, guestIdentityKey()), ...legacyGuestIdentities].filter(Boolean);
+  return guests.length > 0 && !guests.includes(token);
+}
+
+function identityProblemMessage() {
+  return identityProblem === "identity_expired" ? "账号登录已到期，请重新登录。原游客记录仍可使用。" : "账号登录已失效，请重新登录。原游客记录仍可使用。";
+}
+
+function renderIdentityNotice() {
+  const notice = $("identityNotice");
+  notice.hidden = !identityProblem;
+  if (!identityProblem) { notice.replaceChildren(); return; }
+  const actions = el("div", "noticeActions");
+  actions.append(button("重新登录", "primaryButton", openIdentity, identityBusy), button("使用原游客身份", "secondaryButton", returnToGuest, identityBusy));
+  notice.replaceChildren(el("h2", "", "账号需要重新登录"), el("p", "", identityProblemMessage()), actions);
+}
+
+function invalidateIdentityView() {
+  syncAnswerClock(true);
+  identityGeneration += 1;
+  connectionGeneration += 1;
+  demoFillGeneration += 1;
+  identityPromise = null;
+  clearLearningView();
+  drafts.clear();
+  portal?.suspendIdentity();
+}
+
+function blockAccountIdentity(error) {
+  if (!identityProblem) {
+    identityProblem = error.code === "identity_expired" ? "identity_expired" : "invalid_identity";
+    storageWrite(localStorage, identityProblemKey(), identityProblem);
+    forgetInvalidIdentity();
+    storageWrite(localStorage, identityRoleKey(), null);
+    invalidateIdentityView();
+    channel?.postMessage({ type: "identity-changed", scope: scope() });
+  }
+  renderIdentity();
+}
+
+function scheduleIdentitySync() {
+  clearTimeout(identitySyncTimer);
+  identitySyncTimer = setTimeout(() => { void syncExternalIdentity(); }, 0);
+}
+
+async function syncExternalIdentity() {
+  if (!deploymentReady || identitySyncPromise) return;
+  const savedToken = storageRead(localStorage, identityKey(), "");
+  const savedProblem = storageRead(localStorage, identityProblemKey());
+  const nextProblem = ["invalid_identity", "identity_expired"].includes(savedProblem) ? savedProblem : null;
+  if (savedToken === identityToken && nextProblem === identityProblem) return;
+  invalidateIdentityView();
+  identityToken = savedToken;
+  access = null;
+  identityProblem = nextProblem;
+  identityBusy = false;
+  identityRecoveryAllowed = true;
+  $("identityDialog").close();
+  renderIdentity();
+  if (identityProblem) return;
+  const pending = (async () => { if (portal) await portal.identityChanged(); else if (topicId) await start(); })();
+  identitySyncPromise = pending;
+  try { await pending; }
+  finally {
+    if (identitySyncPromise === pending) identitySyncPromise = null;
+    if (storageRead(localStorage, identityKey(), "") !== identityToken) scheduleIdentitySync();
+  }
+}
+
 function clearLearningView() {
   stopPolling();
   state = null;
@@ -314,6 +412,8 @@ function clearLearningView() {
   stateBusy = false;
   pollBusy = false;
   $("courseShell").hidden = true;
+  $("stepCard").replaceChildren();
+  $("moduleResult").replaceChildren();
   $("lessonTitle").textContent = "数学学习";
   $("lessonProgress").hidden = true;
   $("progressCaption").hidden = true;
@@ -325,9 +425,10 @@ function clearLearningView() {
 }
 
 async function switchIdentity(result) {
-  connectionGeneration += 1;
-  clearLearningView();
+  invalidateIdentityView();
   rememberIdentity(result);
+  retireLegacyConnection();
+  channel?.postMessage({ type: "identity-changed", scope: scope() });
   $("identityDialog").close();
   $("invitationCode").value = "";
   if (portal) await portal.identityChanged();
@@ -336,13 +437,13 @@ async function switchIdentity(result) {
 
 async function recoverIdentity(error) {
   if (!identityFailure(error)) return false;
+  if (identityProblem) return true;
+  if (accountIdentity() || error.code === "identity_expired") { blockAccountIdentity(error); return true; }
   if (identityRecoveryPromise) return false;
   if (!identityRecoveryAllowed) return false;
   identityRecoveryAllowed = false;
   forgetInvalidIdentity();
-  identityPromise = null;
-  connectionGeneration += 1;
-  clearLearningView();
+  invalidateIdentityView();
   const pending = (async () => {
     const guest = await obtainGuestIdentity();
     await switchIdentity(guest);
@@ -359,13 +460,17 @@ async function recoverIdentity(error) {
 }
 
 function renderIdentity() {
-  const guest = !access || access.role === "guest";
-  const name = guest ? "游客" : access.display_name || "学习账号";
+  const guest = access?.role === "guest";
+  const name = identityProblem ? "未登录" : !access || guest ? "游客" : access.display_name || "学习账号";
   $("identityName").textContent = name;
-  $("identityAction").textContent = guest ? "邀请码登录" : "切换账号";
-  $("identityButton").setAttribute("aria-label", `${guest ? "邀请码登录" : "切换账号"}，当前${name}`);
-  $("identityDialogStatus").textContent = guest ? "当前使用游客身份。" : `当前账号：${name}`;
-  $("guestIdentityButton").hidden = guest;
+  const action = identityProblem ? "重新登录" : !access || guest ? "邀请码登录" : "切换账号";
+  $("identityAction").textContent = action;
+  $("identityButton").setAttribute("aria-label", `${action}，当前${name}`);
+  $("identityButton").disabled = identityBusy;
+  $("logoutButton").disabled = identityBusy;
+  $("identityDialogStatus").textContent = identityProblem ? identityProblemMessage() : guest || !access ? "当前使用游客身份。" : `当前账号：${name}${access.purpose === "test" ? "（测试账号）" : ""}`;
+  $("guestIdentityButton").hidden = guest || (!access && !identityProblem);
+  $("guestIdentityButton").textContent = identityProblem ? "使用原游客身份" : "退出并切回游客";
   $("identitySubmitButton").disabled = identityBusy;
   $("guestIdentityButton").disabled = identityBusy;
   $("invitationCode").disabled = identityBusy;
@@ -373,6 +478,7 @@ function renderIdentity() {
   $("cancelIdentityButton").disabled = identityBusy;
   $("guestDemoOption").hidden = access?.role !== "guest";
   $("guestDemoCheckbox").checked = access?.role === "guest" && storageRead(localStorage, demoPreferenceKey(), "false") === "true";
+  renderIdentityNotice();
   portal?.setIdentity(access);
 }
 
@@ -401,7 +507,9 @@ function renderAccessUnavailable() {
 }
 
 async function refreshAccess() {
-  access = await request("access", { skipIdentity: true, timeout: STATE_TIMEOUT });
+  const next = await request("access", { skipIdentity: true, timeout: STATE_TIMEOUT });
+  if (next.learner_id !== access?.learner_id && access) throw new ApiError("当前身份已更新，请重新读取。", 0, "connection_changed");
+  access = next;
   renderIdentity();
 }
 
@@ -466,6 +574,7 @@ function syncAnswerClock(forcePause = false) {
 
 function applyState(next, { force = false, announceChange = false } = {}) {
   if (!next || !Array.isArray(next.steps) || !Array.isArray(next.modules)) throw new ApiError("课程数据不完整，请重新连接。", 0, "invalid_state");
+  if (access?.learner_id && next.learner_id !== access.learner_id) throw new ApiError("此学习记录不属于当前身份，请刷新。", 0, "identity_mismatch");
   if (state && next.course_version === state.course_version && next.revision < state.revision) return;
   const accessChanged = next.access && JSON.stringify(next.access) !== JSON.stringify(access);
   if (next.access) access = next.access;
@@ -489,7 +598,7 @@ function applyState(next, { force = false, announceChange = false } = {}) {
 }
 
 async function refreshState({ quiet = true, force = false } = {}) {
-  if (!topicId || stateBusy) return;
+  if (!topicId || stateBusy || identityProblem) return;
   const generation = connectionGeneration;
   stateBusy = true;
   try {
@@ -1070,7 +1179,7 @@ function renderCompletion(target) {
 function renderBusy() {
   if (!state) return;
   syncAnswerClock();
-  const disabled = actionBusy || pauseBusy;
+  const disabled = actionBusy || pauseBusy || identityBusy;
   for (const element of $("stepCard").querySelectorAll("button, textarea")) {
     const feature = element.closest(".historyPagination") ? "review_history" : element.id === "submitButton" || element.closest(".answerForm") ? "submit_answer" : "learn";
     element.disabled = disabled || element.dataset.navAvailable === "false" || !can(feature);
@@ -1098,7 +1207,7 @@ function openIdentity() {
   renderIdentity();
   $("invitationCode").value = "";
   $("identityError").hidden = true;
-  $("identityDialog").showModal();
+  if (!$("identityDialog").open) $("identityDialog").showModal();
 }
 
 async function loginIdentity(event) {
@@ -1111,7 +1220,7 @@ async function loginIdentity(event) {
   renderIdentity();
   renderBusy();
   try {
-    const result = await request("access/login", { method: "POST", body: { invitation_code: invitation }, skipIdentity: true, suppressIdentity: true });
+    const result = await request("access/login", { method: "POST", body: { invitation_code: invitation }, skipIdentity: true, identityOperation: true });
     identityRecoveryAllowed = true;
     await switchIdentity(result);
   } catch (error) {
@@ -1128,12 +1237,22 @@ async function loginIdentity(event) {
 
 async function returnToGuest() {
   if (identityBusy) return;
+  if (!$("identityDialog").open) openIdentity();
   identityBusy = true;
   $("identityError").hidden = true;
   renderIdentity();
   renderBusy();
   try {
     const guest = await obtainGuestIdentity();
+    if (access?.role === "account") {
+      try {
+        const result = await request("access/logout", { method: "POST", body: {}, skipIdentity: true, identityOperation: true });
+        if (result.status !== "logged_out") throw new ApiError("退出尚未确认，请重试。", 0, "logout_unconfirmed");
+      } catch (error) {
+        if (!identityFailure(error)) throw error;
+        // The server has confirmed this session is already unusable.
+      }
+    }
     identityRecoveryAllowed = true;
     await switchIdentity(guest);
   } catch (error) {
@@ -1176,6 +1295,7 @@ $("guestIdentityButton").addEventListener("click", returnToGuest);
 $("closeIdentityButton").addEventListener("click", () => $("identityDialog").close());
 $("cancelIdentityButton").addEventListener("click", () => $("identityDialog").close());
 $("identityDialog").addEventListener("close", () => { $("invitationCode").value = ""; });
+$("identityDialog").addEventListener("cancel", (event) => { if (identityBusy) event.preventDefault(); });
 $("historyButton").addEventListener("click", () => {
   setHistoryOpen(!historyOpen, { focus: true });
 });
@@ -1189,7 +1309,7 @@ setHistoryOpen(true);
 $("pauseButton").addEventListener("click", () => {
   if (state?.status === "in_progress" && !pauseBusy) mutate("pause", { request_id: uuid() }, { pause: true });
 });
-window.addEventListener("focus", () => { pageActive = true; syncAnswerClock(); if (!actionBusy && !pauseBusy) refreshState(); });
+window.addEventListener("focus", () => { pageActive = true; syncAnswerClock(); scheduleIdentitySync(); if (!actionBusy && !pauseBusy) refreshState(); });
 window.addEventListener("blur", () => { pageActive = false; syncAnswerClock(); });
 window.addEventListener("pagehide", () => syncAnswerClock(true));
 window.addEventListener("online", () => refreshState({ force: true }));
@@ -1197,12 +1317,16 @@ document.addEventListener("visibilitychange", () => { syncAnswerClock(); if (!do
 try {
   channel = new BroadcastChannel("math-learning-web-progress");
   channel.onmessage = (event) => {
+    if (event.data?.type === "identity-changed" && event.data.scope === scope()) scheduleIdentitySync();
     if (event.data?.type === "state-changed" && event.data.scope === scope() && event.data.learner_id === learnerScope()) {
       portal?.progressChanged();
       if (event.data.topic_id === topicId && event.data.revision > (state?.revision ?? -1) && !actionBusy && !pauseBusy) refreshState();
     }
   };
 } catch { /* Periodic state reads also keep separate windows synchronized. */ }
+window.addEventListener("storage", (event) => {
+  if (deploymentReady && [identityKey(), identityProblemKey()].some((key) => event.key === STORAGE_PREFIX + key)) scheduleIdentitySync();
+});
 setInterval(() => {
   if (!document.hidden && !actionBusy && !pauseBusy && !state?.pending_submission_id) refreshState();
 }, 5000);
@@ -1231,9 +1355,21 @@ const { initPortal } = await import("./portal.js");
 portal = initPortal({
   request: async (path, options) => {
     try { return await request(path, options); }
-    catch (error) { if (identityFailure(error)) await recoverIdentity(error); throw error; }
+    catch (error) {
+      if (identityFailure(error)) await recoverIdentity(error);
+      else if (permissionFailure(error)) {
+        try { await refreshAccess(); portal?.permissionsChanged(); }
+        catch (accessError) { if (identityFailure(accessError)) await recoverIdentity(accessError); }
+      }
+      throw error;
+    }
   },
   getAccess: () => access,
+  getIdentityProblem: () => identityProblem,
+  refreshAccess: async () => {
+    try { await refreshAccess(); }
+    catch (error) { if (identityFailure(error)) await recoverIdentity(error); throw error; }
+  },
   getApiOrigin: () => apiBase || window.location.origin,
   openIdentity, returnToGuest, openTopic, leaveTopic,
 });

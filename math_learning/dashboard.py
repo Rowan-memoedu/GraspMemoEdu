@@ -105,7 +105,7 @@ class DashboardStore:
         attempts = state['attempts'] if state else []
         completed = {attempt['module_id'] for attempt in attempts if attempt['status'] == 'completed'}
         started_at = state.get('started_at') if state else None
-        if state:
+        if state and not state.get('reset_at'):
             # Reading an initial example is not a start. Old records have the
             # genuine first choice in the existing transactional event log.
             for event in con.execute('SELECT body,created_at FROM events WHERE learner=? AND topic=? ORDER BY created_at', (learner_id, topic_id)):
@@ -221,6 +221,8 @@ class DashboardStore:
             snapshot = self._snapshot(con, access['learner_id'], topic_id)
             rows = con.execute('''SELECT * FROM submissions WHERE learner=? AND topic=? AND status='judged'
                                 ORDER BY created_at,id''', (access['learner_id'], topic_id)).fetchall()
+            current_attempts = {attempt['id'] for attempt in snapshot['state']['attempts']} if snapshot['state'] else set()
+            rows = [row for row in rows if row['attempt'] in current_attempts]
         task = self._task(course, topic_id, snapshot, self._allowed_topics(access))
         if snapshot['status'] != 'completed' or not rows:
             raise DomainError('unknown_task_answers', '此身份尚无该任务的已完成作答记录。', 404)

@@ -10,11 +10,21 @@ body { padding-top: 50px; }
 .mainNavigation a:hover { color: #0577c7; }
 .userMenuHost { position: relative; margin-left: auto; height: 50px; display: flex; align-items: center; }
 .userAvatar { width: 38px; height: 38px; padding: 0; border: 0; border-radius: 50%; background: #f5f5f5; color: #727272; font-size: 15px; }
+.portalStart.guestReset { margin-left: 12px; background: #f4c744; border-color: #d4a626; color: #493a0b; }
+.portalStart.guestReset:hover { background: #e9b92f; color: #493a0b; }
+.completedTaskActions { padding: 0 24px 20px; }
+.resetStatus { color: #53616b; font-size: 14px; }
 .userMenu { position: absolute; right: 0; top: 49px; min-width: 225px; padding: 10px 0; border: 1px solid #e0e0e0; border-radius: 2px; background: #fff; box-shadow: 0 1px 1px #00000013, 0 2px 2px #00000013, 0 4px 4px #00000013, 0 8px 8px #00000013, 0 16px 16px #00000013; }
 .userMenuIdentity { padding: 8px 18px 16px; margin-bottom: 6px; border-bottom: 1px solid #eee; }
 .userMenuIdentity strong, .userMenuIdentity > span { display: block; overflow-wrap: anywhere; }
 .userMenuIdentity strong { color: #1e194e; font-size: 14px; }
 .userMenuIdentity > span { color: #909090; font-size: 12px; margin-top: 2px; }
+.userMenuIdentity > .accountPurpose { color: #8a632e; }
+.identityNotice { max-width: 1070px; margin: 28px auto; padding: 22px; border: 1px solid #e8ddd2; background: #fdfbf8; }
+.identityNotice h2 { margin: 0 0 10px; color: #1e194e; font-size: 18px; font-weight: 400; }
+.identityNotice p { margin: 0 0 16px; line-height: 1.6; }
+.identityNotice .noticeActions { flex-wrap: wrap; }
+@media (max-width: 1110px) { .identityNotice { margin-left: 20px; margin-right: 20px; } }
 .userMenu > a, .userMenu > button { display: block; text-align: left; width: 100%; padding: 9px 18px; border: 0; background: #fff; color: #404040; font-size: 15px !important; text-decoration: none; }
 .userMenu > a:hover, .userMenu > button:hover { background: #f2f2f2; }
 .userMenu > a span, .userMenu > button span:not(#identityAction):not(#identityName) { font-size: 12px; color: #969696; margin-left: 8px; }
@@ -172,6 +182,15 @@ body.portalModalOpen { overflow: hidden; }
   .topicPage .historyDrawerToggle { top: 145px; }
 }
 @media (max-width: 760px) {
+  body { padding-top: 96px; }
+  .topRibbon { height: 96px; }
+  .topBarContainer { height: 96px; flex-wrap: wrap; }
+  .mainNavigation { order: 3; width: 100%; height: 46px; justify-content: center; }
+  .topicPage .historySidebar { top: 96px; max-height: calc(100dvh - 96px); }
+  .topicPage .appLayout::before, .topicPage .historyScrim { top: 96px; }
+  .topicPage .historyScrim { height: calc(100% - 96px); }
+  .topicPage .historyDrawerToggle { top: 191px; }
+  .topicPage .step { scroll-margin-top: 110px; }
   .dashboardLayout { display: block; }
   .courseSidebar { margin-bottom: 24px; }
   .courseOverviewTop { min-height: 88px; padding-block: 15px; }

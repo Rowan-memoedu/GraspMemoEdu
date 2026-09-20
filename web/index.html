@@ -25,16 +25,18 @@
         <div class="userMenuHost" id="userMenuHost">
           <button class="userAvatar" id="userMenuButton" type="button" aria-label="用户菜单" aria-haspopup="true" aria-expanded="false" aria-controls="userMenu">游</button>
           <div class="userMenu" id="userMenu" hidden>
-            <div class="userMenuIdentity"><strong id="menuDisplayName">游客</strong><span id="menuRole">游客身份</span><label class="guestDemoOption" id="guestDemoOption" hidden><input id="guestDemoCheckbox" type="checkbox"><span>体验专用浏览版</span></label></div>
+            <div class="userMenuIdentity"><strong id="menuDisplayName">游客</strong><span id="menuRole">游客身份</span><span id="menuAccountPurpose" class="accountPurpose" hidden>测试账号</span></div>
             <a href="#/settings">Settings <span>个人设置</span></a>
-            <a href="#/guide">Help <span>使用指南</span></a>
+            <a href="#/help">Help <span>常见问题</span></a>
             <button id="supportButton" type="button">Support <span>站内反馈</span></button>
             <button class="identityButton" id="identityButton" type="button" aria-haspopup="dialog"><span id="identityAction">邀请码登录</span><span id="identityName" hidden>游客</span></button>
-            <button id="logoutButton" type="button" hidden>Logout <span>切回游客</span></button>
+            <button id="logoutButton" type="button" hidden>Logout <span>退出并切回游客</span></button>
           </div>
         </div>
+        <label class="guestDemoOption" id="guestDemoOption" hidden><input id="guestDemoCheckbox" type="checkbox"><span>体验专用浏览版</span></label>
       </div>
     </header>
+    <section id="identityNotice" class="identityNotice" role="status" hidden></section>
     <main class="portalShell" id="portalContent" tabindex="-1"><section class="portalLoading" aria-live="polite"><span class="spinner" aria-hidden="true"></span><p>正在读取课程…</p></section></main>
     <div class="appLayout" id="appLayout" hidden>
       <aside id="historySidebar" class="historySidebar" aria-label="学习记录">

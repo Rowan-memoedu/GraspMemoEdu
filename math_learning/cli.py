@@ -16,6 +16,7 @@ from .config import Settings
 from .service import DomainError, LearningService
 from .access import AccessStore, FEATURES
 from .catalog import Catalog
+from .account_admin import AccountAdmin
 
 
 def output(data):
@@ -216,6 +217,21 @@ def main():
     account_create.add_argument('--name', required=True, help='账号显示名称')
     account_create.add_argument('--topics', help='逗号分隔的 Topic 标识；默认当前已配置的全部 Topic')
     account_create.add_argument('--features', help='逗号分隔的功能权限；默认 ' + ','.join(FEATURES))
+    account_create.add_argument('--purpose', choices=('learner', 'test'), default='learner')
+    account_create.add_argument('--output', type=Path, help='私密 JSON 路径，必须位于数据目录 admin 下；省略保留一次性终端输出')
+    provision = sub.add_parser('account-provision', help='安全创建可重试批次，邀请码只写入私密 JSON')
+    provision.add_argument('--batch', required=True)
+    provision.add_argument('--learners', type=int, default=10)
+    provision.add_argument('--tests', type=int, default=5)
+    provision.add_argument('--output', type=Path, required=True)
+    for operation, help_text in [('account-disable', '停用账号并注销全部会话'),
+                                 ('account-enable', '重新启用账号'),
+                                 ('account-revoke-sessions', '注销账号的全部会话，保留邀请码')]:
+        command = sub.add_parser(operation, help=help_text)
+        command.add_argument('--learner', required=True)
+    rotate = sub.add_parser('account-rotate', help='更换邀请码并注销全部会话，新码只写入私密 JSON')
+    rotate.add_argument('--learner', required=True)
+    rotate.add_argument('--output', type=Path, required=True)
     sub.add_parser('account-list', help='查看账号及当前 Topic/功能权限，不显示邀请码')
     feedback = sub.add_parser('feedback-list', help='仅在本机查看收到的支持与内容纠错反馈')
     feedback.add_argument('--limit', type=int, default=30)
@@ -251,8 +267,22 @@ def main():
         elif args.command == 'backup':
             output(backup_bundle(settings, args.output))
         elif args.command == 'account-create':
-            output(make_access_store(settings).create_account(
-                args.name, split_permissions(args.topics), split_permissions(args.features)))
+            store = make_access_store(settings)
+            if args.output is not None:
+                output(AccountAdmin(store).create(args.name, split_permissions(args.topics),
+                       split_permissions(args.features), purpose=args.purpose, output=args.output))
+            else:
+                output(store.create_account(args.name, split_permissions(args.topics),
+                                            split_permissions(args.features), purpose=args.purpose))
+        elif args.command == 'account-provision':
+            output(AccountAdmin(make_access_store(settings)).provision(
+                args.batch, learners=args.learners, tests=args.tests, output=args.output))
+        elif args.command in ('account-disable', 'account-enable'):
+            output(make_access_store(settings).set_enabled(args.learner, args.command == 'account-enable'))
+        elif args.command == 'account-revoke-sessions':
+            output(make_access_store(settings).revoke_sessions(args.learner))
+        elif args.command == 'account-rotate':
+            output(AccountAdmin(make_access_store(settings)).rotate(args.learner, output=args.output))
         elif args.command == 'account-list':
             output({'accounts': make_access_store(settings).list_principals(accounts_only=True)})
         elif args.command == 'feedback-list':

@@ -24,6 +24,7 @@ from .access import AccessStore
 from .catalog import Catalog
 from .dashboard import DashboardStore
 from .guide import register_guide_routes
+from .guest_reset import register_guest_reset_routes
 from .public_limits import BodyLimitMiddleware, PublicLimits, PublicLimitError
 
 
@@ -146,7 +147,15 @@ def create_app(settings: Settings | None = None, service: LearningService | None
             step['actions'] = [action for action in step['actions'] if action_feature.get(action) in features]
         return state
 
-    def public_submission(result, access):
+    def public_submission(result, access, learner):
+        # A POST idempotency replay reads the same saved verdict as GET polling.
+        # Both routes must honor a subsequently revoked history permission.
+        if 'review_history' not in access['features']:
+            with closing(learner._connect()) as con:
+                row = con.execute('SELECT step FROM submissions WHERE id=? AND learner=? AND topic=?',
+                                  (result['submission_id'], learner.learner_id, learner.topic_id)).fetchone()
+            if not row or row['step'] != result['state']['active_step_id']:
+                raise DomainError('feature_forbidden', '当前账号没有使用此功能的权限。', 403)
         result['state'] = public_state(result['state'], access)
         return result
 
@@ -262,8 +271,8 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                 response.headers['Access-Control-Allow-Origin'] = origin
                 response.headers['Vary'] = 'Origin'
             return response
-        public_paths = {'/api/health', '/api/access', '/api/access/guest', '/api/access/login',
-                        '/api/state', '/api/demo-answer', '/api/choose', '/api/continue', '/api/select', '/api/pause', '/api/submit',
+        public_paths = {'/api/health', '/api/access', '/api/access/guest', '/api/access/login', '/api/access/logout',
+                        '/api/state', '/api/demo-answer', '/api/guest/reset', '/api/choose', '/api/continue', '/api/select', '/api/pause', '/api/submit',
                         '/api/catalog', '/api/catalog/select', '/api/dashboard', '/api/profile', '/api/feedback', '/api/guide'}
         task_answers_path = path.startswith('/api/tasks/') and path.endswith('/answers') and path.count('/') == 4
         if public and path.startswith('/api/') and path not in public_paths and not path.startswith('/api/submissions/') and not task_answers_path:
@@ -365,7 +374,11 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     def login(payload: InvitationLogin, request: Request):
         if request.state.public_transport:
             public_limits.consume('login', public_limits.login_per_minute)
-        return access_store.login(payload.invitation_code)
+        return access_store.login(payload.invitation_code, request.headers.get('x-learning-identity'))
+
+    @app.post('/api/access/logout')
+    def logout(payload: GuestAccess, request: Request):
+        return access_store.logout(request.headers.get('x-learning-identity'))
 
     @app.get('/api/catalog')
     def course_catalog(request: Request):
@@ -464,20 +477,15 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                     public_limits.record(quota_key)
             if result['status'] == 'pending':
                 schedule(learner, result['submission_id'])
-        return public_submission(result, access)
+        return public_submission(result, access, learner)
 
     @app.get('/api/submissions/{submission_id}')
     def submission(submission_id: str, request: Request):
         access, learner = identity(request, 'submit_answer')
         result = learner.submission(submission_id)
-        if 'review_history' not in access['features']:
-            with closing(learner._connect()) as con:
-                row = con.execute('SELECT step FROM submissions WHERE id=? AND learner=? AND topic=?',
-                                  (submission_id, learner.learner_id, learner.topic_id)).fetchone()
-            if not row or row['step'] != result['state']['active_step_id']:
-                raise DomainError('feature_forbidden', '当前账号没有使用此功能的权限。', 403)
-        return public_submission(result, access)
+        return public_submission(result, access, learner)
 
     register_guide_routes(app, settings, access_store)
+    register_guest_reset_routes(app, identity, public_state, Action)
     app.mount('/', StaticFiles(directory=Path(__file__).resolve().parent.parent / 'web', html=True), name='web')
     return app

@@ -27,3 +27,5 @@ secrets*
 pairing*.json
 pairing*.txt
 invitation*.txt
+invitation*.json
+invitation*.md

@@ -258,6 +258,34 @@ class LearningService:
                 'current_step_id': state['current_step_id'], 'attempt_id': attempt['id'], 'pause': state['pause'],
                 'pending_submission_id': state['pending_submission_id'], 'modules': modules, 'steps': steps}
 
+    def reset_progress(self, payload):
+        """Start a fresh Topic generation, retaining the previous state for audit."""
+        with self._transaction() as con:
+            state = self._load(con)
+            replay, fingerprint = self._request(con, 'guest_reset', payload)
+            if not replay:
+                # Reset is also allowed after completion, pause or while judging.
+                if payload.get('expected_revision') != state['revision']:
+                    raise DomainError('stale_revision', '学习状态已更新，请刷新后重置。')
+                if payload.get('attempt_id') != state['attempt_id']:
+                    raise DomainError('stale_attempt', '作答轮次已变化，请刷新。')
+                if payload.get('step_id') != state['active_step_id']:
+                    raise DomainError('locked_step', '学习步骤已变化，请刷新。', 403)
+                previous = state
+                state = {'revision': previous['revision'], 'status': 'in_progress',
+                         'introduction_read': False, 'attempts': [], 'steps': [],
+                         'module_index': 0, 'pause': None, 'pending_submission_id': None,
+                         'reset_at': now()}
+                self._new_attempt(state, 0)
+                con.execute("UPDATE submissions SET status='discarded',reason=?,updated_at=? "
+                            "WHERE learner=? AND topic=? AND status IN ('pending','running')",
+                            ('学习进度已重置，本次作答不再计入。', now(), *self.key))
+                self._event(con, state, 'guest_progress_reset', previous_state=previous)
+                self._record_action(con, 'guest_reset', payload, fingerprint)
+                self._save(con, state)
+        self.flush_logs()
+        return self._public(state)
+
     def choose(self, payload):
         with self._transaction() as con:
             state = self._load(con)

@@ -27,6 +27,7 @@ export function initPortal(bridge) {
   const timezone = () => profile?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   const query = (fields) => new URLSearchParams(Object.entries(fields).filter(([, value]) => value !== null && value !== undefined && value !== "")).toString();
   const call = (path, options) => bridge.request(path, options);
+  const allowed = (feature) => Boolean(bridge.getAccess()?.features?.includes(feature));
   const learnHref = () => "#/learn";
   const apiDate = (value, withTime = false) => {
     if (!value || !Number.isFinite(Date.parse(value))) return "—";
@@ -71,13 +72,15 @@ export function initPortal(bridge) {
   }
   function updateUser() {
     const current = bridge.getAccess();
-    const name = profile?.display_name || current?.display_name || "游客";
+    const expired = bridge.getIdentityProblem();
+    const name = expired ? "未登录" : profile?.display_name || current?.display_name || "游客";
     const parts = name.trim().split(/\s+/);
     const initials = /^[A-Za-z]/.test(name) ? (parts.length > 1 ? parts[0][0] + parts.at(-1)[0] : name.slice(0, 2)).toUpperCase() : [...name].slice(0, 2).join("");
     $("userMenuButton").textContent = initials || "游";
     $("userMenuButton").setAttribute("aria-label", `用户菜单，${name}`);
     $("menuDisplayName").textContent = name;
-    $("menuRole").textContent = current?.role === "account" ? "学习账号" : "游客身份";
+    $("menuRole").textContent = expired ? "登录已失效" : current?.role === "account" ? "学习账号" : "游客身份";
+    $("menuAccountPurpose").hidden = current?.role !== "account" || current?.purpose !== "test";
     $("logoutButton").hidden = current?.role !== "account";
   }
   function showMenu(show) {
@@ -131,9 +134,11 @@ export function initPortal(bridge) {
     stopPageWork(); showMenu(false); collapseTasks();
     if (graphDialog.open) graphDialog.close();
     root.hidden = false; bridge.leaveTopic();
+    if (bridge.getIdentityProblem()) { root.hidden = true; root.replaceChildren(); return; }
     setNavigation(currentRoute.path.startsWith("/courses") ? "courses" : currentRoute.path === "/guide" ? "guide" : "learn");
     root.replaceChildren(loading()); window.scrollTo(0, 0);
     try {
+      if (catalog && profile) await bridge.refreshAccess();
       if (!catalog || !profile) await basics();
       if (ticket !== sequence) return;
       const { path, params } = currentRoute;
@@ -153,6 +158,8 @@ export function initPortal(bridge) {
         document.title = "COURSES · 数学学习"; renderCourses();
       } else if (path === "/guide") {
         document.title = "GUIDE · 数学学习"; await renderGuide(ticket);
+      } else if (path === "/help") {
+        document.title = "Q&A · 数学学习"; renderHelp();
       } else if (path === "/settings") {
         document.title = "个人设置 · 数学学习"; renderSettings();
       } else if (/^\/courses\/[^/]+\/progress$/.test(path)) {
@@ -173,14 +180,17 @@ export function initPortal(bridge) {
       });
     } catch (error) {
       if (ticket !== sequence) return;
-      root.hidden = false; root.replaceChildren(errorBox(error.message, () => location.reload(), "服务暂不可用"));
+      if (bridge.getIdentityProblem()) { root.hidden = true; root.replaceChildren(); return; }
+      const forbidden = error.status === 403 && ["feature_forbidden", "topic_forbidden", "course_forbidden"].includes(error.code);
+      root.hidden = false; root.replaceChildren(errorBox(error.message, forbidden ? () => navigate("/courses") : () => location.reload(), forbidden ? "当前内容尚未开放" : "服务暂不可用"));
     }
   }
 
   function renderCourses() {
     const heading = node("h1", "portalPageTitle", "COURSES"), grid = node("div", "courseGrid");
     root.replaceChildren(heading, grid);
-    if (!catalog.courses.length) { grid.append(emptyBox("暂时没有可学习的课程。")); return; }
+    if (!catalog.courses.length) { grid.append(emptyBox(bridge.getAccess()?.role === "account" ? "管理员尚未为你的账号开放课程，请联系管理员。" : "暂时没有可学习的课程。")); return; }
+    if (bridge.getAccess()?.role === "account" && !catalog.courses.some((course) => course.available)) root.insertBefore(emptyBox("管理员尚未为你的账号开放课程，请联系管理员。"), grid);
     for (const course of catalog.courses) {
       const card = node("article", "courseChoice"); card.dataset.courseId = course.id;
       card.append(node("h2", "", course.title), node("p", "courseDescription", course.description || ""));
@@ -316,17 +326,55 @@ export function initPortal(bridge) {
       const actions = node("div", "taskStartRow");
       const explicit = task.start_href || task.start_url;
       const target = (task.type === "Lesson" || !task.type) && task.topic_id ? `#/topic/${encode(task.topic_id)}` : typeof explicit === "string" && /^#\/(topic|learn|courses)\//.test(explicit) ? explicit : null;
-      if (target) actions.append(roundButton(percent(task.progress) > 0 || task.started ? "Resume" : "Start", () => navigate(target)));
+      if (target && allowed("learn")) actions.append(roundButton(percent(task.progress) > 0 || task.started ? "Resume" : "Start", () => navigate(target)));
+      else if (target && task.started && allowed("review_history")) actions.append(roundButton("回看", () => navigate(target)));
+      else if (target) actions.append(node("p", "", "管理员尚未开放学习功能，请联系管理员。"));
       else actions.append(node("p", "", "此任务的学习入口尚未开放。"));
+      appendGuestReset(actions, task);
       details.append(actions);
     }
     card.append(toggle, details); return card;
   }
   function historyCard(task) {
-    const card = control("", "portalTask taskCompleted", () => navigate(`/learn?taskId=${encode(task.id)}`)); card.dataset.taskId = task.id; card.append(taskSummary(task, true)); return card;
+    const card = node("article", "portalTask taskCompleted"); card.dataset.taskId = task.id;
+    const summary = control("", "taskToggle", () => navigate(`/learn?taskId=${encode(task.id)}`)); summary.append(taskSummary(task, true)); card.append(summary);
+    if (bridge.getAccess()?.role === "guest") {
+      const actions = node("div", "taskStartRow completedTaskActions");
+      actions.append(roundButton("回看", () => navigate(`/learn?taskId=${encode(task.id)}`)));
+      appendGuestReset(actions, task); card.append(actions);
+    }
+    return card;
+  }
+  function appendGuestReset(actions, task) {
+    if (bridge.getAccess()?.role !== "guest" || !allowed("learn") || !task.topic_id || (task.type && task.type !== "Lesson")) return;
+    const reset = control("reset", "portalStart guestReset", async () => {
+      if (reset.disabled) return;
+      const learner = bridge.getAccess()?.learner_id, ticket = sequence;
+      reset.disabled = true; reset.textContent = "重置中…";
+      actions.parentElement?.querySelector(".resetStatus")?.remove();
+      try {
+        const state = await call(`state?topic_id=${encode(task.topic_id)}`);
+        if (bridge.getAccess()?.learner_id !== learner || ticket !== sequence) return;
+        await call(`guest/reset?topic_id=${encode(task.topic_id)}`, {method:"POST", body:{
+          request_id:crypto.randomUUID(), expected_revision:state.revision,
+          attempt_id:state.attempt_id, step_id:state.active_step_id,
+        }});
+        if (bridge.getAccess()?.learner_id !== learner || ticket !== sequence) return;
+        dashboards.clear(); answerCache.clear();
+        await route();
+        const status = node("p", "resetStatus", "进度已重置，可以重新开始。"); status.setAttribute("role", "status");
+        root.prepend(status);
+      } catch (error) {
+        if (bridge.getAccess()?.learner_id !== learner || ticket !== sequence) return;
+        const status = node("p", "resetStatus fieldError", error.message); status.setAttribute("role", "alert"); actions.after(status);
+      } finally { reset.disabled = false; reset.textContent = "reset"; }
+    });
+    reset.title = "重置这个 lesson 的学习进度，从头开始";
+    actions.append(reset);
   }
   function renderHistory(data, target) {
     target.replaceChildren(); let date = null; renderedDay = dayKey(new Date());
+    if (!allowed("review_history")) { target.append(emptyBox("管理员尚未开放回看功能，请联系管理员。")); return; }
     for (const task of data.history) {
       const valid = task.completed_at && Number.isFinite(Date.parse(task.completed_at));
       const key = valid ? dayKey(task.completed_at) : "unknown";
@@ -393,6 +441,7 @@ export function initPortal(bridge) {
 
   async function renderAnswers(target, taskId, ticket) {
     const back = control("← 返回学习记录", "taskBackButton", () => { if (scrolls.has("#/learn")) history.back(); else navigate("/learn"); });
+    if (!allowed("review_history")) { target.replaceChildren(back, emptyBox("管理员尚未开放回看功能，请联系管理员。")); return; }
     target.replaceChildren(back, loading("正在读取作答记录…"));
     try {
       const result = answerCache.get(taskId) || await call(`tasks/${encode(taskId)}/answers`);
@@ -495,6 +544,18 @@ export function initPortal(bridge) {
     graphContent.replaceChildren(viewport, node("p", "graphLegend", "深蓝：已完成　浅蓝：学习中　淡蓝：可开始　灰色：尚未学习"));
   }
 
+  function renderHelp() {
+    const article = node("article", "guidePage"), body = node("div", "guideBody courseContent");
+    const questions = [
+      ["学习进度会保存吗？", "进度会自动保存。游客请使用同一浏览器继续学习；更换设备或清除浏览器数据后，可能无法找回原游客身份。使用邀请码登录的账号可在其他设备登录后继续。"],
+      ["“体验专用浏览版”怎么用？", "游客勾选右上角的选项后，作答框会自动填入标准答案，点击 Submit 即可提交。你也可以修改答案，系统仍会正常判对错；取消勾选后，后续题目需要自行作答。"],
+      ["reset 会重置什么？", "游客点击某个 Lesson 旁的黄色 reset，会立即清空该 Lesson 当前显示的学习进度和作答记录，让你从头开始。其他 Lesson 和其他人的进度不受影响。"],
+      ["题目有问题，或者不知道怎么操作怎么办？", "操作流程可以查看 GUIDE。发现题目或解析有误，可在学习页点击“内容反馈”，或在作答记录中点击问号选择 Report a content error；其他问题可通过头像菜单中的 Support 反馈。"],
+    ];
+    for (const [question, answer] of questions) body.append(node("h2", "", question), node("p", "", answer));
+    body.append(link("查看 GUIDE →", "#/guide"));
+    article.append(node("h1", "portalPageTitle", "Q&A"), body); root.replaceChildren(article);
+  }
   async function renderGuide(ticket) {
     guideLoaded = false; guideVersion = null;
     const article = node("article", "guidePage"), heading = node("h1", "portalPageTitle", "GUIDE"), notice = node("div", "guideNotice"), body = node("div", "guideBody courseContent"), updated = node("p", "guideUpdated");
@@ -574,7 +635,22 @@ export function initPortal(bridge) {
   history.scrollRestoration = "manual";
   return {
     start: route,
-    setIdentity(next) { if (identity?.learner_id && next?.learner_id !== identity.learner_id) profile = null; identity = next; updateUser(); },
+    setIdentity(next) {
+      if (identity?.learner_id && next?.learner_id !== identity.learner_id) profile = null;
+      if (identity && (JSON.stringify(identity.features) !== JSON.stringify(next?.features) || JSON.stringify(identity.topics) !== JSON.stringify(next?.topics))) {
+        catalog = null; dashboards.clear(); answerCache.clear();
+      }
+      identity = next; updateUser();
+    },
+    suspendIdentity() {
+      sequence += 1; stopPageWork(); showMenu(false); bridge.leaveTopic();
+      catalog = null; profile = null; selectedCourse = null; dashboards.clear(); answerCache.clear(); scrolls.clear();
+      paging = false; busyCourse = false; expandedTask = null; root.replaceChildren(); root.hidden = true;
+      if (graphDialog.open) graphDialog.close();
+      if (feedbackDialog.open) feedbackDialog.close();
+      feedbackInput.value = "";
+    },
+    permissionsChanged() { catalog = null; dashboards.clear(); answerCache.clear(); },
     async identityChanged() { catalog = null; profile = null; dashboards.clear(); answerCache.clear(); scrolls.clear(); await route(); },
     progressChanged() { /* Returning to Learn reads current server progress without changing it. */ },
     showFeedback,

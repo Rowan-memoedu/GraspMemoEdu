@@ -48,7 +48,7 @@ pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Stop-Learning.ps1'
 
 点击已完成任务可回看各模块的实际作答、结果和解析。新作答记录页面可见且处于答题状态的累计用时，不计判题等待；旧记录不补造用时。更早记录支持分页、失败重试和去重。页面使用 `#/learn`、`#/courses`、`#/guide`、`#/topic/<id>` 等地址，支持刷新、浏览器前进和后退，也适用于 GitHub Pages 子路径。
 
-用户菜单的 Settings 仅修改显示名和时区，Help 打开 GUIDE，Support 提交站内反馈。题目记录中的 Report a content error 会附上课程与题目位置。反馈保存于本机数据库，管理员查看：
+用户菜单的 Settings 仅修改显示名和时区，Help 打开常见问题 Q&A，Support 提交站内反馈。GUIDE 保留在顶部导航。游客可在头像右侧开启「体验专用浏览版」，Lesson 的学习按钮旁可用黄色 reset 重置当前游客的该 Topic；账号不显示这两个游客入口。题目记录中的 Report a content error 会附上课程与题目位置。反馈保存于本机数据库，管理员查看：
 
 ```powershell
 pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' feedback-list --limit 30
@@ -68,7 +68,7 @@ GUIDE 的唯一正文来源为 `D:/AppData/MathLearningWeb/guide/guide.md`，配
 
 ## 邀请码与账号权限
 
-管理员在本机管理入口创建账号并生成专属邀请码。邀请码只显示一次，数据库仅保存哈希；网页输入邀请码后取得独立登录身份。当前框架支持已导入 Topic 的白名单，当前可用 Topic 为 `digits-to-letters`。
+管理员在本机管理入口创建账号并生成专属邀请码。邀请码可重复登录同一账号，跨设备共享该账号的进度；数据库仅保存凭据哈希，原始邀请码清单单独保存在本机私密管理目录。账号按 Topic 与功能授权，当前可用 Topic 为 `digits-to-letters`。完整批次创建、停用、换码和会话管理见 [本机账号管理](docs/accounts.md)。
 
 ```powershell
 pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' account-list
@@ -85,7 +85,9 @@ pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' account-
 | `review_history` | 学习记录、上一页和下一页 |
 | `pause_topic` | 主动暂时终止学习 |
 
-游客固定开放前三项及所有已配置 Topic。网页可从邀请码登录切回原游客身份，两个身份的进度独立。本轮没有创建实际账号，也没有执行邀请码登录验收。
+游客固定开放前三项及所有已配置 Topic。网页退出账号会在服务端撤销当前登录会话，并切回原游客身份；其他设备的登录保留。账号会话 30 天后到期，页面明确提示重新登录。停用账号、更换邀请码或管理员撤销会话会使相关旧登录失效；恢复账号不会复活旧会话。游客与账号的进度不自动合并。
+
+初始批次为 10 个正式使用账号与 5 个固定标记的测试账号。测试标记不能从个人设置修改，公开验收只能使用测试账号。新 Topic 不会自动授予既有账号，管理员按需补充授权。
 
 ## 管理解锁
 
@@ -163,7 +165,7 @@ node scripts/inspect_page.mjs
 
 公网流程使用 `Start-PublicLearning.ps1 -DataDirectory '<独立验收目录>' -Port 8768 -SkipPublish`，然后运行 `node scripts/verify_published_page.mjs <HTTPS页面> <HTTPS接口origin> <新结果目录> <课程JSON路径>`。该检查不模拟网络、不授予本地网络权限、不关闭浏览器安全限制。最后可加 `read-only`，仅新建独立游客、读取与刷新，不提交学习操作。
 
-既有结果：[验收报告](D:/Artifacts/MathLearningWeb/验收报告.md)。公网初次接入记录位于 `D:/Artifacts/MathLearningWeb/public-internet`，主页与指南的真实判题、页面和回归证据位于 `D:/Artifacts/MathLearningWeb/homepage`。浏览器验收使用独立 Chrome 上下文，不修改用户浏览器的学习记录；真实判题仅在独立验收数据目录执行。账号只进行语法、命令帮助与代码检查，未创建或登录账号。测试框架仍提示 HTTPX 接口弃用警告；当前固定版本正常通过，不影响服务运行。
+既有结果：[验收报告](D:/Artifacts/MathLearningWeb/验收报告.md)。公网初次接入记录位于 `D:/Artifacts/MathLearningWeb/public-internet`，主页与指南证据位于 `D:/Artifacts/MathLearningWeb/homepage`，账号测试证据位于 `D:/Artifacts/MathLearningWeb/accounts`。浏览器验收使用独立 Chrome 上下文，不修改用户浏览器记录。账号先在独立目录验收，再使用正式批次中保留的测试账号验证公网登录、跨设备进度、真实判题、权限与退出；不使用 10 个正式学习账号。测试框架仍提示 HTTPX 接口弃用警告，当前固定版本通过测试后继续使用。
 
 ## 打开公开页面
 
