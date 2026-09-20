@@ -25,6 +25,8 @@ from .catalog import Catalog
 from .dashboard import DashboardStore
 from .guide import register_guide_routes
 from .guest_reset import register_guest_reset_routes
+from .review import ReviewBackend
+from .review_api import register_review_routes, review_route_feature
 from .public_limits import BodyLimitMiddleware, PublicLimits, PublicLimitError
 
 
@@ -103,6 +105,8 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     dashboard_store = DashboardStore(catalog, access_store)
     learning_services = ServiceCache(catalog.default_topic_id)
     learning_services[(service.learner_id, service.topic_id)] = service
+    if service.review_backend is None:
+        ReviewBackend(service)
     services_lock = threading.Lock()
     public_limits = PublicLimits()
     admission_lock = threading.Lock()
@@ -118,6 +122,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
             if key not in learning_services:
                 learning_services[key] = LearningService(
                     catalog.topic(topic_id), settings.data_dir, service.judge, learner_id=learner_id)
+                ReviewBackend(learning_services[key])
             return learning_services[key]
 
     def requested_topic(request):
@@ -159,35 +164,41 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         result['state'] = public_state(result['state'], access)
         return result
 
-    def schedule(learner, submission_id):
+    def outstanding_count(con):
+        return sum(con.execute(f"SELECT COUNT(*) FROM {table} WHERE status IN ('pending','running')").fetchone()[0]
+                   for table in ('submissions', 'review_submissions'))
+
+    def schedule(learner, submission_id, review=False):
         # Called under admission_lock. A transport retry never adds another queue item.
-        if submission_id in scheduled_submissions:
+        key = (review, submission_id)
+        if key in scheduled_submissions:
             # A service-error retry may have become pending while its previous
             # worker is still flushing logs. That accepted work must survive.
-            reschedule_submissions.add(submission_id)
+            reschedule_submissions.add(key)
             return
         with closing(learner._connect()) as con:
-            row = con.execute('SELECT status FROM submissions WHERE id=?', (submission_id,)).fetchone()
+            table = 'review_submissions' if review else 'submissions'
+            row = con.execute(f'SELECT status FROM {table} WHERE id=?', (submission_id,)).fetchone()
         if not row or row['status'] != 'pending':
             return
-        scheduled_submissions.add(submission_id)
+        scheduled_submissions.add(key)
 
         def run():
             try:
-                learner.process_submission(submission_id)
+                (learner.review_backend if review else learner).process_submission(submission_id)
             finally:
                 with admission_lock:
-                    scheduled_submissions.discard(submission_id)
-                    retry_requested = submission_id in reschedule_submissions
-                    reschedule_submissions.discard(submission_id)
+                    scheduled_submissions.discard(key)
+                    retry_requested = key in reschedule_submissions
+                    reschedule_submissions.discard(key)
                     if retry_requested and not executor_stopping.is_set():
-                        schedule(learner, submission_id)
+                        schedule(learner, submission_id, review)
 
         try:
             executor.submit(run)
         except BaseException:
-            scheduled_submissions.discard(submission_id)
-            reschedule_submissions.discard(submission_id)
+            scheduled_submissions.discard(key)
+            reschedule_submissions.discard(key)
             raise
 
     @asynccontextmanager
@@ -196,7 +207,9 @@ def create_app(settings: Settings | None = None, service: LearningService | None
             pairs = con.execute('SELECT learner,topic FROM topics').fetchall()
         for learner, topic_id in pairs:
             if topic_id in catalog.topics:
-                service_for(learner, topic_id).recover_interrupted()
+                recovered = service_for(learner, topic_id)
+                recovered.recover_interrupted()
+                recovered.review_backend.recover_interrupted()
         yield
         with admission_lock:
             executor_stopping.set()
@@ -275,7 +288,9 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                         '/api/state', '/api/demo-answer', '/api/guest/reset', '/api/choose', '/api/continue', '/api/select', '/api/pause', '/api/submit',
                         '/api/catalog', '/api/catalog/select', '/api/dashboard', '/api/profile', '/api/feedback', '/api/guide'}
         task_answers_path = path.startswith('/api/tasks/') and path.endswith('/answers') and path.count('/') == 4
-        if public and path.startswith('/api/') and path not in public_paths and not path.startswith('/api/submissions/') and not task_answers_path:
+        review_feature = review_route_feature(path, request.method)
+        review_path = review_feature is not None
+        if public and path.startswith('/api/') and path not in public_paths and not path.startswith('/api/submissions/') and not task_answers_path and not review_path:
             return deny('public_endpoint_forbidden', '公网不开放管理操作。')
         if request.method == 'OPTIONS':
             if not origin or origin not in permitted_origins:
@@ -310,10 +325,10 @@ def create_app(settings: Settings | None = None, service: LearningService | None
             # Enforce permissions before parsing a mutation body; hiding controls is not authorization.
             action_features = {'/api/choose': 'learn', '/api/continue': 'learn',
                                '/api/submit': 'submit_answer', '/api/select': 'review_history', '/api/pause': 'pause_topic'}
-            if path in action_features or path == '/api/state' or path.startswith('/api/submissions/'):
+            if path in action_features or path == '/api/state' or path.startswith('/api/submissions/') or review_path:
                 try:
                     access = access_store.resolve(request.headers.get('x-learning-identity'))
-                    feature = action_features.get(path)
+                    feature = review_feature if review_path else action_features.get(path)
                     if path.startswith('/api/submissions/'):
                         feature = 'submit_answer'
                     access_store.authorize(access, requested_topic(request), feature)
@@ -461,7 +476,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         with admission_lock:
             with closing(learner._connect()) as con:
                 old = con.execute('SELECT * FROM submissions WHERE id=?', (data['request_id'],)).fetchone()
-                outstanding = con.execute("SELECT COUNT(*) FROM submissions WHERE status IN ('pending','running')").fetchone()[0]
+                outstanding = outstanding_count(con)
             replay_or_conflict = old and (old['status'] != 'error' or old['learner'] != learner.learner_id
                                          or old['topic'] != learner.topic_id or old['fingerprint'] != learner._fingerprint('submit', data))
             if replay_or_conflict:
@@ -487,5 +502,6 @@ def create_app(settings: Settings | None = None, service: LearningService | None
 
     register_guide_routes(app, settings, access_store)
     register_guest_reset_routes(app, identity, public_state, Action)
+    register_review_routes(app, identity, admission_lock, public_limits, schedule, outstanding_count)
     app.mount('/', StaticFiles(directory=Path(__file__).resolve().parent.parent / 'web', html=True), name='web')
     return app

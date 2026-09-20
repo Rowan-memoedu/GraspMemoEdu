@@ -1,6 +1,6 @@
 import argparse
 from contextlib import contextmanager, closing
-from datetime import datetime
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -23,10 +23,53 @@ def output(data):
     print(json.dumps(data, ensure_ascii=False, indent=2))
 
 
-def make_service(settings, learner='local', topic_id=None):
+def make_service(settings, learner='local', topic_id=None, *, review=False):
     catalog = Catalog.load(settings)
     course = catalog.topic(topic_id or catalog.default_topic_id)
-    return LearningService(course, settings.data_dir, learner_id=learner)
+    service = LearningService(course, settings.data_dir, learner_id=learner)
+    if review:
+        from .review import ReviewBackend
+        ReviewBackend(service)
+    return service
+
+
+def review_status(settings, learner, topic_id):
+    """Read-only local overview; never initialize a learner or import old scores."""
+    from .practice import REVIEW_POLICY
+    course = Catalog.load(settings).topic(topic_id)
+    result = {'learner_id': learner, 'topic_id': topic_id, 'course_version': course['version'],
+              'enabled': False, 'lesson_status': 'not_started', 'pause': None, 'due': [],
+              'active': [], 'next_due_at': None, 'policy': REVIEW_POLICY.to_dict(), 'ratings': {}}
+    database = settings.data_dir / 'learning.sqlite3'
+    if not database.exists():
+        return result
+    with closing(sqlite3.connect(database.resolve().as_uri() + '?mode=ro', uri=True)) as con:
+        con.row_factory = sqlite3.Row
+        tables = {row[0] for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        if 'topics' in tables:
+            row = con.execute('SELECT body FROM topics WHERE learner=? AND topic=?', (learner, topic_id)).fetchone()
+            if row:
+                lesson = json.loads(row['body'])
+                result.update(lesson_status=lesson['status'], pause=lesson['pause'])
+        if 'review_cards' not in tables:
+            return result
+        result['enabled'] = True
+        key = (learner, topic_id)
+        paused = con.execute('SELECT event_id,reason FROM review_topic_pauses WHERE learner=? AND topic=?', key).fetchone()
+        if paused:
+            result['pause'] = dict(paused)
+        result['active'] = []
+        for row in con.execute("SELECT id,module,body FROM review_sessions WHERE learner=? AND topic=? AND version=? AND status='in_progress'", (*key, course['version'])):
+            state = json.loads(row['body'])
+            result['active'].append({'session_id': row['id'], 'module_id': row['module'],
+                                     'policy_version': state['policy']['version'],
+                                     'practice_error_count': state['practice_error_count'],
+                                     'practice_answered_count': state['practice_answered_count']})
+        if not result['pause']:
+            result['next_due_at'] = con.execute('SELECT MIN(due_at) FROM review_cards WHERE learner=? AND topic=? AND version=? AND active_session IS NULL', (*key, course['version'])).fetchone()[0]
+            result['due'] = [dict(row) for row in con.execute('SELECT module AS module_id,due_at,revision AS schedule_revision FROM review_cards WHERE learner=? AND topic=? AND version=? AND active_session IS NULL AND due_at<=? ORDER BY due_at,module', (*key, course['version'], datetime.now(timezone.utc).isoformat()))]
+        result['ratings'] = {str(row['mastery']): row['count'] for row in con.execute('SELECT mastery,COUNT(*) AS count FROM review_ratings WHERE learner=? AND topic=? AND version=? GROUP BY mastery', (*key, course['version']))}
+    return result
 
 
 def make_access_store(settings):
@@ -203,6 +246,13 @@ def main():
     unlock.add_argument('--topic', required=True)
     unlock.add_argument('--module', required=True)
     unlock.add_argument('--pause-event', required=True)
+    review_status_command = sub.add_parser('review-status', help='只读查看指定学习者 Topic 的复习排期、暂停事件和规则')
+    review_status_command.add_argument('--learner', required=True)
+    review_status_command.add_argument('--topic', required=True)
+    review_unlock = sub.add_parser('review-unlock', help='按精确事件解除 Topic 的复习暂停，同时恢复暂停的 Lesson')
+    review_unlock.add_argument('--learner', required=True)
+    review_unlock.add_argument('--topic', required=True)
+    review_unlock.add_argument('--pause-event', required=True)
     backup = sub.add_parser('backup')
     backup.add_argument('--output', type=Path)
     restore = sub.add_parser('restore')
@@ -262,8 +312,13 @@ def main():
                 state = make_service(settings, args.learner, args.topic).state()
                 output({k: state[k] for k in ['topic_id', 'learner_id', 'status', 'revision', 'pause', 'modules']})
         elif args.command == 'unlock':
-            state = make_service(settings, args.learner, args.topic).unlock(args.topic, args.module, args.pause_event)
+            state = make_service(settings, args.learner, args.topic, review=True).unlock(args.topic, args.module, args.pause_event)
             output({'status': state['status'], 'attempt_id': state['attempt_id'], 'pause': state['pause']})
+        elif args.command == 'review-status':
+            output(review_status(settings, args.learner, args.topic))
+        elif args.command == 'review-unlock':
+            backend = make_service(settings, args.learner, args.topic, review=True).review_backend
+            output(backend.unlock_topic(pause_event_id=args.pause_event))
         elif args.command == 'backup':
             output(backup_bundle(settings, args.output))
         elif args.command == 'account-create':

@@ -276,6 +276,18 @@ class LearningService:
                     raise DomainError('stale_attempt', '作答轮次已变化，请刷新。')
                 if payload.get('step_id') != state['active_step_id']:
                     raise DomainError('locked_step', '学习步骤已变化，请刷新。', 403)
+                review_tables = {row[0] for row in con.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'review_%'")}
+                if 'review_submissions' in review_tables and con.execute(
+                        "SELECT 1 FROM review_submissions WHERE learner=? AND topic=? AND status IN ('pending','running')",
+                        self.key).fetchone():
+                    raise DomainError('review_submission_pending', '复习答案正在判定，请等待完成后重置。')
+                # Keep scheduling preferences, but remove this identity's entire
+                # review generation in the same transaction as its Lesson reset.
+                for table in ('review_cards', 'review_ratings', 'review_sessions', 'review_actions',
+                              'review_submissions', 'review_topic_pauses', 'review_unlocks', 'review_optimizations'):
+                    if table in review_tables:
+                        con.execute(f'DELETE FROM {table} WHERE learner=? AND topic=?', self.key)
                 previous = state
                 state = {'revision': previous['revision'], 'status': 'in_progress',
                          'introduction_read': False, 'attempts': [], 'steps': [],

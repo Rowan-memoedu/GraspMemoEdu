@@ -558,7 +558,11 @@ class PublicAccessAcceptanceTests(unittest.TestCase):
                    "/api/access/login", "/api/access/logout", "/api/state", "/api/demo-answer", "/api/guest/reset", "/api/choose", "/api/continue",
                    "/api/select", "/api/pause", "/api/submit", "/api/submissions/{submission_id}",
                    "/api/catalog", "/api/catalog/select", "/api/dashboard", "/api/profile", "/api/feedback",
-                   "/api/tasks/{task_id}/answers", "/api/guide", "/guide-assets/{relative:path}"}
+                   "/api/tasks/{task_id}/answers", "/api/guide", "/guide-assets/{relative:path}",
+                   "/api/review/begin", "/api/review/sessions/{session_id}",
+                   "/api/review/sessions/{session_id}/submit", "/api/review/sessions/{session_id}/continue",
+                   "/api/review/sessions/{session_id}/pause", "/api/review/sessions/{session_id}/demo-answer",
+                   "/api/review/submissions/{submission_id}"}
         self.assertLessEqual({route.path for route in self.app.routes}, allowed)
         identity, _ = self._guest()
         before = self._state(identity)

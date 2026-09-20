@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 from contextlib import closing
 from datetime import datetime, timedelta
 import json
 import math
 import uuid
+from urllib.parse import quote
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .public_limits import PublicLimitError
@@ -135,6 +137,66 @@ class DashboardStore:
         return task
 
     @staticmethod
+    def _has_reviews(con):
+        return con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='review_sessions'").fetchone() is not None
+
+    def _review_task(self, course, topic_id, module_id, *, state=None, due_at=None):
+        module = next(item for item in self.catalog.topic(topic_id)['modules'] if item['id'] == module_id)
+        state = state or {}
+        session_id = state.get('session_id')
+        task = {'id': 'review:' + session_id if session_id else 'review-due:' + topic_id + ':' + module_id,
+                'type': 'Review', 'topic_id': topic_id, 'module_id': module_id,
+                'course_id': course['id'], 'course_title': course['title'],
+                'title': self.catalog.topics[topic_id]['title'] + ' · ' + module['title'],
+                'module_title': module['title'], 'session_id': session_id,
+                'started': bool(session_id), 'started_at': state.get('created_at'),
+                'status': state.get('status', 'not_started'), 'due_at': due_at or state.get('due_at'),
+                'progress': round(100 * state.get('practice_answered_count', 0) /
+                                  max(1, state.get('practice_target_count', 1)), 2),
+                'prerequisites': [], 'maintenance': False,
+                'start_href': '#/review/' + quote(topic_id, safe='') + '/' + quote(module_id, safe='')}
+        if session_id:
+            task['start_href'] += '?session=' + quote(session_id, safe='')
+        if state.get('status') == 'completed':
+            task.update(completed_at=state['completed_at'], mastery=state['mastery'], result='completed', progress=100)
+        return task
+
+    def _reviews(self, con, access, course, snapshots):
+        tasks, history, wakeups, paused = [], [], [], set()
+        if not self._has_reviews(con):
+            return tasks, history, None, paused
+        current_time = now()
+        for topic_id, snapshot in snapshots.items():
+            topic = self.catalog.topic(topic_id)
+            key = (access['learner_id'], topic_id)
+            is_paused = snapshot['status'] == 'paused' or con.execute(
+                'SELECT 1 FROM review_topic_pauses WHERE learner=? AND topic=?', key).fetchone()
+            if is_paused:
+                paused.add(topic_id)
+            rows = con.execute('SELECT * FROM review_sessions WHERE learner=? AND topic=? AND version=?',
+                               (*key, topic['version'])).fetchall()
+            active = None
+            for row in rows:
+                state = json.loads(row['body'])
+                if row['status'] == 'completed':
+                    history.append(self._review_task(course, topic_id, row['module'], state=state))
+                elif row['status'] == 'in_progress':
+                    active = self._review_task(course, topic_id, row['module'], state=state)
+            if is_paused:
+                continue
+            if active:
+                tasks.append(active)
+                continue
+            cards = con.execute('''SELECT * FROM review_cards WHERE learner=? AND topic=? AND version=?
+                                   AND active_session IS NULL ORDER BY due_at,module''', (*key, topic['version'])).fetchall()
+            for card in cards:
+                wakeups.append(card['due_at'])
+                if datetime.fromisoformat(card['due_at']) <= datetime.fromisoformat(current_time):
+                    tasks.append(self._review_task(course, topic_id, card['module'], due_at=card['due_at']))
+        tasks.sort(key=lambda task: (task['due_at'] or '', task['id']))
+        return tasks, history, min(wakeups, default=None), paused
+
+    @staticmethod
     def _decode_cursor(cursor, course_id, learner_id):
         if not cursor:
             return None
@@ -161,6 +223,7 @@ class DashboardStore:
             # One consistent SQLite snapshot for progress, tasks and history.
             con.execute('BEGIN')
             snapshots = {topic['id']: self._snapshot(con, access['learner_id'], topic['id']) for topic in visible}
+            review_tasks, review_history, next_review_due_at, review_paused = self._reviews(con, access, course, snapshots)
         total = sum(len(self.catalog.topics[topic['id']]['modules']) for topic in course['topics'])
         completed = sum(item['completed_modules'] for item in snapshots.values())
         progress = round(100 * completed / total, 2) if total else 0
@@ -170,7 +233,7 @@ class DashboardStore:
         overview = {'id': course['id'], 'title': course['title'], 'description': course['description'],
                     'progress': progress, 'start_date': min(started) if started else None,
                     'end_date': max(finished) if all_complete else None, 'estimated_completion': None}
-        tasks, history, topics, units = [], [], [], []
+        tasks, history, topics, units = review_tasks, review_history, [], []
         for unit in course['units']:
             members = [topic_id for topic_id in unit['topic_ids'] if topic_id in snapshots]
             if not members:
@@ -184,6 +247,8 @@ class DashboardStore:
         for metadata in visible:
             topic_id, snapshot = metadata['id'], snapshots[metadata['id']]
             task = self._task(course, topic_id, snapshot, allowed)
+            if topic_id in review_paused and snapshot['status'] != 'completed':
+                task['status'] = 'paused'
             (history if snapshot['status'] == 'completed' else tasks).append(task)
             topics.append({'id': topic_id, 'title': task['title'], 'status': snapshot['status'], 'progress': snapshot['progress'],
                            'prerequisites': task['prerequisites'],
@@ -193,6 +258,10 @@ class DashboardStore:
         history.sort(key=lambda task: (task['completed_at'] or '', task['id']), reverse=True)
         if 'review_history' not in access['features']:
             history = []
+        # A reset or permission change can remove even a previously loaded older
+        # page. Let clients invalidate that cache, regardless of cursor position.
+        history_revision = hashlib.sha256(json.dumps(
+            [(task['id'], task['completed_at']) for task in history]).encode()).hexdigest()
         if boundary:
             history = [task for task in history if (task['completed_at'] or '', task['id']) < boundary]
         has_more = len(history) > limit
@@ -202,9 +271,20 @@ class DashboardStore:
             next_cursor = base64.urlsafe_b64encode(json.dumps(
                 [course_id, access['learner_id'], page[-1]['completed_at'] or '', page[-1]['id']]).encode()).decode().rstrip('=')
         return {'course': overview, 'units': units, 'topics': topics, 'tasks': tasks, 'history': page,
-                'history_cursor': next_cursor, 'has_more': has_more}
+                'history_cursor': next_cursor, 'has_more': has_more, 'history_revision': history_revision,
+                'next_review_due_at': next_review_due_at}
 
     def _task_topic(self, access, task_id):
+        if task_id.startswith('review:'):
+            with closing(self.access_store._connect()) as con:
+                row = con.execute('SELECT topic,version FROM review_sessions WHERE id=? AND learner=?',
+                                  (task_id[7:], access['learner_id'])).fetchone() if self._has_reviews(con) else None
+            if not row or row['topic'] not in self.catalog.topics:
+                raise DomainError('unknown_task', '未找到此学习任务。', 404)
+            self.access_store.authorize(access, row['topic'])
+            if row['version'] != self.catalog.topic(row['topic'])['version']:
+                raise DomainError('course_version_mismatch', '课程版本已变化，原记录已保留。')
+            return row['topic']
         if not task_id.startswith('lesson:') or task_id[7:] not in self.catalog.topics:
             raise DomainError('unknown_task', '未找到此学习任务。', 404)
         topic_id = task_id[7:]
@@ -214,6 +294,8 @@ class DashboardStore:
     def answers(self, access, task_id):
         self._feature(access, 'review_history')
         topic_id = self._task_topic(access, task_id)
+        if task_id.startswith('review:'):
+            return self._review_answers(access, task_id, topic_id)
         topic = self.catalog.topic(topic_id)
         course = self.catalog.courses[self.catalog.topic_courses[topic_id]]
         with closing(self.access_store._connect()) as con:
@@ -246,6 +328,29 @@ class DashboardStore:
                 groups.append({'id': module['id'], 'title': module['title'], 'answers': answers})
         return {'task': task, 'groups': groups, 'math_css': topic.get('math_css', '')}
 
+    def _review_answers(self, access, task_id, topic_id):
+        topic = self.catalog.topic(topic_id)
+        with closing(self.access_store._connect()) as con:
+            con.execute('BEGIN')
+            row = con.execute("SELECT * FROM review_sessions WHERE id=? AND learner=? AND topic=? AND status='completed'",
+                              (task_id[7:], access['learner_id'], topic_id)).fetchone()
+            if not row or row['version'] != topic['version']:
+                raise DomainError('unknown_task_answers', '此身份尚无该任务的已完成作答记录。', 404)
+            state = json.loads(row['body'])
+            rows = con.execute("SELECT * FROM review_submissions WHERE session=? AND learner=? AND topic=? AND status='judged' ORDER BY created_at,id",
+                               (row['id'], access['learner_id'], topic_id)).fetchall()
+        module = next(item for item in topic['modules'] if item['id'] == row['module'])
+        questions = {question['id']: question for question in module['practices']}
+        answers = [{'id': answer['id'], 'question_id': answer['question'], 'html': questions[answer['question']]['html'],
+                    'explanation_html': questions[answer['question']]['explanation_html'], 'answer': answer['answer'],
+                    'correct': bool(answer['correct']), 'result': 'correct' if answer['correct'] else 'incorrect',
+                    'answered_at': answer['created_at'], 'difficulty': None,
+                    'elapsed_seconds': answer['elapsed_ms'] / 1000 if answer['elapsed_ms'] is not None else None}
+                   for answer in rows if answer['question'] in questions]
+        course = self.catalog.courses[self.catalog.topic_courses[topic_id]]
+        return {'task': self._review_task(course, topic_id, module['id'], state=state),
+                'groups': [{'id': module['id'], 'title': module['title'], 'answers': answers}], 'math_css': topic.get('math_css', '')}
+
     def save_feedback(self, access, values):
         message = values['message'].strip()
         if not message or '\x00' in message:
@@ -274,6 +379,11 @@ class DashboardStore:
             if question_id:
                 snapshot = self._snapshot(con, access['learner_id'], topic_id)
                 visited = {step['question_id'] for step in snapshot['state']['steps']} if snapshot['state'] else set()
+                if task_id and task_id.startswith('review:'):
+                    row = con.execute('SELECT body FROM review_sessions WHERE id=? AND learner=? AND topic=?',
+                                      (task_id[7:], access['learner_id'], topic_id)).fetchone()
+                    state = json.loads(row['body']) if row else {}
+                    visited = set(state.get('order', [])[:state.get('index', -1) + 1])
                 if question_id not in visited:
                     raise DomainError('locked_step', '只能反馈已访问的题目。', 403)
             recent = con.execute('SELECT created_at FROM feedback WHERE learner_id=? AND created_at>? ORDER BY created_at',

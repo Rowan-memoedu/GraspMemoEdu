@@ -1,4 +1,5 @@
 import { t, getLanguage, setLanguage, locale, translateMessage } from "./i18n.js";
+import { createReviewView } from "./review.js";
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -37,6 +38,14 @@ export function initPortal(bridge) {
   };
   const dayKey = (value) => new Intl.DateTimeFormat("en-CA", { timeZone: timezone(), year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
   const clockTime = (value) => value && Number.isFinite(Date.parse(value)) ? new Intl.DateTimeFormat(locale(), { timeZone: timezone(), hour: "2-digit", minute: "2-digit" }).format(new Date(value)) : "—";
+  const review = createReviewView({
+    ...bridge, root, formatDate: value => apiDate(value, true), showFeedback,
+    progressChanged: () => { dashboards.clear(); answerCache.clear(); },
+    setSession: id => {
+      history.replaceState(null, "", `${location.hash.split("?")[0]}?session=${encode(id)}`);
+      currentHash = routeKey(); currentRoute = parseRoute();
+    },
+  });
 
   function navigate(path, replace = false) {
     const hash = path.startsWith("#") ? path : `#${path}`;
@@ -120,16 +129,17 @@ export function initPortal(bridge) {
   }
   function mergeDashboard(id, data, append = false) {
     const previous = dashboards.get(id);
-    const all = append ? [...(previous?.history || []), ...data.history] : [...data.history, ...(previous?.history || [])];
+    const sameHistory = Boolean(data.history_revision && data.history_revision === previous?.history_revision);
+    const all = append ? [...(previous?.history || []), ...data.history] : sameHistory ? [...data.history, ...(previous?.history || [])] : data.history;
     const historyRows = [...new Map(all.map((task) => [task.id, task])).values()]
       .sort((a, b) => Date.parse(b.completed_at || 0) - Date.parse(a.completed_at || 0));
     const merged = { ...data, history: historyRows };
-    if (!append && previous?.history?.length > data.history.length && previous.history_cursor !== undefined) {
+    if (!append && sameHistory && previous?.history?.length > data.history.length && previous.history_cursor !== undefined) {
       merged.history_cursor = previous.history_cursor; merged.has_more = previous.has_more;
     }
     dashboards.set(id, merged); return merged;
   }
-  function stopPageWork() { clearTimeout(refreshTimer); clearTimeout(pageTimer); hidePopovers(); }
+  function stopPageWork() { clearTimeout(refreshTimer); clearTimeout(pageTimer); review.stop(); hidePopovers(); }
   async function route() {
     if (currentHash) scrolls.set(currentHash, window.scrollY);
     currentHash = routeKey(); currentRoute = parseRoute();
@@ -137,6 +147,7 @@ export function initPortal(bridge) {
     stopPageWork(); showMenu(false); collapseTasks();
     if (graphDialog.open) graphDialog.close();
     root.hidden = false; bridge.leaveTopic();
+    root.classList.toggle("reviewShell", currentRoute.path.startsWith("/review/"));
     if (bridge.getIdentityProblem()) { root.hidden = true; root.replaceChildren(); return; }
     setNavigation(currentRoute.path.startsWith("/courses") ? "courses" : currentRoute.path === "/guide" ? "guide" : "learn");
     root.replaceChildren(loading()); window.scrollTo(0, 0);
@@ -173,6 +184,8 @@ export function initPortal(bridge) {
       } else if (/^\/topic\/[^/]+$/.test(path)) {
         root.hidden = true;
         await bridge.openTopic(decodeURIComponent(path.split("/")[2]));
+      } else if (/^\/review\/[^/]+\/[^/]+$/.test(path)) {
+        await review.open(decodeURIComponent(path.split("/")[2]), decodeURIComponent(path.split("/")[3]), params.get("session"));
       } else root.replaceChildren(errorBox(t("portal.this.page.does.not.exist.24"), () => navigate("/learn"), t("portal.page.not.found.25")));
       if (ticket !== sequence) return;
       const target = params.get("unitId") || params.get("topicId");
@@ -299,6 +312,7 @@ export function initPortal(bridge) {
     const p = percent(task.progress);
     if (!history && p > 0 && p < 100) { const row = node("div", "taskProgressRow"), bar = node("div", "taskProgress"), fill = node("span"); fill.style.width = `${p}%`; bar.append(fill); row.append(bar, node("span", "", percentLabel(p))); wrap.append(row); }
     if (task.maintenance) wrap.append(node("p", "maintenanceNote", task.maintenance_message ? translateMessage(task.maintenance_message) : t("portal.this.content.is.under.maintenance.and.cannot.be.started.yet.46")));
+    if (task.type === "Review" && !history && task.due_at) wrap.append(node("div", "taskDueAt", t("review.dueAt", { time: apiDate(task.due_at, true) })));
     if (history) wrap.append(node("div", "taskCompletedAt", t("portal.completedAt", { time: clockTime(task.completed_at) })));
     return wrap;
   }
@@ -328,7 +342,7 @@ export function initPortal(bridge) {
     if (!task.maintenance) {
       const actions = node("div", "taskStartRow");
       const explicit = task.start_href || task.start_url;
-      const target = (task.type === "Lesson" || !task.type) && task.topic_id ? `#/topic/${encode(task.topic_id)}` : typeof explicit === "string" && /^#\/(topic|learn|courses)\//.test(explicit) ? explicit : null;
+      const target = (task.type === "Lesson" || !task.type) && task.topic_id ? `#/topic/${encode(task.topic_id)}` : typeof explicit === "string" && /^#\/(topic|review|learn|courses)\//.test(explicit) ? explicit : null;
       if (target && allowed("learn")) actions.append(roundButton(percent(task.progress) > 0 || task.started ? t("portal.resume.52") : t("portal.start.53"), () => navigate(target)));
       else if (target && task.started && allowed("review_history")) actions.append(roundButton(t("portal.review.54"), () => navigate(target)));
       else if (target) actions.append(node("p", "", t("portal.learning.is.not.enabled.for.your.account.please.contact.your.admi.55")));
@@ -395,12 +409,13 @@ export function initPortal(bridge) {
     if (!data.tasks.length) {
       const empty = emptyBox(percent(data.course.progress) === 100 ? t("portal.all.current.tasks.in.this.course.are.complete.65") : t("portal.no.tasks.are.available.to.start.we.will.check.again.shortly.66") );
       empty.append(control(t("portal.check.again.67"), "textButton", () => route())); pending.append(empty);
-      if (percent(data.course.progress) !== 100 && data.course.start_date) waitForTasks(ticket, 0);
     }
     const historyList = node("section", "completedTasks"); historyList.id = "completedTasks"; historyList.setAttribute("aria-label", t("portal.completed.tasks.68")); renderHistory(data, historyList);
     const more = node("div", "historyMore"); more.id = "historyMore";
     tasks.append(pending, historyList, more); renderMore();
     if (!data.tasks.length && !data.history.length && percent(data.course.progress) !== 100) historyList.append(node("p", "historyEmpty", t("portal.completed.learning.records.will.appear.here.69")));
+    if (data.next_review_due_at && !data.tasks.some(task => task.type === "Review")) pending.append(node("p", "reviewNextDue", t("review.nextDue", {time: apiDate(data.next_review_due_at, true)})));
+    waitForTasks(ticket, 0);
   }
   function renderMore(error = null) {
     const target = $("historyMore"), data = selectedDashboard(); if (!target || !data) return;
@@ -416,6 +431,7 @@ export function initPortal(bridge) {
     try {
       const next = await dashboard(id, data.history_cursor);
       if (ticket !== sequence) return;
+      if (next.history_revision !== data.history_revision) { dashboards.delete(id); await route(); return; }
       const merged = mergeDashboard(id, next, true); renderHistory(merged, $("completedTasks"));
     } catch (error) { failure = translateMessage(error.message); }
     finally { paging = false; if (ticket === sequence) renderMore(failure); }
@@ -428,18 +444,29 @@ export function initPortal(bridge) {
     if (renderedDay !== dayKey(new Date()) && $("completedTasks") && selectedDashboard()) renderHistory(selectedDashboard(), $("completedTasks"));
   }, 30000);
   function waitForTasks(ticket, attempt) {
+    const delta = Date.parse(selectedDashboard()?.next_review_due_at) - Date.now();
+    const delay = Number.isFinite(delta) && delta > 0 ? Math.max(500, Math.min(15000, delta + 150)) : 15000;
     clearTimeout(refreshTimer); refreshTimer = setTimeout(async () => {
       if (ticket !== sequence || document.hidden) { if (ticket === sequence) waitForTasks(ticket, attempt); return; }
       try {
-        const data = mergeDashboard(selectedCourse, await dashboard(selectedCourse));
+        const previous = selectedDashboard();
+        const fresh = await dashboard(selectedCourse);
         if (ticket !== sequence) return;
-        if (data.tasks.length || percent(data.course.progress) === 100) { const y = window.scrollY; renderLearn(data, null, ticket); window.scrollTo(0, y); }
-        else waitForTasks(ticket, attempt + 1);
+        const data = mergeDashboard(selectedCourse, fresh);
+        if (root.querySelector(".taskRefreshError") || JSON.stringify([previous?.tasks, previous?.history, previous?.course]) !== JSON.stringify([data.tasks, data.history, data.course])) {
+          const y = window.scrollY, expanded = expandedTask;
+          renderLearn(data, null, ticket);
+          if (expanded) root.querySelector(`[data-task-id="${CSS.escape(expanded)}"] .taskToggle`)?.click();
+          window.scrollTo(0, y);
+        } else waitForTasks(ticket, attempt + 1);
       } catch (error) {
         if (ticket !== sequence) return;
-        const target = root.querySelector(".incompleteTasks"); target?.replaceChildren(errorBox(translateMessage(error.message), () => route(), t("portal.unable.to.check.for.new.tasks.73")));
+        const target = root.querySelector(".incompleteTasks"); target?.querySelector(".taskRefreshError")?.remove();
+        const message = errorBox(translateMessage(error.message), () => route(), t("portal.unable.to.check.for.new.tasks.73"));
+        message.classList.add("taskRefreshError"); target?.prepend(message);
+        waitForTasks(ticket, attempt + 1);
       }
-    }, [5000, 10000, 15000][Math.min(attempt, 2)]);
+    }, delay);
   }
 
   async function renderAnswers(target, taskId, ticket) {

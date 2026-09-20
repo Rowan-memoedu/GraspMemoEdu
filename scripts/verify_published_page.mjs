@@ -54,10 +54,10 @@ try {
   await page.locator('.courseChoice').filter({hasText:'再探小学算术'}).waitFor();
   assert.equal(await page.locator('.mainNavigation a').count(), 3);
   await screenshot('00-courses');
-  await page.locator('.courseChoice').filter({hasText:'再探小学算术'}).getByRole('button',{name:'Learn',exact:true}).click();
+  await page.locator('.courseChoice').filter({hasText:'再探小学算术'}).getByRole('button',{name:/^(学习|Learn)$/}).click();
   await page.locator('.taskToggle').filter({hasText:course.title}).click();
   await screenshot('00-learn');
-  await page.getByRole('button',{name:'Start',exact:true}).click();
+  await page.getByRole('button',{name:/^(开始|Start)$/}).click();
   await page.locator('#courseShell:not([hidden])').waitFor();
   assert.equal(await page.locator('#settingsDialog, #settingsButton, #apiAddress, #pairingCredential').count(), 0);
   let initial = await state();
@@ -122,6 +122,12 @@ try {
     assert.equal(after.current_step_id, initial.current_step_id);
     assert.deepEqual(report.mutations.filter(endpoint => !['/api/profile','/api/catalog/select'].includes(endpoint)), []);
     report.checks.push('Progress inspected without learning writes; revision and selected page unchanged');
+    const review = await page.evaluate(async ({api, identityToken, topic}) => {
+      const response = await fetch(`${api}/api/review/sessions/public-read-only-probe?topic_id=${encodeURIComponent(topic)}`, {headers: {'X-Learning-Identity': identityToken}});
+      const body = await response.json(); return {status: response.status, code: body.detail?.code};
+    }, {api, identityToken, topic: initial.topic_id});
+    assert.deepEqual(review, {status: 404, code: 'unknown_review'});
+    report.checks.push('Review API is reachable through public HTTPS with current guest authorization; no review created');
   }
   await screenshot('03-final');
   await page.setViewportSize({ width: 390, height: 844 });

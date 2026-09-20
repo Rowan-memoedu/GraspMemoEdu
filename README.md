@@ -1,6 +1,6 @@
 # MathLearningWeb
 
-可调用的 Example/FSRS 复习后端已提供，包含到期队列、随机 Practice 复习、目标保留度设置与参数优化接口。它采用显式启用方式，当前网站尚未启用复习入口、自动接入或历史回填。接线方式与可调整规则见 [复习后端接口](docs/review-backend.md)。
+网站已接通 Example/FSRS 复习：新完成的 Lesson 模块自动计算下次复习时间，到期在主页显示“复习”；复习只抽取对应 Practice。完成后更新下次时间，已完成轮次可从学习记录回看。评分规则、接口和本机管理见 [复习后端接口](docs/review-backend.md)。原有完成记录没有自动回填。
 
 本机数学学习网站。顶部提供 LEARN 学习主页、COURSES 课程页和 GUIDE 使用指南。当前课程为「再探小学算术」，包含 Topic「数字化为字母」：6 个 Example、每模块 15 道 Practice，合计 96 道题。原有逐块学习、真实 MathAnswerJudge 判题、练习补题、模块评分、暂停与恢复继续使用同一份进度。
 
@@ -46,9 +46,11 @@ pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Stop-Learning.ps1'
 
 ## 课程主页与指南
 
-首次进入可在 COURSES 点击 Learn 选择课程；选择会随当前身份保存。LEARN 显示课程进度、章节状态、真实前置关系图、待学习任务和按日期分组的已完成任务。任务展开后点击 Start 或 Resume 进入 Topic。课程进度按模块完成数计算，缺少预计完成日期、难度或旧作答用时的数据显示「—」。目前只产生真实 Lesson 任务，不生成复习、测验、XP 或推荐分值。
+首次进入可在课程页点击学习选择课程；选择会随当前身份保存。学习主页显示课程进度、章节状态、真实前置关系图、待学习任务和按日期分组的已完成任务。到期“复习”按时间排在 Lesson 前，同一 Topic 优先恢复未完成的复习轮次。主页自动查询到期变化，关闭网页期间的到期任务会保留，重新打开后展示。课程进度仍按 Lesson 模块完成数计算；缺少预计完成日期、难度或旧作答用时的数据显示「—」，不生成测验或 XP。
 
-点击已完成任务可回看各模块的实际作答、结果和解析。新作答记录页面可见且处于答题状态的累计用时，不计判题等待；旧记录不补造用时。更早记录支持分页、失败重试和去重。页面使用 `#/learn`、`#/courses`、`#/guide`、`#/topic/<id>` 等地址，支持刷新、浏览器前进和后退，也适用于 GitHub Pages 子路径。
+点击已完成任务可回看各模块的实际作答、结果和解析。新作答记录页面可见且处于答题状态的累计用时，不计判题等待；旧记录不补造用时。更早记录支持分页、失败重试和去重。页面使用 `#/learn`、`#/courses`、`#/guide`、`#/topic/<id>`、`#/review/<topic>/<module>?session=<round>` 等地址，支持刷新、浏览器前进和后退，也适用于 GitHub Pages 子路径。
+
+复习先随机抽 1 题，每错 1 题追加 2 题，已抽题目不重复。首题正确返回 4（Easy）；累计错 1 题并完成共 3 题返回 2（Hard）；累计错 2 题并完成共 5 题返回 1（Again）。第 3 次错误或主动暂停立即终止本轮，不评分、不更新 FSRS。当前没有返回 3（Good）的复习路径。游客不能主动暂停，自动暂停仍有效。以后调整 `math_learning/practice.py` 中的 `REVIEW_POLICY` 并递增版本；进行中的轮次继续使用原规则快照。
 
 用户菜单的 Settings 仅修改显示名和时区，Help 打开常见问题 Q&A，Support 提交站内反馈。GUIDE 保留在顶部导航。游客可在头像右侧开启「体验专用浏览版」，Lesson 的学习按钮旁可用黄色 reset 重置当前游客的该 Topic；账号不显示这两个游客入口。题目记录中的 Report a content error 会附上课程与题目位置。反馈保存于本机数据库，管理员查看：
 
@@ -107,6 +109,15 @@ pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' unlock -
 ```
 
 解锁新开当前未完成模块的一轮；保留旧作答、暂停记录、已完成评分和 Introduction 状态。若暂停时当前模块已经结算，解锁进入下一个未完成模块。页面没有解锁接口。
+
+复习造成的 Topic 暂停（包括 Lesson 已经全部完成）使用本机命令查看准确事件后解锁：
+
+```powershell
+pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' review-status --learner '<学习者 ID>' --topic digits-to-letters
+pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' review-unlock --learner '<学习者 ID>' --topic digits-to-letters --pause-event '<暂停事件 ID>'
+```
+
+解锁后旧轮次保留，新轮次重新抽题、错误数清零。游客重置某 Topic 时，其 Lesson 进度和复习记录一起清空；复习判题在途时须等判定结束再重置。
 
 ## 数据与备份
 

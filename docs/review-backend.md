@@ -1,6 +1,6 @@
 # Example 复习后端
 
-本阶段提供可直接调用的 Python 后端，复用 `py-fsrs==6.3.2`（MIT）。网站启动、前端、学习主页、正式数据及外部通知均未启用这套复习机制。正式接线前，调用方须复用现有身份、Topic/功能授权、提交限流和判题工作池；这里的 Python 接口属于可信后端入口。
+网站已接通此 Python 后端，复用 `py-fsrs==6.3.2`（MIT）。`create_app()` 为学习服务绑定复习后端，沿用身份、Topic/功能授权、提交限流和判题工作池。新完成模块开始排期，历史记录不自动回填。下述 Python 管理接口属于可信本机入口，不直接暴露给浏览器。
 
 ## 组件与边界
 
@@ -29,7 +29,7 @@ lesson.recover_interrupted()
 reviews.recover_interrupted()
 ```
 
-构造 `ReviewBackend` 是显式启用点。它给这一个 `LearningService` 注册完成、暂停和解锁事件；未来重建服务对象时也要重新构造。Lesson 的评分和 FSRS 更新在同一个 SQLite 事务中提交。现有 `create_app()` 没有构造它，普通网站启动不会创建复习表，也不会开始生成复习任务。
+构造 `ReviewBackend` 是显式启用点。它给这一个 `LearningService` 注册完成、暂停和解锁事件；重建服务对象时也要重新构造。Lesson 的评分和 FSRS 更新在同一个 SQLite 事务中提交。网站 `create_app()` 已构造它并在启动时恢复中断提交；本机旧 Lesson 解锁入口也绑定复习后端以同步解冻。
 
 若结果来自其他已验证的后台流程，可以直接提交整段 Example 模块的结果。这个接口不应原样暴露给浏览器，让用户自行填写分数：
 
@@ -47,6 +47,15 @@ scheduled = reviews.record_module_result(
 同一结果 ID 重放只返回已有调度结果；改变其评分或完成时间会报冲突。时间更早的结果不能覆盖已经更新的卡片。`None`、0、5、字符串和布尔值均不能作为 FSRS 评分。进行中与暂停结果不进入此入口。
 
 构造后端不会自动回填历史 Lesson。未来回填须另外明确范围，并传入每条结果原始 ID 与时间。
+
+## 网站接入
+
+- `GET /api/dashboard` 汇集当前课程已授权 Topic 的到期卡片和未完成轮次，返回 `type: "Review"` 与 `next_review_due_at`。主页到期自动查询，页面隐藏时暂停查询、恢复可见后继续。已完成轮次并入现有学习历史分页。课程完成度仍由 Lesson 决定。
+- `POST /api/review/begin` 接收 `module_id/request_id`；`GET /api/review/sessions/{id}` 读取当前轮次。前端地址为 `#/review/<topic>/<module>?session=<id>`，刷新恢复相同轮次。
+- `POST /api/review/sessions/{id}/submit`、`/continue`、`/pause` 对应提交、下一题与主动暂停；`GET /api/review/submissions/{id}` 读取判题结果。前两者使用 revision 与 question_id 校验；所有请求带 `topic_id` 并核对身份和权限。
+- 复习页面只有当前 Practice 和本轮已答题，不提供 Example、Introduction、未来题或未作答题解析。游客主动暂停返回 403；游客自愿开启体验浏览时，`GET /api/review/sessions/{id}/demo-answer` 只提供当前可提交题的标准答案，已有草稿不覆盖。
+- 保留度、优化、解锁及后台配置不开放网页接口。`review-status --learner ... --topic ...` 查看本机复习状态；`review-unlock --learner ... --topic ... --pause-event ...` 按精确暂停事件解锁，Lesson 已完成时同样有效。
+- 本次推送指网站内到期任务；浏览器系统通知、邮件与站外消息未接入。
 
 ## 到期推送与复习轮次
 

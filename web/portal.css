@@ -29,6 +29,28 @@ body { padding-top: 50px; }
 .userMenu > a:hover, .userMenu > button:hover { background: #f2f2f2; }
 .userMenu > a span, .userMenu > button span:not(#identityAction):not(#identityName) { font-size: 12px; color: #969696; margin-left: 8px; }
 .portalShell { max-width: 1110px; margin: 29px auto 80px; padding: 0 20px; outline: 0; }
+.portalShell.reviewShell { max-width: 1380px; }
+.reviewLayout { display: grid; grid-template-columns: 220px minmax(0, 820px); gap: 40px; }
+.reviewMain { min-width: 0; outline: 0; }
+.reviewHistory { align-self: start; position: sticky; top: 100px; border-right: 1px solid #e4e9ed; padding-right: 20px; }
+.reviewHistory .historyButton { padding: 10px 8px; width: 100%; }
+.reviewHistoryList { display: grid; gap: 5px; padding-top: 10px; }
+.reviewHistoryList[hidden] { display: none; }
+.reviewHistory .historyItem { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+.reviewTopicTitle { margin: 9px 0; color: #717f8a; font-size: 13px; }
+.reviewProgress { color: #627584; font-size: 13px; margin: 18px 0 26px; }
+.reviewMastery { font-size: 17px; color: #0877bf; white-space: nowrap; }
+.taskDueAt, .reviewNextDue { font-size: 12px; color: #687e8c; margin-top: 12px; }
+@media (max-width: 900px) {
+  .reviewLayout { grid-template-columns: 145px minmax(0, 1fr); gap: 22px; }
+  .reviewHistory { padding-right: 12px; }
+}
+@media (max-width: 640px) {
+  .reviewLayout { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .reviewHistory { position: static; border: 1px solid #e4e9ed; border-radius: 3px; padding: 8px; }
+  .reviewHistoryList { grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); }
+  .reviewMain .moduleResult { flex-wrap: wrap; }
+}
 .portalPageTitle { color: #1e194e; font-size: 22px; font-weight: 400; margin: 0 0 28px; line-height: 1.4; }
 .portalLoading { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 35px 16px; color: #818181; font-size: 14px; }
 .portalLoading .spinner { width: 18px; height: 18px; flex: 0 0 18px; }

@@ -1381,6 +1381,8 @@ portal = initPortal({
     catch (error) { if (identityFailure(error)) await recoverIdentity(error); throw error; }
   },
   getApiOrigin: () => apiBase || window.location.origin,
+  setAccess: next => { access = next; renderIdentity(); },
+  demoEnabled: () => $("guestDemoCheckbox").checked,
   openIdentity, returnToGuest, openTopic, leaveTopic,
 });
 await portal.start();
