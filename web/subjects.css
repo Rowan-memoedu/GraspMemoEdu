@@ -32,7 +32,8 @@ body.platformTheme { background: var(--platform-paper); }
 .subjectCard:hover { background: #fffefa; border-color: var(--card-accent, var(--subject-accent)); }
 .subjectCard:focus-visible, .subjectEmpty a:focus-visible, .platformTheme #subjectContext:focus-visible { outline: 2px solid var(--card-accent, var(--subject-accent)); outline-offset: 4px; }
 .subjectCardTop { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; }
-.subjectEmblem { display: block; color: var(--card-accent, var(--subject-accent)); font: 400 31px/1.1 var(--platform-serif); min-height: 35px; }
+.subjectEmblem { display: block; width: 40px; height: 40px; }
+.hasSubjectContext .portalLogo { color: var(--subject-accent); }
 .subjectCardArrow { color: var(--card-accent, var(--subject-accent)); font: 21px/1 var(--platform-serif); opacity: .65; }
 .subjectName { margin: 0; font: 500 25px/1.35 var(--platform-serif); }
 .subjectSecondaryName { margin: 4px 0 0; color: var(--card-accent, var(--subject-accent)); font: 13px/1.4 var(--platform-serif); letter-spacing: .025em; }
@@ -42,7 +43,7 @@ body.platformTheme { background: var(--platform-paper); }
 .subjectBack { display: inline-block; margin-bottom: 24px; font-size: 13px; color: var(--platform-muted); text-decoration: none; }
 .subjectBack:hover { color: var(--subject-accent); }
 .subjectEmptyPanel { padding: 66px 28px; text-align: center; border: 1px solid var(--ma-border); background: #fff; }
-.subjectEmptyPanel .subjectEmblem { font-size: 42px; }
+.subjectEmptyPanel .subjectEmblem { margin-inline: auto; width: 48px; height: 48px; }
 .subjectEmptyTitle { margin: 25px 0 12px; color: var(--ma-navy); font-size: 28px; font-weight: 400; line-height: 1.3; }
 .subjectEmptyMessage { color: var(--muted); font-size: 16px; line-height: 1.8; }
 .subjectEmptyActions { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 18px; margin-top: 30px; }

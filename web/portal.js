@@ -665,7 +665,7 @@ export function initPortal(bridge) {
       const fill = completed ? "var(--progress-complete)" : topic.status === "in_progress" || topic.status === "paused" ? "var(--progress-paused)" : topic.frontier ? "var(--progress-ready)" : "#f2f2f2";
       group.append(make("rect", { x: p.x - 86, y: p.y - 24, width: 172, height: 48, rx: 3, fill, stroke: "#c9d2da" }));
       const title = make("title"); title.textContent = `${topic.title} · ${statusNames[topic.status] || t("portal.not.started.3")}`; group.append(title);
-      const label = make("text", { x: p.x, y: p.y + 5, "text-anchor": "middle", fill: completed ? "#fff" : "var(--ma-navy)", "font-size": 13 }); label.textContent = [...topic.title].length > 13 ? [...topic.title].slice(0, 12).join("") + "…" : topic.title; group.append(label); svg.append(group);
+      const label = make("text", { x: p.x, y: p.y + 5, "text-anchor": "middle", fill: completed ? "var(--primary-text, #fff)" : "var(--ma-navy)", "font-size": 13 }); label.textContent = [...topic.title].length > 13 ? [...topic.title].slice(0, 12).join("") + "…" : topic.title; group.append(label); svg.append(group);
     }
     const viewport = node("div", "graphViewport"); viewport.append(svg);
     graphContent.replaceChildren(viewport, node("p", "graphLegend", t("portal.dark.blue.completed.light.blue.in.progress.pale.blue.ready.to.sta.98")));

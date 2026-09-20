@@ -71,9 +71,15 @@ function recolor(hex, subjectId) {
 }
 export function subjectPalette(subjectId = 'math') {
   const id = Object.hasOwn(subjectHues, subjectId) ? subjectId : 'math';
-  return Object.fromEntries(Object.entries(mathPalette).map(([token, value]) => [token,
+  const palette = Object.fromEntries(Object.entries(mathPalette).map(([token, value]) => [token,
     id === 'chemistry' && monochromeInk.has(token) ? '#111111' :
     id === 'chemistry' && ['--link-hover', '--button-hover', '--button-active'].includes(token) ? '#000000' : recolor(value, id)]));
+  if (id === 'physics') Object.assign(palette, {
+    '--link-color': '#FF7800', '--ma-blue': '#FF7800', '--score-color': '#FF7800',
+    '--progress-complete': '#FF7800', '--link-hover': '#ed7000',
+    '--button-hover': '#ed7000', '--button-active': '#e06900'
+  });
+  return palette;
 }
 const accent = subject => subjectPalette(subject?.id)['--link-color'];
 const emblems = { math: '∑', physics: 'φ', english: 'Aa', chinese: '文', biology: '叶', chemistry: '⚗' };
@@ -105,7 +111,9 @@ export function parsePlatformRoute(hash = '#/') {
 }
 
 function emblem(subject) {
-  const symbol = element('span', 'subjectEmblem', subject.emblem || emblems[subject.id] || '·');
+  const symbol = element('img', 'subjectEmblem');
+  symbol.src = subjectLogo(subject);
+  symbol.alt = '';
   symbol.setAttribute('aria-hidden', 'true');
   return symbol;
 }
@@ -165,6 +173,7 @@ export function applySubjectTheme(subject, { home = false } = {}) {
   const color = palette['--link-color'];
   document.documentElement.style.setProperty('--subject-accent', color);
   document.documentElement.style.setProperty('--subject-accent-soft', color + '12');
+  document.documentElement.style.setProperty('--primary-text', subject?.id === 'physics' ? '#202020' : '#ffffff');
   for (const [name, value] of Object.entries(palette)) document.documentElement.style.setProperty(name, value);
   document.body.classList.toggle('platformTheme', home);
   document.body.classList.toggle('subjectTemplate', Boolean(subject));

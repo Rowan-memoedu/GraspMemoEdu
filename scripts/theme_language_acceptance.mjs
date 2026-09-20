@@ -20,6 +20,7 @@ try{
  const go=async route=>{await page.goto(base+'#'+route,{waitUntil:'networkidle'});};
  await go('/');await page.locator('.subjectCard').first().waitFor();
  assert.equal(await page.locator('.subjectSecondaryName').count(),6,'Keep homepage bilingual subtitles');
+ const homeLogos=await page.locator('.subjectCard').evaluateAll(cards=>Object.fromEntries(cards.map(card=>[card.dataset.subjectId,card.querySelector('.subjectEmblem').src])));
  await page.locator('#userMenuButton').click();await page.locator('#identityButton').click();
  await page.locator('#invitationCode').fill(account.invitation_code);await page.locator('#identitySubmitButton').click();
  await page.locator('#identityDialog').waitFor({state:'hidden'});
@@ -31,17 +32,20 @@ try{
    }
    for(const id of ids){
      await go(`/subjects/${id}/courses`);await page.locator('.courseChoice').first().waitFor();
+     assert.equal(await page.locator('.portalLogo img').getAttribute('src'),homeLogos[id],`${id} same homepage and navbar logo`);
+     assert.equal(await page.locator('.portalLogo').evaluate(node=>getComputedStyle(node).color),await page.locator('.courseLearn').first().evaluate(node=>getComputedStyle(node).backgroundColor),`${id} navbar label uses accent`);
      const styles=await page.evaluate(()=>{
        const title=getComputedStyle(document.querySelector('.courseChoice h2')),button=getComputedStyle(document.querySelector('.courseLearn')),card=getComputedStyle(document.querySelector('.courseChoice'));
        return {heading:title.color,button:button.backgroundColor,buttonText:button.color,font:title.fontFamily,size:title.fontSize,weight:title.fontWeight,padding:card.padding,border:card.borderRadius};
      });
      if(!mathStyles)mathStyles=styles;
-     for(const key of ['font','size','weight','padding','border','buttonText'])assert.equal(styles[key],mathStyles[key],`${id} common ${key}`);
+     for(const key of ['font','size','weight','padding','border'])assert.equal(styles[key],mathStyles[key],`${id} common ${key}`);
      assert.ok(lum(styles.heading)<=lum(mathStyles.heading)+.006,`${id} heading contrast`);
-     assert.ok(lum(styles.button)<=lum(mathStyles.button)+.006,`${id} button contrast`);
+     if(id==='physics')assert.equal(styles.button,'rgb(255, 120, 0)');
+     else assert.ok(lum(styles.button)<=lum(mathStyles.button)+.006,`${id} button contrast`);
      if(id==='english')assert.ok(Math.abs(lum(styles.button)-lum(mathStyles.button))<.006,'Approved violet brightness');
      if(id==='chemistry')assert.equal(styles.button,'rgb(17, 17, 17)','Black primary button');
-     assert.ok(1.05/(lum(styles.button)+.05)>=4.5,`${id} white button text contrast`);
+     assert.ok((Math.max(lum(styles.button),lum(styles.buttonText))+.05)/(Math.min(lum(styles.button),lum(styles.buttonText))+.05)>=4.5,`${id} button text contrast`);
      assert.equal(await page.locator('.mainNavigation').innerText(),lang==='en'?'Learn\nCourses\nGuide':'学习\n课程\n指南');
      await page.screenshot({path:path.join(out,`${lang}-${id}-courses.png`),fullPage:true});
      await page.locator('.courseGraphButton').first().click();

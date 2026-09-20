@@ -125,7 +125,7 @@ body { padding-top: 50px; }
 .taskStartRow { border-top: 1px solid #ececec; padding: 23px 15px 20px; }
 .taskStartRow p, .taskStatusNote, .maintenanceNote { color: #878787; font-size: 13px; margin: 12px 15px; }
 .maintenanceNote { margin: 17px 0 0; }
-.portalStart { border: 0; border-radius: 17px; padding: 7px 20px; background: var(--link-color); color: #fff; font-size: 14px; line-height: 20px; }
+.portalStart { border: 0; border-radius: 17px; padding: 7px 20px; background: var(--link-color); color: var(--primary-text, #fff); font-size: 14px; line-height: 20px; }
 .portalStart:hover { background: var(--link-hover); }
 .taskCompleted { border-radius: 0; padding: 0; }
 button.taskCompleted:hover { border-color: var(--task-hover-border); }

@@ -9,16 +9,18 @@ assert.deepEqual(subjectPalette('math'),mathPalette);
 for(const id of Object.keys(subjectHues)){
  const palette=subjectPalette(id);
  for(const [key,base] of Object.entries(mathPalette)){
-   assert.ok(luminance(palette[key])<=luminance(base)+.006,`${id}: ${key} lost contrast`);
+   if(id!=='physics')assert.ok(luminance(palette[key])<=luminance(base)+.006,`${id}: ${key} lost contrast`);
    if(id==='math'||id==='english'||luminance(base)>.5)assert.ok(Math.abs(luminance(palette[key])-luminance(base))<.006,`${id}: ${key} changed reference brightness`);
    if(id==='chemistry')assert.equal(new Set(palette[key].slice(1).match(/../g)).size,1);
  }
- assert.ok(1.05/(luminance(palette['--link-color'])+.05)>=4.5,`${id}: button contrast`);
+ const contrast=id==='physics'?(luminance(palette['--link-color'])+.05)/(luminance('#202020')+.05):1.05/(luminance(palette['--link-color'])+.05);
+ assert.ok(contrast>=4.5,`${id}: button contrast`);
  assert.ok(1.05/(luminance(palette['--ma-navy'])+.05)>=14,`${id}: heading contrast`);
  console.log(id, palette['--ma-navy'],palette['--link-color']);
 }
 assert.equal(subjectPalette('chemistry')['--link-color'],'#111111');
-for(const id of ['physics','biology','chinese'])assert.ok(luminance(subjectPalette(id)['--link-color'])<luminance(mathPalette['--link-color'])*.8);
+assert.equal(subjectPalette('physics')['--link-color'],'#FF7800');
+for(const id of ['biology','chinese'])assert.ok(luminance(subjectPalette(id)['--link-color'])<luminance(mathPalette['--link-color'])*.8);
 globalThis.document={documentElement:{}};
 setLanguage('zh-CN');assert.equal(t('Introduction'),'课程介绍');
 assert.deepEqual(['again','hard','good','easy'].map(key=>t('review.'+key)),['需再练习','较难','良好','轻松']);
