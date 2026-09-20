@@ -10,12 +10,14 @@
 - 源码仅在本仓库；数据在 `D:/AppData/MathLearningWeb`，证据在 `D:/Artifacts/MathLearningWeb`。课程正文、答案表、数据库、配对信息和密钥不进入 Git。
 - 修改后运行 `D:/AppData/MathLearningWeb/venv/Scripts/python.exe -m unittest discover -s tests -v`。实际学习流程须用独立验收目录和真实判题核验，不能消耗正式进度。
 - 课程导入从只读原稿重跑；排版勘误放外置 sidecar 并保留来源。不要手改生成课程冒充管线通过。
+- 作者 Markdown 导入使用 `Import-Topic.ps1` 或 `author-prepare` / `author-install`，规范见 `docs/author-import.md`。复用原转换器，LLM 提取与独立审核后按题目 ID 注入；审核包留本机。只新增至已有 Course，不覆盖 Topic 或自动扩大账号权限，安装后重载后端。
 - 课程版本不匹配须保留旧进度；暂停与评分由 SQLite 事务决定；在途判题不持有数据库锁，旧轮次结果不能推进新轮次。
 - 后端只绑定回环地址；禁止 Web 解锁。管理命令精确指定学习者、Topic、模块、暂停事件。
 - 启动入口要验证进程开始时间及实例 ID。后台服务启动不能放入会在正常退出时清理整个 Job 的测试超时器。
 - 已获公开发布及更名授权；源码仓库为私有 GraspMemoEdu，独立公开仓库 GraspMemoEdu-Pages 仅发布 web 静态资产和仅含公开 API 地址的 deployment.json。本机源码、数据及运维目录继续沿用 MathLearningWeb，避免影响运行配置。前端不提供连接配置；访客通过公共 HTTPS API 自动进入游客模式。发布后核对实际资产哈希。
 - 已授权完整邀请码账号搭建与测试：access_* 表与学习状态同库，凭据仅存哈希；每浏览器游客独立，账号按 Topic 和功能授权。游客目前只可进入数学，且禁止主动暂停，原自动暂停规则不变；其它学科须登录账号，课程仍受原有 Topic 权限约束。初始 15 个账号中 10 个正式使用、5 个固定 test 用途；先做独立验收，再仅使用 test 账号公网验收。原始邀请码只保存在本机私密管理目录，不能写入源码、回执或公开资产。
 - 管理账号和权限使用本机CLI；网页不得暴露管理员接口。每个身份按 learner_id 隔离，状态和提交结果都须核对归属。
+- 账号默认动态开放全部当前及后续 Topic、功能；明确权限列表按 Topic/功能两个维度分别覆盖，空列表禁止该维度。`account-permissions --default-topics --default-features` 恢复继承。游客限制不变；旧无模式记录保守保留，已确认默认的正式初始批次按建号记录迁移。
 - 先前清空记录任务已完成；后续更新默认保留正式进度，迁移前备份并核对原行。不得将验收进度灌入正式学习者。
 - 用户已授权免费公网测试、本机持续作为后端。Start-PublicLearning.ps1 管理 Cloudflare Quick Tunnel 并更新固定网页地址；不得暴露其他本机服务，不开路由器端口。公网游客隔离验收使用独立数据目录，正式记录保留。
 - 网站已获授权接通 `ReviewBackend(learning_service)`：新完成 Lesson 模块进入 FSRS，到期以“复习”推送；每轮只抽取对应 Practice，复用共享判题和队列规则。既有完成记录不自动回填。评分规则集中在 `practice.py` 并随轮次保存版本；保留度、参数优化、重排和解锁只在本机管理。验证必须使用独立数据目录。复习第 3 次错误暂停，Lesson 第 4 次错误暂停。

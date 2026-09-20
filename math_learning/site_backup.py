@@ -15,6 +15,7 @@ from .config import Settings
 from .guide import GuideReader
 from .service import DomainError, LearningService
 from .subjects import Subjects
+from scripts.verify_content import collect_questions, parse_outline, sha256
 
 
 def _json(value):
@@ -45,6 +46,33 @@ def _safe_name(name):
     reserved = re.compile(r'^(CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³]|CONIN\$|CONOUT\$)(\.|$)', re.IGNORECASE)
     return all(part not in {'.', '..'} and part == part.rstrip(' .') and not reserved.match(part)
                and not any(ord(character) < 32 for character in part) for part in path.parts)
+
+
+def _validate_review(topic, source, answers, data):
+    """Validate preserved review evidence without sending another LLM request."""
+    review = json.loads(data)
+    if (review.get('schema_version') != 1 or review.get('status') != 'approved'
+            or review.get('source_sha256') != sha256(source)
+            or review.get('sidecar_sha256') != sha256(answers)):
+        raise ValueError('Review evidence is unapproved or differs from its inputs')
+    questions = collect_questions(parse_outline(source.decode('utf-8-sig')))
+    by_id = {question['id']: question for question in questions}
+    topic_questions = {q['id']: q for m in topic['modules'] for q in [m['example'], *m['practices']]}
+    answer_rows = json.loads(answers)['answers']
+    records = review.get('questions')
+    if not isinstance(records, list) or any(not isinstance(row, dict) or not isinstance(row.get('id'), str) for row in records):
+        raise ValueError('Invalid review questions')
+    ids = [row['id'] for row in records]
+    if (len(ids) != len(set(ids)) or set(ids) != set(by_id)
+            or set(ids) != set(topic_questions) or set(ids) != set(answer_rows)):
+        raise ValueError('Review question coverage differs from the source or topic')
+    for row in records:
+        qid = row['id']
+        if (row.get('approved') is not True or row.get('issues') != []
+                or row.get('question_sha256') != sha256(by_id[qid]['question'])
+                or answer_rows[qid].get('question_sha256') != row['question_sha256']
+                or topic_questions[qid]['question'] != by_id[qid]['question']):
+            raise ValueError('Review question evidence is invalid')
 
 
 def _read_archive(backup):
@@ -95,13 +123,18 @@ def _validate_payload(manifest, blobs):
     for topic_id, entry in sources.items():
         if not isinstance(entry, dict):
             raise ValueError('Invalid sources entry')
-        expected = {'source': f'sources/{topic_id}.md', 'answers': f'courses/{topic_id}.answers.json'}
+        expected = {'source': f'sources/{topic_id}.md', 'answers': f'courses/{topic_id}.answers.json',
+                    'review': f'courses/{topic_id}.review.json'}
         if any(key not in expected or value != expected[key] or value not in blobs for key, value in entry.items()):
             raise ValueError('Invalid sources path')
         if 'source' in entry and hashlib.sha256(blobs[entry['source']]).hexdigest() != topics[topic_id]['source_sha256']:
             raise ValueError('Source differs from topic content')
         if 'answers' in entry:
             _validate_answers(topics[topic_id], blobs[entry['answers']])
+        if 'review' in entry:
+            if not {'source', 'answers'} <= set(entry):
+                raise ValueError('Review requires its source and answers')
+            _validate_review(topics[topic_id], blobs[entry['source']], blobs[entry['answers']], blobs[entry['review']])
         expected_files.update(entry.values())
     guide_roots = {'guide': 'guide/guide.md'}
     if 'subjects.json' in blobs:
@@ -189,6 +222,15 @@ def backup_site(settings, destination=None):
             blobs[entry['answers']] = answers_bytes
         elif source_path is not None or 'answers_path' in index:
             raise DomainError('answers_missing', '独立答案表缺失，无法生成完整备份。', 422)
+        if 'review_path' in index:
+            review_path = source_location(index['review_path'])
+            if not review_path.is_file():
+                raise DomainError('review_missing', '课程审核凭据缺失，无法生成完整备份。', 422)
+            review_bytes = review_path.read_bytes()
+            if sha256(review_bytes) != index.get('review_sha256'):
+                raise DomainError('review_changed', '课程审核凭据已变化，未创建备份。', 409)
+            entry['review'] = f'courses/{topic_id}.review.json'
+            blobs[entry['review']] = review_bytes
         sources_index[topic_id] = entry
     portable = {'courses': [{**course, 'topics': [{**topic, 'path': f"courses/{topic['id']}.json"}
                                                 for topic in course['topics']]} for course in catalog.courses.values()]}
@@ -284,6 +326,9 @@ def restore_site(backup, destination):
                     index['source_path'] = str((destination / sources['source']).resolve())
                 if 'answers' in sources:
                     index['answers_path'] = str((destination / sources['answers']).resolve())
+                if 'review' in sources:
+                    index['review_path'] = str((destination / sources['review']).resolve())
+                    index['review_sha256'] = sha256(blobs[sources['review']])
                 (staged / f'courses/{topic_id}.sources.json').write_bytes(_json(index))
             (staged / 'settings.json').write_bytes(_json({
                 'course_path': str((destination / f'courses/{default_id}.json').resolve()),

@@ -239,6 +239,18 @@ def main():
     parser = argparse.ArgumentParser(description='本机数学学习网站与管理命令')
     parser.add_argument('--data-dir', type=Path, default=None)
     sub = parser.add_subparsers(dest='command', required=True)
+    for command in ('author-prepare', 'author-import', 'author-install'):
+        author = sub.add_parser(command, help='本机作者 Markdown 导入：准备审核包、入库或一键执行')
+        if command != 'author-install':
+            author.add_argument('--source', type=Path, required=True)
+            author.add_argument('--topic-id', required=True)
+            author.add_argument('--run-dir', type=Path, help='新审核产物目录；默认 D:/Artifacts/MathLearningWeb/author-import/runs')
+        else:
+            author.add_argument('--package', type=Path, required=True)
+        if command != 'author-prepare':
+            author.add_argument('--subject', required=True)
+            author.add_argument('--course', required=True, help='已有 Course ID，不会覆盖其原有 Topic')
+            author.add_argument('--unit', help='已有章节 ID；多章节课程必须指定')
     serve = sub.add_parser('serve')
     serve.add_argument('--port', type=int)
     serve.add_argument('--instance-id')
@@ -294,6 +306,8 @@ def main():
     permissions.add_argument('--learner', required=True, help='account-list 返回的账号 learner_id')
     permissions.add_argument('--topics', help='逗号分隔 Topic 标识；空字符串清空；省略则保留')
     permissions.add_argument('--features', help='逗号分隔功能权限；空字符串清空；省略则保留')
+    permissions.add_argument('--default-topics', action='store_true', help='恢复默认开放全部当前及后续 Topic')
+    permissions.add_argument('--default-features', action='store_true', help='恢复默认开放全部当前及后续功能')
     args = parser.parse_args()
     try:
         if args.command == 'restore':
@@ -310,6 +324,31 @@ def main():
             from .api import create_app
             with server_lock(settings.data_dir):
                 uvicorn.run(create_app(settings), host='127.0.0.1', port=settings.port, access_log=False, proxy_headers=False)
+        elif args.command in ('author-prepare', 'author-import', 'author-install'):
+            from .author_import import prepare_topic
+            from .topic_install import install_topic
+            if args.command == 'author-install':
+                output(install_topic(settings, args.package, subject_id=args.subject, course_id=args.course, unit_id=args.unit))
+            else:
+                Catalog._identifier(args.topic_id)
+                # Resolve destination mistakes before spending tokens on API review.
+                if args.command == 'author-import':
+                    from .subjects import Subjects
+                    catalog = Catalog.load(settings)
+                    Subjects(settings, catalog).authorize_course(args.subject, args.course)
+                    if args.topic_id in catalog.topics:
+                        raise ValueError('Topic ID already exists; use author-install with the approved package to check idempotency')
+                stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')
+                folder = args.run_dir or Path('D:/Artifacts/MathLearningWeb/author-import/runs') / (args.topic_id + '-' + stamp)
+                manifest = prepare_topic(args.source, args.topic_id, folder)
+                if manifest['status'] != 'approved':
+                    output({'status': 'failed', 'package': str(folder), 'report': str(folder / 'manifest.json'),
+                            'error': manifest.get('error'), 'stage': manifest.get('stage')})
+                    raise SystemExit(1)
+                result = {'status': 'approved', 'package': str(folder), 'report': str(folder / 'manifest.json')}
+                if args.command == 'author-import':
+                    result.update(install_topic(settings, folder, subject_id=args.subject, course_id=args.course, unit_id=args.unit))
+                output(result)
         elif args.command == 'status':
             if args.list_learners:
                 output({'learners': learner_statuses(settings)})
@@ -355,10 +394,11 @@ def main():
                         rows = [dict(row) for row in con.execute('SELECT * FROM feedback ORDER BY created_at DESC,id DESC LIMIT ?', (max(1, min(500, args.limit)),))]
             output({'feedback': rows})
         elif args.command == 'account-permissions':
-            if args.topics is None and args.features is None:
+            if args.topics is None and args.features is None and not args.default_topics and not args.default_features:
                 raise DomainError('permissions_required', '请指定 --topics 或 --features；空字符串表示清空。', 422)
             output(make_access_store(settings).set_permissions(
-                args.learner, split_permissions(args.topics), split_permissions(args.features)))
+                args.learner, split_permissions(args.topics), split_permissions(args.features),
+                reset_topics=args.default_topics, reset_features=args.default_features))
         elif args.command == 'pair':
             # An exact origin and a local, manually supplied credential are both required.
             origins = tuple(dict.fromkeys([*settings.allowed_origins, args.origin]))

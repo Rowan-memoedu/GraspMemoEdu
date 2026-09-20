@@ -19,6 +19,7 @@ from math_learning.guide import GuideReader
 from math_learning.service import DomainError, LearningService
 from math_learning.site_backup import backup_site, restore_site
 from tests.fixtures import DeterministicJudge, synthetic_course, temporary_test_directory
+from scripts.verify_content import collect_questions, parse_outline, sha256
 
 
 def write_json(path, value):
@@ -174,6 +175,71 @@ class SiteBackupAcceptanceTests(unittest.TestCase):
         second_index = json.loads((second_destination / 'courses/portable-b.sources.json').read_text(encoding='utf-8'))
         self.assertTrue(Path(second_index['answers_path']).is_relative_to(second_destination))
         self.assertEqual(Catalog.load(Settings.load(second_destination)).topics, self.catalog.topics)
+
+    def _attach_review_evidence(self):
+        # Add a separate source-backed topic; never reinterpret existing progress.
+        topic = synthetic_course(1)
+        topic.update(id='reviewed-topic', title='Reviewed fixture')
+        module = topic['modules'][0]
+        module['id'] = 'example-1'
+        module['example']['id'] = 'example-1-question'
+        for number, q in enumerate(module['practices'], 1):
+            q['id'] = f'example-1-practice-{number}'
+        lines = ['- Reviewed fixture', '  - Introduction', '    - Synthetic prose.', '  - Example 1: Question',
+                 '    - State a fact.', '    - Explanation', '      - A synthetic explanation.']
+        module['example']['question'] = 'State a fact.'
+        for number, q in enumerate(module['practices'], 1):
+            q['question'] = f'State fact {number}.'
+            lines += [f'    - Practice {number}', f'      - {q["question"]}', '      - Explanation', '        - Synthetic explanation.']
+        source = self.external / 'reviewed-topic.md'
+        source.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+        topic['source_sha256'] = sha256(source.read_bytes())
+        questions = collect_questions(parse_outline(source.read_text()))
+        topic_path = self.external / 'reviewed-topic.json'
+        write_json(topic_path, topic)
+        answers_path = self.external / 'reviewed-topic.answers.json'
+        write_json(answers_path, {'source_sha256': topic['source_sha256'], 'answers': {
+            q['id']: {**{key: q[key] for key in ('reference_answer', 'answer_type', 'constraints')},
+                      'question_sha256': sha256(q['question'])} for q in [module['example'], *module['practices']]}})
+        review_path = self.external / 'reviewed-topic.review.json'
+        write_json(review_path, {'schema_version': 1, 'status': 'approved', 'source_sha256': topic['source_sha256'],
+                               'sidecar_sha256': sha256(answers_path.read_bytes()), 'model': 'fixture',
+                               'questions': [{'id': q['id'], 'question_sha256': sha256(q['question']),
+                                              'approved': True, 'issues': []} for q in questions]})
+        write_json(self.external / 'reviewed-topic.sources.json', {
+            'source_path': str(source), 'answers_path': str(answers_path),
+            'review_path': str(review_path), 'review_sha256': sha256(review_path.read_bytes())})
+        self.catalog_data['courses'][0]['topics'].append({'id': 'reviewed-topic', 'path': str(topic_path)})
+        write_json(self.data / 'catalog.json', self.catalog_data)
+        return review_path
+
+    def test_review_evidence_survives_backup_restore_and_second_backup(self):
+        review = self._attach_review_evidence().read_bytes()
+        archive = self._backup()
+        destination = self.root / 'with-review'
+        restore_site(archive, destination)
+        index = json.loads((destination / 'courses/reviewed-topic.sources.json').read_text())
+        self.assertEqual(Path(index['review_path']).read_bytes(), review)
+        self.assertEqual(index['review_sha256'], sha256(review))
+        second = self.root / 'review-second.zip'
+        backup_site(Settings.load(destination), second)
+        with zipfile.ZipFile(second) as saved:
+            self.assertEqual(saved.read('courses/reviewed-topic.review.json'), review)
+
+    def test_review_tampering_and_noncanonical_paths_rejected_before_restore(self):
+        self._attach_review_evidence()
+        archive = self._backup()
+        def change_record(manifest, blobs):
+            review = json.loads(blobs['courses/reviewed-topic.review.json'])
+            review['questions'][0]['approved'] = False
+            blobs['courses/reviewed-topic.review.json'] = json.dumps(review).encode()
+        def change_answers_bytes(manifest, blobs):
+            blobs['courses/reviewed-topic.answers.json'] += b'\n'
+        def change_path(manifest, blobs):
+            manifest['sources']['reviewed-topic']['review'] = 'courses/portable-a.json'
+        for mutation in (change_record, change_answers_bytes, change_path):
+            with self.subTest(mutation=mutation):
+                self._assert_invalid_without_target(self._edited_archive(archive, mutation))
 
     def test_referenced_in_directory_symlink_keeps_markdown_path(self):
         assets = self.settings.guide_path.parent / 'assets'

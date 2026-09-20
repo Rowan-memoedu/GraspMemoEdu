@@ -69,6 +69,11 @@ class AccessStore:
                 con.execute('ALTER TABLE access_principals ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1))')
             if 'batch_id' not in columns:
                 con.execute('ALTER TABLE access_principals ADD COLUMN batch_id TEXT')
+            # Legacy lists were explicit snapshots. Never infer that an old
+            # all-current-topics list authorized future content or features.
+            for name in ('topics_default', 'features_default'):
+                if name not in columns:
+                    con.execute(f'ALTER TABLE access_principals ADD COLUMN {name} INTEGER NOT NULL DEFAULT 0 CHECK({name} IN (0,1))')
             columns = {row['name'] for row in con.execute('PRAGMA table_info(access_identities)')}
             if 'expires_at' not in columns:
                 con.execute('ALTER TABLE access_identities ADD COLUMN expires_at TEXT')
@@ -107,8 +112,9 @@ class AccessStore:
 
     def _public(self, row):
         guest = row['role'] == 'guest'
-        features = list(GUEST_FEATURES) if guest else json.loads(row['features'])
-        topic_ids = [topic for topic in self.topics if topic in self.guest_topic_ids] if guest else json.loads(row['topic_ids'])
+        features = list(GUEST_FEATURES) if guest else (list(FEATURES) if row['features_default'] else json.loads(row['features']))
+        topic_ids = ([topic for topic in self.topics if topic in self.guest_topic_ids] if guest else
+                     (list(self.topics) if row['topics_default'] else json.loads(row['topic_ids'])))
         result = {
             'role': row['role'], 'learner_id': row['learner_id'],
             'display_name': row['display_name'],
@@ -116,7 +122,8 @@ class AccessStore:
             'topics': [self.topics[topic_id] for topic_id in topic_ids if topic_id in self.topics],
         }
         if not guest:
-            result.update(purpose=row['purpose'], enabled=bool(row['enabled']), batch_id=row['batch_id'])
+            result.update(purpose=row['purpose'], enabled=bool(row['enabled']), batch_id=row['batch_id'],
+                          permission_defaults={'topics': bool(row['topics_default']), 'features': bool(row['features_default'])})
         return result
 
     def _new_identity(self, con, learner_id, *, account=False):
@@ -210,6 +217,7 @@ class AccessStore:
             raise DomainError('invalid_account_purpose', '账号用途只能是 learner 或 test。', 422)
         if batch_id is not None and (not isinstance(batch_id, str) or not batch_id.strip() or len(batch_id) > 100):
             raise DomainError('invalid_batch', '批次标识需要 1 至 100 个字符。', 422)
+        topics_default, features_default = topic_ids is None, features is None
         topic_ids, features = self._validate_permissions(
             list(self.topics) if topic_ids is None else topic_ids,
             list(FEATURES) if features is None else features)
@@ -217,10 +225,10 @@ class AccessStore:
         invitation = invitation or 'MLW-' + secrets.token_urlsafe(24)
         now = timestamp()
         con.execute('''INSERT INTO access_principals
-            (learner_id,role,display_name,features,topic_ids,invitation_digest,created_at,updated_at,purpose,batch_id)
-            VALUES (?,?,?,?,?,?,?,?,?,?)''',
+            (learner_id,role,display_name,features,topic_ids,invitation_digest,created_at,updated_at,purpose,batch_id,topics_default,features_default)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''',
             (learner_id, 'account', display_name.strip(), json.dumps(features), json.dumps(topic_ids),
-             credential_digest('invitation', invitation), now, now, purpose, batch_id))
+             credential_digest('invitation', invitation), now, now, purpose, batch_id, int(topics_default), int(features_default)))
         row = con.execute('SELECT * FROM access_principals WHERE learner_id=?', (learner_id,)).fetchone()
         return {'account': self._public(row), 'invitation_code': invitation,
                 'notice': '邀请码可重复登录同一账号，请通过可信方式交付给对应学习者。'}
@@ -266,16 +274,23 @@ class AccessStore:
             count = con.execute('DELETE FROM access_identities WHERE learner_id=?', (learner_id,)).rowcount
         return {'learner_id': learner_id, 'revoked_sessions': count}
 
-    def set_permissions(self, learner_id, topic_ids=None, features=None):
+    def set_permissions(self, learner_id, topic_ids=None, features=None, *, reset_topics=False, reset_features=False):
+        if type(reset_topics) is not bool or type(reset_features) is not bool:
+            raise DomainError('invalid_permission_reset', '恢复默认权限的选项必须为 true 或 false。', 422)
+        if (reset_topics and topic_ids is not None) or (reset_features and features is not None):
+            raise DomainError('conflicting_permissions', '同一权限不能同时指定列表和恢复默认。', 422)
+        validated_topics, validated_features = self._validate_permissions(
+            [] if topic_ids is None else topic_ids, [] if features is None else features)
         with self._transaction() as con:
             row = con.execute("SELECT * FROM access_principals WHERE learner_id=? AND role='account'", (learner_id,)).fetchone()
             if not row:
                 raise DomainError('account_not_found', '未找到指定账号；游客权限为固定规则。', 404)
-            topic_ids, features = self._validate_permissions(
-                json.loads(row['topic_ids']) if topic_ids is None else topic_ids,
-                json.loads(row['features']) if features is None else features)
-            con.execute('UPDATE access_principals SET topic_ids=?,features=?,updated_at=? WHERE learner_id=?',
-                        (json.dumps(topic_ids), json.dumps(features), timestamp(), learner_id))
+            topics_default = 1 if reset_topics else (0 if topic_ids is not None else row['topics_default'])
+            features_default = 1 if reset_features else (0 if features is not None else row['features_default'])
+            topic_json = '[]' if reset_topics else (json.dumps(validated_topics) if topic_ids is not None else row['topic_ids'])
+            feature_json = '[]' if reset_features else (json.dumps(validated_features) if features is not None else row['features'])
+            con.execute('UPDATE access_principals SET topic_ids=?,features=?,topics_default=?,features_default=?,updated_at=? WHERE learner_id=?',
+                        (topic_json, feature_json, topics_default, features_default, timestamp(), learner_id))
             row = con.execute('SELECT * FROM access_principals WHERE learner_id=?', (learner_id,)).fetchone()
         return self._public(row)
 

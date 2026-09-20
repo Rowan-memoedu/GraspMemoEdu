@@ -57,6 +57,7 @@ export function sourceQuestions(topic) {
       const explanation = node.children.filter(child => /^Explanation$/i.test(child.head));
       const question = node.children.filter(child => !/^Explanation$|^Practice\s+\d+$/i.test(child.head));
       if (explanation.length !== 1 || !question.length) throw new Error(`Missing question or Explanation: ${id}`);
+      if (!explanation[0].children.length) throw new Error(`Empty Explanation: ${id}`);
       questions.push({id, moduleId, title:node.head, line:node.line, node, questionNodes:question,
         explanationNodes:explanation[0].children, question:question.map(text).join('\n')});
     }
@@ -145,18 +146,39 @@ async function writeAtomic(filename, value) {
   await fs.rename(temporary, filename);
 }
 
-export async function importCourse(sourcePath, sidecarPath, outputPath, auditPath) {
-  const paths = [sourcePath, sidecarPath, outputPath, auditPath].map(p => path.resolve(p));
-  if (new Set(paths.map(p => p.toLowerCase())).size !== 4) throw new Error('Input and output paths must be distinct');
+export async function inspectCourse(sourcePath) {
+  const raw = await fs.readFile(sourcePath);
+  const topic = parseOutline(raw.toString('utf8'));
+  const content = sourceQuestions(topic);
+  if (!content.modules.length) throw new Error('Expected at least one Example module');
+  for (const [index] of content.modules.entries()) {
+    if (content.questions.filter(q => q.moduleId === `example-${index + 1}`).length < 8) throw new Error('At least seven Practices per module required');
+  }
+  return {title:topic.head, source_sha256:digest(raw), introduction:content.introduction.children.map(text).join('\n'),
+    modules:content.modules.map((module, index) => ({id:`example-${index + 1}`, title:module.head,
+      question_ids:content.questions.filter(q => q.moduleId === `example-${index + 1}`).map(q => q.id)})),
+    questions:content.questions.map(q => ({id:q.id, module_id:q.moduleId, title:q.title, line:q.line,
+      question:q.question, explanation:q.explanationNodes.map(text).join('\n'), question_sha256:digest(q.question)}))};
+}
+
+export async function importCourse(sourcePath, sidecarPath, outputPath, auditPath, reviewPath = null) {
+  const sourceManifestPath = outputPath.replace(/\.json$/i, '.sources.json');
+  if (sourceManifestPath === outputPath) throw new Error('Course output must end with .json');
+  const paths = [sourcePath, sidecarPath, outputPath, sourceManifestPath, auditPath, ...(reviewPath ? [reviewPath] : [])].map(p => path.resolve(p));
+  if (new Set(paths.map(p => p.toLowerCase())).size !== paths.length) throw new Error('Input and output paths must be distinct');
   const sourceBuffer = await fs.readFile(sourcePath);
   const source = sourceBuffer.toString('utf8');
-  const sidecar = JSON.parse(await fs.readFile(sidecarPath, 'utf8'));
+  const sidecarBuffer = await fs.readFile(sidecarPath);
+  const sidecar = JSON.parse(sidecarBuffer.toString('utf8').replace(/^\uFEFF/, ''));
+  const reviewHash = reviewPath ? digest(await fs.readFile(reviewPath)) : null;
   const sourceHash = digest(sourceBuffer);
   if (sourceHash !== sidecar.source_sha256) throw new Error('Source changed since the answer sidecar was reviewed');
-  const check = spawnSync(process.env.MATH_LEARNING_PYTHON || 'python', [path.join(here, 'verify_content.py'), sourcePath, sidecarPath],
+  const check = spawnSync(process.env.MATH_LEARNING_PYTHON || 'python', [path.join(here, 'verify_content.py'), sourcePath, sidecarPath, ...(reviewPath ? ['--review', reviewPath] : [])],
     {encoding:'utf8', maxBuffer:32 * 1024 * 1024, env:{...process.env, PYTHONIOENCODING:'utf-8'}, windowsHide:true});
-  if (check.status !== 0) throw new Error(`Independent arithmetic verification failed: ${check.stderr || check.error || check.status}`);
+  if (check.status !== 0) throw new Error(`${reviewPath ? 'Reviewed content' : 'Independent arithmetic'} verification failed: ${check.stderr || check.error || check.status}`);
   const audit = JSON.parse(check.stdout);
+  if (audit.source_sha256 !== sourceHash || audit.sidecar_sha256 !== digest(sidecarBuffer)
+      || (reviewPath && audit.review_sha256 !== reviewHash)) throw new Error('Inputs changed during verification');
   const topic = parseOutline(source);
   const content = sourceQuestions(topic);
   if (content.modules.length !== sidecar.expected_module_count || content.questions.length !== sidecar.expected_question_count) throw new Error('Unexpected module or question count');
@@ -167,7 +189,7 @@ export async function importCourse(sourcePath, sidecarPath, outputPath, auditPat
   for (const [index, module] of content.modules.entries()) {
     const moduleId = `example-${index + 1}`;
     const members = content.questions.filter(q => q.moduleId === moduleId);
-    if (members.length !== sidecar.expected_practices_per_module + 1) throw new Error(`Unexpected Practice count in ${moduleId}`);
+    if (!(reviewPath && sidecar.expected_practices_per_module == null) && members.length !== sidecar.expected_practices_per_module + 1) throw new Error(`Unexpected Practice count in ${moduleId}`);
     const built = members.map(question => {
       const answer = sidecar.answers[question.id];
       if (digest(question.question) !== answer.question_sha256) throw new Error(`Question content changed: ${question.id}`);
@@ -196,6 +218,8 @@ export async function importCourse(sourcePath, sidecarPath, outputPath, auditPat
   }
   course.version = digest(JSON.stringify(course));
   if (digest(await fs.readFile(sourcePath)) !== sourceHash) throw new Error('Source changed during import');
+  if (digest(await fs.readFile(sidecarPath)) !== digest(sidecarBuffer)) throw new Error('Sidecar changed during import');
+  if (reviewPath && digest(await fs.readFile(reviewPath)) !== reviewHash) throw new Error('Review changed during import');
   const report = {...audit, course_version:course.version, course_path:path.resolve(outputPath),
     module_count:course.modules.length, practice_count:course.modules.reduce((count, m) => count + m.practices.length, 0),
     formula_count:render.formulas.length, rendered_formula_count:render.formulas.length,
@@ -203,8 +227,9 @@ export async function importCourse(sourcePath, sidecarPath, outputPath, auditPat
     introduction_hierarchy_preserved:true, source_unchanged:true, external_math_requests:0,
     renderer_versions:render.versions, formulas:render.formulas, prose_records:render.prose};
   await writeAtomic(outputPath, JSON.stringify(course, null, 2) + '\n');
-  await writeAtomic(outputPath.replace(/\.json$/i, '.sources.json'), JSON.stringify({
-    source_path:path.resolve(sourcePath), answers_path:path.resolve(sidecarPath), source_sha256:sourceHash
+  await writeAtomic(sourceManifestPath, JSON.stringify({
+    source_path:path.resolve(sourcePath), answers_path:path.resolve(sidecarPath), source_sha256:sourceHash,
+    ...(reviewPath ? {review_path:path.resolve(reviewPath), review_sha256:reviewHash} : {})
   }, null, 2) + '\n');
   await writeAtomic(auditPath, JSON.stringify(report, null, 2) + '\n');
   return {course_path:path.resolve(outputPath), audit_path:path.resolve(auditPath), course_version:course.version,
@@ -212,7 +237,10 @@ export async function importCourse(sourcePath, sidecarPath, outputPath, auditPat
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const [source, sidecar, output, audit] = process.argv.slice(2);
-  if (!source || !sidecar || !output || !audit) throw new Error('Usage: node import_course.mjs <source.md> <answers.json> <course.json> <audit.json>');
-  console.log(JSON.stringify(await importCourse(source, sidecar, output, audit), null, 2));
+  const [source, sidecar, output, audit, review] = process.argv.slice(2);
+  if (source === '--inspect' && sidecar) console.log(JSON.stringify(await inspectCourse(sidecar), null, 2));
+  else {
+    if (!source || !sidecar || !output || !audit) throw new Error('Usage: node import_course.mjs <source.md> <answers.json> <course.json> <audit.json> [review.json], or --inspect <source.md>');
+    console.log(JSON.stringify(await importCourse(source, sidecar, output, audit, review), null, 2));
+  }
 }

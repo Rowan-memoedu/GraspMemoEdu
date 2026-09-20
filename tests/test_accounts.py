@@ -367,8 +367,8 @@ class AccountAcceptanceTests(unittest.TestCase):
         self._request('GET', '/api/submissions/' + submission_id + '?topic_id=account-topic-a', token, status=403, code='feature_forbidden')
         self.assertEqual(self._request('GET', '/api/dashboard?course_id=account-course-a', token)['history'], [])
 
-    def test_new_topics_are_not_implicitly_granted_to_existing_accounts(self):
-        account = self._account()
+    def test_explicit_topic_override_does_not_grant_future_topics(self):
+        account = self._account(topics=list(self.store.topics))
         token = self._login(account)['identity_token']
         guest = self._guest()['identity_token']
         self._write_topic('future')

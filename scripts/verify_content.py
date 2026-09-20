@@ -237,7 +237,7 @@ class ExactTex:
         return value
 
 
-def verify(source_path: Path, sidecar_path: Path) -> dict:
+def verify(source_path: Path, sidecar_path: Path, review_path: Path | None = None) -> dict:
     raw = source_path.read_bytes()
     source = raw.decode("utf-8-sig")
     sidecar = json.loads(sidecar_path.read_text(encoding="utf-8-sig"))
@@ -249,11 +249,49 @@ def verify(source_path: Path, sidecar_path: Path) -> dict:
         raise ValueError("Sidecar question IDs do not exactly cover the source")
     if len(questions) != sidecar["expected_question_count"]:
         raise ValueError("Question count changed")
+    if review_path is not None:
+        module_ids = {q["module_id"] for q in questions}
+        if not module_ids or len(module_ids) != sidecar.get("expected_module_count"):
+            raise ValueError("Module count changed")
+        if not isinstance(sidecar.get("course_id"), str) or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", sidecar["course_id"]):
+            raise ValueError("Invalid course_id")
+        expected = sidecar.get("expected_practices_per_module")
+        for module_id in module_ids:
+            count = sum(q["module_id"] == module_id for q in questions) - 1
+            if count < 7 or (expected is not None and count != expected):
+                raise ValueError(f"Unexpected Practice count in {module_id}; at least seven required")
+        review = json.loads(review_path.read_text(encoding="utf-8-sig"))
+        if review.get("schema_version") != 1 or review.get("status") != "approved":
+            raise ValueError("LLM review is not approved")
+        if review.get("source_sha256") != sha256(raw) or review.get("sidecar_sha256") != sha256(sidecar_path.read_bytes()):
+            raise ValueError("LLM review hash mismatch; review again")
+        reviewed = review.get("questions")
+        if not isinstance(reviewed, list) or any(not isinstance(q, dict) for q in reviewed):
+            raise ValueError("Invalid LLM review questions")
+        ids = [q.get("id") for q in reviewed]
+        if any(not isinstance(qid, str) for qid in ids) or len(set(ids)) != len(ids) or set(ids) != set(by_id):
+            raise ValueError("LLM review must uniquely cover all questions")
+        for record in reviewed:
+            if record.get("approved") is not True or record.get("issues") != []:
+                raise ValueError(f"LLM review rejected: {record['id']}")
+            if record.get("question_sha256") != sha256(by_id[record["id"]]["question"]):
+                raise ValueError(f"LLM review question hash mismatch: {record['id']}")
     records = []
     for question in questions:
         answer = sidecar["answers"][question["id"]]
         if sha256(question["question"]) != answer["question_sha256"]:
             raise ValueError(f"Question hash mismatch: {question['id']}")
+        if review_path is not None:
+            if any(not isinstance(answer.get(key), str) or not answer[key].strip()
+                   for key in ("reference_answer", "answer_type", "constraints")):
+                raise ValueError(f"Missing answer metadata: {question['id']}")
+            if not question["explanation"].strip():
+                raise ValueError(f"Missing explanation: {question['id']}")
+            records.append({"id": question["id"], "source_line": question["line"],
+                            "question_sha256": answer["question_sha256"],
+                            "reference_answer": answer["reference_answer"], "passed": True,
+                            "method": "llm-reviewed"})
+            continue
         if answer["answer_type"] not in {"integer", "rational"} or not answer["constraints"].strip():
             raise ValueError(f"Missing answer metadata: {question['id']}")
         formulas = re.findall(r"\$\$([\s\S]*?)\$\$", question["question"])
@@ -283,7 +321,9 @@ def verify(source_path: Path, sidecar_path: Path) -> dict:
     return {"status": "verified", "source_sha256": sha256(raw), "source_path": str(source_path),
             "sidecar_sha256": sha256(sidecar_path.read_bytes()), "source_unchanged": sha256(source_path.read_bytes()) == sha256(raw),
             "question_count": len(questions), "verified_answer_count": len(records),
-            "records": records, "errata": corrections, "content_review_notes": sidecar.get("content_review_notes", [])}
+            "records": records, "errata": corrections, "content_review_notes": sidecar.get("content_review_notes", []),
+            **({"method": "llm-reviewed", "review_sha256": sha256(review_path.read_bytes()),
+                "review_model": review.get("model")} if review_path is not None else {})}
 
 
 def main() -> None:
@@ -291,8 +331,9 @@ def main() -> None:
     parser.add_argument("source", type=Path)
     parser.add_argument("sidecar", type=Path)
     parser.add_argument("--report", type=Path)
+    parser.add_argument("--review", type=Path)
     args = parser.parse_args()
-    result = verify(args.source, args.sidecar)
+    result = verify(args.source, args.sidecar, review_path=args.review)
     encoded = json.dumps(result, ensure_ascii=False, indent=2)
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)

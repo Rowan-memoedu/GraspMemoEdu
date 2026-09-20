@@ -96,6 +96,47 @@ $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
             dump = '\n'.join(con.iterdump())
         self.assertTrue(all(a['invitation_code'] not in dump for a in manifest['accounts']), 'Database contained a raw invitation')
         self.assertFalse((self.root / 'logs').exists())
+        self.assertEqual(self.rows('SELECT DISTINCT topics_default, features_default FROM access_principals'), [(1, 1)])
+
+    def test_default_create_follows_new_topics_but_explicit_all_is_distinct_request(self):
+        self.admin.create('Dynamic', output=self.output)
+        account = self.manifest()['accounts'][0]
+        self.assertTrue(account['topics_default'] and account['features_default'])
+        with self.assertRaises(DomainError) as caught:
+            self.admin.create('Dynamic', ['synthetic-course'], list(FEATURES), output=self.output)
+        self.assertEqual(caught.exception.code, 'account_batch_conflict')
+        expanded = AccessStore(self.root, [{'id': 'synthetic-course', 'title': 'First'}, {'id': 'new-topic', 'title': 'New'}])
+        expanded_admin = AccountAdmin(expanded)
+        self.assertTrue(expanded_admin.create('Dynamic', output=self.output)['already_exists'])
+        access = expanded.login(account['invitation_code'])['access']
+        self.assertEqual({topic['id'] for topic in access['topics']}, {'synthetic-course', 'new-topic'})
+        rotation = self.root / 'admin/rotate-default.json'
+        expanded_admin.rotate(account['learner_id'], output=rotation)
+        rotated = self.manifest(rotation)['accounts'][0]
+        self.assertTrue(rotated['topics_default'] and rotated['features_default'])
+        self.assertEqual(self.rows('SELECT topics_default, features_default FROM access_principals'), [(1, 1)])
+
+    def test_explicit_create_empty_permissions_and_rotation_preserve_overrides(self):
+        self.admin.create('Restricted', [], [], output=self.output)
+        account = self.manifest()['accounts'][0]
+        self.assertFalse(account['topics_default'] or account['features_default'])
+        rotation = self.root / 'admin/rotate-explicit.json'
+        self.admin.rotate(account['learner_id'], output=rotation)
+        self.assertEqual(self.rows('SELECT topic_ids, features, topics_default, features_default FROM access_principals'),
+                         [('[]', '[]', 0, 0)])
+
+    def test_legacy_pending_manifest_retries_without_granting_dynamic_permissions(self):
+        with patch.object(self.store, '_insert_account', side_effect=sqlite3.OperationalError('Interrupted')):
+            with self.assertRaises(DomainError):
+                self.provision(learners=1, tests=0)
+        document = self.manifest()
+        for record in [document['request'], *document['accounts']]:
+            record.pop('topics_default')
+            record.pop('features_default')
+        self.output.write_text(json.dumps(document), encoding='utf-8')
+        self.assertFalse(self.provision(learners=1, tests=0)['already_exists'])
+        self.assertEqual(self.rows('SELECT topics_default, features_default FROM access_principals'), [(0, 0)])
+        self.assertTrue(self.provision(learners=1, tests=0)['already_exists'])
 
     def test_same_batch_and_concurrent_requests_create_exactly_one_set(self):
         barrier = threading.Barrier(4)

@@ -73,6 +73,18 @@ def _canonical(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
 
 
+def _same_request(saved, requested):
+    """Default scopes are dynamic; old manifests remain replayable as snapshots."""
+    saved, requested = dict(saved), dict(requested)
+    for flag, field in [('topics_default', 'topic_ids'), ('features_default', 'features')]:
+        if flag not in saved:
+            requested.pop(flag, None)
+        elif saved[flag] is True and requested.get(flag) is True:
+            saved.pop(field, None)
+            requested.pop(field, None)
+    return saved == requested
+
+
 def _private_permissions(path, *, apply=False):
     """No credential is passed to the ACL process or written before this succeeds."""
     try:
@@ -204,20 +216,29 @@ class AccountAdmin:
                 or type(manifest['format']) is not int or manifest['format'] != 1
                 or manifest['operation'] != kind or manifest['operation_id'] != operation_id
                 or manifest['batch_id'] != batch_id or manifest['database'] != self.database
-                or manifest['request'] != request or not isinstance(manifest['accounts'], list)
+                or not _same_request(manifest['request'], request) or not isinstance(manifest['accounts'], list)
                 or len(manifest['accounts']) != len(templates)):
             raise ValueError('Manifest does not match request')
         created = datetime.fromisoformat(manifest['created_at'])
+        if any(type(manifest['request'][key]) is not bool for key in ('topics_default', 'features_default')
+               if key in manifest['request']):
+            raise ValueError('Invalid request permission mode')
         if created.tzinfo is None or created.utcoffset().total_seconds() != 0:
             raise ValueError('Manifest timestamp must be UTC')
         ids, codes = set(), set()
         for account, expected in zip(manifest['accounts'], templates):
-            if not isinstance(account, dict) or set(account) != {
-                    'learner_id', 'display_name', 'purpose', 'topic_ids', 'features', 'invitation_code'}:
+            required = {'learner_id', 'display_name', 'purpose', 'topic_ids', 'features', 'invitation_code'}
+            modes = {'topics_default', 'features_default'}
+            if (not isinstance(account, dict) or not required <= set(account) or set(account) - required - modes
+                    or any(type(account[key]) is not bool for key in modes & set(account))):
                 raise ValueError('Invalid manifest account')
-            for field in ('display_name', 'purpose', 'topic_ids', 'features'):
-                if account[field] != expected[field]:
-                    raise ValueError('Manifest account differs')
+            if kind != 'rotate' and any((key in account) != (key in manifest['request'])
+                                       or account.get(key) != manifest['request'].get(key) for key in modes):
+                raise ValueError('Manifest permission mode differs from request')
+            fields = {'display_name', 'purpose', 'topic_ids', 'features', *modes}
+            if any(account[field] != expected[field] for field in ('display_name', 'purpose', 'topic_ids', 'features')) or not _same_request({key: value for key, value in account.items() if key in fields},
+                                 {key: value for key, value in expected.items() if key in fields}):
+                raise ValueError('Manifest account differs')
             learner_id, code = account['learner_id'], account['invitation_code']
             if (not isinstance(learner_id, str) or not re.fullmatch(r'account-[a-f0-9]{32}', learner_id)
                     or not isinstance(code, str) or not re.fullmatch(r'MLW-[A-Za-z0-9_-]{32}', code)
@@ -242,13 +263,14 @@ class AccountAdmin:
                 path = self._output(output)
                 completed = con.execute('SELECT * FROM account_admin_operations WHERE operation_id=?', (operation_id,)).fetchone()
                 if completed:
-                    if (completed['kind'] != kind or completed['request_json'] != _canonical(request)
+                    saved_request = json.loads(completed['request_json'])
+                    if (completed['kind'] != kind or not _same_request(saved_request, request)
                             or completed['output_path'] != str(path)):
                         raise DomainError('account_batch_conflict', '此批次或导出操作已完成，但参数或输出路径不同；未新增账号。', 409)
                     public = json.loads(completed['public_accounts'])
                     if path.exists():
                         manifest, blob = self._read(path)
-                        self._validate(manifest, operation_id, kind, batch_id, request, public, fixed_ids=True)
+                        self._validate(manifest, operation_id, kind, batch_id, saved_request, public, fixed_ids=True)
                         if hashlib.sha256(blob).hexdigest() != completed['manifest_sha256']:
                             raise ValueError('Completed manifest was modified')
                     return self._receipt(kind, batch_id, self.database, path, public, True)
@@ -269,12 +291,14 @@ class AccountAdmin:
                     if kind == 'rotate':
                         self.store._rotate_invitation(con, account['learner_id'], invitation=account['invitation_code'])
                     else:
-                        self.store._insert_account(con, account['display_name'], account['topic_ids'], account['features'],
+                        self.store._insert_account(con, account['display_name'],
+                                                   None if account.get('topics_default') else account['topic_ids'],
+                                                   None if account.get('features_default') else account['features'],
                                                    purpose=account['purpose'], batch_id=batch_id,
                                                    learner_id=account['learner_id'], invitation=account['invitation_code'])
                 public = [{key: value for key, value in account.items() if key != 'invitation_code'} for account in manifest['accounts']]
                 con.execute('INSERT INTO account_admin_operations VALUES (?,?,?,?,?,?,?,?)',
-                            (operation_id, kind, _canonical(request), str(path), hashlib.sha256(blob).hexdigest(),
+                            (operation_id, kind, _canonical(manifest['request']), str(path), hashlib.sha256(blob).hexdigest(),
                              _canonical(public), batch_id, manifest['created_at']))
             return self._receipt(kind, batch_id, self.database, path, public, False)
         except DomainError:
@@ -290,8 +314,9 @@ class AccountAdmin:
         if any(type(count) is not int or count < 0 for count in (learners, tests)) or not 1 <= learners + tests <= 1000:
             raise DomainError('invalid_account_count', '每批账号总数需要为 1 至 1000，且各用途数量不能为负。', 422)
         topics, features = list(self.store.topics), list(FEATURES)
-        request = {'learners': learners, 'tests': tests, 'topic_ids': topics, 'features': features}
-        entries = [{'display_name': f'{label} {index:02d}', 'purpose': purpose, 'topic_ids': topics, 'features': features}
+        defaults = {'topics_default': True, 'features_default': True}
+        request = {'learners': learners, 'tests': tests, 'topic_ids': topics, 'features': features, **defaults}
+        entries = [{'display_name': f'{label} {index:02d}', 'purpose': purpose, 'topic_ids': topics, 'features': features, **defaults}
                    for purpose, label, count in [('learner', '学习者', learners), ('test', '测试账号', tests)]
                    for index in range(1, count + 1)]
         return self._run('provision', 'batch:' + batch_id, batch_id, request, output, entries)
@@ -301,9 +326,10 @@ class AccountAdmin:
             raise DomainError('invalid_account_name', '账号显示名称需要 1 至 100 个字符。', 422)
         if purpose not in ('learner', 'test'):
             raise DomainError('invalid_account_purpose', '账号用途只能是 learner 或 test。', 422)
+        defaults = {'topics_default': topic_ids is None, 'features_default': features is None}
         topics, features = self.store._validate_permissions(list(self.store.topics) if topic_ids is None else topic_ids,
                                                           list(FEATURES) if features is None else features)
-        request = {'display_name': display_name.strip(), 'purpose': purpose, 'topic_ids': topics, 'features': features}
+        request = {'display_name': display_name.strip(), 'purpose': purpose, 'topic_ids': topics, 'features': features, **defaults}
         operation_id = 'create:' + hashlib.sha256(str(Path(output).resolve()).encode()).hexdigest()
         return self._run('create', operation_id, None, request, output, [request])
 
@@ -311,6 +337,8 @@ class AccountAdmin:
         def template(con):
             row = self.store._account(con, learner_id)
             return [{'learner_id': learner_id, 'display_name': row['display_name'], 'purpose': row['purpose'],
-                     'topic_ids': json.loads(row['topic_ids']), 'features': json.loads(row['features'])}]
+                     'topic_ids': list(self.store.topics) if row['topics_default'] else json.loads(row['topic_ids']),
+                     'features': list(FEATURES) if row['features_default'] else json.loads(row['features']),
+                     'topics_default': bool(row['topics_default']), 'features_default': bool(row['features_default'])}]
         operation_id = 'rotate:' + hashlib.sha256(str(Path(output).resolve()).encode()).hexdigest()
         return self._run('rotate', operation_id, None, {'learner_id': learner_id}, output, template)
