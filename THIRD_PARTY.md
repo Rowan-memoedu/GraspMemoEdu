@@ -1,5 +1,7 @@
 # Reused components and references
 
+- [py-fsrs](https://github.com/open-spaced-repetition/py-fsrs), MIT, pinned as `fsrs==6.3.2`: Example review scheduling, serialization and optional parameter optimization. The upstream formulas are used unchanged; local code adapts Example identity, grading, due queues and transactional persistence. Its optional local training runtime is pinned in `requirements-optimizer.txt`. No learner history is sent to an external optimization service. See [review backend](docs/review-backend.md) for the Anki compatibility boundary.
+
 - FastAPI (MIT), Starlette (BSD-3-Clause), Uvicorn (BSD-3-Clause), Pydantic (MIT), HTTPX (BSD-3-Clause); exact dependency versions in requirements.txt. Dependencies are installed outside this repository.
 - MathJax 3.2.2 (Apache-2.0) generates offline SVG, using the existing `D:/Caches/MathTopicPdf/node_modules/mathjax-full` installation. Marked 17.0.5 (MIT) is supplied by the existing Codex runtime. Neither dependency nor generated course content is committed here.
 - The live Markdown guide reuses Marked and MathJax with sanitize-html 2.17.7 (MIT), installed in `D:/Caches/MathLearningWeb/node-runtime/node_modules`. Its maintained source is in the [Apostrophe monorepo](https://github.com/apostrophecms/apostrophe/tree/main/packages/sanitize-html). tzdata supplies IANA time zones on Windows; its exact Python package version is pinned in requirements.txt.

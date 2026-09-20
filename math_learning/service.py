@@ -10,6 +10,9 @@ import sqlite3
 import threading
 import uuid
 
+from .judging import judge_answer
+from .practice import LESSON_POLICY, apply_practice_result
+
 
 def now():
     return datetime.now(timezone.utc).isoformat()
@@ -30,6 +33,8 @@ class LearningService:
 
     def __init__(self, course: dict, data_dir: Path, judge=None, learner_id='local'):
         self.course, self.data_dir, self.judge = course, Path(data_dir), judge
+        # Explicitly attached by ReviewBackend; ordinary website startup is unchanged.
+        self.review_backend = None
         self.learner_id, self.topic_id = learner_id, course['id']
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.db_path = self.data_dir / 'learning.sqlite3'
@@ -399,9 +404,12 @@ class LearningService:
         event_id = self._event(con, state, 'topic_paused', **extra)
         state['status'] = 'paused'
         state['pause'] = {'event_id': event_id, 'reason': reason, 'module_id': attempt['module_id'],
-                          'attempt_id': attempt['id'], 'message': '检测到状态不佳，已暂停作答' if reason == 'practice_error_limit'
+                          'attempt_id': attempt['id'], 'message': '检测到状态不佳，已暂停作答' if reason in ('practice_error_limit', 'review_practice_error_limit')
                           else '已手动暂停学习，请等待管理者解锁。'}
         state['pending_submission_id'] = None
+
+        if self.review_backend is not None:
+            self.review_backend.on_topic_paused(con, event_id, reason)
 
     def pause(self, payload):
         with self._transaction() as con:
@@ -473,18 +481,8 @@ class LearningService:
             con.execute("UPDATE submissions SET status='running',updated_at=? WHERE id=?", (now(), submission_id))
             item = dict(row)
         question = self.questions[item['question']]
-        try:
-            if self.judge is None:
-                raise RuntimeError('Judge not configured')
-            verdict = self.judge(question['question'] + '\n作答约束：' + question['constraints'],
-                                 question['reference_answer'], item['answer'])
-            if not isinstance(verdict, dict):
-                verdict = {'status': verdict.status, 'correct': verdict.correct, 'reason': verdict.reason}
-            valid = verdict.get('status') == 'judged' and type(verdict.get('correct')) is bool and isinstance(verdict.get('reason'), str)
-        except Exception:
-            verdict, valid = {}, False
-        correct = verdict['correct'] if valid else None
-        reason = verdict['reason'][:2000] if valid else '判题服务暂时不可用，请重试；本次未计入作答。'
+        correct, reason = judge_answer(self.judge, question, item['answer'])
+        valid = correct is not None
         with self._transaction() as con:
             state = self._load(con)
             latest = con.execute('SELECT status FROM submissions WHERE id=?', (submission_id,)).fetchone()
@@ -510,15 +508,11 @@ class LearningService:
                         if correct:
                             self._complete(con, state, 4)
                     else:
-                        attempt['practice_answered_count'] += 1
-                        if not correct:
-                            attempt['practice_error_count'] += 1
-                        errors = attempt['practice_error_count']
-                        attempt['practice_target_count'] = [2, 3, 5, 7][min(errors, 3)]
-                        if errors >= 4:
+                        must_pause, mastery = apply_practice_result(attempt, correct, LESSON_POLICY)
+                        if must_pause:
                             self._pause(con, state, 'practice_error_limit', submission={**item, 'correct': correct, 'reason': reason})
-                        elif attempt['practice_answered_count'] >= attempt['practice_target_count']:
-                            self._complete(con, state, 4 - errors)
+                        elif mastery is not None:
+                            self._complete(con, state, mastery)
                     self._event(con, state, 'answer_judged', submission_id=submission_id,
                                 question_id=item['question'], correct=correct)
                 else:
@@ -530,6 +524,8 @@ class LearningService:
         attempt = self._attempt(state)
         attempt.update(status='completed', mastery=mastery, completed_at=now())
         self._event(con, state, 'module_completed')
+        if self.review_backend is not None:
+            self.review_backend.on_lesson_completed(con, attempt)
 
     def recover_interrupted(self):
         """Called by the one server process on startup, never by an admin client."""
@@ -563,6 +559,8 @@ class LearningService:
                 self._new_attempt(state, previous['module_index'])
             self._event(con, state, 'admin_unlocked', pause_event_id=pause_event_id,
                         old_attempt_id=previous['id'], new_attempt_id=state['attempt_id'])
+            if self.review_backend is not None:
+                self.review_backend.on_topic_unlocked(con, pause_event_id)
             con.execute('INSERT INTO unlocks VALUES (?,?,?,?,?)', (pause_event_id, *self.key, module_id, state['attempt_id']))
             self._save(con, state)
         self.flush_logs()

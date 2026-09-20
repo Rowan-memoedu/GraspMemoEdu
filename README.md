@@ -1,5 +1,7 @@
 # MathLearningWeb
 
+可调用的 Example/FSRS 复习后端已提供，包含到期队列、随机 Practice 复习、目标保留度设置与参数优化接口。它采用显式启用方式，当前网站尚未启用复习入口、自动接入或历史回填。接线方式与可调整规则见 [复习后端接口](docs/review-backend.md)。
+
 本机数学学习网站。顶部提供 LEARN 学习主页、COURSES 课程页和 GUIDE 使用指南。当前课程为「再探小学算术」，包含 Topic「数字化为字母」：6 个 Example、每模块 15 道 Practice，合计 96 道题。原有逐块学习、真实 MathAnswerJudge 判题、练习补题、模块评分、暂停与恢复继续使用同一份进度。
 
 公开入口：[数学学习](https://amymiller76717-sudo.github.io/MathLearningWeb-Pages/)。其他电脑、手机可直接打开，自动进入游客模式，无需填写服务地址、配对码或授予本地网络权限。后端仍运行在当前电脑，通过免费 Cloudflare 临时隧道接入；课程、答案、学习记录和邀请码资料仍保存在本机，源码主仓库保持私有。
