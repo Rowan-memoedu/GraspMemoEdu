@@ -1,5 +1,6 @@
 """Self-contained installation checks with the real Markdown/MathJax converter."""
 from contextlib import closing
+import base64
 import json
 import os
 from pathlib import Path
@@ -33,6 +34,13 @@ class TopicInstallTests(unittest.TestCase):
         lines = ['- Synthetic physics', '  - Introduction', '    - Speed is distance divided by time.',
                  '  - Example 1: Speed', '    - What is the SI unit of speed?',
                  '    - Explanation', '      - The SI unit is metres per second.']
+        assets = []
+        if getattr(cls, 'with_image', False):
+            raw = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC')
+            (cls.package / 'assets').mkdir()
+            (cls.package / 'assets/diagram.png').write_bytes(raw)
+            assets = [{'path': 'assets/diagram.png', 'sha256': sha256(raw), 'size': len(raw), 'mime': 'image/png'}]
+            lines.insert(3, '    - ![diagram](assets/diagram.png)')
         for number in range(1, 8):
             lines += [f'    - Practice {number}', '      - What is the SI unit of speed?',
                       '      - Explanation', '        - The SI unit is metres per second.']
@@ -44,11 +52,21 @@ class TopicInstallTests(unittest.TestCase):
             'answers': {q['id']: {'question_sha256': sha256(q['question']),
                 'reference_answer': 'm/s', 'answer_type': 'text', 'constraints': 'Equivalent SI notation accepted.'}
                 for q in questions}}
+        if getattr(cls, 'mechanical', False):
+            for q in questions:
+                answers['answers'][q['id']]['reference_answer'] = q['explanation']
         write(cls.package / 'answers.json', answers)
         review = {'schema_version': 1, 'status': 'approved', 'source_sha256': answers['source_sha256'],
             'sidecar_sha256': sha256((cls.package / 'answers.json').read_bytes()), 'model': 'test-fixture',
             'questions': [{'id': q['id'], 'question_sha256': sha256(q['question']),
                            'approved': True, 'issues': []} for q in questions]}
+        if assets:
+            review['assets'] = assets
+        if getattr(cls, 'mechanical', False):
+            review.update(mode='mechanical', method='mechanical-import', status='mechanically_validated',
+                          semantic_review_performed=False, mathematical_correctness_checked=False)
+            review['questions'] = [{'id': q['id'], 'question_sha256': sha256(q['question']),
+                                    'structurally_valid': True, 'field_mapping': 'reference_answer=explanation'} for q in questions]
         write(cls.package / 'review.json', review)
         converter = Path(__file__).resolve().parents[1] / 'scripts/import_course.mjs'
         result = subprocess.run(['node', str(converter), str(source), str(cls.package / 'answers.json'),
@@ -60,7 +78,9 @@ class TopicInstallTests(unittest.TestCase):
         cls.manifest = {'schema_version': 1, 'status': 'approved', 'topic_id': 'imported-physics',
             'artifacts': {'source': 'source.md', 'answers': 'answers.json', 'review': 'review.json',
                           'topic': 'topic.json', 'audit': 'audit.json'},
-            'files': {p.name: sha256(p.read_bytes()) for p in cls.package.iterdir()}}
+            'files': {p.relative_to(cls.package).as_posix(): sha256(p.read_bytes()) for p in cls.package.rglob('*') if p.is_file()}}
+        if assets:
+            cls.manifest['assets'] = assets
         write(cls.package / 'manifest.json', cls.manifest)
 
     def setUp(self):
@@ -196,6 +216,94 @@ class TopicInstallTests(unittest.TestCase):
         self.assertFalse((self.data / 'catalog.json.author-pending').exists())
         self.assertTrue((self.data / 'imported-topics/imported-physics/topic.json').is_file())
         self.assertEqual(self.install()['status'], 'installed')
+
+
+class ImageTopicInstallTests(unittest.TestCase):
+    with_image = True
+    setUpClass = classmethod(TopicInstallTests.setUpClass.__func__)
+    setUp = TopicInstallTests.setUp
+    install = TopicInstallTests.install
+    assert_not_activated = TopicInstallTests.assert_not_activated
+
+    def test_image_package_installs_original_and_embedded_image(self):
+        result = self.install()
+        destination = Path(result['topic_path']).parent
+        self.assertEqual((destination / 'assets/diagram.png').read_bytes(), (self.package / 'assets/diagram.png').read_bytes())
+        self.assertIn('data:image/png;base64,', (destination / 'topic.json').read_text())
+        sources = json.loads((destination / 'topic.sources.json').read_text())
+        self.assertEqual(sources['assets'], self.manifest['assets'])
+        self.assertEqual(self.install()['status'], 'already_installed')
+        self.assertEqual((self.data / 'learning.sqlite3').read_bytes(), self.database_before)
+
+    def test_altered_asset_cannot_be_installed(self):
+        (self.local_package / 'assets/diagram.png').write_bytes(b'changed')
+        with self.assertRaises(ValueError):
+            self.install()
+        self.assert_not_activated()
+
+    def test_review_cannot_omit_asset_binding(self):
+        review_path = self.local_package / 'review.json'
+        review = json.loads(review_path.read_text())
+        review['assets'] = []
+        write(review_path, review)
+        manifest_path = self.local_package / 'manifest.json'
+        manifest = json.loads(manifest_path.read_text())
+        manifest['files']['review.json'] = sha256(review_path.read_bytes())
+        write(manifest_path, manifest)
+        with self.assertRaisesRegex(ValueError, 'Review assets'):
+            self.install()
+        self.assert_not_activated()
+
+    def test_restored_image_source_reimports_through_real_converter(self):
+        from math_learning.site_backup import backup_site, restore_site
+        from math_learning.service import LearningService
+        self.install()
+        catalog = Catalog.load(self.settings)
+        LearningService(catalog.topic(catalog.default_topic_id), self.data)
+        archive = self.root / 'images.zip'
+        backup_site(self.settings, archive)
+        restored = self.root / 'restored'
+        restore_site(archive, restored)
+        index = json.loads((restored / 'courses/imported-physics.sources.json').read_text())
+        output = self.root / 'reimported.json'
+        converter = Path(__file__).resolve().parents[1] / 'scripts/import_course.mjs'
+        result = subprocess.run(['node', str(converter), index['source_path'], index['answers_path'],
+                                 str(output), str(self.root / 'reimport-audit.json'), index['review_path']],
+                                capture_output=True, text=True, encoding='utf-8', timeout=180,
+                                env={**os.environ, 'MATH_LEARNING_PYTHON': sys.executable})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(output.read_text()), catalog.topic('imported-physics'))
+
+
+class MechanicalImageTopicInstallTests(ImageTopicInstallTests):
+    mechanical = True
+
+    def test_review_cannot_omit_asset_binding(self):
+        # Mechanical validation reaches the same binding check in its verifier.
+        review_path = self.local_package / 'review.json'
+        review = json.loads(review_path.read_text())
+        review['assets'] = []
+        write(review_path, review)
+        manifest_path = self.local_package / 'manifest.json'
+        manifest = json.loads(manifest_path.read_text())
+        manifest['files']['review.json'] = sha256(review_path.read_bytes())
+        write(manifest_path, manifest)
+        with self.assertRaises(ValueError):
+            self.install()
+        self.assert_not_activated()
+
+    def test_mechanical_evidence_cannot_claim_semantic_approval(self):
+        review_path = self.local_package / 'review.json'
+        review = json.loads(review_path.read_text())
+        review['semantic_review_performed'] = True
+        write(review_path, review)
+        manifest_path = self.local_package / 'manifest.json'
+        manifest = json.loads(manifest_path.read_text())
+        manifest['files']['review.json'] = sha256(review_path.read_bytes())
+        write(manifest_path, manifest)
+        with self.assertRaisesRegex(ValueError, 'semantic approval'):
+            self.install()
+        self.assert_not_activated()
 
 
 if __name__ == '__main__':

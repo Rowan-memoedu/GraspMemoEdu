@@ -264,6 +264,7 @@ def verify(source_path: Path, sidecar_path: Path, review_path: Path | None = Non
         raise ValueError("Source hash changed; sidecar must be reviewed again")
     questions = collect_questions(parse_outline(source))
     by_id = {q["id"]: q for q in questions}
+    mechanical = False
     if set(by_id) != set(sidecar["answers"]):
         raise ValueError("Sidecar question IDs do not exactly cover the source")
     if len(questions) != sidecar["expected_question_count"]:
@@ -280,7 +281,10 @@ def verify(source_path: Path, sidecar_path: Path, review_path: Path | None = Non
             if count < 7 or (expected is not None and count != expected):
                 raise ValueError(f"Unexpected Practice count in {module_id}; at least seven required")
         review = json.loads(review_path.read_text(encoding="utf-8-sig"))
-        if review.get("schema_version") != 1 or review.get("status") != "approved":
+        mechanical = review.get("mode") == "mechanical"
+        expected_status = "mechanically_validated" if mechanical else "approved"
+        if (review.get("schema_version") != 1 or review.get("status") != expected_status
+                or (mechanical and review.get("method") != "mechanical-import")):
             raise ValueError("LLM review is not approved")
         if review.get("source_sha256") != sha256(raw) or review.get("sidecar_sha256") != sha256(sidecar_path.read_bytes()):
             raise ValueError("LLM review hash mismatch; review again")
@@ -291,7 +295,10 @@ def verify(source_path: Path, sidecar_path: Path, review_path: Path | None = Non
         if any(not isinstance(qid, str) for qid in ids) or len(set(ids)) != len(ids) or set(ids) != set(by_id):
             raise ValueError("LLM review must uniquely cover all questions")
         for record in reviewed:
-            if record.get("approved") is not True or record.get("issues") != []:
+            if mechanical:
+                if record.get("structurally_valid") is not True or record.get("field_mapping") != "reference_answer=explanation":
+                    raise ValueError(f"Invalid mechanical field mapping: {record['id']}")
+            elif record.get("approved") is not True or record.get("issues") != []:
                 raise ValueError(f"LLM review rejected: {record['id']}")
             if record.get("question_sha256") != sha256(by_id[record["id"]]["question"]):
                 raise ValueError(f"LLM review question hash mismatch: {record['id']}")
@@ -306,10 +313,12 @@ def verify(source_path: Path, sidecar_path: Path, review_path: Path | None = Non
                 raise ValueError(f"Missing answer metadata: {question['id']}")
             if not question["explanation"].strip():
                 raise ValueError(f"Missing explanation: {question['id']}")
+            if mechanical and answer["reference_answer"] != question["explanation"]:
+                raise ValueError(f"Mechanical explanation mapping mismatch: {question['id']}")
             records.append({"id": question["id"], "source_line": question["line"],
                             "question_sha256": answer["question_sha256"],
                             "reference_answer": answer["reference_answer"], "passed": True,
-                            "method": "llm-reviewed"})
+                            "method": "mechanical-import" if mechanical else "llm-reviewed"})
             continue
         if answer["answer_type"] not in {"integer", "rational"} or not answer["constraints"].strip():
             raise ValueError(f"Missing answer metadata: {question['id']}")
@@ -330,6 +339,8 @@ def verify(source_path: Path, sidecar_path: Path, review_path: Path | None = Non
                         "method": "direct question TeX evaluation with Python Fraction and integer square root",
                         "sequence_checks": evaluator.sequence_checks})
     corrections = []
+    if mechanical and sidecar.get("errata"):
+        raise ValueError("Mechanical import does not rewrite source explanations")
     for correction in sidecar.get("errata", []):
         question = by_id[correction["question_id"]]
         if correction["field"] != "explanation" or question["explanation"].count(correction["original"]) != 1:
@@ -337,12 +348,14 @@ def verify(source_path: Path, sidecar_path: Path, review_path: Path | None = Non
         if not correction["reason"] or not correction["replacement"]:
             raise ValueError("Errata require a reason and replacement")
         corrections.append({**correction, "source_line": question["line"], "unique_match": True})
-    return {"status": "verified", "source_sha256": sha256(raw), "source_path": str(source_path),
+    return {"status": "mechanically_validated" if mechanical else "verified", "source_sha256": sha256(raw), "source_path": str(source_path),
             "sidecar_sha256": sha256(sidecar_path.read_bytes()), "source_unchanged": sha256(source_path.read_bytes()) == sha256(raw),
-            "question_count": len(questions), "verified_answer_count": len(records),
+            "question_count": len(questions), "verified_answer_count": 0 if mechanical else len(records),
             "records": records, "errata": corrections, "content_review_notes": sidecar.get("content_review_notes", []),
-            **({"method": "llm-reviewed", "review_sha256": sha256(review_path.read_bytes()),
-                "review_model": review.get("model")} if review_path is not None else {})}
+            **({"method": "mechanical-import" if mechanical else "llm-reviewed", "review_sha256": sha256(review_path.read_bytes()),
+                "review_model": review.get("model")} if review_path is not None else {}),
+            **({"semantic_review_performed": False, "mathematical_correctness_checked": False,
+                "mechanically_mapped_answer_count": len(records)} if mechanical else {})}
 
 
 def main() -> None:

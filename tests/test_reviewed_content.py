@@ -56,6 +56,35 @@ class ReviewedContentTests(unittest.TestCase):
         self.assertEqual(report["method"], "llm-reviewed")
         self.assertNotIn("independent_exact_result", report["records"][0])
 
+    def test_mechanical_mapping_is_exact_without_claiming_semantic_review(self):
+        for question in self.questions:
+            self.metadata['answers'][question['id']]['reference_answer'] = question['explanation']
+        self.save_sidecar()
+        self.receipt.update(mode='mechanical', method='mechanical-import', status='mechanically_validated',
+                            sidecar_sha256=sha256(self.sidecar.read_bytes()), model=None)
+        self.receipt['questions'] = [{'id': q['id'], 'question_sha256': sha256(q['question']),
+                                     'structurally_valid': True, 'field_mapping': 'reference_answer=explanation'}
+                                    for q in self.questions]
+        self.save_review()
+        report = self.audit()
+        self.assertEqual(report['method'], 'mechanical-import')
+        self.assertEqual(report['verified_answer_count'], 0)
+        self.assertEqual(report['mechanically_mapped_answer_count'], 17)
+        self.assertFalse(report['semantic_review_performed'])
+        self.metadata['answers'][self.questions[0]['id']]['reference_answer'] = 'A silently rewritten explanation.'
+        self.save_sidecar()
+        self.receipt['sidecar_sha256'] = sha256(self.sidecar.read_bytes())
+        self.save_review()
+        with self.assertRaisesRegex(ValueError, 'mapping mismatch'):
+            self.audit()
+
+    def test_mechanical_receipt_cannot_omit_or_relabel_a_question(self):
+        self.receipt.update(mode='mechanical', method='mechanical-import', status='mechanically_validated')
+        self.receipt['questions'].pop()
+        self.save_review()
+        with self.assertRaisesRegex(ValueError, 'uniquely cover'):
+            self.audit()
+
     def test_rejected_incomplete_duplicate_and_issue_reviews_fail(self):
         original = json.loads(json.dumps(self.receipt))
         for mutation in [lambda r: r.update(status="rejected"),

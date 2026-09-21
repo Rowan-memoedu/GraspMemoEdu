@@ -1,4 +1,5 @@
 import hashlib
+import io
 import json
 from pathlib import Path
 import tempfile
@@ -53,7 +54,7 @@ class AuthorImportTests(unittest.TestCase):
 
     def run_prepare(self, client):
         with patch('math_learning.author_import._node', side_effect=self.node), patch('math_learning.author_import.Catalog._validate_topic'):
-            return prepare_topic(self.source, 'physics-speed', self.run, client=client)
+            return prepare_topic(self.source, 'physics-speed', self.run, client=client, mode='semantic')
 
     def test_approved_package_binds_source_answers_and_complete_review(self):
         client = FakeClient()
@@ -81,7 +82,7 @@ class AuthorImportTests(unittest.TestCase):
         self.assertEqual(manifest['status'], 'failed')
         self.assertEqual(manifest['stage'], 'review-1')
         self.assertEqual(len(client.calls), 2)
-        self.assertEqual(len(self.node_calls), 1)
+        self.assertEqual(len(self.node_calls), 2)
         self.assertFalse((self.run / 'topic.json').exists())
         self.assertTrue((self.run / 'review-rejection.json').is_file())
 
@@ -91,6 +92,8 @@ class AuthorImportTests(unittest.TestCase):
         self.assertEqual(len(client.calls), 3)
         self.assertTrue((self.run / 'extract-1-1-failure.json').is_file())
         self.assertEqual(json.loads((self.run / 'extract-1-1-response.json').read_text()), '{broken')
+        self.assertIn('JSON 语法错误', client.calls[1][0]['content'])
+        self.assertEqual(client.calls[0][-1], client.calls[1][-1])
 
     def test_exhausted_retries_leave_failed_manifest(self):
         client = FakeClient(malformed=5)
@@ -136,6 +139,80 @@ class AuthorImportTests(unittest.TestCase):
             with self.subTest(reason=reason), self.assertRaises(ValueError):
                 _object({'choices': [{'finish_reason': reason, 'message': {'content': '{"answers":[]}'}}]})
         self.assertEqual(_object({'choices': [{'finish_reason': 'stop', 'message': {'content': '{"answers":[]}'}}]}), {'answers': []})
+
+    def test_official_review_request_enables_thinking_only_for_review(self):
+        payloads = []
+        def opened(request, timeout):
+            payloads.append((json.loads(request.data), timeout))
+            return io.BytesIO(b'{"choices":[{"finish_reason":"stop","message":{"content":"{}"}}]}')
+        client = CompatibleClient('https://api.deepseek.com', 'fixture-secret', 'deepseek-flash')
+        with patch('math_learning.author_import.urllib.request.build_opener') as build:
+            build.return_value.open.side_effect = opened
+            client.complete([{'role': 'user', 'content': 'Extract JSON'}])
+            client.review_complete([{'role': 'user', 'content': 'Review JSON'}])
+        extraction, review = payloads
+        self.assertEqual(extraction[0]['thinking'], {'type': 'disabled'})
+        self.assertEqual(extraction[0]['temperature'], 0)
+        self.assertEqual(review[0]['thinking'], {'type': 'enabled'})
+        self.assertEqual(review[0]['reasoning_effort'], 'high')
+        self.assertNotIn('temperature', review[0])
+        self.assertEqual(review[0]['response_format'], {'type': 'json_object'})
+        self.assertGreaterEqual(review[1], 300)
+
+    def test_pipeline_dispatches_independent_review_method(self):
+        class SplitClient(FakeClient):
+            def __init__(self):
+                super().__init__()
+                self.review_calls = 0
+            def review_complete(self, messages):
+                self.review_calls += 1
+                return super().complete(messages)
+        client = SplitClient()
+        self.assertEqual(self.run_prepare(client)['status'], 'approved')
+        self.assertEqual(client.review_calls, 1)
+        request = json.loads((self.run / 'review-1-1-request.json').read_text(encoding='utf-8'))
+        self.assertEqual(request['call_method'], 'review_complete')
+
+    def test_extra_review_field_retry_gets_schema_feedback_without_changing_source(self):
+        class ExtraFieldClient(FakeClient):
+            def complete(self, messages):
+                result = super().complete(messages)
+                if len(self.calls) == 2:
+                    result['questions'][0]['rationale_note'] = 'unrequested note'
+                return result
+        client = ExtraFieldClient()
+        self.assertEqual(self.run_prepare(client)['status'], 'approved')
+        self.assertEqual(len(client.calls), 3)
+        self.assertIn('缺失或额外字段', client.calls[2][0]['content'])
+        self.assertIn('不为通过校验删除实质问题', client.calls[2][0]['content'])
+        self.assertEqual(client.calls[1][-1], client.calls[2][-1])
+        before = json.loads((self.run / 'review-1-1-response.json').read_text())
+        self.assertIn('rationale_note', before['questions'][0])
+
+    def test_schema_failure_never_retries_a_semantic_rejection_to_approval(self):
+        class RejectedEnvelope(FakeClient):
+            def complete(self, messages):
+                result = super().complete(messages)
+                if 'questions' in result:
+                    result['questions'][0]['rationale_note'] = 'extra field'
+                return result
+        client = RejectedEnvelope(reject=True)
+        self.assertEqual(self.run_prepare(client)['status'], 'failed')
+        self.assertEqual(len(client.calls), 2)
+        failure = json.loads((self.run / 'review-1-1-failure.json').read_text())
+        self.assertTrue(failure['semantic_rejection_detected'])
+        self.assertFalse((self.run / 'topic.json').exists())
+
+    def test_transport_errors_never_echo_sensitive_exception_text(self):
+        class NetworkFailure(FakeClient):
+            def complete(self, messages):
+                self.calls.append(messages)
+                raise RuntimeError('Bearer fixture-secret-private-value')
+        client = NetworkFailure()
+        self.assertEqual(self.run_prepare(client)['status'], 'failed')
+        self.assertEqual(len(client.calls), 3)
+        for path in self.run.glob('*.json'):
+            self.assertNotIn('fixture-secret-private-value', path.read_text(encoding='utf-8'))
 
 
 if __name__ == '__main__':

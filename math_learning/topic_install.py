@@ -40,8 +40,8 @@ def import_lock(root):
 def read_package(package):
     root = Path(package).resolve()
     manifest = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
-    if manifest.get('status') != 'approved' or not isinstance(manifest.get('files'), dict):
-        raise ValueError('Only an approved, hashed author package can be installed')
+    if manifest.get('status') not in ('approved', 'mechanically_validated') or not isinstance(manifest.get('files'), dict):
+        raise ValueError('Only a validated, hashed author package can be installed')
     artifacts = manifest.get('artifacts', {})
     values = {}
     for key in ('source', 'answers', 'review', 'topic', 'audit'):
@@ -60,6 +60,28 @@ def read_package(package):
     if topic_id != manifest.get('topic_id') or topic.get('source_sha256') != digest(values['source']):
         raise ValueError('Package identity or source differs from the reviewed Topic')
     Catalog._validate_topic(topic)
+    from .topic_assets import validate_assets, read_local_asset
+    assets = manifest.get('assets', [])
+    review = json.loads(values['review'])
+    if manifest.get('status') == 'mechanically_validated' or manifest.get('review_mode') == 'mechanical' or review.get('mode') == 'mechanical':
+        if review.get('status') != 'mechanically_validated' or review.get('mode') != 'mechanical':
+            raise ValueError('Mechanical package must preserve mechanical validation evidence')
+        from .site_backup import _validate_review
+        _validate_review(topic, values['source'], values['answers'], values['review'], assets)
+        audit = json.loads(values['audit'])
+        count = sum(1 + len(module['practices']) for module in topic['modules'])
+        if (audit.get('status') != 'mechanically_validated' or audit.get('method') != 'mechanical-import'
+                or audit.get('verified_answer_count') != 0
+                or audit.get('mechanically_mapped_answer_count') != count
+                or audit.get('semantic_review_performed') is not False
+                or audit.get('mathematical_correctness_checked') is not False):
+            raise ValueError('Mechanical audit must not claim semantic or mathematical verification')
+    if review.get('assets', []) != assets:
+        raise ValueError('Review assets differ from the approved package')
+    values['assets'] = validate_assets(assets, lambda name: read_local_asset(root, name), source=values['source'].decode('utf-8-sig'))
+    for name, raw in values['assets'].items():
+        if manifest['files'].get(name) != digest(raw):
+            raise ValueError('Asset is not covered by the package manifest')
     return manifest, values, topic
 
 
@@ -106,6 +128,10 @@ def install_topic(settings, package, *, subject_id, course_id, unit_id=None):
                      'audit': 'prepared-audit.json'}
             for key, name in names.items():
                 (stage / name).write_bytes(values[key])
+            for name, raw in values['assets'].items():
+                asset = stage / name
+                asset.parent.mkdir(parents=True, exist_ok=True)
+                asset.write_bytes(raw)
             converter = Path(__file__).resolve().parents[1] / 'scripts/import_course.mjs'
             env = {**os.environ, 'MATH_LEARNING_PYTHON': sys.executable}
             result = subprocess.run(['node', str(converter), str(stage / 'source.md'), str(stage / 'answers.json'),
@@ -119,14 +145,14 @@ def install_topic(settings, package, *, subject_id, course_id, unit_id=None):
             (stage / 'topic.sources.json').write_bytes(encoded({
                 'source_path': str(destination / 'source.md'), 'answers_path': str(destination / 'answers.json'),
                 'review_path': str(destination / 'review.json'), 'review_sha256': digest(values['review']),
-                'source_sha256': topic['source_sha256']}))
+                'source_sha256': topic['source_sha256'], **({'assets': manifest['assets']} if values['assets'] else {})}))
             (stage / 'import.json').write_bytes(encoded(record))
             (stage / 'catalog-before.json').write_bytes(before)
             if destination.exists():
                 # A process may have stopped after placing files but before activating the catalog.
                 prior = json.loads((destination / 'import.json').read_text(encoding='utf-8'))
                 if prior != record or any((destination / name).read_bytes() != (stage / name).read_bytes()
-                                          for name in ('source.md', 'answers.json', 'review.json', 'topic.json', 'topic.sources.json')):
+                                          for name in ('source.md', 'answers.json', 'review.json', 'topic.json', 'topic.sources.json', *values['assets'])):
                     raise ValueError('Unactivated import directory conflicts; inspect it without overwriting')
             else:
                 # Copy to a permanent directory; it remains unreachable until catalog commit.

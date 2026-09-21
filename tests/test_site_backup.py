@@ -1,6 +1,7 @@
 """Portable site backups using synthetic courses and guest-only private fixtures."""
 
 from contextlib import closing
+import base64
 import hashlib
 import json
 from pathlib import Path
@@ -176,7 +177,7 @@ class SiteBackupAcceptanceTests(unittest.TestCase):
         self.assertTrue(Path(second_index['answers_path']).is_relative_to(second_destination))
         self.assertEqual(Catalog.load(Settings.load(second_destination)).topics, self.catalog.topics)
 
-    def _attach_review_evidence(self):
+    def _attach_review_evidence(self, with_image=False):
         # Add a separate source-backed topic; never reinterpret existing progress.
         topic = synthetic_course(1)
         topic.update(id='reviewed-topic', title='Reviewed fixture')
@@ -187,6 +188,14 @@ class SiteBackupAcceptanceTests(unittest.TestCase):
             q['id'] = f'example-1-practice-{number}'
         lines = ['- Reviewed fixture', '  - Introduction', '    - Synthetic prose.', '  - Example 1: Question',
                  '    - State a fact.', '    - Explanation', '      - A synthetic explanation.']
+        assets = []
+        if with_image:
+            image = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC')
+            image_path = self.external / 'assets' / 'diagram.png'
+            image_path.parent.mkdir(exist_ok=True)
+            image_path.write_bytes(image)
+            assets = [{'path': 'assets/diagram.png', 'sha256': sha256(image), 'size': len(image), 'mime': 'image/png'}]
+            lines.insert(3, '    - ![diagram](assets/diagram.png)')
         module['example']['question'] = 'State a fact.'
         for number, q in enumerate(module['practices'], 1):
             q['question'] = f'State fact {number}.'
@@ -203,15 +212,47 @@ class SiteBackupAcceptanceTests(unittest.TestCase):
                       'question_sha256': sha256(q['question'])} for q in [module['example'], *module['practices']]}})
         review_path = self.external / 'reviewed-topic.review.json'
         write_json(review_path, {'schema_version': 1, 'status': 'approved', 'source_sha256': topic['source_sha256'],
-                               'sidecar_sha256': sha256(answers_path.read_bytes()), 'model': 'fixture',
+                               'sidecar_sha256': sha256(answers_path.read_bytes()), 'model': 'fixture', 'assets': assets,
                                'questions': [{'id': q['id'], 'question_sha256': sha256(q['question']),
                                               'approved': True, 'issues': []} for q in questions]})
         write_json(self.external / 'reviewed-topic.sources.json', {
             'source_path': str(source), 'answers_path': str(answers_path),
-            'review_path': str(review_path), 'review_sha256': sha256(review_path.read_bytes())})
+            'review_path': str(review_path), 'review_sha256': sha256(review_path.read_bytes()), 'assets': assets})
         self.catalog_data['courses'][0]['topics'].append({'id': 'reviewed-topic', 'path': str(topic_path)})
         write_json(self.data / 'catalog.json', self.catalog_data)
         return review_path
+
+    def test_topic_attachments_survive_backup_restore_and_second_backup(self):
+        self._attach_review_evidence(with_image=True)
+        archive = self._backup()
+        destination = self.root / 'with-assets'
+        restore_site(archive, destination)
+        index = json.loads((destination / 'courses/reviewed-topic.sources.json').read_text())
+        self.assertEqual(Path(index['source_path']), destination / 'sources/reviewed-topic/source.md')
+        self.assertEqual((Path(index['source_path']).parent / 'assets/diagram.png').read_bytes(),
+                         (self.external / 'assets/diagram.png').read_bytes())
+        self.assertEqual(index['assets'][0]['sha256'], sha256((self.external / 'assets/diagram.png').read_bytes()))
+        second = self.root / 'assets-second.zip'
+        backup_site(Settings.load(destination), second)
+        with zipfile.ZipFile(second) as saved:
+            self.assertEqual(saved.read('sources/reviewed-topic/assets/diagram.png'), (self.external / 'assets/diagram.png').read_bytes())
+
+    def test_changed_missing_unbound_or_escaping_topic_assets_rejected(self):
+        self._attach_review_evidence(with_image=True)
+        archive = self._backup()
+        def changed(manifest, blobs):
+            blobs['sources/reviewed-topic/assets/diagram.png'] += b'changed'
+        def missing(manifest, blobs):
+            del blobs['sources/reviewed-topic/assets/diagram.png']
+        def unbound(manifest, blobs):
+            review = json.loads(blobs['courses/reviewed-topic.review.json'])
+            review['assets'] = []
+            blobs['courses/reviewed-topic.review.json'] = json.dumps(review).encode()
+        def escaping(manifest, blobs):
+            manifest['sources']['reviewed-topic']['assets'][0]['path'] = '../escape.png'
+        for mutation in (changed, missing, unbound, escaping):
+            with self.subTest(mutation=mutation):
+                self._assert_invalid_without_target(self._edited_archive(archive, mutation))
 
     def test_review_evidence_survives_backup_restore_and_second_backup(self):
         review = self._attach_review_evidence().read_bytes()

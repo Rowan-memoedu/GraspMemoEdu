@@ -2,7 +2,7 @@
 
 Topic 内容与课程图谱独立导入。此入口不创建或覆盖图谱关系；图谱使用 `Import-Graph.ps1` / `graph-import`，可反复整体更新，详见 [图谱格式与工作流](course-graph.md)。两者通过稳定的 `topic_id` 关联，图谱可先于正文导入。
 
-在后端电脑调用，网页不提供配置或上传入口。第一版把一个已校准的 Markdown 文件导入已有学科、Course；不自动创建 Course，不覆盖既有 Topic，不写账号权限或学习记录。采用默认权限的账号会自动获得新 Topic，设置过 Topic 覆盖的账号继续受其明确配置限制。
+在后端电脑调用，网页不提供配置或上传入口。默认只机械导入已校准的 Markdown：解析结构、按字段注入并搬运附件，不逐题检查数学、答案、图注或配图细节，不调用 API 改写内容。API 仅用于极少量抽样检查整体性损坏。单篇入口加入已有学科、Course；整门新课程使用后文的课程安装入口。不覆盖既有 Topic，不写账号权限或学习记录。
 
 ## 一条命令
 
@@ -18,9 +18,7 @@ pwsh -NoProfile -File 'D:/Projects/MathLearningWeb/Import-Topic.ps1' `
 pwsh -NoProfile -File 'D:/Projects/MathLearningWeb/Start-PublicLearning.ps1' -RestartBackend
 ```
 
-账号默认开放全部 Topic 和功能，新增内容自动继承；明确设置的 Topic 或功能列表覆盖各自默认值。物理等非数学学科需要登录。权限管理仍在本机 CLI，见 [账号管理](accounts.md)。
-
-本次物理验收新增 `physics-uniform-speed-import-test`（「【测试】匀速直线运动：速度计算」，1 个 Example、7 道 Practice），放在 `test-physics-course` 下，保留原有测试 Topic。默认权限账号可直接学习该 Topic。
+账号默认开放全部 Topic 和功能，新增内容自动继承；明确设置的 Topic 或功能列表覆盖各自默认值。权限管理仍在本机 CLI，见 [账号管理](accounts.md)。历史测试课程已下线，不随导入器更新重新发布。
 
 ## 输入格式
 
@@ -40,7 +38,33 @@ pwsh -NoProfile -File 'D:/Projects/MathLearningWeb/Start-PublicLearning.ps1' -Re
         - 推导与最终答案。
 ```
 
-上例仅展示层级；实际文件须继续到 Practice 7 或更多。支持原有 Markdown/LaTeX；主动 HTML、脚本、远程图片等不属于输入合同。字段不齐或题量不足会在调用 API 前失败。不会自动补题、改写源稿或猜测缺失条件。
+上例仅展示层级；实际文件须继续到 Practice 7 或更多。支持原有 Markdown/LaTeX 和本地 PNG 插图；主动 HTML、脚本、远程图片等不属于输入合同。字段不齐或题量不足会在调用 API 前失败。不会自动补题、改写源稿或猜测缺失条件。
+
+## 本地插图
+
+将 Markdown 与附件一起保存，例如 `topic.md` 引用 `![示意图](assets/rod.png)`。导入器只复制实际引用的 PNG，保留相对目录和原始字节；PNG 会内嵌进相应题面、解析或指导的 HTML，网页无需访问作者电脑的路径或额外图片服务器。
+
+仅接受文档目录内的相对 `.png` 路径，拒绝绝对路径、上级目录、网络链接、符号链接、目录联接和伪装文件。图片经过 PNG 校验、尺寸和哈希检查；每张上限 8 MiB，边长最多 10000、像素总数最多 2000 万。SVG 原件可以留在交付目录，但本版本不导入 SVG 附件。图片按宽度自适应显示。
+
+资产清单与源稿凭据绑定，只机械检查附件可读、格式有效、路径与哈希一致。换图后只更新受影响引用和哈希，不检查图中数学、方向、单位或图注细节。安装及整站备份携带相同附件。
+
+`topic-diagrams` 生成的哈希注释仅在显示时忽略，原 Markdown 不变。其他任意 HTML 不因支持图片而被放开。
+
+## 多篇准备与新建课程
+
+`scripts/prepare_topic_batch.py --plan <JSON> --run-root <新目录> [--workers 1..4]` 可准备多篇独立审核包。计划的 `topics` 项包含 `topic_id`、绝对 `source` 路径和 `source_sha256`；可用多个 `--topic` 只运行指定项。源文件必须与计划哈希一致，每个 Topic 的失败和成功分别保存；失败重试使用新运行目录，不覆盖旧证据。
+
+全部审核通过后，将对应 `package` 路径填入课程安装计划：
+
+```json
+{"course_id":"my-physics-course","subject_id":"physics","title":"课程名称","topics":[{"topic_id":"physics-my-topic","package":"D:/Artifacts/my-approved-package"}]}
+```
+
+```powershell
+& 'D:/AppData/MathLearningWeb/venv/Scripts/python.exe' scripts/install_author_course.py --plan '<课程安装计划.json>' --data-dir 'D:/AppData/MathLearningWeb'
+```
+
+此入口只新增课程：先在隔离目录验证全部包，再切换课程与学科配置，保存切换前配置。已有图谱使用相同 Course/Topic ID，不重编号。原课程、学习记录和权限不改写；默认权限账号自动继承新内容。已有课程仍使用单 Topic 安装入口。失败留下的未激活内容供检查，不自动删除或覆盖。安装成功后按上文重载服务。
 
 支持分组生产稿：每个 Example 下共 5 组、每组 3 道，依次标为 `Practice 1.1`、`Practice 1.2`、`Practice 1.3`、`Practice 2.1`，直到 `Practice 5.3`。所有 Practice 仍是 Example 的直接子节点，不增加分组容器。每个 Example 的分组编号从 1.1 重新开始；同一 Example 内不混用整数与分组编号，重复、缺号、乱序或不完整分组均拒绝导入。
 
@@ -48,13 +72,13 @@ pwsh -NoProfile -File 'D:/Projects/MathLearningWeb/Start-PublicLearning.ps1' -Re
 
 ## 标准流程与字段
 
-1. 保存原始文件快照，脚本解析结构并生成稳定题目 ID、源码行号和题面哈希。
-2. LLM 按模块结合 Introduction 提取 `reference_answer`、`answer_type`、`constraints`。
-3. 第二次独立 API 调用重新核对答案、解析、条件、单位与精度，逐题记录理由。任何拒绝都会停止；传输或响应格式异常最多尝试 3 次，保留失败记录。
-4. 脚本按题目 ID 精确注入字段，渲染 Introduction、题面和解析；校验题目覆盖、哈希与最少练习数量。原有精确算术验证入口仍然保留；本流程的通用语义校验明确标记为 `llm-reviewed`，不声称数学形式证明。
-5. 安装时重新运行转换并逐字段比较结果，先写永久内容，再原子切换目录。保留切换前目录快照；冲突、篡改和重复 ID 均不会覆盖旧内容。安装锁防止两个导入器同时写目录。
+1. 保存原始文件及引用附件快照，解析结构并生成稳定题目 ID、源码行号和哈希。
+2. 将原稿 Explanation 完整映射到 `reference_answer`，使用通用答案类型及判题约束，不让 LLM 重写答案。
+3. 按题目 ID 注入字段，渲染指导、题面和解析；检查字段覆盖、附件引用、哈希与题库结构，不判断教学内容正误。
+4. 凭据明确标记为机械校验，不冒充语义审核通过。历史逐题 API 审核记录保留作为旧证据，不继续运行该流程。
+5. 安装前通过确定性转换比较确认字段未损坏，再原子切换目录；原有内容、权限和学习记录不改写。这里的本地一致性检查不触发 API 或细节审核。
 
-标题、Introduction、模块、题面、解析来自源文件；答案类型、标准答案和判题约束来自经过独立审核的答案侧车。源文件、答案侧车、审核报告和 Topic 都以 SHA-256 关联。网站备份同时携带这些来源和审核材料，恢复时重新核验。
+标题、Introduction、模块、题面和解析来自源文件；答案侧车由原稿机械映射。源文件、答案侧车、转换凭据与 Topic 用 SHA-256 关联。网站备份携带这些来源，恢复时核验字节及引用完整性。
 
 ## 分阶段调用
 
@@ -66,12 +90,26 @@ $python = 'D:/AppData/MathLearningWeb/venv/Scripts/python.exe'
 & $python -m math_learning author-install --package 'D:/Artifacts/MathLearningWeb/author-import/runs/my-new-run' --subject physics --course test-physics-course
 ```
 
-`author-prepare` 只产生审核包；`author-install` 不再次调用 LLM。`author-import` 合并两步。Course 有多个显式 Unit 时须提供 `--unit`（PowerShell 为 `-Unit`）。每次 prepare 使用新运行目录；失败后修订源稿或通用流程，再从源文件重新执行，不能修改审核 JSON 强行通过。相同包重复 install 返回 `already_installed`。
+`author-prepare` 只产生审核包；`author-install` 不再次调用 LLM。`author-import` 合并两步。Course 有多个显式 Unit 时须提供 `--unit`（PowerShell 为 `-Unit`）。每次 prepare 使用新运行目录。后续发现问题只局部修复并验证受影响部分，不整篇重跑；保留已成功的提取、转换和审核结果。审核误报的人工纠正须附具体证据，保留原拒绝结论并明确标记人工核对，不能伪装成 LLM 自动通过。相同包重复 install 返回 `already_installed`。
+
+局部接续使用以下入口，原包保持不变：
+
+```powershell
+& $python scripts/resume_topic_import.py --package '<原审核包>' --run-dir '<局部修复结果目录>'
+```
+
+有正文或附件修复时加 `--source '<更正后的MD>'`，按当前机械规则更新字段、引用和哈希，保留旧包，不重跑逐题 API。历史语义拒绝不作为机械导入门禁，也不被改写成模型批准。
 
 默认运行材料位于 `D:/Artifacts/MathLearningWeb/author-import/runs`；已入库内容位于数据目录的 `imported-topics/<TopicId>`。API 请求、响应、逐题理由和 `manifest.json` 留在本机，不能加入源码仓库。返回失败状态时进程退出码非零。未激活的残留目录或锁须核对原运行进程后处理，不自动删除。
 
 ## API 与扩展边界
 
-复用本机 `ai-production-supervisor` 的配置发现和模型规范化。专用凭据为 `DEEPSEEK_CODEX_API_KEY`（进程或 Windows 用户环境），仅发送到 DeepSeek 官方 HTTPS 地址，禁止重定向。可用 `AUTHOR_IMPORT_MODEL` 指定模型；当前默认 `deepseek-flash`，关闭思考。缺少凭据时明确失败，不回退其他项目的密钥。完整教学稿及答案会提交该 API 审核。
+默认机械导入无需 API 凭据。可选 API 抽样只检查字段丢失、大片乱码、图片未呈现等整体性损坏；每批最多抽两题，不按每篇循环抽样，不核算答案或评价配图细节。抽样使用专用 `DEEPSEEK_CODEX_API_KEY`（进程或 Windows 用户环境），仅发送抽中内容到 DeepSeek 官方 HTTPS 地址，不使用网站判题凭据。未经明确要求不启动历史逐题提取或审核。
 
-准备包逻辑在 `math_learning/author_import.py`，安装在 `math_learning/topic_install.py`，渲染沿用 `scripts/import_course.mjs`。后续新增输入格式或内容类型时在这些边界扩展，不改变既有学习/复习状态机。当前不支持自动更新已有 Topic、插图附件导入或任意 Markdown 排版。
+```powershell
+& $python scripts/sample_import_integrity.py --package '<包1>' '<包2>' --output '<抽样记录新目录>' --max-questions 2
+```
+
+`--package` 一次传入整批包，整批合计最多两题。该入口需显式调用，普通导入和安装不会触发。2026-09-21 已将 22 篇 Topic 安装到物理课程“运动学进阶”（`rigid-constraints`）；原数学课程、图谱及学习记录保留。
+
+准备包逻辑在 `math_learning/author_import.py`，安装在 `math_learning/topic_install.py`，渲染沿用 `scripts/import_course.mjs`，共享图片校验在 `math_learning/topic_assets.py`。后续新增输入格式或内容类型时在这些边界扩展，不改变既有学习/复习状态机。当前不支持自动更新已有 Topic 或任意 Markdown 排版。

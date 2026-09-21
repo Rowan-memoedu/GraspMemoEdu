@@ -48,10 +48,18 @@ def _safe_name(name):
                and not any(ord(character) < 32 for character in part) for part in path.parts)
 
 
-def _validate_review(topic, source, answers, data):
+def _validate_review(topic, source, answers, data, assets=None):
     """Validate preserved review evidence without sending another LLM request."""
     review = json.loads(data)
-    if (review.get('schema_version') != 1 or review.get('status') != 'approved'
+    mechanical = review.get('mode') == 'mechanical'
+    if mechanical and (review.get('status') != 'mechanically_validated'
+                       or review.get('method') != 'mechanical-import'
+                       or review.get('semantic_review_performed') is not False
+                       or review.get('mathematical_correctness_checked') is not False):
+        raise ValueError('Mechanical evidence must not claim semantic approval')
+    if review.get('assets', []) != (assets or []):
+        raise ValueError('Review asset evidence differs from its source attachments')
+    if (review.get('schema_version') != 1 or review.get('status') != ('mechanically_validated' if mechanical else 'approved')
             or review.get('source_sha256') != sha256(source)
             or review.get('sidecar_sha256') != sha256(answers)):
         raise ValueError('Review evidence is unapproved or differs from its inputs')
@@ -68,7 +76,11 @@ def _validate_review(topic, source, answers, data):
         raise ValueError('Review question coverage differs from the source or topic')
     for row in records:
         qid = row['id']
-        if (row.get('approved') is not True or row.get('issues') != []
+        valid = (row.get('structurally_valid') is True and row.get('field_mapping') == 'reference_answer=explanation'
+                 and 'approved' not in row) if mechanical else row.get('approved') is True and row.get('issues') == []
+        if mechanical and (answer_rows[qid].get('reference_answer') != by_id[qid]['explanation']):
+            raise ValueError('Mechanical answer is not mapped from its source explanation')
+        if (not valid
                 or row.get('question_sha256') != sha256(by_id[qid]['question'])
                 or answer_rows[qid].get('question_sha256') != row['question_sha256']
                 or topic_questions[qid]['question'] != by_id[qid]['question']):
@@ -123,9 +135,16 @@ def _validate_payload(manifest, blobs):
     for topic_id, entry in sources.items():
         if not isinstance(entry, dict):
             raise ValueError('Invalid sources entry')
-        expected = {'source': f'sources/{topic_id}.md', 'answers': f'courses/{topic_id}.answers.json',
+        from .topic_assets import validate_assets
+        assets = entry.get('assets', [])
+        asset_root = f'sources/{topic_id}/'
+        asset_bytes = validate_assets(assets, lambda name: blobs[asset_root + name],
+                                      source=blobs[entry['source']].decode('utf-8-sig') if 'source' in entry else None)
+        if assets and not {'source', 'answers', 'review'} <= set(entry):
+            raise ValueError('Source attachments require complete reviewed source evidence')
+        expected = {'source': f'sources/{topic_id}/source.md' if assets else f'sources/{topic_id}.md', 'answers': f'courses/{topic_id}.answers.json',
                     'review': f'courses/{topic_id}.review.json'}
-        if any(key not in expected or value != expected[key] or value not in blobs for key, value in entry.items()):
+        if any(key not in expected or value != expected[key] or value not in blobs for key, value in entry.items() if key != 'assets'):
             raise ValueError('Invalid sources path')
         if 'source' in entry and hashlib.sha256(blobs[entry['source']]).hexdigest() != topics[topic_id]['source_sha256']:
             raise ValueError('Source differs from topic content')
@@ -134,8 +153,9 @@ def _validate_payload(manifest, blobs):
         if 'review' in entry:
             if not {'source', 'answers'} <= set(entry):
                 raise ValueError('Review requires its source and answers')
-            _validate_review(topics[topic_id], blobs[entry['source']], blobs[entry['answers']], blobs[entry['review']])
-        expected_files.update(entry.values())
+            _validate_review(topics[topic_id], blobs[entry['source']], blobs[entry['answers']], blobs[entry['review']], assets)
+        expected_files.update(value for key, value in entry.items() if key != 'assets')
+        expected_files.update(asset_root + name for name in asset_bytes)
     from .course_graph import validate_graph_archive
     expected_files.update(validate_graph_archive(blobs))
     guide_roots = {'guide': 'guide/guide.md'}
@@ -215,8 +235,16 @@ def backup_site(settings, destination=None):
             original = source_path.read_bytes()
             if hashlib.sha256(original).hexdigest() != topic['source_sha256']:
                 raise DomainError('source_changed', '原稿已变化，请先完成新版本导入后再备份。', 409)
-            entry['source'] = f'sources/{topic_id}.md'
+            assets = index.get('assets', [])
+            from .topic_assets import validate_assets, read_local_asset
+            asset_bytes = validate_assets(assets, lambda name: read_local_asset(source_path.parent, name), source=original.decode('utf-8-sig'))
+            entry['source'] = f'sources/{topic_id}/source.md' if assets else f'sources/{topic_id}.md'
             blobs[entry['source']] = original
+            if assets:
+                entry['assets'] = assets
+                blobs.update({f'sources/{topic_id}/{name}': raw for name, raw in asset_bytes.items()})
+        elif index.get('assets'):
+            raise DomainError('source_missing', '课程附件缺少对应原稿，无法完整备份。', 422)
         if answers_path.is_file():
             answers_bytes = answers_path.read_bytes()
             _validate_answers(topic, answers_bytes, code='answers_changed', status=409)
@@ -335,6 +363,8 @@ def restore_site(backup, destination):
                 if 'review' in sources:
                     index['review_path'] = str((destination / sources['review']).resolve())
                     index['review_sha256'] = sha256(blobs[sources['review']])
+                if sources.get('assets'):
+                    index['assets'] = sources['assets']
                 (staged / f'courses/{topic_id}.sources.json').write_bytes(_json(index))
             (staged / 'settings.json').write_bytes(_json({
                 'course_path': str((destination / f'courses/{default_id}.json').resolve()),
