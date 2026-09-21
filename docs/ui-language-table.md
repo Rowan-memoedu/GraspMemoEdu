@@ -381,7 +381,7 @@
 | Search Topic title or ID | 搜索 主题 名称或 ID |
 | Select Topic | 选择 主题 |
 | Topic prerequisites, bottom to top | 由下向上的 主题 前置关系图 |
-| Content not imported | 内容未导入 |
+| Content not imported | 教学内容未导入 |
 | Completed | 已完成 |
 | In progress | 学习中 |
 | Paused | 已暂停 |

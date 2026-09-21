@@ -640,7 +640,7 @@ export const portalMessages = {
     "Topic prerequisites, bottom to top"
   ],
   "graph.pending": [
-    "内容未导入",
+    "教学内容未导入",
     "Content not imported"
   ],
   "graph.completed": [

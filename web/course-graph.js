@@ -1,4 +1,4 @@
-import { portalMessages } from './portal-messages.js?v=eb981ee70dae9c04';
+import { portalMessages } from './portal-messages.js?v=a67fbb18830c7235';
 // One dependency-free renderer for the website and self-contained local previews.
 export function renderCourseGraph(target, graph, {language = 'zh', onOpenTopic} = {}) {
   const t = key => portalMessages[key][language === 'en' ? 1 : 0];
@@ -99,10 +99,14 @@ export function renderCourseGraph(target, graph, {language = 'zh', onOpenTopic} 
     group.append(svgEl('rect', {x: pos.x - 112, y: pos.y - 33, width: 224, height: 66, rx: 6, fill,
       stroke: '#506e86', 'stroke-dasharray': pending ? '5 3' : 'none'}));
     const title = svgEl('title'); title.textContent = node.title + ' · ' + status(node); group.append(title);
-    const label = svgEl('text', {x: pos.x, y: pos.y - 5, 'text-anchor': 'middle', fill: '#20364a', 'font-size': 13});
+    const label = svgEl('text', {x: pos.x, y: pos.y + (pending ? -5 : 5), 'text-anchor': 'middle', fill: '#20364a', 'font-size': 13});
     label.textContent = [...node.title].length > 15 ? [...node.title].slice(0, 14).join('') + '…' : node.title;
-    const badge = svgEl('text', {x: pos.x, y: pos.y + 18, 'text-anchor': 'middle', fill: '#596e7e', 'font-size': 11}); badge.textContent = status(node);
-    group.append(label, badge); group.addEventListener('click', () => select(node.topic_id));
+    group.append(label);
+    if (pending) {
+      const badge = svgEl('text', {x: pos.x, y: pos.y + 18, 'text-anchor': 'middle', fill: '#596e7e', 'font-size': 11}); badge.textContent = t('graph.pending');
+      group.append(badge);
+    }
+    group.addEventListener('click', () => select(node.topic_id));
     group.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(node.topic_id); } });
     groups.set(node.topic_id, group); svg.append(group);
   }
