@@ -125,6 +125,34 @@ class SiteBackupAcceptanceTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, 'invalid_backup')
         self.assertFalse(destination.exists(), 'Invalid backup must not leave a partially restored destination')
 
+    def test_retired_progress_round_trip_without_republishing(self):
+        retired = synthetic_course(1)
+        retired['id'] = 'retired-fixture'
+        learner = LearningService(retired, self.data, self.judge, self.guest['access']['learner_id'])
+        learner.choose(self._payload(learner, choice='mastered'))
+        with closing(sqlite3.connect(self.data / 'learning.sqlite3')) as con:
+            before = con.execute('SELECT * FROM topics WHERE topic=?', (retired['id'],)).fetchall()
+        archive = self._backup()
+        destination = self.root / 'retired-restored'
+        restore_site(archive, destination)
+        self.assertNotIn(retired['id'], Catalog.load(Settings.load(destination)).topics)
+        with closing(sqlite3.connect(destination / 'learning.sqlite3')) as con:
+            self.assertEqual(before, con.execute('SELECT * FROM topics WHERE topic=?', (retired['id'],)).fetchall())
+        second = backup_site(Settings.load(destination), self.root / 'second-retired.zip')
+        restore_site(Path(second['backup']), self.root / 'second-retired-restored')
+        for replacement in ({}, {retired['id']: ['wrong-version']}, {'portable-a': [retired['version']]}):
+            with self.subTest(replacement=replacement):
+                altered = self._edited_archive(archive, lambda manifest, blobs: manifest.update(retired_topic_versions=replacement))
+                self._assert_invalid_without_target(altered)
+
+    def test_active_version_mismatch_still_blocks_backup(self):
+        with closing(sqlite3.connect(self.data / 'learning.sqlite3')) as con:
+            con.execute("UPDATE topics SET version='different' WHERE topic='portable-a'")
+            con.commit()
+        with self.assertRaises(DomainError) as caught:
+            self._backup()
+        self.assertEqual(caught.exception.code, 'backup_version_changed')
+
     def test_format2_cli_round_trip_migrates_all_sources_and_shared_guest_data(self):
         archive = self._backup()
         with zipfile.ZipFile(archive) as saved:

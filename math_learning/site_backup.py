@@ -22,6 +22,19 @@ def _json(value):
     return json.dumps(value, ensure_ascii=False, indent=2).encode('utf-8')
 
 
+def _retired_versions(manifest, active_topics):
+    retired = manifest.get('retired_topic_versions', {})
+    if not isinstance(retired, dict):
+        raise ValueError('Invalid retired topic versions')
+    for topic_id, versions in retired.items():
+        Catalog._identifier(topic_id)
+        if (topic_id in active_topics or not isinstance(versions, list) or not versions
+                or any(not isinstance(value, str) or not value for value in versions)
+                or len(versions) != len(set(versions))):
+            raise ValueError('Invalid retired topic versions')
+    return retired
+
+
 def _validate_answers(topic, data, *, code='invalid_backup', status=422):
     answers = json.loads(data)
     if not isinstance(answers, dict) or answers.get('source_sha256') != topic['source_sha256']:
@@ -132,6 +145,7 @@ def _validate_payload(manifest, blobs):
             expected_files.add(expected)
     if not topics or set(versions) != set(topics) or set(sources) != set(topics) or default_id not in topics:
         raise ValueError('Topic manifest membership differs from catalog')
+    _retired_versions(manifest, topics)
     for topic_id, entry in sources.items():
         if not isinstance(entry, dict):
             raise ValueError('Invalid sources entry')
@@ -207,8 +221,12 @@ def backup_site(settings, destination=None):
                 if snapshot.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
                     raise DomainError('backup_failed', '备份数据库完整性校验失败。', 500)
                 saved_versions = snapshot.execute('SELECT DISTINCT topic,version FROM topics').fetchall()
-        if any(topic_id not in catalog.topics or catalog.topics[topic_id]['version'] != version for topic_id, version in saved_versions):
+        if any(topic_id in catalog.topics and catalog.topics[topic_id]['version'] != version for topic_id, version in saved_versions):
             raise DomainError('backup_version_changed', '部分进度的课程来源缺失或版本不同，请先处理课程目录。', 409)
+        retired_versions = {}
+        for topic_id, version in sorted(saved_versions):
+            if topic_id not in catalog.topics:
+                retired_versions.setdefault(topic_id, []).append(version)
         blobs['learning.sqlite3'] = snapshot_path.read_bytes()
     sources_index = {}
     for topic_id, topic in catalog.topics.items():
@@ -305,6 +323,7 @@ def backup_site(settings, destination=None):
         raise DomainError('invalid_backup', '课程文件名在本机存在大小写冲突。', 422)
     manifest = {'format': 2, 'created_at': stamp, 'default_topic_id': catalog.default_topic_id,
                 'topic_versions': {key: topic['version'] for key, topic in catalog.topics.items()},
+                'retired_topic_versions': retired_versions,
                 'sources': sources_index,
                 'sha256': {name: hashlib.sha256(data).hexdigest() for name, data in blobs.items()}}
     if (not all(_safe_name(name) for name in blobs)
@@ -347,9 +366,13 @@ def restore_site(backup, destination):
                 if con.execute('PRAGMA integrity_check').fetchone()[0] != 'ok' or con.execute('PRAGMA foreign_key_check').fetchone():
                     raise ValueError('Invalid database integrity')
                 rows = con.execute('SELECT learner,topic,version FROM topics').fetchall()
-                if any(topic_id not in topics or topics[topic_id]['version'] != version for _, topic_id, version in rows):
+                retired = _retired_versions(manifest, topics)
+                archived_rows = {(topic_id, version) for _, topic_id, version in rows if topic_id not in topics}
+                declared_rows = {(topic_id, version) for topic_id, versions in retired.items() for version in versions}
+                if (archived_rows != declared_rows or any(topic_id in topics and topics[topic_id]['version'] != version
+                                                         for _, topic_id, version in rows)):
                     raise ValueError('Database topics differ from the catalog')
-                learners = [(learner_id, topic_id) for learner_id, topic_id, _ in rows]
+                learners = [(learner_id, topic_id) for learner_id, topic_id, _ in rows if topic_id in topics]
             for learner_id, topic_id in learners:
                 LearningService(catalog.topic(topic_id), staged, learner_id=learner_id).recover_interrupted()
             for topic_id, sources in manifest['sources'].items():

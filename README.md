@@ -1,5 +1,7 @@
 # GraspMemoEdu
 
+当前正式后端已于 2026-09-21 迁至腾讯云 `https://124.221.144.155`，GitHub Pages 前端地址保持不变。部署、证书续期、备份和回滚边界见 [腾讯云部署](docs/tencent-deployment.md)。下文 Windows 启动与 Quick Tunnel 段落用于本地开发和历史路线，不要对正式数据重新启用旧维护任务。
+
 课程图谱使用独立的 `Import-Graph.ps1` / `graph-import`，支持先于 Topic 导入、差异预览、重复更新、历史恢复及离线可视化。Topic 导入不覆盖图谱，图谱更新不改正文和学习进度。标准格式和工作流见 [独立课程图谱](docs/course-graph.md)。
 
 作者可在本机将校准好的 Markdown 及相对路径 PNG 插图机械转换为 Topic：解析结构、按字段注入、搬运附件并验证来源一致性；默认不调用 API，不逐题审查内容。API 只用于极少量抽样检查整体性损坏。支持批量准备来源包、新建整门课程和局部修复。调用方法和输入格式见 [作者导入工作流](docs/author-import.md)。
