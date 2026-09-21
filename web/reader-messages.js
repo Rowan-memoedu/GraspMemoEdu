@@ -400,9 +400,9 @@ export const readerMessages = {
     "请先填写答案。",
     "Please enter an answer first."
   ],
-  "可输入数值、分数或数学表达式，例如 3/4、x^2。Ctrl + Enter 提交。": [
-    "可输入数值、分数或数学表达式，例如 3/4、x^2。Ctrl + Enter 提交。",
-    "Enter a number, fraction, or expression, such as 3/4 or x^2. Press Ctrl + Enter to submit."
+  "只要描述清楚正确答案的形式即可，表达方式不限，夹杂口语也没关系。Ctrl + Enter 提交。": [
+    "只要描述清楚正确答案的形式即可，表达方式不限，夹杂口语也没关系。Ctrl + Enter 提交。",
+    "Just describe the form of the correct answer clearly, in any wording—even with informal phrases mixed in. Press Ctrl + Enter to submit."
   ],
   "判题未完成，本次未计错": [
     "判题未完成，本次未计错",

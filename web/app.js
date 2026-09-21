@@ -1,4 +1,4 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=a2750ba76f9ededa";
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=aa1b73113c05cc38";
 
 applyStaticTranslations();
 
@@ -1172,7 +1172,7 @@ function answerForm(step) {
   error.id = "answerError";
   error.hidden = true;
   const bottom = el("div", "answerBottom");
-  const hint = el("p", "inputHint", t("可输入数值、分数或数学表达式，例如 3/4、x^2。Ctrl + Enter 提交。"));
+  const hint = el("p", "inputHint", t("只要描述清楚正确答案的形式即可，表达方式不限，夹杂口语也没关系。Ctrl + Enter 提交。"));
   hint.id = "answerHint";
   const submit = el("button", "primaryButton", submissionError && input.value.trim() === submissionError.answer ? t("重试判题") : t("Submit"));
   submit.id = "submitButton";
@@ -1404,7 +1404,7 @@ async function openTopic(id, subjectId) {
   await start();
 }
 
-const { initPortal } = await import("./portal.js?v=a2750ba76f9ededa");
+const { initPortal } = await import("./portal.js?v=aa1b73113c05cc38");
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {
     try { return await fetchGuideAsset(url, subjectId); }
