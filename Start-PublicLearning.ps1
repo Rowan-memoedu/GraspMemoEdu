@@ -5,6 +5,7 @@ param(
     [string]$Repository = 'amymiller76717-sudo/GraspMemoEdu-Pages',
     [string]$ArtifactDirectory = 'D:\Artifacts\MathLearningWeb\public-internet',
     [switch]$SkipPublish,
+    [switch]$RepairOnly,
     [switch]$RestartBackend
 )
 $ErrorActionPreference = 'Stop'
@@ -41,6 +42,22 @@ try {
                     $record = $null
                 }
             }
+        }
+    }
+    # A living connector can still return Cloudflare 1033 without logging a failure.
+    if ($record -and $record.origin) {
+        $reachable = $false
+        for ($probe = 0; $probe -lt 3; $probe++) {
+            try {
+                $health = Invoke-RestMethod -Uri ($record.origin + '/api/health') -TimeoutSec 8
+                if ($health.service -eq 'MathLearningWeb') { $reachable = $true; break }
+            } catch { }
+            Start-Sleep -Seconds 2
+        }
+        if (-not $reachable) {
+            & pwsh -NoLogo -NoProfile -File (Join-Path $PSScriptRoot 'Stop-PublicLearning.ps1') -DataDirectory $DataDirectory
+            if ($LASTEXITCODE -ne 0) { throw '不健康的公网隧道停止失败。' }
+            $record = $null
         }
     }
     if (-not $record) {
@@ -97,7 +114,10 @@ try {
     }
     if (-not $ready) { throw ('公网健康检查未通过；服务与隧道仍保留运行，可检查日志后重试：' + $record.stderr) }
     Write-Output ('公网后端已就绪：' + $record.origin)
-    if (-not $SkipPublish) {
+    if ($RepairOnly) {
+        & pwsh -NoLogo -NoProfile -File (Join-Path $PSScriptRoot 'Update-PublicEndpoint.ps1') -Origin $record.origin -Repository $Repository
+        if ($LASTEXITCODE -ne 0) { throw '公网地址同步失败，下次维护将重试。' }
+    } elseif (-not $SkipPublish) {
         $releaseDirectory = Join-Path $ArtifactDirectory ('release-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff'))
         $exportDirectory = Join-Path $releaseDirectory 'web'
         $evidenceDirectory = Join-Path $releaseDirectory 'publication'

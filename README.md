@@ -213,3 +213,13 @@ pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Publish-Frontend.ps1' -Export
 公开后端校验精确 Host、来源和学习者身份，不再要求访客共享配对码。每位访客仍按身份隔离进度，Topic 和功能授权由后端执行；管理解锁与账号授权仅在本机命令入口。请求正文上限 16 KiB，游客创建每分钟最多 20 次、邀请码请求每分钟最多 10 次、新判题每位学习者每分钟最多 12 次；全局最多 8 个在途判题。达到限制返回 429，未接受的请求不计入作答。公开健康检查不返回本机实例标识，公开入口不提供本机会话或管理接口。
 
 免费入口用于测试，无需 Cloudflare 账号或自有域名；临时隧道重建会更换后端地址，重新运行公开启动入口可更新网页配置。Cloudflare 不为 Quick Tunnel 提供可用性保证，后续可替换为独立服务器，保持前端学习网址。参见 [Cloudflare 官方 Quick Tunnel 说明](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/)。FSRS 复习调度已接入；XP、云服务器迁移和管理员网页尚未实现。
+
+## 本机持续维护
+
+当前机器使用 `Install-LearningUserStartup.ps1` 安装当前用户登录启动项。入口隐藏运行 `Run-LearningMaintenance.ps1`，后者在维护子进程退出后等待 15 秒重新启动。`Watch-Learning.ps1` 每轮验证本机实例、公网 `/api/health` 与已发布地址；健康时每 30 秒检查一次，失败时退避至最多 5 分钟。锁与互斥量阻止重复维护。运行状态和最近检查时间见 `D:/AppData/MathLearningWeb/runtime/maintenance/status.json`，历史日志限长轮换。
+
+本机进程存在但健康检查失败时会恢复后端；公网连续三次失败时重建归本项目管理的隧道。`Start-PublicLearning.ps1 -RepairOnly` 只通过 `Update-PublicEndpoint.ps1` 更新公开仓库的 `deployment.json`，不会把工作区中尚未发布的源码自动上线。网页在网络或网关错误时最多每 30 秒重新发现入口；身份经原有验证迁移，只重试读取，不重复提交答案。
+
+安装命令：`pwsh -NoProfile -File D:/Projects/MathLearningWeb/Install-LearningUserStartup.ps1`。仅启动快捷方式位于 Windows 用户 Startup 目录，源码、数据与日志仍在 D 盘。当前非提升权限无法注册计划任务；`Install-LearningMaintenance.ps1` 保留为有权限环境的替代安装入口，两种方式择一。登录启动项方案适用于当前用户保持登录的运行环境，不承诺注销后或登录前可用，不修改电源或唤醒设置。维护进程本身被整体强制结束后，需要重新运行安装入口或下次登录才能恢复。
+
+上述机制缩短故障恢复时间，不能保证 Cloudflare 或互联网故障期间零中断。维护重建及 GitHub Pages 更新需要时间；不要仅凭隧道进程仍存在或日志曾连接成功判断公网健康。

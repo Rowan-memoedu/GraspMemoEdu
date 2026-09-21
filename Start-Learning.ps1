@@ -13,8 +13,16 @@ if (Test-Path -LiteralPath $pidFile) {
     $prior = Get-Content -LiteralPath $pidFile -Raw | ConvertFrom-Json
     $existing = Get-Process -Id $prior.pid -ErrorAction SilentlyContinue
     if ($existing -and $existing.StartTime.ToUniversalTime() -eq ([datetime]$prior.startedAt).ToUniversalTime()) {
-        Write-Output ('学习网站已启动：http://127.0.0.1:{0}' -f $prior.port)
-        exit 0
+        if ($prior.port -ne $Port) { throw '已有服务端口不同，请先停止已有服务。' }
+        try {
+            $health = Invoke-RestMethod -Uri ('http://127.0.0.1:{0}/api/health' -f $Port) -TimeoutSec 5
+            if ($health.service -eq 'MathLearningWeb' -and $health.instance_id -eq $prior.instanceId) {
+                Write-Output ('学习网站已启动：http://127.0.0.1:{0}' -f $prior.port)
+                exit 0
+            }
+        } catch { }
+        & pwsh -NoLogo -NoProfile -File (Join-Path $PSScriptRoot 'Stop-Learning.ps1') -DataDirectory $DataDirectory
+        if ($LASTEXITCODE -ne 0) { throw '不健康的本机服务停止失败。' }
     }
 }
 $instanceId = [guid]::NewGuid().ToString('N')
