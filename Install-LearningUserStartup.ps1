@@ -1,5 +1,7 @@
 param([string]$DataDirectory = 'D:\AppData\MathLearningWeb', [int]$Port = 8767)
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Assert-LocalLearningData.ps1')
+Assert-LocalLearningData -DataDirectory $DataDirectory
 $script = Join-Path $PSScriptRoot 'Run-LearningMaintenance.ps1'
 $pwsh = (Get-Command pwsh).Source
 $arguments = '-NoLogo -NoProfile -WindowStyle Hidden -File "{0}" -DataDirectory "{1}" -Port {2}' -f $script,$DataDirectory,$Port

@@ -1,5 +1,7 @@
 param([string]$DataDirectory = 'D:\AppData\MathLearningWeb', [int]$Port = 8767)
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Assert-LocalLearningData.ps1')
+Assert-LocalLearningData -DataDirectory $DataDirectory
 $name = 'GraspMemoEdu-ServiceMaintenance'
 $script = Join-Path $PSScriptRoot 'Watch-Learning.ps1'
 $existing = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue

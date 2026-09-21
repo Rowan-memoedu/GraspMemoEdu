@@ -67,6 +67,8 @@ The browser uses hash routes under any static-site base path, and completed task
 
 ## Deployment and transport
 
+Production runs on Tencent Cloud at `https://124.221.144.155`, behind nginx with a loopback-only Python backend. GitHub Pages remains the frontend. Operational authority, service supervision and backups are described in [Tencent deployment](tencent-deployment.md); Windows data is a rollback snapshot, not the active database.
+
 The browser loads `deployment.json` with `cache:no-store`. An empty `api_origin` means local same-origin mode, which obtains a session nonce from GET `/api/session` and sends `X-Learning-Session`. A nonempty origin selects public mode even when the frontend and API share the same HTTPS origin; it sends no pairing credential and never calls `/api/session`. Invalid or unreachable deployment config must not fall back to localhost. The API serves deployment config dynamically for its exact local/public Host; Pages receives the fixed public origin at export.
 
 Public mode requires `Settings.public_api_origin` to be an exact HTTPS origin without credentials, path, query, or wildcard. Forwarded host headers do not affect transport selection. Origin must be explicitly allowed; same-origin browser GET/HEAD may omit Origin only with `Sec-Fetch-Site: same-origin` and the exact public Host. POST still requires Origin. Public `/api/session` is forbidden, health exposes only status/service, and no administrator endpoints exist. Legacy CLI pairing remains available for compatibility but has no public webpage UI.

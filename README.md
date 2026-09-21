@@ -1,20 +1,20 @@
 # GraspMemoEdu
 
-当前正式后端已于 2026-09-21 迁至腾讯云 `https://124.221.144.155`，GitHub Pages 前端地址保持不变。部署、证书续期、备份和回滚边界见 [腾讯云部署](docs/tencent-deployment.md)。下文 Windows 启动与 Quick Tunnel 段落用于本地开发和历史路线，不要对正式数据重新启用旧维护任务。
+当前正式后端已于 2026-09-21 迁至腾讯云 `https://124.221.144.155`，GitHub Pages 前端地址保持不变。部署、证书续期、备份和回滚边界见 [腾讯云部署](docs/tencent-deployment.md)。下文 Windows 命令仅作隔离开发示例，必须显式指定隔离数据目录；正式管理在服务器执行，不要对本机回滚快照或旧维护任务执行它们。
 
 课程图谱使用独立的 `Import-Graph.ps1` / `graph-import`，支持先于 Topic 导入、差异预览、重复更新、历史恢复及离线可视化。Topic 导入不覆盖图谱，图谱更新不改正文和学习进度。标准格式和工作流见 [独立课程图谱](docs/course-graph.md)。
 
 作者可在本机将校准好的 Markdown 及相对路径 PNG 插图机械转换为 Topic：解析结构、按字段注入、搬运附件并验证来源一致性；默认不调用 API，不逐题审查内容。API 只用于极少量抽样检查整体性损坏。支持批量准备来源包、新建整门课程和局部修复。调用方法和输入格式见 [作者导入工作流](docs/author-import.md)。
 
-多学科学习平台：总首页提供数学、物理、英语、语文、生物、化学入口，古典衬线字和纸色背景仅作用于总首页。数学和设置页恢复原有视觉；其他学科共用原模板，使用各自配色、名称与徽标。数学保留既有课程与记录，不新增测试课；其余五科测试内容已下线，保留学科入口与独立配色；测试原文件和已有记录留在本机。账号、设置、学习和复习页面共用实现，配置与初始化见 [学科配置与扩展](docs/subjects.md)。本机源码和数据目录继续沿用 MathLearningWeb 名称，仓库与公开网页使用 GraspMemoEdu 品牌。
+多学科学习平台：总首页提供数学、物理、英语、语文、生物、化学入口，古典衬线字和纸色背景仅作用于总首页。数学和设置页恢复原有视觉；其他学科共用原模板，使用各自配色、名称与徽标。数学保留既有课程与记录，不新增测试课；其余五科测试内容已下线，保留学科入口与独立配色；测试原文件留在本机，历史学习记录已迁至服务器；物理正式课程「运动学进阶」已发布，共 22 个 Topic。账号、设置、学习和复习页面共用实现，配置与初始化见 [学科配置与扩展](docs/subjects.md)。本机源码和数据目录继续沿用 MathLearningWeb 名称，仓库与公开网页使用 GraspMemoEdu 品牌。
 
-网站已接通 Example/FSRS 复习：新完成的 Lesson 模块自动计算下次复习时间，到期在主页显示“复习”；复习只抽取对应 Practice。完成后更新下次时间，已完成轮次可从学习记录回看。评分规则、接口和本机管理见 [复习后端接口](docs/review-backend.md)。原有完成记录没有自动回填。
+网站已接通 Example/FSRS 复习：新完成的 Lesson 模块自动计算下次复习时间，到期在主页显示“复习”；复习只抽取对应 Practice。完成后更新下次时间，已完成轮次可从学习记录回看。评分规则、接口和服务端管理见 [复习后端接口](docs/review-backend.md)。原有完成记录没有自动回填。
 
 每个学科的顶部提供学习、课程、指南入口，并可返回所有学科。数学当前课程为「再探小学算术」，包含 Topic「数字化为字母」：6 个 Example、每模块 15 道 Practice，合计 96 道题。原有逐块学习、真实 MathAnswerJudge 判题、练习补题、模块评分、暂停与恢复继续使用同一份进度。
 
 界面默认中文，可在设置切换英文。统一译法与内容边界见 [界面语言规范](docs/ui-language.md)，完整文案见 [中英对照表](docs/ui-language-table.md)。
 
-公开入口：[GraspMemoEdu](https://amymiller76717-sudo.github.io/GraspMemoEdu-Pages/)。其他电脑、手机可直接打开，自动进入游客模式，无需填写服务地址、配对码或授予本地网络权限。后端仍运行在当前电脑，通过免费 Cloudflare 临时隧道接入；课程、答案、学习记录和邀请码资料仍保存在本机。源码仓库已更名为私有 `amymiller76717-sudo/GraspMemoEdu`；本机目录保留原名。
+公开入口：[GraspMemoEdu](https://amymiller76717-sudo.github.io/GraspMemoEdu-Pages/)。其他电脑、手机可直接打开，自动进入游客模式，无需填写服务地址、配对码或授予本地网络权限。后端、课程和学习记录运行并保存在腾讯云；原始邀请码管理文件仍留在本机私密目录，服务器保存认证所需哈希。源码仓库为私有 `amymiller76717-sudo/GraspMemoEdu`；本机源码目录保留原名。
 
 游客可进入全部六科学习、提交答案和回看已发布内容；主动暂停仍提示「该功能需注册账号才能使用」，后端同样限制。邀请码账号在全部学科通用，默认开放全部 Topic 和功能并自动继承新增内容；管理员明确设置的 Topic 或功能列表分别覆盖默认权限，见 [账号管理](docs/accounts.md)。
 
@@ -22,27 +22,12 @@
 
 ## 打开与启动
 
-网址：[http://127.0.0.1:8767](http://127.0.0.1:8767)。只在本机可用，判题需要联网。本机 8765 已由 AnkiConnect 使用，本项目使用 8767。
+正式网址：[GraspMemoEdu](https://amymiller76717-sudo.github.io/GraspMemoEdu-Pages/)。腾讯云上的 systemd 持续托管后端，个人电脑关闭、休眠或退出 ChatGPT 桌面端中的 Codex 均不影响网站运行。运维命令见 [腾讯云部署](docs/tencent-deployment.md)。
 
-公开服务使用下面的入口。它复用已有隧道；隧道失效后取得新地址、更新本机配置并发布到同一个学习网址。整个过程在本机完成：
-
-```powershell
-pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Start-PublicLearning.ps1'
-```
-
-电脑须保持联网且不休眠。隧道工具位于 `D:/Applications/cloudflared/cloudflared.exe`；日志和运行记录位于 `D:/AppData/MathLearningWeb/runtime/tunnel`。仅停止公开入口可运行 `Stop-PublicLearning.ps1`，不会停止本机服务或删除记录。更新后端代码时，可使用 `Start-PublicLearning.ps1 -RestartBackend`。
+`D:/AppData/MathLearningWeb` 已标为迁移回滚快照，旧启动、维护和默认管理入口会拒绝使用它，不能与云端同时写入。开发时必须显式指定独立数据目录；本机 8765 属于 AnkiConnect，不要占用。示例（先向隔离目录导入测试数据）：
 
 ```powershell
-pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Start-Learning.ps1'
-pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Stop-Learning.ps1'
-```
-
-启动入口后台运行，不打开额外窗口；重复启动复用同一实例。停止只处理入口记录且身份校验一致的学习服务进程树。重启后继续读取原进度；中断的判题可重试，不计错。启动失败的详细信息在 `D:/AppData/MathLearningWeb/runtime/server-error.log`。
-
-开发时可在源码目录前台启动：
-
-```powershell
-& 'D:\AppData\MathLearningWeb\venv\Scripts\python.exe' -m math_learning serve
+& 'D:\AppData\MathLearningWeb\venv\Scripts\python.exe' -m math_learning --data-dir 'D:\Artifacts\MathLearningWeb\development-data' serve --port 8768
 ```
 
 ## 学习方式
@@ -52,7 +37,7 @@ pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Stop-Learning.ps1'
 3. 练习初始 2 道；错误量 1、2、3 时总量扩为 3、5、7 道。完成后熟练度为 3、2、1；两道全对为 4。每题判定后必须点击下一页。
 4. 第 4 次练习错误暂停整个 Topic。具有对应权限的账号也可点击「暂时终止学习」，下方说明为「未掌握前置知识，感到困难，可选择后延该模块」。游客点击时提示注册，不会提交暂停请求；后端同样禁止游客主动暂停。自动暂停规则保持有效。
 5. 学习记录默认在页面左侧展开，宽度约 309px，手机抽屉按屏幕宽度限制。右下角的 Submit、下一页共用一个位置，按当前状态显示；上一页、下一页回看已开启页面，当前学习页的下一页可在满足条件后推进，没有对应操作时不显示按钮。
-6. 游客进度按浏览器身份分开保存，刷新后恢复；切换账号时使用独立进度。清除浏览器本地存储会失去原游客入口，管理员仍可通过学习者 ID 查看本机记录。
+6. 游客进度按浏览器身份分开保存，刷新后恢复；切换账号时使用独立进度。清除浏览器本地存储会失去原游客入口，管理员仍可通过学习者 ID 查看服务器记录。
 
 ## 课程主页与指南
 
@@ -64,17 +49,17 @@ pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Stop-Learning.ps1'
 
 复习每轮先做 1 题，每错 1 题增加 2 题的本轮题量，从上述队列继续取题。首题正确返回 4（Easy）；累计错 1 题并完成共 3 题返回 2（Hard）；累计错 2 题并完成共 5 题返回 1（Again）。第 3 次错误或主动暂停立即终止本轮，不评分、不更新 FSRS。当前没有返回 3（Good）的复习路径。游客不能主动暂停，自动暂停仍有效。以后调整 `math_learning/practice.py` 中的 `REVIEW_POLICY` 并递增版本；进行中的轮次继续使用原规则快照。
 
-用户菜单的「设置」可修改显示名、时区和界面语言，默认中文，可切换英文；课程正文不随 UI 语言翻译。「帮助」打开常见问题 Q&A，「反馈」提交站内反馈，指南保留在顶部导航。游客可在头像右侧开启「体验专用浏览版」，学习任务的学习按钮旁可用黄色「重置」按钮重置当前游客的该主题；账号不显示这两个游客入口。题目记录中的内容纠错会附上课程与题目位置。反馈保存于本机数据库，管理员查看：
+用户菜单的「设置」可修改显示名、时区和界面语言，默认中文，可切换英文；课程正文不随 UI 语言翻译。「帮助」打开常见问题 Q&A，「反馈」提交站内反馈，指南保留在顶部导航。游客可在头像右侧开启「体验专用浏览版」，学习任务的学习按钮旁可用黄色「重置」按钮重置当前游客的该主题；账号不显示这两个游客入口。题目记录中的内容纠错会附上课程与题目位置。反馈保存于服务器数据库，管理员查看：
 
 ```powershell
-pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' feedback-list --limit 30
+ssh ubuntu@124.221.144.155 'cd /opt/graspmemoedu/app && sudo -u graspmemoedu /opt/graspmemoedu/venv/bin/python -m math_learning --data-dir /var/lib/graspmemoedu feedback-list --limit 30'
 ```
 
-数学 GUIDE 的正文默认来源为 `D:/AppData/MathLearningWeb/guide/guide.md`，配图放在同级 `assets` 中。其他学科通过 `subjects.json` 指定各自 Markdown，未填写时显示空指南。数学正文分为「极简使用流程」与「系统工作原理」，配图采用本网站真实截图与箭头、红框标注。在本机修改 Markdown 或配图后，打开的 GUIDE 约每 5 秒检查更新并保留滚动位置；重新进入或刷新同样读取最新内容。读取或渲染错误会如实提示。网页没有指南或服务器配置编辑入口。
+正式指南由服务器 `/var/lib/graspmemoedu/subjects.json` 指定，当前位于 `subject-guides/<学科ID>/guide.md`，配图放在同级 `assets` 中。数学与物理指南已发布，其他四科为空。正文更新必须同步到服务器；只修改本机回滚快照不会更新网站。打开的 GUIDE 约每 5 秒检查更新并保留滚动位置；重新进入或刷新同样读取最新内容。读取或渲染错误会如实提示。网页没有指南或服务器配置编辑入口。
 
 指南支持标准 Markdown、表格、代码和 `$...$`、`\(...\)`、`$$...$$`、`\[...\]` 数学公式。仅正文明确引用、位于指南目录内的图片/PDF/TXT/CSV 可通过只读资源入口访问；源文件、目录外文件、脚本和主动 TeX 不会发布。
 
-课程目录保存在 `D:/AppData/MathLearningWeb/catalog.json`。Course 只组织现有 Topic，不改变 Topic 的 ID、版本或进度；缺少目录时兼容原单 Topic 配置。新增课程应引用已审核导入的 Topic 文件，不能重复 Topic ID。示例：
+正式课程目录保存在服务器 `/var/lib/graspmemoedu/catalog.json`。Course 只组织现有 Topic，不改变 Topic 的 ID、版本或进度；缺少目录时兼容原单 Topic 配置。新增课程应引用已审核导入的 Topic 文件，不能重复 Topic ID。示例：
 
 ```json
 {"courses":[{"id":"arithmetic-revisited","title":"再探小学算术","description":"从熟悉的算术出发，用字母表达规律，重新理解计算。","topics":[{"id":"digits-to-letters","path":"courses/digits-to-letters.json","prerequisites":[]}]}]}
@@ -84,7 +69,7 @@ pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' feedback
 
 ## 邀请码与账号权限
 
-管理员在本机管理入口创建账号并生成专属邀请码。邀请码可重复登录同一账号，跨设备共享该账号的进度；数据库仅保存凭据哈希，原始邀请码清单单独保存在本机私密管理目录。账号按 Topic 与功能授权，Topic 清单以当前课程目录为准，以下用 `digits-to-letters` 举例。完整批次创建、停用、换码和会话管理见 [本机账号管理](docs/accounts.md)。
+管理员通过 SSH 在服务器创建正式账号并生成专属邀请码。邀请码可重复登录同一账号，跨设备共享该账号的进度；数据库仅保存凭据哈希，迁移前的原始邀请码清单仍保存在本机私密管理目录。账号按 Topic 与功能授权，Topic 清单以当前课程目录为准，以下用 `digits-to-letters` 举例。完整批次创建、停用、换码和会话管理见 [账号管理](docs/accounts.md)。
 
 ```powershell
 pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' account-list
@@ -140,18 +125,19 @@ pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' review-u
 | 内容 | 位置 |
 |---|---|
 | 唯一活动源码 | `D:/Projects/MathLearningWeb` |
-| 课程、独立答案表、勘误及导入来源索引 | `D:/AppData/MathLearningWeb/courses` |
-| Course 与 Topic 归属、章节及前置关系 | `D:/AppData/MathLearningWeb/catalog.json` |
-| 使用指南与标注截图 | `D:/AppData/MathLearningWeb/guide` |
-| 学习状态、作答、事件、身份与账号权限 | `D:/AppData/MathLearningWeb/learning.sqlite3` |
-| 可读事件日志 | `D:/AppData/MathLearningWeb/logs/events.jsonl` |
-| 默认备份 | `D:/AppData/MathLearningWeb/backups` |
+| 正式课程、答案表及导入来源索引 | 服务器 `/var/lib/graspmemoedu/courses` |
+| 正式 Course 与 Topic 归属及图谱 | 服务器 `/var/lib/graspmemoedu/catalog.json`、`graphs` |
+| 正式指南与附件 | 服务器 `/var/lib/graspmemoedu/subject-guides/<学科ID>`（兼容入口 `guide`） |
+| 正式学习状态、事件、身份与账号权限 | 服务器 `/var/lib/graspmemoedu/learning.sqlite3` |
+| 可读事件日志 | 服务器 `/var/lib/graspmemoedu/logs/events.jsonl` |
+| 每日验证备份 | 服务器 `/var/backups/graspmemoedu` |
+| 迁移回滚快照、未发布原稿与原邀请码清单 | 本机 `D:/AppData/MathLearningWeb`，不再是正式数据源 |
 | 验收结果与截图 | `D:/Artifacts/MathLearningWeb` |
 | 已确认需求档案 | `D:/Artifacts/MathLearningWebPlan` |
 
-```powershell
-pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' backup
-pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' restore --backup '<备份 ZIP 的绝对路径>' --destination 'D:\AppData\MathLearningWeb-Restored'
+```sh
+# 在服务器上执行，生成备份并验证可恢复性
+sudo /usr/local/sbin/graspmemoedu-backup
 ```
 
 备份包含一致的 SQLite 快照（含身份、权限、选课、时区和站内反馈）、目录内全部 Topic、原稿、独立答案/勘误表、指南及实际引用附件和 SHA-256 清单。新版 format 2 支持多课程迁移，仍可恢复原 format 1 备份。邀请码和身份凭据只保存哈希。恢复只接受**尚不存在的新目录**，校验后重建可读日志；原目录不会被覆盖。连接网页用的配对凭据不进入备份。可用 `Start-Learning.ps1 -DataDirectory 'D:\AppData\MathLearningWeb-Restored' -Port 8768` 检查当前课程的恢复结果。
@@ -170,7 +156,7 @@ python -m venv 'D:\AppData\MathLearningWeb\venv'
 导入在源码目录运行：
 
 ```powershell
-node scripts/import_course.mjs 'D:/Artifacts/MathTopicPipeline/数字化为字母/数字化为字母-topic.md' 'D:/AppData/MathLearningWeb/courses/digits-to-letters.answers.json' 'D:/AppData/MathLearningWeb/courses/digits-to-letters.json' 'D:/Artifacts/MathLearningWeb/content-audit.json'
+node scripts/import_course.mjs 'D:/Artifacts/MathTopicPipeline/数字化为字母/数字化为字母-topic.md' 'D:/Artifacts/MathLearningWeb/development-data/courses/digits-to-letters.answers.json' 'D:/Artifacts/MathLearningWeb/development-data/courses/digits-to-letters.json' 'D:/Artifacts/MathLearningWeb/content-audit.json'
 ```
 
 导入器依赖现有 `D:/Caches/MathTopicPdf/node_modules/mathjax-full` 和 Codex Node 运行库中的 marked。可用 `MATH_TOPIC_PDF_RUNTIME`、`CODEX_NODE_MODULES` 覆盖位置。原稿与独立答案表均保留在本机，未提交源码仓库。题面变化须重新准备并审核独立答案表，导入器拒绝旧哈希或未支持的运算结构。
@@ -181,7 +167,7 @@ GUIDE 复用这两个渲染依赖，并使用 sanitize-html 2.17.7 清理 HTML�
 npm install --prefix 'D:\Caches\MathLearningWeb\node-runtime' --cache 'D:\Caches\npm' --save-exact --no-audit --no-fund sanitize-html@2.17.7
 ```
 
-判题复用 `D:/Projects/MathAnswerJudge/math_answer_judge.py` 的既有接口与提示词，保持不思考模式。网站仅读取独立的 `MATH_JUDGE_API_KEY`、`MATH_JUDGE_BASE_URL`、`MATH_JUDGE_MODEL`，不再回退到 Codex 外包的密钥、模型或配置文件。Windows 用户环境变量优先于继承的进程变量，每次判题重新读取，保存修改后下一次提交即可生效；变量缺失时返回服务不可用，不借用外包配置。接口地址必须是 HTTPS，服务需兼容既有 Chat Completions/JSON 判题请求。只有当前题面、标准答案和学习者提交被发送给判题服务；网页和日志不包含 API 密钥。
+判题复用 `D:/Projects/MathAnswerJudge/math_answer_judge.py` 的既有接口与提示词，保持不思考模式。网站仅读取独立的 `MATH_JUDGE_API_KEY`、`MATH_JUDGE_BASE_URL`、`MATH_JUDGE_MODEL`，不再回退到 Codex 外包的密钥、模型或配置文件。正式 Linux 服务从 `/etc/graspmemoedu/judge.env` 加载变量，修改后须重启后端服务生效；本机开发环境中 Windows 用户环境变量优先于继承的进程变量，每次判题重新读取，保存修改后下一次提交即可生效；变量缺失时返回服务不可用，不借用外包配置。接口地址必须是 HTTPS，服务需兼容既有 Chat Completions/JSON 判题请求。只有当前题面、标准答案和学习者提交被发送给判题服务；网页和日志不包含 API 密钥。
 
 ## 验证
 
@@ -200,27 +186,27 @@ node scripts/inspect_page.mjs
 
 公开页面仅含 HTML、JS、CSS、图标、`.nojekyll` 和只含 `api_origin` 的 `deployment.json`。连接配置由发布时写入，网页没有配置入口。服务不可用时只显示提示和重试。游客身份在切换后端网址时会先到新后端验证，成功后迁移；连接错误不会清除旧身份或悄悄创建替代身份。
 
-前端发布仓库为 `amymiller76717-sudo/GraspMemoEdu-Pages`，与私有源码仓库独立。正式服务只允许已配置网页来源及自身公开来源。`settings.json` 的 `public_api_origin` 指定精确公开 HTTPS 地址；隧道默认保留 Host，后端据此识别公开请求。本机仍只监听 `127.0.0.1`，不开放路由器或局域网入站端口。
+前端发布仓库为 `amymiller76717-sudo/GraspMemoEdu-Pages`，与私有源码仓库独立。正式服务只允许已配置网页来源及自身公开来源。`settings.json` 的 `public_api_origin` 指定精确公开 HTTPS 地址；nginx 保留公开 Host，后端据此识别公开请求。云端后端只监听 `127.0.0.1:18768`，由 nginx 提供公网 HTTPS。
 
 修改前端后，先应用 `python scripts/version_web_assets.py --patch` 输出的补丁，为 HTML、CSS 和整套模块引用生成同一内容版本号；再导出到新的构建目录。脚本验证版本号和源码、导出一致，并检查远端完整文件清单，遇到额外文件会停止：
 
 ```powershell
 python scripts/version_web_assets.py
-pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' export-web --output '<新的构建目录>' --api-origin '<本机配置中的公开HTTPS地址>'
+pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Manage-Learning.ps1' --data-dir '<隔离构建数据目录>' export-web --output '<新的构建目录>' --api-origin 'https://124.221.144.155'
 pwsh -NoProfile -File 'D:\Projects\MathLearningWeb\Publish-Frontend.ps1' -ExportDirectory '<新的构建目录>'
 ```
 
 发布回执的 `submitted` 仅表示已提交，不能作为上线验收。等待公开资源与导出哈希一致，并在真实浏览器中检查首页和受影响页面；同时验证已缓存页面能加载新版本。GitHub Pages 的 HTML 可缓存 10 分钟，刚发布的入口可附 `?v=<资源版本号>`。主题、标志及双语边界的唯一说明见 [学科配置](docs/subjects.md)。
 
-公开后端校验精确 Host、来源和学习者身份，不再要求访客共享配对码。每位访客仍按身份隔离进度，Topic 和功能授权由后端执行；管理解锁与账号授权仅在本机命令入口。请求正文上限 16 KiB，游客创建每分钟最多 20 次、邀请码请求每分钟最多 10 次、新判题每位学习者每分钟最多 12 次；全局最多 8 个在途判题。达到限制返回 429，未接受的请求不计入作答。公开健康检查不返回本机实例标识，公开入口不提供本机会话或管理接口。
+公开后端校验精确 Host、来源和学习者身份，不再要求访客共享配对码。每位访客仍按身份隔离进度，Topic 和功能授权由后端执行；管理解锁与账号授权仅通过 SSH 在服务器命令入口执行。请求正文上限 16 KiB，游客创建每分钟最多 20 次、邀请码请求每分钟最多 10 次、新判题每位学习者每分钟最多 12 次；全局最多 8 个在途判题。达到限制返回 429，未接受的请求不计入作答。公开健康检查不返回本机实例标识，公开入口不提供本机会话或管理接口。
 
-免费入口用于测试，无需 Cloudflare 账号或自有域名；临时隧道重建会更换后端地址，重新运行公开启动入口可更新网页配置。Cloudflare 不为 Quick Tunnel 提供可用性保证，后续可替换为独立服务器，保持前端学习网址。参见 [Cloudflare 官方 Quick Tunnel 说明](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/)。FSRS 复习调度已接入；XP、云服务器迁移和管理员网页尚未实现。
+当前固定入口为腾讯云 IP HTTPS，已完成云端迁移；FSRS 复习调度已接入，XP 与管理员网页尚未实现。Cloudflare 临时隧道不再用于正式服务。
 
-## 本机持续维护
+## 已停用的本机持续维护（历史）
 
-当前机器使用 `Install-LearningUserStartup.ps1` 安装当前用户登录启动项。入口隐藏运行 `Run-LearningMaintenance.ps1`，后者在维护子进程退出后等待 15 秒重新启动。`Watch-Learning.ps1` 每轮验证本机实例、公网 `/api/health` 与已发布地址；健康时每 30 秒检查一次，失败时退避至最多 5 分钟。锁与互斥量阻止重复维护。运行状态和最近检查时间见 `D:/AppData/MathLearningWeb/runtime/maintenance/status.json`，历史日志限长轮换。
+迁移前使用 `Install-LearningUserStartup.ps1` 安装当前用户登录启动项。该启动项及维护进程现已停用，历史状态见 `D:/AppData/MathLearningWeb/runtime/maintenance`。正式运维以云端 systemd 服务和定时器为准。
 
-本机进程存在但健康检查失败时会恢复后端；公网连续三次失败时重建归本项目管理的隧道。`Start-PublicLearning.ps1 -RepairOnly` 只通过 `Update-PublicEndpoint.ps1` 更新公开仓库的 `deployment.json`，不会把工作区中尚未发布的源码自动上线。网页在网络或网关错误时最多每 30 秒重新发现入口；身份经原有验证迁移，只重试读取，不重复提交答案。
+旧维护机制中，本机进程存在但健康检查失败时会恢复后端；公网连续三次失败时重建归本项目管理的隧道。`Start-PublicLearning.ps1 -RepairOnly` 只通过 `Update-PublicEndpoint.ps1` 更新公开仓库的 `deployment.json`，不会把工作区中尚未发布的源码自动上线。网页在网络或网关错误时最多每 30 秒重新发现入口；身份经原有验证迁移，只重试读取，不重复提交答案。
 
 安装命令：`pwsh -NoProfile -File D:/Projects/MathLearningWeb/Install-LearningUserStartup.ps1`。仅启动快捷方式位于 Windows 用户 Startup 目录，源码、数据与日志仍在 D 盘。当前非提升权限无法注册计划任务；`Install-LearningMaintenance.ps1` 保留为有权限环境的替代安装入口，两种方式择一。登录启动项方案适用于当前用户保持登录的运行环境，不承诺注销后或登录前可用，不修改电源或唤醒设置。维护进程本身被整体强制结束后，需要重新运行安装入口或下次登录才能恢复。
 

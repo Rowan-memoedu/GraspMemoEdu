@@ -1,28 +1,28 @@
 # MathLearningWeb
 
-- 产品品牌为 GraspMemoEdu，整体多学科框架以 RemNote「搭建掌握式学习平台」（MQrYfdVzLFh4tV96K）及用户后续修订为准。古典衬线风格只用于总首页；数学与全局设置恢复原模板视觉，其他学科沿用同一模板并替换配色、名称与徽标。数学只保留既有课程，不额外加测试课；其余五科测试课程、Topic 及配套测试指南已下线，保留学科空页面和本机原文件；未经新的明确要求，不得重新发布测试内容。共用结构在当前仓库维护，不复制六份网站。
-- 学科路由为 `#/subjects/<id>/...`；旧数学路径继续兼容。账号、身份存储与 Topic ID 不因学科拆分改变。课程归属、名称及指南由本机 `subjects.json` 配置；配色和首页/导航栏共用徽标统一在 `web/subjects.js` 维护，见 `docs/subjects.md`。不得将本机路径暴露给公开前端。
-- 本机数学学习应用；Lesson 产品行为以 `D:/Artifacts/MathLearningWebPlan/01-需求与方案.md`、`04-推送系统补充需求.md` 为准，复习后端以 `docs/review-backend.md` 为准，当前实现/运维以 README 为准。
+- 产品品牌为 GraspMemoEdu，整体多学科框架以 RemNote「搭建掌握式学习平台」（MQrYfdVzLFh4tV96K）及用户后续修订为准。古典衬线风格只用于总首页；数学与全局设置恢复原模板视觉，其他学科沿用同一模板并替换配色、名称与徽标。数学只保留既有课程，不额外加测试课；其余五科测试课程、Topic 及配套测试指南已下线，测试原文件仍留本机；物理正式课程「运动学进阶」现已发布，共 22 个 Topic，其余四科仍为空；未经新的明确要求，不得重新发布测试内容。共用结构在当前仓库维护，不复制六份网站。
+- 学科路由为 `#/subjects/<id>/...`；旧数学路径继续兼容。账号、身份存储与 Topic ID 不因学科拆分改变。正式课程归属、名称及指南由服务器 `/var/lib/graspmemoedu/subjects.json` 配置；配色和首页/导航栏共用徽标统一在 `web/subjects.js` 维护，见 `docs/subjects.md`。不得将服务器或本机路径暴露给公开前端。
+- 腾讯云托管的多学科学习应用；Lesson 产品行为以 `D:/Artifacts/MathLearningWebPlan/01-需求与方案.md`、`04-推送系统补充需求.md` 为准，复习后端以 `docs/review-backend.md` 为准，当前实现/运维以 README 为准。
 - 主页布局以 `D:/Artifacts/MathTopicPipeline/MathAcademy-learn-主页复刻需求.md` 为准；Course「再探小学算术」组织 Topic「数字化为字母」，不改变其 ID、版本和既有进度。网站主页产生真实 Lesson 和到期 Review 任务，尚未接入 XP 或测验。
-- GUIDE 由 `D:/AppData/MathLearningWeb/guide/guide.md` 与相对 assets 单向发布；内容分极简使用流程和系统工作原理，配图用本网站真实截图标注。更新指南不能夹带技术配置说明或暴露其他本机文件。
+- 正式 GUIDE 由服务器 `/var/lib/graspmemoedu/guide/guide.md` 与相对 assets 单向发布；内容分极简使用流程和系统工作原理，配图用本网站真实截图标注。更新指南不能夹带技术配置说明或暴露其他文件。
 - 技术栈：Python/FastAPI/SQLite，原生 HTML/CSS/JS，离线 MathJax SVG；复用 `D:/Projects/MathAnswerJudge`，不在网页判题。
-- 启动：`pwsh -NoProfile -File D:/Projects/MathLearningWeb/Start-Learning.ps1`；默认 127.0.0.1:8767。8765 属于 AnkiConnect，不要终止。
-- 源码仅在本仓库；数据在 `D:/AppData/MathLearningWeb`，证据在 `D:/Artifacts/MathLearningWeb`。课程正文、答案表、数据库、配对信息和密钥不进入 Git。
+- 正式启动由腾讯云 `graspmemoedu.service` 管理，只监听 127.0.0.1:18768。Windows 启动脚本仅用于显式指定的隔离开发目录。8765 属于 AnkiConnect，不要终止。
+- 活动开发源码仅在本仓库；正式数据在腾讯云 `/var/lib/graspmemoedu`，本机 `D:/AppData/MathLearningWeb` 仅作回滚快照及原稿存档，证据在 `D:/Artifacts/MathLearningWeb`。课程正文、答案表、数据库、配对信息和密钥不进入 Git。
 - 修改后运行 `D:/AppData/MathLearningWeb/venv/Scripts/python.exe -m unittest discover -s tests -v`。实际学习流程须用独立验收目录和真实判题核验，不能消耗正式进度。
 - 课程默认只做机械导入：解析结构、按字段注入、搬运附件及校验来源一致性；不得逐题检查数学、答案、图注或配图细节。API 仅可用于极少量抽样，检查整体性损坏，不作为逐题语义门禁。后续只局部修复，不整篇重跑，不增加全量细节检查。
 - 界面术语以 `docs/ui-language.md` 为准，完整对照表从生产词库生成并检查；Introduction 为“指导”，Guide 为“指南”。UI 本地化不得翻译课程正文、答案或解析。
 - 作者 Markdown 导入使用 `Import-Topic.ps1` 或 `author-prepare` / `author-install`，规范见 `docs/author-import.md`。复用原转换器，原稿 Explanation 机械映射为判题参考，不经 LLM 改写；来源包留本机并明确标注机械校验。只新增至已有 Course，不覆盖 Topic 或自动扩大账号权限，安装后重载后端。
 - 本地插图使用文档目录内相对 PNG，来源包绑定附件哈希，显示时内嵌受控 data URL；安装和备份保留原附件，不审查配图教学细节。新建整门课程可用 `scripts/install_author_course.py`，先验证全部来源包再切换目录，沿用已存在图谱的 Course/Topic ID。局部修复只更新受影响字段、附件及哈希并留痕，不重跑整篇导入。
-- 图谱与 Topic 分开导入，规范见 `docs/course-graph.md`。`Import-Graph.ps1` / `graph-import` 按整份课程图谱反复更新，以稳定 `topic_id` 关联，可先于正文导入。图谱不修改正文、题库、权限或学习进度；版本 1 只含 Topic 内部前置关系。图谱数据和历史留本机，不提交私人课程内容到源码仓库。
+- 图谱与 Topic 分开导入，规范见 `docs/course-graph.md`。`Import-Graph.ps1` / `graph-import` 按整份课程图谱反复更新，以稳定 `topic_id` 关联，可先于正文导入。图谱不修改正文、题库、权限或学习进度；版本 1 只含 Topic 内部前置关系。正式图谱数据和历史保存在服务器私密数据目录，不提交私人课程内容到源码仓库。
 - Practice 输入兼容连续整数编号和每例 5×3 的分组编号 1.1–5.3。分组稿展平显示普通序号 1–15，`source_practice` 保留分组；拒绝重复、缺号、乱序与同例混合编号。15 题库使用 `practice_queue.py` 的学习者/Example 持久队列：每组首抽一题、组内首次错题追加其余两题到队尾、跨 Lesson/复习接续，耗尽后先未推送题再最久未推送题。同组补题标记持续至清空记录，暂停/解锁不重置。旧已开始轮次保留原题序，旧历史不回填；详见 `docs/practice-queue.md`。
 - 课程版本不匹配须保留旧进度；暂停与评分由 SQLite 事务决定；在途判题不持有数据库锁，旧轮次结果不能推进新轮次。
 - 后端只绑定回环地址；禁止 Web 解锁。管理命令精确指定学习者、Topic、模块、暂停事件。
 - 启动入口要验证进程开始时间及实例 ID。后台服务启动不能放入会在正常退出时清理整个 Job 的测试超时器。
 - 已获公开发布及更名授权；源码仓库为私有 GraspMemoEdu，独立公开仓库 GraspMemoEdu-Pages 仅发布 web 静态资产和仅含公开 API 地址的 deployment.json。本机目录继续沿用 MathLearningWeb。前端不提供连接配置；访客通过公共 HTTPS API 自动进入游客模式。修改 web 后先更新整套资源版本号再导出；发布后核对实际资产哈希及真实浏览器加载效果，流程见 README。
 - 已授权完整邀请码账号搭建与测试：access_* 表与学习状态同库，凭据仅存哈希；每浏览器游客独立，账号按 Topic 和功能授权。游客可访问全部六科及其已发布 Topic、指南，仍禁止主动暂停，原自动暂停规则不变；账号的明确 Topic 权限保持原授权。初始 15 个账号中 10 个正式使用、5 个固定 test 用途；先做独立验收，再仅使用 test 账号公网验收。原始邀请码只保存在本机私密管理目录，不能写入源码、回执或公开资产。
-- 管理账号和权限使用本机CLI；网页不得暴露管理员接口。每个身份按 learner_id 隔离，状态和提交结果都须核对归属。
+- 管理正式账号、权限与内容须通过 SSH 在服务器运行 CLI；本机导入只用于准备来源包与隔离验收，不直接更新正式网站。网页不得暴露管理员接口。每个身份按 learner_id 隔离，状态和提交结果都须核对归属。
 - 账号默认动态开放全部当前及后续 Topic、功能；明确权限列表按 Topic/功能两个维度分别覆盖，空列表禁止该维度。`account-permissions --default-topics --default-features` 恢复继承。游客限制不变；旧无模式记录保守保留，已确认默认的正式初始批次按建号记录迁移。
 - 先前清空记录任务已完成；后续更新默认保留正式进度，迁移前备份并核对原行。不得将验收进度灌入正式学习者。
 - Cloudflare Quick Tunnel 路线已在 2026-09-21 云端迁移时停用，仅保留历史恢复工具；不得用 Start-PublicLearning.ps1 覆盖当前云端入口。公网游客隔离验收使用独立数据目录，正式记录保留。
-- 网站已获授权接通 `ReviewBackend(learning_service)`：新完成 Lesson 模块进入 FSRS，到期以“复习”推送；每轮只抽取对应 Practice，复用共享判题和队列规则。既有完成记录不自动回填。评分规则集中在 `practice.py` 并随轮次保存版本；保留度、参数优化、重排和解锁只在本机管理。验证必须使用独立数据目录。复习第 3 次错误暂停，Lesson 第 4 次错误暂停。
+- 网站已获授权接通 `ReviewBackend(learning_service)`：新完成 Lesson 模块进入 FSRS，到期以“复习”推送；每轮只抽取对应 Practice，复用共享判题和队列规则。既有完成记录不自动回填。评分规则集中在 `practice.py` 并随轮次保存版本；保留度、参数优化、重排和解锁只通过 SSH 在服务器管理。验证必须使用独立数据目录。复习第 3 次错误暂停，Lesson 第 4 次错误暂停。
 - 用户已于 2026-09-21 明确授权迁移腾讯云：正式后端为 `https://124.221.144.155`，服务与私密数据见 `docs/tencent-deployment.md`。本机数据只保留作迁移回滚快照；不得重新启动旧维护任务、临时隧道或让本机与云端同时写入。云端已有新进度后，回滚必须先导出并核对云端数据。无明确要求不修改全局规则或 Memory。

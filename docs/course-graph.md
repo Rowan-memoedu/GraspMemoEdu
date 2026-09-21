@@ -1,5 +1,7 @@
 # 独立课程图谱：格式与导入工作流
 
+正式图谱自 2026-09-21 起位于腾讯云 `/var/lib/graspmemoedu/graphs`。本文本机命令用于隔离准备和预览；正式导入通过 SSH 在服务器执行，见 [腾讯云运维](tencent-deployment.md)。不要将本机回滚快照当作正式数据源。
+
 Topic Markdown/审核包负责教学内容；`course-graph.json` 负责图谱。两个入口独立、顺序不限，通过稳定的 `topic_id` 关联。图谱变更不改变 Topic 版本、正文、题库、账号权限或学习进度。
 
 ## 版本 1 格式

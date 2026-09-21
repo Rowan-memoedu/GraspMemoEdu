@@ -9,6 +9,8 @@ param(
     [switch]$RestartBackend
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Assert-LocalLearningData.ps1')
+Assert-LocalLearningData -DataDirectory $DataDirectory
 function Read-SharedLog([string]$Path) {
     $stream = [IO.File]::Open($Path, 'Open', 'Read', 'ReadWrite')
     $reader = [IO.StreamReader]::new($stream)

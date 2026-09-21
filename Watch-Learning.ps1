@@ -1,5 +1,7 @@
 param([string]$DataDirectory = 'D:\AppData\MathLearningWeb', [int]$Port = 8767, [switch]$Once)
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Assert-LocalLearningData.ps1')
+Assert-LocalLearningData -DataDirectory $DataDirectory
 $directory = Join-Path $DataDirectory 'runtime\maintenance'
 New-Item -ItemType Directory -Path $directory -Force | Out-Null
 try { $lock = [IO.File]::Open((Join-Path $directory 'watch.lock'), 'OpenOrCreate', 'ReadWrite', 'None') } catch { exit 0 }

@@ -1,5 +1,7 @@
 # Example 复习后端
 
+正式复习数据库自 2026-09-21 起位于腾讯云 `/var/lib/graspmemoedu`。管理操作通过 SSH 在服务器执行；下文 Windows 路径仅供隔离开发示例，详见 [腾讯云运维](tencent-deployment.md)。
+
 网站已接通此 Python 后端，复用 `py-fsrs==6.3.2`（MIT）。`create_app()` 为学习服务绑定复习后端，沿用身份、Topic/功能授权、提交限流和判题工作池。新完成模块开始排期，历史记录不自动回填。下述 Python 管理接口属于可信本机入口，不直接暴露给浏览器。
 
 ## 组件与边界
@@ -55,7 +57,7 @@ scheduled = reviews.record_module_result(
 - `POST /api/review/begin` 接收 `module_id/request_id`；`GET /api/review/sessions/{id}` 读取当前轮次。前端地址为 `#/review/<topic>/<module>?session=<id>`，刷新恢复相同轮次。
 - `POST /api/review/sessions/{id}/submit`、`/continue`、`/pause` 对应提交、下一题与主动暂停；`GET /api/review/submissions/{id}` 读取判题结果。前两者使用 revision 与 question_id 校验；所有请求带 `topic_id` 并核对身份和权限。
 - 复习页面只有当前 Practice 和本轮已答题，不提供 Example、Introduction、未来题或未作答题解析。游客主动暂停返回 403；游客自愿开启体验浏览时，`GET /api/review/sessions/{id}/demo-answer` 只提供当前可提交题的标准答案，已有草稿不覆盖。
-- 保留度、优化、解锁及后台配置不开放网页接口。`review-status --learner ... --topic ...` 查看本机复习状态；`review-unlock --learner ... --topic ... --pause-event ...` 按精确暂停事件解锁，Lesson 已完成时同样有效。
+- 保留度、优化、解锁及后台配置不开放网页接口。`review-status --learner ... --topic ...` 查看服务端复习状态；`review-unlock --learner ... --topic ... --pause-event ...` 按精确暂停事件解锁，Lesson 已完成时同样有效。
 - 本次推送指网站内到期任务；浏览器系统通知、邮件与站外消息未接入。
 
 ## 到期推送与复习轮次
@@ -101,7 +103,7 @@ result = reviews.submission(submission["submission_id"])
 
 `pause(session_id, request_id=...)` 或第 3 次错误沿用“整个 Topic 暂停”的语义。若 Lesson 仍在进行，也会暂停其当前未完成模块；已完成模块评分保留。若 Lesson 已全部完成，保留其完成状态，同时停止该 Topic 的所有复习推送。暂停的复习不调用 FSRS，保留原卡与到期时间。
 
-`unlock_topic(pause_event_id=...)` 是仅供本机管理侧调用的入口。它按精确事件恢复整个 Topic；若 Lesson 同时暂停，复用其原有解锁规则。旧复习轮次作为历史保留，再次 `begin()` 新建轮次，从该 Example 剩余队列继续取题，本轮错误数清零，组内已补题标记保留。对同一事件重复解锁不会重复创建轮次，也不能误解锁后来的暂停。
+`unlock_topic(pause_event_id=...)` 是仅供服务端管理侧调用的入口。它按精确事件恢复整个 Topic；若 Lesson 同时暂停，复用其原有解锁规则。旧复习轮次作为历史保留，再次 `begin()` 新建轮次，从该 Example 剩余队列继续取题，本轮错误数清零，组内已补题标记保留。对同一事件重复解锁不会重复创建轮次，也不能误解锁后来的暂停。
 
 学习权限（包括游客不能主动暂停）由现有账号系统决定；正式接线时在调用这些后端方法前执行原有权限检查，不给网页开放解锁入口。
 

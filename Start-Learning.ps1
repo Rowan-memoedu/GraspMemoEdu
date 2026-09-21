@@ -3,6 +3,8 @@ param(
     [int]$Port = 8767
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Assert-LocalLearningData.ps1')
+Assert-LocalLearningData -DataDirectory $DataDirectory
 $pythonPath = 'D:\AppData\MathLearningWeb\venv\Scripts\python.exe'
 if (-not (Test-Path -LiteralPath $pythonPath -PathType Leaf)) { throw '请先按 README 安装运行环境。' }
 if (-not (Test-Path -LiteralPath (Join-Path $DataDirectory 'courses\digits-to-letters.json') -PathType Leaf)) { throw '课程尚未导入，请按 README 完成课程导入。' }
