@@ -79,7 +79,9 @@ class DependencyPolicyBoundaryTests(unittest.TestCase):
         result = self.dashboard.dashboard(self.access, 'course')
         child = next(topic for topic in result['topics'] if topic['id'] == 'child')
         self.assertEqual(child['prerequisite_details'], [])
-        self.assertNotIn('lesson:child', {task['id'] for task in result['tasks']})
+        task = next(task for task in result['tasks'] if task['id'] == 'lesson:child')
+        self.assertFalse(task['dependency_ready'])
+        self.assertEqual(task['missing_prerequisite_count'], 1)
         self.assertNotIn('unimported', json.dumps(result))
 
     def test_unauthorized_completed_parent_blocks_without_exposing_progress_or_title(self):

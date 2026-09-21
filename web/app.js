@@ -1,4 +1,4 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=aa1b73113c05cc38";
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=21201ffd52d3fd72";
 
 applyStaticTranslations();
 
@@ -1404,7 +1404,7 @@ async function openTopic(id, subjectId) {
   await start();
 }
 
-const { initPortal } = await import("./portal.js?v=aa1b73113c05cc38");
+const { initPortal } = await import("./portal.js?v=21201ffd52d3fd72");
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {
     try { return await fetchGuideAsset(url, subjectId); }

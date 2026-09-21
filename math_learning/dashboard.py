@@ -265,17 +265,18 @@ class DashboardStore:
             con.execute('BEGIN')
             snapshots = {topic['id']: self._snapshot(con, access['learner_id'], topic['id']) for topic in visible}
             review_tasks, review_history, next_review_due_at, review_paused = self._reviews(con, access, course, snapshots)
-            eligibility = {topic_id: self.dependency_policy.ready(con, access, topic_id, dependencies, now())
-                           for topic_id in snapshots}
+            missing = {topic_id: self.dependency_policy.missing_count(con, access, topic_id, dependencies, now())
+                       for topic_id in snapshots}
+            eligibility = {topic_id: count == 0 for topic_id, count in missing.items()}
         def details(topic_id):
             return [{'id': parent, 'title': self.catalog.topics[parent]['title'],
                      'progress': snapshots[parent]['progress'], 'mastery': snapshots[parent]['mastery']}
                     for parent in dependencies.get(topic_id, []) if parent in snapshots]
-        review_tasks = [task for task in review_tasks if eligibility[task['topic_id']]]
         for task in [*review_tasks, *review_history]:
             task['prerequisites'] = [parent for parent in dependencies.get(task['topic_id'], []) if parent in snapshots]
             task['prerequisite_details'] = details(task['topic_id'])
             task['dependency_ready'] = eligibility[task['topic_id']]
+            task['missing_prerequisite_count'] = missing[task['topic_id']]
         total = sum(len(self.catalog.topics[topic['id']]['modules']) for topic in course['topics'])
         completed = sum(item['completed_modules'] for item in snapshots.values())
         progress = round(100 * completed / total, 2) if total else 0
@@ -299,12 +300,13 @@ class DashboardStore:
         for metadata in visible:
             topic_id, snapshot = metadata['id'], snapshots[metadata['id']]
             task = self._task(course, topic_id, snapshot, allowed, dependencies)
-            task.update(prerequisite_details=details(topic_id), dependency_ready=eligibility[topic_id], mastery=snapshot['mastery'])
+            task.update(prerequisite_details=details(topic_id), dependency_ready=eligibility[topic_id],
+                        missing_prerequisite_count=missing[topic_id], mastery=snapshot['mastery'])
             if topic_id in review_paused and snapshot['status'] != 'completed':
                 task['status'] = 'paused'
             if snapshot['status'] == 'completed':
                 history.append(task)
-            elif eligibility[topic_id]:
+            else:
                 tasks.append(task)
             topics.append({'id': topic_id, 'title': task['title'], 'status': snapshot['status'], 'progress': snapshot['progress'],
                            'prerequisites': task['prerequisites'],
@@ -312,6 +314,9 @@ class DashboardStore:
                            'dependency_ready': eligibility[topic_id],
                            'unit_id': next(unit['id'] for unit in units if topic_id in unit['topic_ids']),
                            'frontier': snapshot['status'] != 'completed' and topic_id not in review_paused and eligibility[topic_id]})
+        # Stable ordering preserves existing Review/Lesson priority for ready tasks
+        # and catalog/due order for equally blocked tasks.
+        tasks.sort(key=lambda task: (not task['dependency_ready'], task['missing_prerequisite_count']))
         history.sort(key=lambda task: (task['completed_at'] or '', task['id']), reverse=True)
         if 'review_history' not in access['features']:
             history = []

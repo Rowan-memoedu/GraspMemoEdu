@@ -16,6 +16,21 @@ class PrerequisiteTests(unittest.TestCase):
     def dashboard(self):
         return self._get('/api/dashboard?course_id=course-a')
 
+    def test_locked_tasks_sort_after_ready_by_missing_direct_prerequisites(self):
+        self.catalog_data['courses'] = [{'id': 'course-a', 'title': 'Ordering', 'topics': [
+            {'id': 'topic-c', 'path': 'topic-c.json', 'prerequisites': ['topic-a', 'topic-b']},
+            {'id': 'topic-b', 'path': 'topic-b.json', 'prerequisites': ['topic-a']},
+            {'id': 'topic-a', 'path': 'topic-a.json'}]}]
+        (self.root / 'catalog.json').write_text(json.dumps(self.catalog_data), encoding='utf-8')
+        self._restart()
+        tasks = self.dashboard()['tasks']
+        self.assertEqual([x['topic_id'] for x in tasks], ['topic-a', 'topic-b', 'topic-c'])
+        self.assertEqual([x['missing_prerequisite_count'] for x in tasks], [0, 1, 2])
+        self._complete('topic-a')
+        tasks = self.dashboard()['tasks']
+        self.assertEqual([x['topic_id'] for x in tasks], ['topic-b', 'topic-c'])
+        self.assertEqual([x['missing_prerequisite_count'] for x in tasks], [0, 1])
+
     def due(self, topic, value):
         with closing(self.app.state.service._connect()) as con:
             con.execute('UPDATE review_cards SET due_at=? WHERE learner=? AND topic=?',
@@ -23,7 +38,10 @@ class PrerequisiteTests(unittest.TestCase):
             con.commit()
 
     def test_initial_and_partial_learning_are_blocked_without_creating_progress(self):
-        self.assertEqual([x['topic_id'] for x in self.dashboard()['tasks']], ['topic-a'])
+        tasks = self.dashboard()['tasks']
+        self.assertEqual([x['topic_id'] for x in tasks], ['topic-a', 'topic-b'])
+        self.assertFalse(tasks[1]['dependency_ready'])
+        self.assertEqual(tasks[1]['missing_prerequisite_count'], 1)
         self._get('/api/state?topic_id=topic-b', status=409)
         with closing(self.app.state.service._connect()) as con:
             self.assertEqual(con.execute('SELECT count(*) FROM topics WHERE topic=?', ('topic-b',)).fetchone()[0], 0)
@@ -38,7 +56,8 @@ class PrerequisiteTests(unittest.TestCase):
         self._complete('topic-a')
         state = self._get('/api/state?topic_id=topic-b')
         self.due('topic-a', '2000-01-01T00:00:00+00:00')
-        self.assertNotIn('topic-b', [x['topic_id'] for x in self.dashboard()['tasks']])
+        task = next(x for x in self.dashboard()['tasks'] if x['topic_id'] == 'topic-b')
+        self.assertFalse(task['dependency_ready'])
         blocked = self._get('/api/state?topic_id=topic-b')
         self.assertFalse(blocked['dependency_ready'])
         self.assertTrue(all(not x['actions'] for x in blocked['steps']))

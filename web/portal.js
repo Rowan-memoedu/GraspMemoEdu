@@ -1,7 +1,7 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=aa1b73113c05cc38";
-import { createReviewView } from "./review.js?v=aa1b73113c05cc38";
-import { renderCourseGraph } from "./course-graph.js?v=aa1b73113c05cc38";
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=aa1b73113c05cc38";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=21201ffd52d3fd72";
+import { createReviewView } from "./review.js?v=21201ffd52d3fd72";
+import { renderCourseGraph } from "./course-graph.js?v=21201ffd52d3fd72";
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=21201ffd52d3fd72";
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -411,13 +411,13 @@ export function initPortal(bridge) {
 
   function taskIcon(task, history = false) {
     const successful = ["correct", "passed", "full", "full_credit"].includes(task.result);
-    const icon = node("span", `taskIcon ${history ? successful ? "passed" : "ended" : task.maintenance ? "locked" : "unlocked"}`, history ? successful ? "✓" : task.result === "incorrect" || task.result === "failed" ? "×" : "✓" : "");
-    if (!history) {
-      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("viewBox", "0 0 22 24");
-      const path = document.createElementNS(svg.namespaceURI, "path");
-      path.setAttribute("d", task.maintenance ? "M6 10V7a5 5 0 0 1 10 0v3M4 10h14v11H4zM11 14v3" : "M7 10V7a5 5 0 0 1 10 0M4 10h14v11H4zM11 14v3"); svg.append(path); icon.append(svg);
-    }
-    icon.setAttribute("aria-label", history ? successful ? t("portal.passed.40") : task.result === "incorrect" || task.result === "failed" ? t("portal.not.passed.41") : t("portal.finished.42") : task.maintenance ? t("portal.under.maintenance.43") : t("portal.available.44")); return icon;
+    const locked = task.maintenance || task.dependency_ready === false;
+    const icon = node("span", `taskIcon ${history ? successful ? "passed" : "ended" : locked ? "locked" : "unlocked"}`);
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("viewBox", "0 0 22 24"); svg.setAttribute("aria-hidden", "true");
+    const path = document.createElementNS(svg.namespaceURI, "path");
+    path.setAttribute("d", !history && locked ? "M6 10V7a5 5 0 0 1 10 0v3M4 10h14v11H4zM11 14v3" : history ? "M3 4h16v16H3zM6 12l3 3 7-7" : "M3 4h16v16H3z"); svg.append(path); icon.append(svg);
+    icon.setAttribute("role", "img");
+    icon.setAttribute("aria-label", history ? t("portal.finished.42") : task.dependency_ready === false ? t("portal.prerequisitesRequired") : task.maintenance ? t("portal.under.maintenance.43") : t("portal.available.44")); return icon;
   }
   function taskSummary(task, history = false) {
     const wrap = node("div", "taskSummaryContent"), heading = node("div", "taskHeading");
@@ -441,7 +441,7 @@ export function initPortal(bridge) {
     for (const item of root.querySelectorAll(".taskToggle")) item.setAttribute("aria-expanded", "false");
   }
   function incompleteTask(task, data) {
-    const card = node("article", "portalTask taskUnlocked"); card.dataset.taskId = task.id;
+    const card = node("article", task.dependency_ready === false ? "portalTask taskLocked" : "portalTask taskUnlocked"); card.dataset.taskId = task.id;
     const toggle = control("", "taskToggle", () => { const was = expandedTask === task.id; collapseTasks(); if (!was) { expandedTask = task.id; details.hidden = false; toggle.setAttribute("aria-expanded", "true"); } });
     toggle.append(taskSummary(task)); toggle.setAttribute("aria-expanded", "false");
     const details = node("div", "taskDetails"); details.hidden = true;
@@ -463,7 +463,9 @@ export function initPortal(bridge) {
       const actions = node("div", "taskStartRow");
       const explicit = task.start_href || task.start_url;
       const target = (task.type === "Lesson" || !task.type) && task.topic_id ? `#/topic/${encode(task.topic_id)}` : typeof explicit === "string" && /^#\/(topic|review|learn|courses)\//.test(explicit) ? explicit : null;
-      if (target && allowed("learn")) actions.append(roundButton(percent(task.progress) > 0 || task.started ? t("portal.resume.52") : t("portal.start.53"), () => navigate(target)));
+      if (task.dependency_ready === false) {
+        const blocked = roundButton(t("portal.prerequisitesRequired"), () => {}); blocked.disabled = true; blocked.classList.add("prerequisiteBlocked"); actions.append(blocked);
+      } else if (target && allowed("learn")) actions.append(roundButton(percent(task.progress) > 0 || task.started ? t("portal.resume.52") : t("portal.start.53"), () => navigate(target)));
       else if (target && task.started && allowed("review_history")) actions.append(roundButton(t("portal.review.54"), () => navigate(target)));
       else if (target) actions.append(node("p", "", t("portal.learning.is.not.enabled.for.your.account.please.contact.your.admi.55")));
       else actions.append(node("p", "", t("portal.this.task.is.not.available.to.start.yet.56")));

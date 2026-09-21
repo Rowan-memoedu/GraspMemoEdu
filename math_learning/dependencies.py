@@ -21,6 +21,9 @@ class DependencyPolicy:
         return {row[0] for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
 
     def ready(self, con, access, topic_id, dependencies=None, current_time=None):
+        return self.missing_count(con, access, topic_id, dependencies, current_time) == 0
+
+    def missing_count(self, con, access, topic_id, dependencies=None, current_time=None):
         course_id = self.catalog.topic_courses[topic_id]
         dependencies = dependencies if dependencies is not None else self.dependencies(course_id)
         allowed = {topic['id'] for topic in access['topics']}
@@ -58,7 +61,7 @@ class DependencyPolicy:
             checked[node] = bool(valid)
             return bool(valid)
 
-        return all(healthy(parent) for parent in dependencies.get(topic_id, []))
+        return sum(not healthy(parent) for parent in set(dependencies.get(topic_id, [])))
 
     def is_ready(self, access, topic_id):
         with closing(self.access_store._connect()) as con:

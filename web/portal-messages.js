@@ -671,6 +671,10 @@ export const portalMessages = {
     "完成进度 {progress} · 熟练度 {mastery}",
     "Progress {progress} · Mastery {mastery}"
   ],
+  "portal.prerequisitesRequired": [
+    "请先完成前置知识的学习",
+    "Complete the prerequisite topics first"
+  ],
   "graph.children": [
     "直接后续",
     "Direct successors"
