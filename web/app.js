@@ -1,4 +1,4 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=a67fbb18830c7235";
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=a2750ba76f9ededa";
 
 applyStaticTranslations();
 
@@ -628,7 +628,7 @@ function applyState(next, { force = false, announceChange = false } = {}) {
   if (state && next.course_version === state.course_version && next.revision < state.revision) return;
   const accessChanged = next.access && JSON.stringify(next.access) !== JSON.stringify(access);
   if (next.access) access = next.access;
-  const changed = accessChanged || !state || next.course_version !== state.course_version || next.revision !== state.revision || next.current_step_id !== state.current_step_id;
+  const changed = accessChanged || !state || next.course_version !== state.course_version || next.revision !== state.revision || next.current_step_id !== state.current_step_id || next.dependency_ready !== state.dependency_ready;
   const previousStep = state?.current_step_id;
   state = next;
   connectionIssue = null;
@@ -1019,7 +1019,7 @@ function renderReview(step) {
 }
 
 function renderStep(step) {
-  const key = JSON.stringify([state.course_version, state.revision, state.current_step_id, state.pending_submission_id, submissionError?.request_id, submissionError?.reason, access?.features]);
+  const key = JSON.stringify([state.course_version, state.revision, state.current_step_id, state.pending_submission_id, state.dependency_ready, submissionError?.request_id, submissionError?.reason, access?.features]);
   if (key === renderedKey) return;
   renderedKey = key;
   const target = $("stepCard");
@@ -1067,6 +1067,7 @@ function renderStep(step) {
     target.append(el("h3", "exampleExplanationHeader", t("Explanation · 解析")), content(step.explanation_html));
   }
   const actions = Array.isArray(step.actions) ? step.actions : [];
+  if (state.dependency_ready === false && !actions.length) target.append(el("p", "featureNotice", translateMessage("请先完成前置知识的学习和待复习内容，并解除前置知识的暂停状态。")));
   if (state.status === "in_progress" && step.id === state.active_step_id) {
     if (!can("learn")) target.append(el("p", "featureNotice", featureMessage("learn")));
     else if (step.phase === "answer" && !can("submit_answer")) target.append(el("p", "featureNotice", featureMessage("submit_answer")));
@@ -1403,7 +1404,7 @@ async function openTopic(id, subjectId) {
   await start();
 }
 
-const { initPortal } = await import("./portal.js?v=a67fbb18830c7235");
+const { initPortal } = await import("./portal.js?v=a2750ba76f9ededa");
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {
     try { return await fetchGuideAsset(url, subjectId); }

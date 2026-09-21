@@ -117,7 +117,8 @@ body { padding-top: 50px; }
 .taskPrerequisites { padding: 23px 15px 17px; font-size: 13px; }
 .taskPrerequisites h3 { font-size: 13px; text-transform: uppercase; color: var(--ma-navy); margin: 0 0 13px; }
 .taskPrerequisites p { margin: 0; color: #808080; }
-.prerequisiteRow { display: flex; align-items: baseline; gap: 7px; margin-bottom: 5px; }
+.prerequisiteRow { display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 7px; margin-bottom: 5px; }
+.prerequisiteMetrics { color: #666; font-size: 13px; }
 .prerequisiteRow a { color: #4e4e4e; text-decoration: none; }
 .prerequisiteRow a:hover { color: var(--link-color); }
 .prerequisiteCheck { color: #aaa; }

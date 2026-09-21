@@ -1,7 +1,7 @@
 // UI strings only. Course HTML, names, answers and explanations never enter this module.
-import {readerMessages} from './reader-messages.js?v=a67fbb18830c7235';
-import {portalMessages} from './portal-messages.js?v=a67fbb18830c7235';
-import {staticMessages} from './static-messages.js?v=a67fbb18830c7235';
+import {readerMessages} from './reader-messages.js?v=a2750ba76f9ededa';
+import {portalMessages} from './portal-messages.js?v=a2750ba76f9ededa';
+import {staticMessages} from './static-messages.js?v=a2750ba76f9ededa';
 
 export const LANGUAGE_KEY = 'math-learning-web:ui-language';
 export const messages = {...staticMessages, ...readerMessages, ...portalMessages};
@@ -32,6 +32,7 @@ export function t(key, params = {}) {
 
 // Only API operational errors belong here. A judge's explanation is course content.
 const errors = {
+  '请先完成前置知识的学习和待复习内容，并解除前置知识的暂停状态。': 'Complete the prerequisite topics and their pending reviews, and resolve any paused prerequisites first.',
   '未找到此学科。': 'This subject could not be found.',
   '此课程不属于当前学科。': 'This course does not belong to the current subject.',
   '指南路径无效。': 'This guide is unavailable.',

@@ -1,7 +1,7 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=a67fbb18830c7235";
-import { createReviewView } from "./review.js?v=a67fbb18830c7235";
-import { renderCourseGraph } from "./course-graph.js?v=a67fbb18830c7235";
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=a67fbb18830c7235";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=a2750ba76f9ededa";
+import { createReviewView } from "./review.js?v=a2750ba76f9ededa";
+import { renderCourseGraph } from "./course-graph.js?v=a2750ba76f9ededa";
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=a2750ba76f9ededa";
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -453,8 +453,9 @@ export function initPortal(bridge) {
       if (!task.prerequisites?.length) requirements.append(node("p", "", t("portal.no.prerequisites.are.required.51")));
       for (const item of task.prerequisites || []) {
         const id = typeof item === "string" ? item : item.id;
-        const known = (data.topics || []).find((topic) => topic.id === id) || (typeof item === "object" ? item : {});
-        const row = node("div", "prerequisiteRow"); row.append(node("span", known.status === "completed" ? "prerequisiteCheck complete" : "prerequisiteCheck", known.status === "completed" ? "✓" : "·"), link(known.title || id, `#/courses/${encode(task.course_id || data.course.id)}/progress?topicId=${encode(id)}`)); requirements.append(row);
+        const known = { ...(typeof item === "object" ? item : {}), ...(data.topics || []).find((topic) => topic.id === id), ...(task.prerequisite_details || []).find((topic) => topic.id === id) };
+        const mastery = typeof known.mastery === "number" && Number.isFinite(known.mastery) ? known.mastery.toLocaleString(locale(), { maximumFractionDigits: 2 }) : "—";
+        const row = node("div", "prerequisiteRow"); row.append(node("span", known.status === "completed" ? "prerequisiteCheck complete" : "prerequisiteCheck", known.status === "completed" ? "✓" : "·"), link(known.title || id, `#/courses/${encode(task.course_id || data.course.id)}/progress?topicId=${encode(id)}`), node("span", "prerequisiteMetrics", t("portal.prerequisiteMetrics", { progress: percentLabel(known.progress), mastery }))); requirements.append(row);
       }
       details.append(requirements);
     }

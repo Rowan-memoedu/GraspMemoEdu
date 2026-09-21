@@ -193,6 +193,7 @@ class DashboardAcceptanceTests(unittest.TestCase):
         self._get('/api/tasks/lesson:topic-b/answers', status=404)
 
     def test_old_submission_time_is_null_and_timing_does_not_break_replay(self):
+        self._complete('topic-a')
         self._action('topic-b', 'choose', choice='mastered')
         result, payload = self._action('topic-b', 'submit', answer='correct')
         replay = self._post('/api/submit?topic_id=topic-b', {**payload, 'elapsed_ms': None})
@@ -204,6 +205,7 @@ class DashboardAcceptanceTests(unittest.TestCase):
         self.assertIsNone(answer['difficulty'])
 
     def test_elapsed_time_rejects_negative_boolean_fraction_and_oversize(self):
+        self._complete('topic-a')
         state, _ = self._action('topic-b', 'choose', choice='mastered')
         for elapsed in [-1, True, 1.5, 86400001, '25']:
             payload = {'request_id': str(uuid.uuid4()), 'expected_revision': state['revision'],
@@ -225,6 +227,7 @@ class DashboardAcceptanceTests(unittest.TestCase):
         self.assertEqual(self._get('/api/profile', self._guest())['display_name'], '游客')
 
     def test_feedback_is_real_persistent_context_checked_and_rate_limited(self):
+        self._complete('topic-a')
         state = self._get('/api/state?topic_id=topic-b')
         question_id = state['steps'][0]['question_id']
         payload = {'message': 'A synthetic correction', 'course_id': 'course-a',
@@ -294,6 +297,7 @@ class DashboardAcceptanceTests(unittest.TestCase):
             self.assertEqual(caught.exception.code, 'invalid_catalog')
 
     def test_sqlite_backup_includes_profile_selection_feedback_and_timing(self):
+        self._complete('topic-a')
         self._post('/api/catalog/select', {'course_id': 'course-a'})
         self._post('/api/profile', {'timezone': 'Asia/Shanghai'})
         self._post('/api/feedback', {'message': 'Backed up message'})
@@ -305,9 +309,10 @@ class DashboardAcceptanceTests(unittest.TestCase):
                                 (self.guest['access']['learner_id'],)).fetchone()
             self.assertEqual(prefs, ('course-a', 'Asia/Shanghai'))
             self.assertEqual(con.execute('SELECT COUNT(*) FROM feedback').fetchone()[0], 1)
-            self.assertEqual(con.execute('SELECT elapsed_ms FROM submissions').fetchone()[0], 4200)
+            self.assertEqual(con.execute("SELECT elapsed_ms FROM submissions WHERE topic='topic-b'").fetchone()[0], 4200)
 
     def test_old_database_adds_timing_column_without_changing_saved_payload(self):
+        self._complete('topic-a')
         self._action('topic-b', 'choose', choice='mastered')
         result, payload = self._action('topic-b', 'submit', answer='correct')
         with closing(self.app.state.service._connect()) as con:

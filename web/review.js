@@ -1,4 +1,4 @@
-import { t, translateMessage, learningTitle } from './i18n.js?v=a67fbb18830c7235';
+import { t, translateMessage, learningTitle } from './i18n.js?v=a2750ba76f9ededa';
 
 const node = (tag, cls = '', text) => {
   const item = document.createElement(tag); item.className = cls;
@@ -59,7 +59,7 @@ export function createReviewView(bridge) {
     if (!next || next.learner_id !== learner || next.topic_id !== topic || !next.practice) throw new Error(t('review.invalidState'));
     if (state?.session_id === next.session_id && next.revision < state.revision) return;
     tick(true);
-    const changed = JSON.stringify([next.revision, next.access?.features, next.access?.topics]) !== rendered;
+    const changed = JSON.stringify([next.revision, next.dependency_ready, next.access?.features, next.access?.topics]) !== rendered;
     const oldQuestion = state?.practice.id;
     state = next;
     if (next.access) bridge.setAccess(next.access);
@@ -170,7 +170,7 @@ export function createReviewView(bridge) {
     if (!state || !topic) return;
     const oldInput = root.querySelector('#reviewAnswerInput');
     const focus = oldInput && document.activeElement === oldInput ? [oldInput.selectionStart, oldInput.selectionEnd] : null;
-    rendered = JSON.stringify([state.revision, state.access?.features, state.access?.topics]);
+    rendered = JSON.stringify([state.revision, state.dependency_ready, state.access?.features, state.access?.topics]);
     const layout = node('div', 'reviewLayout'), main = node('section', 'reviewMain'); main.id = 'reviewContent'; main.tabIndex = -1;
     const back = node('a', '', t('nav.backHome')); back.href = bridge.homeHref();
     const breadcrumb = node('div', 'topicBreadcrumb'); breadcrumb.append(back, button(t('lesson.feedback'), 'textButton', () => bridge.showFeedback({topic_id: topic, task_id: `review:${state.session_id}`, question_id: selected || state.practice.id})));
@@ -224,7 +224,8 @@ export function createReviewView(bridge) {
       form.append(label, input); card.append(form);
     }
     if (isCurrent && state.pending_submission_id) { const waiting = node('p', 'waiting', t('review.judging')); waiting.setAttribute('role', 'status'); card.append(waiting); }
-    if (isCurrent && state.status === 'in_progress' && !state.pending_submission_id && !state.actions.length) card.append(node('p', 'featureNotice', t('review.featureUnavailable')));
+    if (!state.actions.length && state.dependency_ready === false) card.append(node('p', 'featureNotice', translateMessage('请先完成前置知识的学习和待复习内容，并解除前置知识的暂停状态。')));
+    else if (isCurrent && state.status === 'in_progress' && !state.pending_submission_id && !state.actions.length) card.append(node('p', 'featureNotice', t('review.featureUnavailable')));
     const nav = node('div', 'stepNavigation');
     if (index > 0) nav.append(button(t('上一页'), 'secondaryButton pageButton', () => choose(pageIds[index - 1])));
     if (!isCurrent) nav.append(button(t('下一页'), 'primaryButton', () => choose(pageIds[index + 1])));

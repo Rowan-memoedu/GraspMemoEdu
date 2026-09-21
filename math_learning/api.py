@@ -105,6 +105,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     subjects = Subjects(settings, catalog)
     access_store = AccessStore(settings.data_dir, [{'id': topic['id'], 'title': topic['title']} for topic in catalog.topics.values()])
     dashboard_store = DashboardStore(catalog, access_store, subjects)
+    dependency_policy = dashboard_store.dependency_policy
     learning_services = ServiceCache(catalog.default_topic_id)
     learning_services[(service.learner_id, service.topic_id)] = service
     if service.review_backend is None:
@@ -138,11 +139,23 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         subjects.authorize_subject(access, request.query_params.get('subject_id'))
         topic_id = requested_topic(request)
         access_store.authorize(access, topic_id, feature)
+        path = request.url.path
+        gated = path in ('/api/choose', '/api/continue', '/api/submit', '/api/demo-answer', '/api/review/begin')
+        gated = gated or (path.startswith('/api/review/sessions/') and path.rsplit('/', 1)[-1] in ('submit', 'continue', 'demo-answer'))
+        if gated:
+            dependency_policy.require(access, topic_id)
+        elif path == '/api/state' and not dependency_policy.is_ready(access, topic_id):
+            with closing(access_store._connect()) as con:
+                previous = con.execute('SELECT 1 FROM topics WHERE learner=? AND topic=?',
+                                       (access['learner_id'], topic_id)).fetchone()
+            if not previous:
+                dependency_policy.require(access, topic_id)
         return access, service_for(access['learner_id'], topic_id)
 
     def public_state(state, access):
         state['access'] = access
         features = set(access['features'])
+        state['dependency_ready'] = dependency_policy.is_ready(access, state['topic_id'])
         action_feature = {'mastered': 'learn', 'unmastered': 'learn', 'continue': 'learn', 'submit': 'submit_answer'}
         if 'review_history' not in features:
             state['steps'] = [step for step in state['steps'] if step['id'] == state['active_step_id']]
@@ -153,7 +166,8 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                     step['actions'] = (['mastered', 'unmastered'] if step['phase'] == 'choice'
                                        else ['submit'] if step['phase'] == 'answer' else ['continue'])
         for step in state['steps']:
-            step['actions'] = [action for action in step['actions'] if action_feature.get(action) in features]
+            step['actions'] = [action for action in step['actions']
+                               if state['dependency_ready'] and action_feature.get(action) in features]
         return state
 
     def public_submission(result, access, learner):
@@ -565,6 +579,6 @@ def create_app(settings: Settings | None = None, service: LearningService | None
 
     register_guide_routes(app, settings, access_store, subjects)
     register_guest_reset_routes(app, identity, public_state, Action)
-    register_review_routes(app, identity, admission_lock, public_limits, schedule, outstanding_count)
+    register_review_routes(app, identity, admission_lock, public_limits, schedule, outstanding_count, dependency_policy)
     app.mount('/', StaticFiles(directory=Path(__file__).resolve().parent.parent / 'web', html=True), name='web')
     return app

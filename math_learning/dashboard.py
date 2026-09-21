@@ -14,12 +14,14 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .public_limits import PublicLimitError
 from .service import DomainError, now
+from .dependencies import DependencyPolicy
 
 
 class DashboardStore:
     def __init__(self, catalog, access_store, subjects=None):
         self.catalog, self.access_store = catalog, access_store
         self.subjects = subjects
+        self.dependency_policy = DependencyPolicy(catalog, access_store, subjects)
         with closing(access_store._connect()) as con:
             con.executescript('''
                 CREATE TABLE IF NOT EXISTS learner_preferences (
@@ -152,6 +154,7 @@ class DashboardStore:
                 (attempt['completed_at'] for attempt in attempts if attempt.get('completed_at')), default=None)
         module_count = len(topic['modules'])
         return {'state': state, 'status': status, 'started_at': started_at, 'completed_at': completed_at,
+                'mastery': self.dependency_policy.mastery(con, learner_id, topic_id, state),
                 'completed_modules': len(completed), 'module_count': module_count,
                 'progress': round(100 * len(completed) / module_count, 2)}
 
@@ -169,10 +172,7 @@ class DashboardStore:
         return task
 
     def _dependencies(self, course_id):
-        if self.subjects is None:
-            return {item['id']: item['prerequisites'] for item in self.catalog.course(course_id)['topics']}
-        from .course_graph import GraphStore
-        return GraphStore(self.subjects.settings, self.catalog, self.subjects).dependencies(course_id)
+        return self.dependency_policy.dependencies(course_id)
 
     @staticmethod
     def _has_reviews(con):
@@ -265,6 +265,17 @@ class DashboardStore:
             con.execute('BEGIN')
             snapshots = {topic['id']: self._snapshot(con, access['learner_id'], topic['id']) for topic in visible}
             review_tasks, review_history, next_review_due_at, review_paused = self._reviews(con, access, course, snapshots)
+            eligibility = {topic_id: self.dependency_policy.ready(con, access, topic_id, dependencies, now())
+                           for topic_id in snapshots}
+        def details(topic_id):
+            return [{'id': parent, 'title': self.catalog.topics[parent]['title'],
+                     'progress': snapshots[parent]['progress'], 'mastery': snapshots[parent]['mastery']}
+                    for parent in dependencies.get(topic_id, []) if parent in snapshots]
+        review_tasks = [task for task in review_tasks if eligibility[task['topic_id']]]
+        for task in [*review_tasks, *review_history]:
+            task['prerequisites'] = [parent for parent in dependencies.get(task['topic_id'], []) if parent in snapshots]
+            task['prerequisite_details'] = details(task['topic_id'])
+            task['dependency_ready'] = eligibility[task['topic_id']]
         total = sum(len(self.catalog.topics[topic['id']]['modules']) for topic in course['topics'])
         completed = sum(item['completed_modules'] for item in snapshots.values())
         progress = round(100 * completed / total, 2) if total else 0
@@ -288,14 +299,19 @@ class DashboardStore:
         for metadata in visible:
             topic_id, snapshot = metadata['id'], snapshots[metadata['id']]
             task = self._task(course, topic_id, snapshot, allowed, dependencies)
+            task.update(prerequisite_details=details(topic_id), dependency_ready=eligibility[topic_id], mastery=snapshot['mastery'])
             if topic_id in review_paused and snapshot['status'] != 'completed':
                 task['status'] = 'paused'
-            (history if snapshot['status'] == 'completed' else tasks).append(task)
+            if snapshot['status'] == 'completed':
+                history.append(task)
+            elif eligibility[topic_id]:
+                tasks.append(task)
             topics.append({'id': topic_id, 'title': task['title'], 'status': snapshot['status'], 'progress': snapshot['progress'],
                            'prerequisites': task['prerequisites'],
+                           'prerequisite_details': task['prerequisite_details'], 'mastery': snapshot['mastery'],
+                           'dependency_ready': eligibility[topic_id],
                            'unit_id': next(unit['id'] for unit in units if topic_id in unit['topic_ids']),
-                           'frontier': snapshot['status'] != 'completed' and all(
-                               item in snapshots and snapshots[item]['status'] == 'completed' for item in dependencies.get(topic_id, []))})
+                           'frontier': snapshot['status'] != 'completed' and topic_id not in review_paused and eligibility[topic_id]})
         history.sort(key=lambda task: (task['completed_at'] or '', task['id']), reverse=True)
         if 'review_history' not in access['features']:
             history = []
