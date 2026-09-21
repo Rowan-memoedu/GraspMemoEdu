@@ -122,7 +122,7 @@ class CourseGraphTests(unittest.TestCase):
             headers = {'Origin': origin, 'X-Learning-Session': transport}
             guest = client.post('/api/access/guest', json={}, headers=headers).json()
             headers['X-Learning-Identity'] = guest['identity_token']
-            self.assertEqual(client.get('/api/graphs?subject_id=physics', headers=headers).status_code, 403)
+            self.assertEqual(client.get('/api/graphs?subject_id=physics', headers=headers).status_code, 200)
             account = app.state.access_store.create_account('Graph test')
             login = client.post('/api/access/login', json={'invitation_code': account['invitation_code']}, headers=headers).json()
             headers['X-Learning-Identity'] = login['identity_token']

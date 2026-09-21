@@ -63,9 +63,9 @@ pwsh -NoProfile -File D:/Projects/MathLearningWeb/Start-PublicLearning.ps1 -Rest
 
 旧 `#/learn`、`#/courses`、`#/guide`、`#/topic/...` 和 `#/review/...` 会转入数学并原样保留查询参数。Topic ID、课程版本、学习记录、复习卡片和浏览器身份键不变。新增 `learner_subject_preferences` 保存每科选课；数学未产生新选择时读取旧选课记录，不改写旧行。
 
-同一账号在全部学科通用，课程权限仍由 Topic 与功能决定。默认权限账号继承新增 Topic，明确列表权限保持原授权；单独调整学科归属不会修改账号权限。游客目前只能进入数学，其他学科的课程、指南和资源均在后端拒绝游客；省略学科参数也不能绕过非数学 Topic 权限。游客不能主动暂停 Topic，体验浏览偏好保持原行为。
+同一账号在全部学科通用，课程权限仍由 Topic 与功能决定。默认权限账号继承新增 Topic，明确列表权限保持原授权；单独调整学科归属不会修改账号权限。游客可进入全部六科，访问已发布的课程、Topic、指南和资源；既有游客身份自动获得这些访问权限，无需重新注册或迁移记录。游客不能主动暂停 Topic，体验浏览偏好保持原行为。开放学科不恢复已下线的测试内容。
 
-`GET /api/subjects` 返回展示字段、课程数、`available` 与 `requires_account`，不包含本地文件路径。课程目录、选课、Dashboard、作答记录以及 Lesson/Review 请求接受可选 `subject_id`；显式学科与课程不匹配时拒绝请求。旧客户端不传学科时保留兼容行为，身份和权限校验依然生效。非数学指南的图片和附件经账号认证后转为临时 Blob URL，离开页面或退出登录后撤销；不会向外部链接传递账号凭据。
+`GET /api/subjects` 返回展示字段、课程数、`available` 与 `requires_account`，不包含本地文件路径；六科均 available=true、requires_account=false。课程目录、选课、Dashboard、作答记录以及 Lesson/Review 请求接受可选 `subject_id`；显式学科与课程不匹配时拒绝请求。旧客户端不传学科时保留兼容行为，身份和权限校验依然生效。非数学指南的图片和附件经有效游客或账号身份认证后转为临时 Blob URL，离开页面或退出登录后撤销；不会向外部链接传递身份凭据。
 
 ## 共用实现与后续范围
 

@@ -103,10 +103,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     pairing_file = settings.data_dir / 'pairing.json'
     executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='answer-judge')
     subjects = Subjects(settings, catalog)
-    math_topics = {topic_id for topic_id, course_id in catalog.topic_courses.items()
-                   if course_id in subjects.course_ids('math')}
-    access_store = AccessStore(settings.data_dir, [{'id': topic['id'], 'title': topic['title']} for topic in catalog.topics.values()],
-                               guest_topic_ids=math_topics)
+    access_store = AccessStore(settings.data_dir, [{'id': topic['id'], 'title': topic['title']} for topic in catalog.topics.values()])
     dashboard_store = DashboardStore(catalog, access_store, subjects)
     learning_services = ServiceCache(catalog.default_topic_id)
     learning_services[(service.learner_id, service.topic_id)] = service

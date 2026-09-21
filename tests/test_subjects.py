@@ -76,11 +76,12 @@ class SubjectAcceptanceTests(unittest.TestCase):
         self.assertEqual([s['course_count'] for s in result['subjects']], [2, 1, 0, 0, 0, 0])
         self.assertNotIn('guide_path', json.dumps(result))
         self.assertNotIn(str(self.data), json.dumps(result))
-        self.assertEqual([s['available'] for s in result['subjects']], [True, False, False, False, False, False])
-        self.assertEqual([s['requires_account'] for s in result['subjects']], [False, True, True, True, True, True])
-        self.call('GET', '/api/catalog?subject_id=english', status=403)
-        self.call('GET', '/api/dashboard?subject_id=english', status=403)
-        self.call('GET', '/api/guide?subject_id=english', status=403)
+        self.assertTrue(all(s['available'] for s in result['subjects']))
+        self.assertFalse(any(s['requires_account'] for s in result['subjects']))
+        for subject in ('english', 'chinese', 'biology', 'chemistry'):
+            self.assertEqual(self.call('GET', '/api/catalog?subject_id=' + subject)['courses'], [])
+            self.call('GET', '/api/dashboard?subject_id=' + subject, status=409)
+            self.assertEqual(self.call('GET', '/api/guide?subject_id=' + subject)['status'], 'empty')
         self.login_account([])
         self.assertTrue(all(s['available'] for s in self.call('GET', '/api/subjects')['subjects']))
         self.assertEqual(self.call('GET', '/api/catalog?subject_id=english'), {'courses': [], 'selected_course_id': None})
@@ -105,7 +106,7 @@ class SubjectAcceptanceTests(unittest.TestCase):
             self.assertEqual(con.execute('SELECT * FROM learner_preferences').fetchall(), legacy)
         other = self.call('POST', '/api/access/guest', {})
         self.headers['X-Learning-Identity'] = other['identity_token']
-        self.call('GET', '/api/catalog?subject_id=physics', status=403)
+        self.assertIsNone(self.call('GET', '/api/catalog?subject_id=physics')['selected_course_id'])
         self.assertIsNone(self.call('GET', '/api/catalog?subject_id=math')['selected_course_id'])
 
     def test_cross_subject_requests_reject_and_permissions_do_not_expand(self):
@@ -197,29 +198,26 @@ class SubjectAcceptanceTests(unittest.TestCase):
         self.assertEqual(subjects.course_ids('math'), {'course-a', 'course-b', 'course-c'})
         self.assertEqual(subjects.course_ids('physics'), set())
 
-    def test_guests_cannot_bypass_scope_by_omitting_subject_id(self):
-        self.assertEqual({t['id'] for t in self.call('GET', '/api/access')['topics']}, {'topic-a', 'topic-c'})
-        self.assertEqual({c['id'] for c in self.call('GET', '/api/catalog')['courses']}, {'course-a', 'course-c'})
-        for path in ('/api/state', '/api/demo-answer', '/api/submissions/other',
-                     '/api/review/sessions/other', '/api/review/submissions/other',
-                     '/api/review/sessions/other/demo-answer'):
-            self.call('GET', path + '?topic_id=topic-b', status=403)
-        for path in ('/api/choose', '/api/continue', '/api/select', '/api/submit', '/api/pause',
-                     '/api/guest/reset', '/api/review/begin', '/api/review/sessions/other/submit',
-                     '/api/review/sessions/other/continue', '/api/review/sessions/other/pause'):
-            self.call('POST', path + '?topic_id=topic-b', {}, status=403)
-        self.call('GET', '/api/tasks/lesson:topic-b/answers', status=403)
-        self.call('GET', '/api/dashboard?course_id=course-b', status=403)
-        self.call('POST', '/api/catalog/select', {'course_id': 'course-b'}, status=403)
-        self.call('GET', '/api/state?topic_id=topic-a')
-        with closing(sqlite3.connect(self.data / 'learning.sqlite3')) as con:
-            self.assertIsNone(con.execute('SELECT 1 FROM topics WHERE learner=? AND topic=?',
-                                         (self.guest['access']['learner_id'], 'topic-b')).fetchone())
+    def test_guests_can_learn_nonmath_with_or_without_subject_scope(self):
+        self.assertEqual({t['id'] for t in self.call('GET', '/api/access')['topics']}, set(self.topics))
+        self.assertEqual({c['id'] for c in self.call('GET', '/api/catalog?subject_id=physics')['courses']}, {'course-b'})
+        self.call('POST', '/api/catalog/select?subject_id=physics', {'course_id': 'course-b'})
+        self.assertEqual(self.call('GET', '/api/dashboard?subject_id=physics')['course']['id'], 'course-b')
+        state = self.call('GET', '/api/state?topic_id=topic-b&subject_id=physics')
+        self.assertEqual(state, self.call('GET', '/api/state?topic_id=topic-b'))
+        chosen = self.call('POST', '/api/choose?topic_id=topic-b&subject_id=physics', {
+            'request_id': 'physics-choice', 'expected_revision': state['revision'],
+            'attempt_id': state['attempt_id'], 'step_id': state['active_step_id'], 'choice': 'mastered'})
+        self.assertEqual(chosen['topic_id'], 'topic-b')
+        denied = self.call('POST', '/api/pause?topic_id=topic-b&subject_id=physics', {'request_id': 'physics-pause'}, status=403)
+        self.assertEqual(denied['detail']['code'], 'feature_forbidden')
+        self.assertEqual(chosen, self.call('GET', '/api/state?topic_id=topic-b'))
 
-    def test_nonmath_assets_require_current_account_and_allow_cors_headers(self):
+    def test_nonmath_assets_accept_guests_and_still_require_valid_identity(self):
         path = '/subject-guide-assets/physics/plot.png'
         self.assertEqual(self.client.get(path).status_code, 401)
-        self.assertEqual(self.client.get(path, headers=self.headers).status_code, 403)
+        self.assertEqual(self.client.get(path, headers=self.headers).status_code, 200)
+        self.assertIn('/subject-guide-assets/physics/plot.png', self.call('GET', '/api/guide?subject_id=physics')['html'])
         self.assertEqual(self.client.get('/subject-guide-assets/math/plot.png').status_code, 200)
         preflight = self.client.options(path, headers={'Origin': self.origin,
             'Access-Control-Request-Method': 'GET', 'Access-Control-Request-Headers': 'X-Learning-Identity,X-Learning-Session'})
@@ -238,7 +236,7 @@ class SubjectAcceptanceTests(unittest.TestCase):
             before = con.execute('SELECT * FROM access_principals ORDER BY learner_id').fetchall()
         scoped = AccessStore(self.data, list(self.topics.values()), guest_topic_ids=['topic-a', 'topic-c'])
         self.assertEqual({t['id'] for t in scoped.resolve(old_guest['identity_token'])['topics']}, {'topic-a', 'topic-c'})
-        self.assertEqual({t['id'] for t in make_access_store(self.settings).resolve(old_guest['identity_token'])['topics']}, {'topic-a', 'topic-c'})
+        self.assertEqual({t['id'] for t in make_access_store(self.settings).resolve(old_guest['identity_token'])['topics']}, set(self.topics))
         login = scoped.login(account['invitation_code'])
         self.assertEqual([t['id'] for t in login['access']['topics']], ['topic-a'])
         with closing(sqlite3.connect(store.db_path)) as con:

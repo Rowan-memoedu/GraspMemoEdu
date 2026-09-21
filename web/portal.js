@@ -1,7 +1,7 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=5c57152f1c408c20";
-import { createReviewView } from "./review.js?v=5c57152f1c408c20";
-import { renderCourseGraph } from "./course-graph.js?v=5c57152f1c408c20";
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=5c57152f1c408c20";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=eb981ee70dae9c04";
+import { createReviewView } from "./review.js?v=eb981ee70dae9c04";
+import { renderCourseGraph } from "./course-graph.js?v=eb981ee70dae9c04";
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=eb981ee70dae9c04";
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -168,7 +168,7 @@ export function initPortal(bridge) {
     updateUser();
   }
   function subjectRestricted(subject) {
-    return Boolean(subject && bridge.getAccess()?.role !== 'account' && (subject.requires_account || subject.id !== 'math'));
+    return Boolean(subject && bridge.getAccess()?.role !== 'account' && subject.requires_account);
   }
   function restrictedNotice(subject, home = false) {
     const notice = node('section', 'subjectAccessNotice'); notice.setAttribute('role', 'status');

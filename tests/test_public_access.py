@@ -559,7 +559,7 @@ class PublicAccessAcceptanceTests(unittest.TestCase):
         response = self.client.get('/api/graphs/arithmetic-revisited?subject_id=math', headers=headers)
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()['nodes'][0]['topic_id'], self.service.topic_id)
-        self.assertEqual(self.client.get('/api/graphs?subject_id=physics', headers=headers).status_code, 403)
+        self.assertEqual(self.client.get('/api/graphs?subject_id=physics', headers=headers).status_code, 200)
         self.assertEqual(self.client.get('/api/graphs', headers=self._headers()).status_code, 401)
         for path in ('/api/graphs', '/api/graphs/arithmetic-revisited'):
             self._assert_error(self.client.post(path, json={}, headers=headers), 403, 'public_endpoint_forbidden')

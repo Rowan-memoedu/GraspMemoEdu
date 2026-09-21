@@ -74,12 +74,7 @@ def review_status(settings, learner, topic_id):
 
 def make_access_store(settings):
     catalog = Catalog.load(settings)
-    from .subjects import Subjects
-    subjects = Subjects(settings, catalog)
-    math_topics = {topic_id for topic_id, course_id in catalog.topic_courses.items()
-                   if course_id in subjects.course_ids('math')}
-    return AccessStore(settings.data_dir, [{'id': topic['id'], 'title': topic['title']} for topic in catalog.topics.values()],
-                       guest_topic_ids=math_topics)
+    return AccessStore(settings.data_dir, [{'id': topic['id'], 'title': topic['title']} for topic in catalog.topics.values()])
 
 
 def split_permissions(value):
