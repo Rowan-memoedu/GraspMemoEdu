@@ -21,6 +21,7 @@ body.platformTheme { background: var(--platform-paper); }
 .platformTheme .mainNavigation a:hover,
 .platformTheme .mainNavigation a.active { color: var(--subject-accent); }
 .platformTheme .mainNavigation a.active { border-bottom-color: var(--subject-accent); }
+.platformTheme .mainNavigation:has(.catalogToggle[aria-expanded="true"]) a.active { color: var(--platform-muted); border-bottom-color: transparent; }
 .platformTheme .mainNavigation .catalogToggle { color: var(--platform-ink); }
 .platformTheme .userAvatar { color: var(--subject-accent); background: #eee9df; }
 .platformTheme .guestDemoOption { color: #000; }
