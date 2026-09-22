@@ -170,7 +170,7 @@ function applyErrata(nodes, errata) {
   return clone;
 }
 
-async function renderer(assets = new Map()) {
+export async function renderer(assets = new Map()) {
   const bundle = process.env.CODEX_NODE_MODULES || path.join(os.homedir(), '.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules');
   const runtime = process.env.MATH_TOPIC_PDF_RUNTIME || 'D:/Caches/MathTopicPdf/node_modules';
   const br = createRequire(path.join(bundle, '_entry.cjs'));

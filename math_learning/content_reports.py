@@ -22,7 +22,8 @@ def validate_correction(topic, question_id, correction):
     require(correction['content_version'] == topic['version'], '正文版本已变化，请刷新后重新选择文字。', 409)
     block = correction['content_block_id']
     if question_id:
-        questions = [q for m in topic['modules'] for q in [m['example'], *m['practices']]]
+        questions = (topic['flashcards'] if topic.get('training_mode') == 'atomic_retrieval'
+                     else [q for m in topic['modules'] for q in [m['example'], *m['practices']]])
         question = next((q for q in questions if q['id'] == question_id), None)
         require(question is not None)
         fields = {f'question:{question_id}': 'html', f'explanation:{question_id}': 'explanation_html'}

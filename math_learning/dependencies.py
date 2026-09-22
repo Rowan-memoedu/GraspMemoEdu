@@ -46,6 +46,9 @@ class DependencyPolicy:
             valid = bool(row and row['version'] == version)
             state = json.loads(row['body']) if valid else {}
             valid = valid and state.get('status') == 'completed'
+            if valid and state.get('training_mode') == 'atomic_retrieval':
+                valid = not state.get('pause') and not any(p.get('due_at') and datetime.fromisoformat(p['due_at']) <= current
+                                                         for p in state['points'].values())
             if valid and 'review_topic_pauses' in tables:
                 valid = con.execute('SELECT 1 FROM review_topic_pauses WHERE learner=? AND topic=?', key).fetchone() is None
             if valid and 'review_sessions' in tables:
@@ -75,6 +78,9 @@ class DependencyPolicy:
 
     def mastery(self, con, learner_id, topic_id, state):
         topic = self.catalog.topic(topic_id)
+        if topic.get('training_mode') == 'atomic_retrieval':
+            ratings = [p['last_rating'] for p in (state or {}).get('points', {}).values() if p.get('last_rating') is not None]
+            return round(sum(ratings) / len(ratings), 2) if ratings else None
         modules = {module['id'] for module in topic['modules']}
         scores = {}
         def record(module, score, completed_at):

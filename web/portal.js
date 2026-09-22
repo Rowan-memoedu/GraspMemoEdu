@@ -1,10 +1,11 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=efb6b9f740ab2e5d";
-import { createReviewView } from "./review.js?v=efb6b9f740ab2e5d";
-import { renderCourseGraph } from "./course-graph.js?v=efb6b9f740ab2e5d";
-import {questionInput} from './question-input.js?v=efb6b9f740ab2e5d';
-import {reportableContent, installContentReporting} from './content-report.js?v=efb6b9f740ab2e5d';
-import {createCatalogPicker} from './catalog-picker.js?v=efb6b9f740ab2e5d';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=efb6b9f740ab2e5d";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=d0d0539aa27e37cc";
+import { createReviewView } from "./review.js?v=d0d0539aa27e37cc";
+import { renderCourseGraph } from "./course-graph.js?v=d0d0539aa27e37cc";
+import {questionInput} from './question-input.js?v=d0d0539aa27e37cc';
+import {reportableContent, installContentReporting} from './content-report.js?v=d0d0539aa27e37cc';
+import {createCatalogPicker} from './catalog-picker.js?v=d0d0539aa27e37cc';
+import {createAtomicView} from './atomic.js?v=d0d0539aa27e37cc';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=d0d0539aa27e37cc";
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -81,6 +82,9 @@ export function initPortal(bridge) {
       currentHash = routeKey(); currentRoute = parseRoute();
     },
   });
+  const atomic = createAtomicView({...bridge, request: call, root, homeHref: learnHref,
+    reviewHref: () => subjectHref(currentRoute?.subjectId, '/reviews'), formatDate: value => apiDate(value, true),
+    progressChanged: () => { dashboards.clear(); answerCache.clear(); }});
 
   function navigate(path, replace = false) {
     const hash = localHref(path);
@@ -131,6 +135,7 @@ export function initPortal(bridge) {
     for (const item of document.querySelectorAll(".mainNavigation [data-navigation]")) {
       const section = item.dataset.navigation;
       item.hidden = section === 'subjects' ? Boolean(subject) : !subject;
+      if (section === 'reviews') item.hidden = !['english', 'chinese', 'biology', 'chemistry'].includes(subject?.id);
       item.href = section === "subjects" ? "#/" : subjectHref(subject?.id || "math", `/${section}`);
     }
     $("topicHomeLink").href = learnHref();
@@ -219,7 +224,7 @@ export function initPortal(bridge) {
     dashboards.set(id, merged); return merged;
   }
   function releaseGuideAssets() { for (const url of guideObjectUrls) URL.revokeObjectURL(url); guideObjectUrls = []; }
-  function stopPageWork() { clearTimeout(refreshTimer); clearTimeout(pageTimer); releaseGuideAssets(); review.stop(); hidePopovers(); }
+  function stopPageWork() { clearTimeout(refreshTimer); clearTimeout(pageTimer); releaseGuideAssets(); review.stop(); atomic.stop(); hidePopovers(); }
   async function route() {
     if (currentHash) scrolls.set(currentHash, window.scrollY);
     currentRoute = parseRoute();
@@ -232,7 +237,7 @@ export function initPortal(bridge) {
     root.classList.toggle("reviewShell", currentRoute.path.startsWith("/review/"));
     if (bridge.getIdentityProblem()) { root.hidden = true; root.replaceChildren(); return; }
     updateSubjectContext(subjects?.find(subject => subject.id === currentRoute.subjectId) || null);
-    setNavigation(!currentRoute.subjectId ? "subjects" : currentRoute.path.startsWith("/courses") ? "courses" : currentRoute.path === "/guide" ? "guide" : "learn");
+    setNavigation(!currentRoute.subjectId ? "subjects" : currentRoute.path.startsWith("/courses") ? "courses" : currentRoute.path === "/guide" ? "guide" : currentRoute.path === '/reviews' ? 'reviews' : "learn");
     root.replaceChildren(loading()); window.scrollTo(0, 0);
     try {
       if (profile) await bridge.refreshAccess();
@@ -261,6 +266,23 @@ export function initPortal(bridge) {
         renderLearn(data, params.get("taskId"), ticket);
       } else if (path === "/courses") {
         document.title = pageTitle(t("nav.courses")); await renderCourses();
+      } else if (path === '/reviews') {
+        const data = await call('atomic/reviews');
+        if (ticket !== sequence) return;
+        document.title = pageTitle(t('atomic.reviewTitle'));
+        const list = node('section', 'atomicReviewList');
+        root.replaceChildren(node('h1', 'portalPageTitle', t('atomic.reviewTitle')), list);
+        for (const item of data.items) {
+          const card = node('article', 'courseChoice');
+          card.append(node('h2', '', item.title), node('p', '', t('atomic.dueCount', {count: item.due_count})));
+          if (item.paused) card.append(node('p', 'atomicPaused', t('atomic.paused')));
+          else if (!item.dependency_ready) card.append(node('p', '', t('portal.prerequisitesRequired')));
+          else card.append(link(t(item.active ? 'atomic.resumeReview' : 'atomic.startReview'), `#/review/${encode(item.topic_id)}/atomic`, 'primaryButton'));
+          list.append(card);
+        }
+        if (!data.items.length) list.append(emptyBox(t('atomic.noDue')));
+        if (data.next_due_at) list.append(node('p', '', t('atomic.availableAt', {time: apiDate(data.next_due_at, true)})));
+        refreshTimer = setTimeout(() => { if (ticket === sequence && !document.hidden) void route(); }, 15000);
       } else if (path === "/guide") {
         document.title = pageTitle(t("nav.guide")); await renderGuide(ticket);
       } else if (path === "/help") {
@@ -273,10 +295,14 @@ export function initPortal(bridge) {
         if (ticket !== sequence) return;
         dashboards.set(id, data); renderCourseProgress(data, params);
       } else if (/^\/topic\/[^/]+$/.test(path)) {
-        root.hidden = true;
-        await bridge.openTopic(decodeURIComponent(path.split("/")[2]), subjectId);
+        const topicId = decodeURIComponent(path.split('/')[2]);
+        const state = await call(`state?topic_id=${encode(topicId)}`);
+        if (ticket !== sequence) return;
+        if (state.training_mode === 'atomic_retrieval') await atomic.open(topicId, 'learn', state);
+        else { root.hidden = true; await bridge.openTopic(topicId, subjectId); }
       } else if (/^\/review\/[^/]+\/[^/]+$/.test(path)) {
-        await review.open(decodeURIComponent(path.split("/")[2]), decodeURIComponent(path.split("/")[3]), params.get("session"));
+        if (path.split('/')[3] === 'atomic') await atomic.open(decodeURIComponent(path.split('/')[2]), 'review');
+        else await review.open(decodeURIComponent(path.split("/")[2]), decodeURIComponent(path.split("/")[3]), params.get("session"));
       } else root.replaceChildren(errorBox(t("portal.this.page.does.not.exist.24"), () => navigate("/"), t("portal.page.not.found.25")));
       if (ticket !== sequence) return;
       const target = params.get("unitId") || params.get("topicId");

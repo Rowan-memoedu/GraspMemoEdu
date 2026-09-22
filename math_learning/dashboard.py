@@ -20,7 +20,8 @@ from .content_reports import validate_correction
 
 
 class DashboardStore:
-    def __init__(self, catalog, access_store, subjects=None):
+    def __init__(self, catalog, access_store, subjects=None, *, atomic_clock=None):
+        self.atomic_clock = atomic_clock
         self.catalog, self.access_store = catalog, access_store
         self.subjects = subjects
         self.dependency_policy = DependencyPolicy(catalog, access_store, subjects)
@@ -143,6 +144,14 @@ class DashboardStore:
         state = json.loads(row['body']) if row else None
         if row and row['version'] != topic['version']:
             raise DomainError('course_version_mismatch', '课程版本已变化，原进度已保留。请先由管理者处理版本迁移。')
+        if topic.get('training_mode') == 'atomic_retrieval':
+            count = sum(len(c['points']) for c in topic['memory_chunks'])
+            completed = sum(p['mastered'] for p in state['points'].values()) if state else 0
+            return {'state': state, 'status': state['status'] if state and state['started_at'] else 'not_started',
+                    'started_at': state['started_at'] if state else None,
+                    'completed_at': state['completed_at'] if state else None,
+                    'mastery': self.dependency_policy.mastery(con, learner_id, topic_id, state),
+                    'completed_modules': completed, 'module_count': count, 'progress': round(100 * completed / count, 2)}
         attempts = state['attempts'] if state else []
         completed = {attempt['module_id'] for attempt in attempts if attempt['status'] == 'completed'}
         started_at = state.get('started_at') if state else None
@@ -207,11 +216,29 @@ class DashboardStore:
 
     def _reviews(self, con, access, course, snapshots):
         tasks, history, wakeups, paused = [], [], [], set()
-        if not self._has_reviews(con):
+        if not self._has_reviews(con) and not any(self.catalog.topic(t).get('training_mode') == 'atomic_retrieval' for t in snapshots):
             return tasks, history, None, paused
         current_time = now()
         for topic_id, snapshot in snapshots.items():
             topic = self.catalog.topic(topic_id)
+            if topic.get('training_mode') == 'atomic_retrieval':
+                from .atomic_api import review_summary
+                state = snapshot['state']
+                if state and state['pause']:
+                    paused.add(topic_id)
+                summary = review_summary(topic, state, self.atomic_clock() if self.atomic_clock else None)
+                if summary['next_due_at']:
+                    wakeups.append(summary['next_due_at'])
+                if summary['due_count'] or summary['active']:
+                    tasks.append({'id': 'atomic-review:' + topic_id, 'type': 'Review', 'topic_id': topic_id,
+                                  'module_id': 'atomic', 'title': topic['title'], 'course_id': course['id'],
+                                  'course_title': course['title'], 'started': summary['active'], 'started_at': None,
+                                  'status': 'in_progress' if summary['active'] else 'not_started', 'progress': 0,
+                                  'due_at': summary['next_due_at'], 'prerequisites': [], 'maintenance': False,
+                                  'start_href': '#/review/' + quote(topic_id, safe='') + '/atomic'})
+                continue
+            if not self._has_reviews(con):
+                continue
             key = (access['learner_id'], topic_id)
             is_paused = snapshot['status'] == 'paused' or con.execute(
                 'SELECT 1 FROM review_topic_pauses WHERE learner=? AND topic=?', key).fetchone()
@@ -283,7 +310,11 @@ class DashboardStore:
             task['prerequisite_details'] = details(task['topic_id'])
             task['dependency_ready'] = eligibility[task['topic_id']]
             task['missing_prerequisite_count'] = missing[task['topic_id']]
-        total = sum(len(self.catalog.topics[topic['id']]['modules']) for topic in course['topics'])
+        def learning_units(topic_id):
+            topic = self.catalog.topic(topic_id)
+            return (sum(len(c['points']) for c in topic['memory_chunks']) if topic.get('training_mode') == 'atomic_retrieval'
+                    else len(topic['modules']))
+        total = sum(learning_units(topic['id']) for topic in course['topics'])
         completed = sum(item['completed_modules'] for item in snapshots.values())
         progress = round(100 * completed / total, 2) if total else 0
         started = [item['started_at'] for item in snapshots.values() if item['started_at']]
@@ -375,6 +406,25 @@ class DashboardStore:
             snapshot = self._snapshot(con, access['learner_id'], topic_id)
             rows = con.execute('''SELECT * FROM submissions WHERE learner=? AND topic=? AND status='judged'
                                 ORDER BY created_at,id''', (access['learner_id'], topic_id)).fetchall()
+            if topic.get('training_mode') == 'atomic_retrieval':
+                state = snapshot['state']
+                if not state or not state['completed_at']:
+                    raise DomainError('unknown_task_answers', '此身份尚无该任务的已完成作答记录。', 404)
+                questions = {q['id']: q for q in topic['flashcards']}
+                groups = []
+                for chunk in topic['memory_chunks']:
+                    points = {p['id'] for p in chunk['points']}
+                    records = [r for r in state['history'] if r['mode'] == 'learn' and set(r['point_ids']) <= points]
+                    answers = [{'id': r['id'], 'question_id': r['card_id'], 'html': questions[r['card_id']]['html'],
+                                'interaction': public_interaction(questions[r['card_id']]), 'content_version': topic['version'],
+                                'explanation_html': questions[r['card_id']]['explanation_html'], 'answer': r['answer'],
+                                'answer_display': display_answer(questions[r['card_id']], r['answer']),
+                                'correct': r['correct'], 'reason': r['reason'],
+                                'result': 'correct' if r['correct'] else 'incorrect', 'answered_at': r['answered_at'],
+                                'elapsed_seconds': None, 'difficulty': None} for r in records]
+                    groups.append({'id': chunk['id'], 'title': chunk['title'], 'answers': answers})
+                return {'task': self._task(course, topic_id, snapshot, self._allowed_topics(access)),
+                        'groups': groups, 'math_css': topic.get('math_css', '')}
             current_attempts = {attempt['id'] for attempt in snapshot['state']['attempts']} if snapshot['state'] else set()
             rows = [row for row in rows if row['attempt'] in current_attempts]
         task = self._task(course, topic_id, snapshot, self._allowed_topics(access))
@@ -459,7 +509,12 @@ class DashboardStore:
         with self.access_store._transaction() as con:
             if question_id:
                 snapshot = self._snapshot(con, access['learner_id'], topic_id)
-                visited = {step['question_id'] for step in snapshot['state']['steps']} if snapshot['state'] else set()
+                saved = snapshot['state']
+                if saved and saved.get('training_mode') == 'atomic_retrieval':
+                    records = saved['history'] + ([saved['active']] if saved['active'] else [])
+                    visited = {record['card_id'] for record in records}
+                else:
+                    visited = {step['question_id'] for step in saved['steps']} if saved else set()
                 if task_id and task_id.startswith('review:'):
                     row = con.execute('SELECT body FROM review_sessions WHERE id=? AND learner=? AND topic=?',
                                       (task_id[7:], access['learner_id'], topic_id)).fetchone()

@@ -13,7 +13,7 @@ from types import SimpleNamespace
 from .catalog import Catalog
 from .config import Settings
 from .guide import GuideReader
-from .service import DomainError, LearningService
+from .service import DomainError, LearningService, create_learning_service
 from .subjects import Subjects
 from scripts.verify_content import collect_questions, parse_outline, sha256
 
@@ -211,7 +211,7 @@ def backup_site(settings, destination=None):
         raise DomainError('backup_exists', '备份目标已存在。', 422)
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     if not (settings.data_dir / 'learning.sqlite3').exists():
-        LearningService(catalog.topic(catalog.default_topic_id), settings.data_dir)
+        create_learning_service(catalog.topic(catalog.default_topic_id), settings.data_dir)
     blobs = {}
     with tempfile.TemporaryDirectory(prefix='backup-', dir=settings.data_dir) as folder:
         snapshot_path = Path(folder) / 'learning.sqlite3'
@@ -374,7 +374,7 @@ def restore_site(backup, destination):
                     raise ValueError('Database topics differ from the catalog')
                 learners = [(learner_id, topic_id) for learner_id, topic_id, _ in rows if topic_id in topics]
             for learner_id, topic_id in learners:
-                LearningService(catalog.topic(topic_id), staged, learner_id=learner_id).recover_interrupted()
+                create_learning_service(catalog.topic(topic_id), staged, learner_id=learner_id).recover_interrupted()
             for topic_id, sources in manifest['sources'].items():
                 if not sources:
                     continue

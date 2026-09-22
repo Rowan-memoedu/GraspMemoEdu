@@ -45,7 +45,7 @@ class LearningService:
         self.questions = {}
         self._validate_course()
         self.practice_queue = PersistentPracticeQueue(self)
-        for module in self.course['modules']:
+        for module in self.course.get('modules', []):
             self.practice_queue.supported(module)
         with closing(self._connect()) as con:
             con.executescript('''
@@ -94,6 +94,15 @@ class LearningService:
         return self.learner_id, self.topic_id
 
     def _validate_course(self):
+        if self.course.get('training_mode') == 'atomic_retrieval':
+            from .atomic_content import validate_atomic
+            try:
+                self.questions = validate_atomic(self.course)
+            except (ValueError, TypeError, KeyError, AttributeError) as exc:
+                raise DomainError('invalid_course', '原子训练结构、记忆点或批注位置无效。', 422) from exc
+            return
+        if self.course.get('training_mode', 'paradigm') != 'paradigm':
+            raise DomainError('invalid_course', '未知的 Topic 训练模式。', 422)
         if not self.course.get('version') or not self.course.get('introduction', {}).get('html'):
             raise DomainError('invalid_course', '课程缺少版本或 Introduction。', 422)
         modules = self.course.get('modules', [])
@@ -662,3 +671,10 @@ class LearningService:
             if result != 'ok':
                 raise DomainError('backup_failed', '备份完整性校验失败。', 500)
         return path
+
+
+def create_learning_service(course, data_dir, judge=None, learner_id='local', **options):
+    if course.get('training_mode') == 'atomic_retrieval':
+        from .atomic import AtomicLearningService
+        return AtomicLearningService(course, data_dir, judge, learner_id, **options)
+    return LearningService(course, data_dir, judge, learner_id, **options)

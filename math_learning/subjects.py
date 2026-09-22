@@ -66,6 +66,11 @@ class Subjects:
                     self.explicit_guides.add(subject_id)
             for course_id in catalog.courses:
                 self.course_subjects.setdefault(course_id, 'math')
+            for topic_id, topic in getattr(catalog, 'topics', {}).items():
+                if topic.get('training_mode') == 'atomic_retrieval':
+                    actual = self.course_subjects[catalog.topic_courses[topic_id]]
+                    if actual not in ('english', 'chinese', 'biology', 'chemistry') or topic.get('subject_id') != actual:
+                        raise ValueError('Atomic topic does not match its permitted subject')
         except (ValueError, TypeError) as exc:
             raise DomainError('invalid_subjects', '学科配置中的课程、字段或指南路径不正确。', 422) from exc
 

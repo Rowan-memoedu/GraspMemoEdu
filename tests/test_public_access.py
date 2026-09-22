@@ -572,6 +572,7 @@ class PublicAccessAcceptanceTests(unittest.TestCase):
                    "/api/access/login", "/api/access/logout", "/api/state", "/api/demo-answer", "/api/guest/reset", "/api/choose", "/api/continue",
                    "/api/select", "/api/pause", "/api/submit", "/api/submissions/{submission_id}",
                    "/api/subjects", "/api/catalog", "/api/catalog/select", "/api/dashboard", "/api/profile", "/api/feedback",
+                   "/api/atomic/reviews",
                    "/api/graphs", "/api/graphs/{course_id}",
                    "/api/tasks/{task_id}/answers", "/api/guide", "/guide-assets/{relative:path}",
                    "/subject-guide-assets/{subject_id}/{relative:path}",
@@ -580,8 +581,13 @@ class PublicAccessAcceptanceTests(unittest.TestCase):
                    "/api/review/sessions/{session_id}/pause", "/api/review/sessions/{session_id}/demo-answer",
                    "/api/review/submissions/{submission_id}"}
         self.assertLessEqual({route.path for route in self.app.routes}, allowed)
+        atomic_route = next(route for route in self.app.routes if route.path == '/api/atomic/reviews')
+        self.assertEqual(atomic_route.methods, {'GET'})
         identity, _ = self._guest()
         before = self._state(identity)
+        self._assert_error(self.client.get('/api/atomic/reviews', headers=self._headers()), 401, 'identity_required')
+        self.assertEqual(self.client.get('/api/atomic/reviews', headers=self._headers(identity)).status_code, 200)
+        self.assertEqual(self.client.post('/api/atomic/reviews', json={}, headers=self._headers(identity)).status_code, 405)
         for path in ["/api/admin/accounts", "/api/unlock", "/api/reset", "/api/access/permissions",
                      "/api/graphs/admin/import", "/learning.sqlite3", "/settings.json", "/pairing.json", "/.env",
                      "/graphs/rigid-constraints.json"]:

@@ -13,7 +13,7 @@ import tempfile
 import zipfile
 
 from .config import Settings
-from .service import DomainError, LearningService
+from .service import DomainError, LearningService, create_learning_service
 from .access import AccessStore, FEATURES
 from .catalog import Catalog
 from .account_admin import AccountAdmin
@@ -26,8 +26,8 @@ def output(data):
 def make_service(settings, learner='local', topic_id=None, *, review=False):
     catalog = Catalog.load(settings)
     course = catalog.topic(topic_id or catalog.default_topic_id)
-    service = LearningService(course, settings.data_dir, learner_id=learner)
-    if review:
+    service = create_learning_service(course, settings.data_dir, learner_id=learner)
+    if review and course.get('training_mode') != 'atomic_retrieval':
         from .review import ReviewBackend
         ReviewBackend(service)
     return service
@@ -51,6 +51,14 @@ def review_status(settings, learner, topic_id):
             if row:
                 lesson = json.loads(row['body'])
                 result.update(lesson_status=lesson['status'], pause=lesson['pause'])
+                if course.get('training_mode') == 'atomic_retrieval':
+                    from .atomic_api import review_summary
+                    summary = review_summary(course, lesson)
+                    result.update(enabled=True, training_mode='atomic_retrieval', policy=lesson['policy'],
+                                  points=[{'id': point_id, 'mastered': p['mastered'], 'due_at': p['due_at'],
+                                           'memory_initialized': p['card_json'] is not None}
+                                          for point_id, p in lesson['points'].items()], **summary)
+                    return result
         if 'review_cards' not in tables:
             return result
         result['enabled'] = True
@@ -222,12 +230,13 @@ def restore_bundle(backup, destination):
     with closing(sqlite3.connect(destination / 'learning.sqlite3')) as con:
         if con.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
             raise DomainError('invalid_backup', '恢复数据库完整性检查失败。', 422)
-    service = LearningService(course, destination)
+    service = create_learning_service(course, destination)
     service.recover_interrupted()
     state = service.state()
     return {'restored_to': str(destination), 'topic_id': state['topic_id'], 'status': state['status'],
             'course_version': state['course_version'], 'revision': state['revision'],
-            'modules': state['modules'], 'pause': state['pause'], 'visited_step_count': len(state['steps'])}
+            'modules': state.get('modules', []), 'pause': state['pause'],
+            'visited_step_count': len(state.get('steps', state.get('history', [])))}
 
 
 def main():
@@ -360,15 +369,20 @@ def main():
                 output({'learners': learner_statuses(settings)})
             else:
                 state = make_service(settings, args.learner, args.topic).state()
-                output({k: state[k] for k in ['topic_id', 'learner_id', 'status', 'revision', 'pause', 'modules']})
+                fields = ['topic_id', 'learner_id', 'status', 'revision', 'pause']
+                fields += ['training_mode', 'phase', 'learned_count', 'point_count'] if state.get('training_mode') == 'atomic_retrieval' else ['modules']
+                output({k: state[k] for k in fields})
         elif args.command == 'unlock':
             state = make_service(settings, args.learner, args.topic, review=True).unlock(args.topic, args.module, args.pause_event)
             output({'status': state['status'], 'attempt_id': state['attempt_id'], 'pause': state['pause']})
         elif args.command == 'review-status':
             output(review_status(settings, args.learner, args.topic))
         elif args.command == 'review-unlock':
-            backend = make_service(settings, args.learner, args.topic, review=True).review_backend
-            output(backend.unlock_topic(pause_event_id=args.pause_event))
+            learner = make_service(settings, args.learner, args.topic, review=True)
+            if learner.course.get('training_mode') == 'atomic_retrieval':
+                output(learner.unlock(args.topic, 'atomic', args.pause_event))
+            else:
+                output(learner.review_backend.unlock_topic(pause_event_id=args.pause_event))
         elif args.command == 'backup':
             output(backup_bundle(settings, args.output))
         elif args.command == 'account-create':

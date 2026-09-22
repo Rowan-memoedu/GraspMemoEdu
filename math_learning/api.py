@@ -19,7 +19,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .config import Settings
 from .judge import ExistingJudge
-from .service import DomainError, LearningService
+from .service import DomainError, LearningService, create_learning_service
+from .atomic_content import is_atomic
+from .atomic_api import register_atomic_routes
 from .access import AccessStore
 from .catalog import Catalog
 from .dashboard import DashboardStore
@@ -113,23 +115,26 @@ class ServiceCache(dict):
         return super().__getitem__((key, self.default_topic_id) if isinstance(key, str) else key)
 
 
-def create_app(settings: Settings | None = None, service: LearningService | None = None):
+def create_app(settings: Settings | None = None, service: LearningService | None = None, *, atomic_clock=None):
     settings = settings or Settings.load()
     catalog = Catalog.load(settings, service.course if service else None)
     if service is None:
         course = catalog.topic(catalog.default_topic_id)
-        service = LearningService(course, settings.data_dir, ExistingJudge(settings.judge_project))
+        service = create_learning_service(course, settings.data_dir, ExistingJudge(settings.judge_project),
+                                          **({'clock': atomic_clock} if is_atomic(course) and atomic_clock else {}))
+    if is_atomic(service.course) and atomic_clock:
+        service.clock = atomic_clock
     session_token = secrets.token_urlsafe(32)
     # Store only a salted cryptographic hash of the remote pairing credential.
     pairing_file = settings.data_dir / 'pairing.json'
     executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='answer-judge')
     subjects = Subjects(settings, catalog)
     access_store = AccessStore(settings.data_dir, [{'id': topic['id'], 'title': topic['title']} for topic in catalog.topics.values()])
-    dashboard_store = DashboardStore(catalog, access_store, subjects)
+    dashboard_store = DashboardStore(catalog, access_store, subjects, atomic_clock=atomic_clock)
     dependency_policy = dashboard_store.dependency_policy
     learning_services = ServiceCache(catalog.default_topic_id)
     learning_services[(service.learner_id, service.topic_id)] = service
-    if service.review_backend is None:
+    if service.review_backend is None and not is_atomic(service.course):
         ReviewBackend(service)
     services_lock = threading.Lock()
     public_limits = PublicLimits()
@@ -144,9 +149,11 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         key = (learner_id, topic_id)
         with services_lock:
             if key not in learning_services:
-                learning_services[key] = LearningService(
-                    catalog.topic(topic_id), settings.data_dir, service.judge, learner_id=learner_id)
-                ReviewBackend(learning_services[key])
+                learning_services[key] = create_learning_service(
+                    catalog.topic(topic_id), settings.data_dir, service.judge, learner_id=learner_id,
+                    **({'clock': atomic_clock} if is_atomic(catalog.topic(topic_id)) and atomic_clock else {}))
+                if not is_atomic(learning_services[key].course):
+                    ReviewBackend(learning_services[key])
             return learning_services[key]
 
     def requested_topic(request):
@@ -171,12 +178,23 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                                        (access['learner_id'], topic_id)).fetchone()
             if not previous:
                 dependency_policy.require(access, topic_id)
-        return access, service_for(access['learner_id'], topic_id)
+        learner = service_for(access['learner_id'], topic_id)
+        if is_atomic(learner.course) and path.startswith('/api/review/'):
+            raise DomainError('wrong_training_mode', '原子训练请使用记忆点复习页面。', 422)
+        return access, learner
 
     def public_state(state, access):
         state['access'] = access
         features = set(access['features'])
         state['dependency_ready'] = dependency_policy.is_ready(access, state['topic_id'])
+        if state.get('training_mode') == 'atomic_retrieval':
+            if 'review_history' not in features:
+                state['history'] = []
+                if state['phase'] != 'introduction':
+                    state['introduction'] = None
+            state['can_learn'] = 'learn' in features and state['dependency_ready']
+            state['can_submit'] = 'submit_answer' in features and state['dependency_ready']
+            return state
         action_feature = {'mastered': 'learn', 'unmastered': 'learn', 'continue': 'learn', 'submit': 'submit_answer'}
         if 'review_history' not in features:
             state['steps'] = [step for step in state['steps'] if step['id'] == state['active_step_id']]
@@ -204,8 +222,9 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         return result
 
     def outstanding_count(con):
+        tables = {row[0] for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         return sum(con.execute(f"SELECT COUNT(*) FROM {table} WHERE status IN ('pending','running')").fetchone()[0]
-                   for table in ('submissions', 'review_submissions'))
+                   for table in ('submissions', 'review_submissions') if table in tables)
 
     def schedule(learner, submission_id, review=False):
         # Called under admission_lock. A transport retry never adds another queue item.
@@ -248,7 +267,8 @@ def create_app(settings: Settings | None = None, service: LearningService | None
             if topic_id in catalog.topics:
                 recovered = service_for(learner, topic_id)
                 recovered.recover_interrupted()
-                recovered.review_backend.recover_interrupted()
+                if recovered.review_backend is not None:
+                    recovered.review_backend.recover_interrupted()
         yield
         with admission_lock:
             executor_stopping.set()
@@ -326,7 +346,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
             return response
         public_paths = {'/api/health', '/api/access', '/api/access/guest', '/api/access/login', '/api/access/logout',
                         '/api/state', '/api/demo-answer', '/api/guest/reset', '/api/choose', '/api/continue', '/api/select', '/api/pause', '/api/submit',
-                        '/api/subjects', '/api/catalog', '/api/catalog/select', '/api/dashboard', '/api/profile', '/api/feedback', '/api/guide'}
+                        '/api/subjects', '/api/catalog', '/api/catalog/select', '/api/dashboard', '/api/profile', '/api/feedback', '/api/guide', '/api/atomic/reviews'}
         task_answers_path = path.startswith('/api/tasks/') and path.endswith('/answers') and path.count('/') == 4
         review_feature = review_route_feature(path, request.method)
         review_path = review_feature is not None
@@ -535,6 +555,12 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         if access['role'] != 'guest':
             raise DomainError('feature_forbidden', '体验专用浏览版仅供游客使用。', 403)
         state = learner.state()
+        if is_atomic(learner.course):
+            current = state['current']
+            if not current or state['phase'] != 'answer' or state['pause'] or state['pending_submission_id']:
+                raise DomainError('demo_answer_unavailable', '当前页面没有可作答的题目。', 409)
+            return {'step_id': current['id'], 'question_id': current['card_id'],
+                    'answer': interaction_demo_answer(learner.questions[current['card_id']])}
         step = next((item for item in state['steps'] if item['id'] == state['current_step_id']), None)
         if (state['status'] != 'in_progress' or state['pending_submission_id'] or not step
                 or step['id'] != state['active_step_id'] or 'submit' not in step['actions']):
@@ -598,6 +624,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         result = learner.submission(submission_id)
         return public_submission(result, access, learner)
 
+    register_atomic_routes(app, catalog, access_store, subjects, dependency_policy, clock=atomic_clock)
     register_guide_routes(app, settings, access_store, subjects)
     register_guest_reset_routes(app, identity, public_state, Action)
     register_review_routes(app, identity, admission_lock, public_limits, schedule, outstanding_count, dependency_policy)

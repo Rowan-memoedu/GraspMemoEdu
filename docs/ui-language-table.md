@@ -2,7 +2,7 @@
 
 本表从当前界面词库自动生成。修改以词库为准，随后重新生成并检查本表。术语约定见 [界面语言规范](ui-language.md)。
 
-共 448 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
+共 476 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
 
 不包括作者课程正文、题目、答案、解析或用户输入。首页的学科双语副标题按约定保留。
 
@@ -248,6 +248,34 @@
 
 | English | 中文 |
 |---|---|
+| Atomic retrieval training | 原子化提取训练 |
+| Review | 复习 |
+| Your answer | 你的答案 |
+| Submit answer | 提交答案 |
+| Checking answer… | 正在判题… |
+| Correct | 回答正确 |
+| Incorrect | 回答错误 |
+| Continue | 继续 |
+| Related statements in the introduction | 指导中的相关陈述 |
+| Start flashcards | 开始原子卡训练 |
+| The introduction unlocks after you complete this topic. | 完成整个 Topic 后可再次查看指导。 |
+| Flashcard {number} | 原子卡 {number} |
+| Mastered | 已掌握 |
+| Not mastered | 未掌握 |
+| {done} / {total} memory points mastered | 已掌握 {done} / {total} 个记忆点 |
+| Return to current training | 返回当前训练 |
+| Please confirm you understand the explanation. Once training starts, you cannot freely return to it. | 请确认已理解讲解内容，开始训练后不得随意返回查看 |
+| Understood, start training | 已理解，开始训练 |
+| Initial learning is complete. Due flashcards will appear on the review page. | 本 Topic 的初次学习已完成。到期的原子卡将出现在复习页面。 |
+| No flashcard is available yet. Cards from the same chunk are spaced at least 3 minutes apart. | 暂时没有可推送的卡片。同一组块的卡片至少间隔 3 分钟。 |
+| Next available: {time} | 下次可训练时间：{time} |
+| Check due flashcards | 检查到期卡片 |
+| Pause this topic | 暂停这个 Topic |
+| This topic is paused. Contact your administrator to unlock it. | 本 Topic 已暂停，请联系管理者解锁。 |
+| {count} memory points due | {count} 个记忆点到期 |
+| Start review | 开始复习 |
+| Resume review | 继续复习 |
+| No atomic flashcards are due. | 暂无到期的原子卡。 |
 | Diagnostic | 诊断测评 |
 | Supplemental diagnostic | 补充诊断测评 |
 | Assessment | 测评 |
