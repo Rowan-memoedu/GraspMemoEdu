@@ -1,10 +1,10 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=efb88fa48288272a";
-import { createReviewView } from "./review.js?v=efb88fa48288272a";
-import { renderCourseGraph } from "./course-graph.js?v=efb88fa48288272a";
-import {questionInput} from './question-input.js?v=efb88fa48288272a';
-import {reportableContent, installContentReporting} from './content-report.js?v=efb88fa48288272a';
-import {createCatalogPicker} from './catalog-picker.js?v=efb88fa48288272a';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=efb88fa48288272a";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=efb6b9f740ab2e5d";
+import { createReviewView } from "./review.js?v=efb6b9f740ab2e5d";
+import { renderCourseGraph } from "./course-graph.js?v=efb6b9f740ab2e5d";
+import {questionInput} from './question-input.js?v=efb6b9f740ab2e5d';
+import {reportableContent, installContentReporting} from './content-report.js?v=efb6b9f740ab2e5d';
+import {createCatalogPicker} from './catalog-picker.js?v=efb6b9f740ab2e5d';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=efb6b9f740ab2e5d";
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {

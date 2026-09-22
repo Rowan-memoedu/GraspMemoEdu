@@ -1,5 +1,5 @@
-import {t, translateMessage} from './i18n.js?v=efb88fa48288272a';
-import {subjectLabel} from './subjects.js?v=efb88fa48288272a';
+import {t, translateMessage} from './i18n.js?v=efb6b9f740ab2e5d';
+import {subjectLabel, subjectPalette} from './subjects.js?v=efb6b9f740ab2e5d';
 
 const node = (tag, cls, text) => {
   const item = document.createElement(tag); item.className = cls;
@@ -17,6 +17,9 @@ export function createCatalogPicker({button, panel, readSubjects, readCatalog, s
   }
   function render(error = null, loading = false) {
     button.disabled = saving;
+    const subjectId = browsing || getSubject() || 'math';
+    panel.dataset.subjectId = subjectId;
+    for (const [name, value] of Object.entries(subjectPalette(subjectId))) panel.style.setProperty(name, value);
     panel.replaceChildren(); panel.setAttribute('aria-busy', String(loading || saving));
     const container = node('div', 'catalogPanelContent'), navigation = node('nav', 'catalogSubjects');
     navigation.setAttribute('aria-label', t('nav.subjects'));
@@ -39,6 +42,7 @@ export function createCatalogPicker({button, panel, readSubjects, readCatalog, s
       const grid = node('div', 'catalogCourseGrid');
       for (const course of catalog.courses) {
         const card = node('button', 'catalogCourse'); card.type = 'button'; card.dataset.courseId = course.id;
+        card.setAttribute('aria-pressed', String(course.id === catalog.selected_course_id));
         card.disabled = saving || course.available === false;
         card.append(node('strong', '', course.title));
         if (course.description) card.append(node('span', '', course.description));

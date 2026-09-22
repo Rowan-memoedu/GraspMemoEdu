@@ -1,6 +1,6 @@
-import { t, translateMessage, learningTitle } from './i18n.js?v=efb88fa48288272a';
-import {questionInput, answerReady} from './question-input.js?v=efb88fa48288272a';
-import {reportableContent} from './content-report.js?v=efb88fa48288272a';
+import { t, translateMessage, learningTitle } from './i18n.js?v=efb6b9f740ab2e5d';
+import {questionInput, answerReady} from './question-input.js?v=efb6b9f740ab2e5d';
+import {reportableContent} from './content-report.js?v=efb6b9f740ab2e5d';
 
 const node = (tag, cls = '', text) => {
   const item = document.createElement(tag); item.className = cls;
