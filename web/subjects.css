@@ -17,10 +17,11 @@ body.platformTheme { background: var(--platform-paper); }
 .platformTheme .portalLogo span { display: inline; }
 .platformTheme #subjectContext { margin: 0 22px 0 -8px; padding: 4px 0 4px 14px; border-left: 1px solid var(--platform-rule); color: var(--subject-accent); font: 15px/1.3 var(--platform-serif); text-decoration: none; white-space: nowrap; }
 .platformTheme #subjectContext[hidden] { display: none; }
-.platformTheme .mainNavigation a { margin-right: 15px; padding-inline: 9px; font-size: 13px; color: var(--platform-muted); }
+.platformTheme .mainNavigation :is(a, .catalogToggle) { margin-right: 15px; padding-inline: 9px; font-size: 13px; color: var(--platform-muted); }
 .platformTheme .mainNavigation a:hover,
 .platformTheme .mainNavigation a.active { color: var(--subject-accent); }
 .platformTheme .mainNavigation a.active { border-bottom-color: var(--subject-accent); }
+.platformTheme .mainNavigation .catalogToggle { color: var(--platform-ink); }
 .platformTheme .userAvatar { color: var(--subject-accent); background: #eee9df; }
 .platformTheme .guestDemoOption { color: #000; }
 .subjectHome { max-width: 1010px; margin: 0 auto; padding: 48px 0 24px; color: var(--platform-ink); }
@@ -63,7 +64,7 @@ body.platformTheme { background: var(--platform-paper); }
 @media (max-width: 960px) {
   .platformTheme .portalLogo { margin-right: 18px; font-size: 17px; }
   .platformTheme #subjectContext { margin-right: 12px; padding-left: 10px; font-size: 14px; }
-  .platformTheme .mainNavigation a { margin-right: 4px; padding-inline: 8px; }
+  .platformTheme .mainNavigation :is(a, .catalogToggle) { margin-right: 4px; padding-inline: 8px; }
 }
 @media (max-width: 700px) {
   .subjectHome { padding-top: 30px; }
@@ -71,20 +72,20 @@ body.platformTheme { background: var(--platform-paper); }
   .subjectGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
   .subjectCard { padding: 23px 20px 20px; min-height: 245px; }
   .platformTheme .portalLogo { margin-right: 20px; }
-  .platformTheme .mainNavigation a { margin-right: 12px; padding-inline: 10px; }
+  .platformTheme .mainNavigation :is(a, .catalogToggle) { margin-right: 12px; padding-inline: 10px; }
 }
 @media (max-width: 760px) {
   .platformTheme .topBarContainer { position: relative; }
   .platformTheme .guestDemoOption { position: absolute; top: 64px; right: 12px; margin: 0; gap: 4px; font-size: 10px; }
   .platformTheme .guestDemoOption input { width: 12px; height: 12px; }
   .platformTheme .topBarContainer:has(.guestDemoOption:not([hidden])) .mainNavigation { justify-content: flex-start; padding-right: 112px; }
-  .platformTheme .topBarContainer:has(.guestDemoOption:not([hidden])) .mainNavigation a { margin-right: 2px; padding-inline: 6px; font-size: 11px; }
+  .platformTheme .topBarContainer:has(.guestDemoOption:not([hidden])) .mainNavigation :is(a, .catalogToggle) { margin-right: 2px; padding-inline: 6px; font-size: 11px; }
 }
 @media (max-width: 480px) {
   .platformTheme .portalLogo { font-size: 17px; margin-right: 13px; gap: 6px; }
   .platformTheme .portalLogo img { width: 27px; height: 27px; }
   .platformTheme #subjectContext { margin: 0 8px 0 0; padding-left: 10px; font-size: 12px; max-width: 80px; overflow: hidden; text-overflow: ellipsis; }
-  .platformTheme .mainNavigation a { margin-right: 8px; padding-inline: 10px; font-size: 12px; }
+  .platformTheme .mainNavigation :is(a, .catalogToggle) { margin-right: 8px; padding-inline: 10px; font-size: 12px; }
   .subjectHome { padding: 20px 0 0; }
   .subjectBrand { font-size: 35px; letter-spacing: -1.4px; }
   .subjectWelcome { font-size: 14px; padding: 0 14px; }
@@ -135,7 +136,7 @@ body { padding-top: var(--site-header-height); }
   .topBarContainer .userMenuHost { grid-column: 3; grid-row: 1; margin-left: 0; height: 50px; }
   .topBarContainer .userAvatar { width: 34px; height: 34px; }
   .topBarContainer .mainNavigation { grid-column: 2 / 4; grid-row: 2; width: 100%; height: 46px; justify-content: flex-end; min-width: 0; padding: 0; }
-  .topBarContainer .mainNavigation a { padding-inline: 7px; margin-right: 5px; font-size: 12px; }
+  .topBarContainer .mainNavigation :is(a, .catalogToggle) { padding-inline: 7px; margin-right: 5px; font-size: 12px; }
   .topBarContainer .guestDemoOption { position: static; grid-column: 1 / 4; grid-row: 3; justify-self: end; margin: 0; font-size: 12px; gap: 7px; }
   .topBarContainer .guestDemoOption input { width: 15px; height: 15px; }
   .topBarContainer:has(.portalLogo[hidden]) .mainNavigation { grid-column: 1 / 4; justify-content: flex-start; }
@@ -150,6 +151,6 @@ body { padding-top: var(--site-header-height); }
   .topBarContainer { column-gap: 6px; padding-inline: 10px; }
   .topBarContainer > .portalLogo { gap: 5px; font-size: 11px; }
   .topBarContainer > .portalLogo img { width: 26px; height: 26px; }
-  .topBarContainer .mainNavigation a { font-size: 11px; padding-inline: 5px; margin-right: 2px; }
+  .topBarContainer .mainNavigation :is(a, .catalogToggle) { font-size: 11px; padding-inline: 5px; margin-right: 2px; }
   .topBarContainer .platformHomeLink { font-size: 19px; }
 }

@@ -1,11 +1,11 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=d0d0539aa27e37cc";
-import { createReviewView } from "./review.js?v=d0d0539aa27e37cc";
-import { renderCourseGraph } from "./course-graph.js?v=d0d0539aa27e37cc";
-import {questionInput} from './question-input.js?v=d0d0539aa27e37cc';
-import {reportableContent, installContentReporting} from './content-report.js?v=d0d0539aa27e37cc';
-import {createCatalogPicker} from './catalog-picker.js?v=d0d0539aa27e37cc';
-import {createAtomicView} from './atomic.js?v=d0d0539aa27e37cc';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=d0d0539aa27e37cc";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=969d8540bd10e3fb";
+import { createReviewView } from "./review.js?v=969d8540bd10e3fb";
+import { renderCourseGraph } from "./course-graph.js?v=969d8540bd10e3fb";
+import {questionInput} from './question-input.js?v=969d8540bd10e3fb';
+import {reportableContent, installContentReporting} from './content-report.js?v=969d8540bd10e3fb';
+import {createCatalogPicker} from './catalog-picker.js?v=969d8540bd10e3fb';
+import {createAtomicView} from './atomic.js?v=969d8540bd10e3fb';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=969d8540bd10e3fb";
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -134,9 +134,9 @@ export function initPortal(bridge) {
     context.href = subject ? subjectHref(subject.id) : "#/";
     for (const item of document.querySelectorAll(".mainNavigation [data-navigation]")) {
       const section = item.dataset.navigation;
-      item.hidden = section === 'subjects' ? Boolean(subject) : !subject;
+      item.hidden = !subject;
       if (section === 'reviews') item.hidden = !['english', 'chinese', 'biology', 'chemistry'].includes(subject?.id);
-      item.href = section === "subjects" ? "#/" : subjectHref(subject?.id || "math", `/${section}`);
+      item.href = subjectHref(subject?.id || "math", `/${section}`);
     }
     $("topicHomeLink").href = learnHref();
   }

@@ -5,7 +5,7 @@ body { padding-top: 50px; }
 .portalLogo { display: inline-flex; align-items: center; gap: 8px; color: var(--ma-navy); text-decoration: none; font-size: 12px; font-weight: 700; margin-right: 54px; white-space: nowrap; }
 .portalLogo img { display: block; }
 .mainNavigation { height: 100%; display: flex; align-items: stretch; }
-.mainNavigation a { display: flex; align-items: center; padding: 0 10px; margin-right: 40px; border-bottom: 3px solid transparent; padding-top: 3px; color: #a4a4a4; text-decoration: none; font-size: 14px; }
+.mainNavigation :is(a, .catalogToggle) { display: flex; align-items: center; padding: 0 10px; margin-right: 40px; border-bottom: 3px solid transparent; padding-top: 3px; color: #a4a4a4; text-decoration: none; font-size: 14px; }
 .mainNavigation a.active { border-bottom-color: var(--link-color); color: var(--link-color); }
 .mainNavigation a:hover { color: var(--link-color); }
 .userMenuHost { position: relative; margin-left: auto; height: 50px; display: flex; align-items: center; }
@@ -197,7 +197,7 @@ body.portalModalOpen { overflow: hidden; }
 @media (max-width: 1120px) {
   .dashboardLayout { grid-template-columns: minmax(240px, 32%) minmax(0, 1fr); gap: 28px; }
   .portalLogo { margin-right: 30px; }
-  .mainNavigation a { margin-right: 25px; }
+  .mainNavigation :is(a, .catalogToggle) { margin-right: 25px; }
 }
 @media (max-width: 1000px) {
   .topicPage .historySidebar { top: 50px; max-height: calc(100dvh - 50px); }
@@ -222,7 +222,7 @@ body.portalModalOpen { overflow: hidden; }
   .estimatedCompletion span + span { margin-top: 0; }
   .coursePopover { top: 76px; }
   .courseGrid { grid-template-columns: 1fr; }
-  .mainNavigation a { margin-right: 8px; padding-inline: 9px; font-size: 12px; }
+  .mainNavigation :is(a, .catalogToggle) { margin-right: 8px; padding-inline: 9px; font-size: 12px; }
   .portalLogo { margin-right: 18px; }
   .portalLogo span { display: none; }
   .portalShell { margin-top: 24px; }
@@ -230,7 +230,7 @@ body.portalModalOpen { overflow: hidden; }
 @media (max-width: 420px) {
   .topBarContainer { padding-inline: 12px; }
   .portalLogo { margin-right: 10px; }
-  .mainNavigation a { padding-inline: 7px; margin-right: 5px; font-size: 11px; }
+  .mainNavigation :is(a, .catalogToggle) { padding-inline: 7px; margin-right: 5px; font-size: 11px; }
   .portalShell { padding-inline: 14px; }
   .userAvatar { width: 34px; height: 34px; font-size: 13px; }
   .sequenceUnits, .progressDetails { max-width: calc(100vw - 28px); }
@@ -242,7 +242,7 @@ body.portalModalOpen { overflow: hidden; }
   .topicBreadcrumb { font-size: 12px; }
 }
 @media print { .topRibbon, .topicBreadcrumb, .portalStart, .answerHelp, .feedbackDialog, .graphDialog { display: none !important; } body { padding-top: 0; } }
-.catalogToggle { border: 0; background: transparent; color: inherit; font: inherit; padding: 8px 12px; cursor: pointer; }
+.catalogToggle { border: 0; border-bottom: 3px solid transparent; background: transparent; font-family: inherit; font-weight: inherit; line-height: inherit; cursor: pointer; }
 .atomicLayout { display: grid; grid-template-columns: 220px minmax(0, 760px); gap: 36px; margin: 25px auto; }
 .atomicHistory { border-right: 1px solid #ddd; padding-right: 20px; }
 .atomicHistory h2 { font-size: 17px; }
@@ -271,7 +271,7 @@ body.portalModalOpen { overflow: hidden; }
   .atomicArrow { margin-top: 25px; }
   .atomicChunkNote { grid-column: 1 / -1; margin: 0 0 0 32px; }
 }
-.catalogToggle[aria-expanded="true"] { background: var(--soft-blue); color: var(--ma-navy); border-radius: 4px; }
+.mainNavigation .catalogToggle { color: #222; }
 .catalogPanel { position: absolute; left: 0; right: 0; top: 100%; background: #fff; color: #222; border-top: 3px solid var(--link-color); z-index: 50; box-shadow: 0 8px 20px #0003; max-height: 80vh; overflow-y: auto; }
 .catalogPanelContent { max-width: 1140px; margin: auto; padding: 28px 24px; display: grid; grid-template-columns: 180px minmax(0,1fr); gap: 32px; }
 .catalogSubjects { display: flex; flex-direction: column; gap: 6px; }
