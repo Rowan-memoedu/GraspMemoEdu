@@ -15,6 +15,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from .public_limits import PublicLimitError
 from .service import DomainError, now
 from .dependencies import DependencyPolicy
+from .question_types import public_interaction, display_answer
+from .content_reports import validate_correction
 
 
 class DashboardStore:
@@ -34,6 +36,10 @@ class DashboardStore:
                     task_id TEXT, question_id TEXT, created_at TEXT NOT NULL);
                 CREATE INDEX IF NOT EXISTS feedback_learner_created
                     ON feedback(learner_id, created_at);
+                CREATE TABLE IF NOT EXISTS feedback_corrections (
+                    feedback_id TEXT PRIMARY KEY REFERENCES feedback(id),
+                    content_block_id TEXT NOT NULL, content_version TEXT NOT NULL,
+                    body TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS learner_subject_preferences (
                     learner_id TEXT NOT NULL REFERENCES access_principals(learner_id),
                     subject_id TEXT NOT NULL, selected_course_id TEXT NOT NULL, updated_at TEXT NOT NULL,
@@ -385,6 +391,8 @@ class DashboardStore:
                 # Explanation is available only with that learner's actual
                 # judged answer. Reference answers and locked questions never leave.
                 answers.append({'id': row['id'], 'question_id': row['question'], 'html': question['html'],
+                                'interaction': public_interaction(question), 'content_version': topic['version'],
+                                'answer_display': display_answer(question, row['answer']), 'reason': row['reason'],
                                 'explanation_html': question['explanation_html'], 'answer': row['answer'],
                                 'correct': bool(row['correct']), 'result': 'correct' if row['correct'] else 'incorrect',
                                 'answered_at': row['created_at'],
@@ -408,6 +416,8 @@ class DashboardStore:
         module = next(item for item in topic['modules'] if item['id'] == row['module'])
         questions = {question['id']: question for question in module['practices']}
         answers = [{'id': answer['id'], 'question_id': answer['question'], 'html': questions[answer['question']]['html'],
+                    'interaction': public_interaction(questions[answer['question']]), 'content_version': topic['version'],
+                    'answer_display': display_answer(questions[answer['question']], answer['answer']), 'reason': answer['reason'],
                     'explanation_html': questions[answer['question']]['explanation_html'], 'answer': answer['answer'],
                     'correct': bool(answer['correct']), 'result': 'correct' if answer['correct'] else 'incorrect',
                     'answered_at': answer['created_at'], 'difficulty': None,
@@ -438,6 +448,11 @@ class DashboardStore:
             self._course(access, course_id)
         if question_id and not topic_id:
             raise DomainError('invalid_feedback_context', '题目反馈需要指定对应 Topic。', 422)
+        correction = values.get('correction')
+        if correction:
+            if not topic_id:
+                raise DomainError('invalid_feedback_context', '文字纠错需要指定对应 Topic。', 422)
+            validate_correction(self.catalog.topic(topic_id), question_id, correction)
         created_at = now()
         cutoff = (datetime.fromisoformat(created_at) - timedelta(seconds=60)).isoformat()
         feedback_id = str(uuid.uuid4())
@@ -460,4 +475,8 @@ class DashboardStore:
                 raise PublicLimitError('feedback_rate_limited', '反馈过于频繁，请稍后重试。', retry)
             con.execute('INSERT INTO feedback VALUES (?,?,?,?,?,?,?,?)',
                         (feedback_id, access['learner_id'], message, course_id, topic_id, task_id, question_id, created_at))
+            if correction:
+                con.execute('INSERT INTO feedback_corrections VALUES (?,?,?,?)',
+                            (feedback_id, correction['content_block_id'], correction['content_version'],
+                             json.dumps(correction, ensure_ascii=False)))
         return {'id': feedback_id, 'status': 'saved', 'created_at': created_at}

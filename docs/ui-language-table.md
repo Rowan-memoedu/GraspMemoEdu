@@ -2,7 +2,7 @@
 
 本表从当前界面词库自动生成。修改以词库为准，随后重新生成并检查本表。术语约定见 [界面语言规范](ui-language.md)。
 
-共 417 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
+共 448 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
 
 不包括作者课程正文、题目、答案、解析或用户输入。首页的学科双语副标题按约定保留。
 
@@ -89,6 +89,33 @@
 
 | English | 中文 |
 |---|---|
+| True | 正确 |
+| False | 错误 |
+| Left options | 左侧选项 |
+| Right options | 右侧选项 |
+| Blank {number} | 第 {number} 空 |
+| Slot {number} | 位置 {number} |
+| {side}, slot {number} | {side}，位置 {number} |
+| Drag an option to a slot, or select an option then a slot. Click a filled slot to return it to the bank. | 拖动选项到对应框内，也可先点选项再点框。点击已填框可移回候选区。 |
+| Exact recall: enter the exact answer. Only whitespace and permitted formatting differences are ignored. | 复刻：请填写准确答案，仅忽略空白和允许的格式差异。 |
+| Semantic recall: express the meaning in your own words. Ctrl + Enter to submit. | 复现：按含义判断，可用自己的话表述。Ctrl + Enter 提交。 |
+| Complete every item before submitting. The question is correct only when every item is correct. | 完成所有小项后提交；整题全部正确才计为正确。 |
+| Move {side} item {number} up | 将{side}第 {number} 项上移 |
+| Move {side} item {number} down | 将{side}第 {number} 项下移 |
+| Moved to slot {number} | 已移动到位置 {number} |
+| Report selected text | 报告选中文字 |
+| Report a text error | 报告文字错误 |
+| Original text | 原文 |
+| Replacement preview | 修改后预览 |
+| Suggested replacement (leave empty to delete the selection) | 建议改为（留空表示删除选中文字） |
+| Comment (optional) | 备注（可选） |
+| Catalog | 目录 |
+| Loading courses… | 正在读取课程… |
+| No courses have been published for this subject yet. | 该学科暂无已发布课程。 |
+| Unavailable for this account | 当前账号无权限 |
+| Selected course | 已选课程 |
+| Unsubmitted answers are kept in this browser when you switch courses. | 切换课程会保留当前浏览器中的未提交答案。 |
+| Course selection was not confirmed. Please try again. | 课程选择尚未确认，请重试。 |
 | The service is temporarily unavailable. Please try again later. | 服务暂不可用，请稍后重试。 |
 | Your sign-in status or learning page has changed. Please try again. | 登录状态或学习页面已更新，请重试。 |
 | Learning content is temporarily unavailable. Please try again later. | 服务暂时无法返回学习内容，请稍后重试。 |
@@ -436,6 +463,10 @@
 | There are no completed answers for this lesson under this identity. | 此身份尚无该任务的已完成作答记录。 |
 | Your display name must contain 1–100 visible characters. | 显示名称需要 1 至 100 个可显示字符。 |
 | Please enter your feedback. | 请填写反馈内容。 |
+| Complete every item and use each matching option only once. | 请完成全部作答，且不要重复使用配对选项。 |
+| The selection does not match the text. Please select it again. | 所选文字与正文不一致，请重新选择。 |
+| The content version has changed. Refresh and select the text again. | 正文版本已变化，请刷新后重新选择文字。 |
+| A text correction must identify its topic. | 文字纠错需要指定对应 主题。 |
 | This feature is not enabled for your account. | 当前账号没有使用此功能的权限。 |
 | An account is required to use this feature. | 该功能需注册账号才能使用 |
 | An account is required to use this feature. | 该功能需注册账号才能使用。 |

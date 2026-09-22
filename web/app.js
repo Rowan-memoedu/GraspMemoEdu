@@ -1,4 +1,6 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=ed1e66598212b7cf";
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=efb88fa48288272a";
+import {questionInput, answerReady} from './question-input.js?v=efb88fa48288272a';
+import {reportableContent} from './content-report.js?v=efb88fa48288272a';
 
 applyStaticTranslations();
 
@@ -801,10 +803,11 @@ async function submitAnswer(event) {
   if (!allowFeature("submit_answer")) return;
   const input = $("answerInput");
   const answer = input.value.trim();
-  if (!answer) {
+  if (!answerReady(input)) {
     $("answerError").hidden = false;
     input.setAttribute("aria-invalid", "true");
-    input.focus();
+    if (input.questionControl) input.questionControl.focus();
+    else input.focus();
     return;
   }
   saveDraft(step, input.value);
@@ -1106,10 +1109,18 @@ function renderStep(step) {
   const module = state.modules.find((item) => item.id === step.module_id);
   if (step.kind === "practice" && module) heading.append(el("span", "stepCounter", module.attempt_id && module.attempt_id !== step.attempt_id ? t("历史作答") : t("reader.practiceCompleted", { completed: module.practice_answered_count, total: module.practice_target_count })));
   else if (step.kind === "introduction") heading.append(el("span", "stepCounter", state.introduction_read ? t("已读") : t("阅读")));
-  target.append(heading, content(step.html));
+  const stem = content(step.html);
+  const reportContext = {topic_id: state.topic_id, ...(step.question_id ? {question_id: step.question_id} : {})};
+  reportableContent(stem, reportContext, step.question_id ? `question:${step.question_id}` : 'introduction', state.course_version);
+  const actions = Array.isArray(step.actions) ? step.actions : [];
+  target.append(heading, stem);
+  if (step.interaction && step.interaction.type !== 'text' && !actions.includes('submit')) {
+    target.append(questionInput(step.interaction, {id: 'submittedInteraction', stem,
+      value: step.answer || (step.id === state.active_step_id ? draftValue(step) : ''), disabled: true}).element);
+  }
   if (step.answer !== null && step.answer !== undefined && step.answer !== "") {
     const answer = el("details", "submittedAnswer");
-    answer.append(el("summary", "", t("查看已提交答案")), el("pre", "", step.answer));
+    answer.append(el("summary", "", t("查看已提交答案")), el("pre", "", step.answer_display ?? step.answer));
     target.append(answer);
   }
   if (step.feedback) {
@@ -1123,9 +1134,9 @@ function renderStep(step) {
     target.append(feedback);
   }
   if (step.explanation_html) {
-    target.append(el("h3", "exampleExplanationHeader", t("Explanation · 解析")), content(step.explanation_html));
+    const explanation = reportableContent(content(step.explanation_html), reportContext, `explanation:${step.question_id}`, state.course_version);
+    target.append(el("h3", "exampleExplanationHeader", t("Explanation · 解析")), explanation);
   }
-  const actions = Array.isArray(step.actions) ? step.actions : [];
   if (state.dependency_ready === false && !actions.length) target.append(el("p", "featureNotice", translateMessage("请先完成前置知识的学习和待复习内容，并解除前置知识的暂停状态。")));
   if (state.status === "in_progress" && step.id === state.active_step_id) {
     if (!can("learn")) target.append(el("p", "featureNotice", featureMessage("learn")));
@@ -1145,7 +1156,7 @@ function renderStep(step) {
     area.append(el("p", "choiceNotice", t("已选择未掌握。点击下一页，开始阅读相关讲解。")));
     target.append(area);
   }
-  if (actions.includes("submit")) target.append(answerForm(step));
+  if (actions.includes("submit")) target.append(answerForm(step, stem));
   if (state.pending_submission_id && step.id === state.active_step_id) {
     const wait = el("div", "waiting");
     wait.setAttribute("role", "status");
@@ -1198,13 +1209,16 @@ function renderStepNavigation(target, step, actions) {
   if (footer.childElementCount) target.append(footer);
 }
 
-function answerForm(step) {
+function answerForm(step, stem) {
   const form = el("form", "learningActions answerForm");
   form.id = "answerForm";
   form.addEventListener("submit", submitAnswer);
-  const label = el("label", "", t("你的答案"));
+  const structured = step.interaction && step.interaction.type !== 'text';
+  const control = structured ? questionInput(step.interaction, {id: 'answerInput', stem,
+    value: draftValue(step), formId: 'answerForm'}) : null;
+  const label = el(structured ? 'p' : 'label', "", t("你的答案"));
   label.htmlFor = "answerInput";
-  const input = el("textarea", "answerInput");
+  const input = control?.input || el("textarea", "answerInput");
   input.id = "answerInput";
   input.name = "answer";
   input.rows = 3;
@@ -1217,7 +1231,7 @@ function answerForm(step) {
     saveDraft(step, input.value);
     $("answerError").hidden = true;
     input.removeAttribute("aria-invalid");
-    $("submitButton").disabled = !input.value.trim() || actionBusy || pauseBusy || !can("submit_answer");
+    $("submitButton").disabled = !answerReady(input) || actionBusy || pauseBusy || !can("submit_answer");
     if (submissionError && input.value.trim() !== submissionError.answer) $("submitButton").textContent = t("Submit");
     else if (submissionError) $("submitButton").textContent = t("重试判题");
   });
@@ -1227,19 +1241,22 @@ function answerForm(step) {
       form.requestSubmit();
     }
   });
-  const error = el("p", "inputError", t("请先填写答案。"));
+  const error = el("p", "inputError", t(structured ? 'question.completeHint' : '请先填写答案。'));
   error.id = "answerError";
   error.hidden = true;
   const bottom = el("div", "answerBottom");
-  const hint = el("p", "inputHint", t("只要描述清楚正确答案的形式即可，表达方式不限，夹杂口语也没关系。Ctrl + Enter 提交。"));
+  const hint = el("p", "inputHint", t(step.interaction?.grading === 'exact' ? 'question.exactHint'
+    : step.interaction?.grading === 'semantic' ? 'question.semanticHint'
+    : structured && step.interaction.type !== 'fill_blank' ? 'question.completeHint'
+    : "只要描述清楚正确答案的形式即可，表达方式不限，夹杂口语也没关系。Ctrl + Enter 提交。"));
   hint.id = "answerHint";
   const submit = el("button", "primaryButton", submissionError && input.value.trim() === submissionError.answer ? t("重试判题") : t("Submit"));
   submit.id = "submitButton";
   submit.type = "submit";
   submit.setAttribute("form", "answerForm");
-  submit.disabled = !input.value.trim();
+  submit.disabled = !answerReady(input);
   bottom.append(hint, submit);
-  form.append(label, input, error);
+  form.append(label, control?.element || input, error);
   if (submissionError && submissionError.step_id === step.id) {
     const failed = el("div", "feedback incorrect");
     failed.setAttribute("role", "alert");
@@ -1291,11 +1308,13 @@ function renderBusy() {
   syncAnswerClock();
   const disabled = actionBusy || pauseBusy || identityBusy;
   for (const element of $("stepCard").querySelectorAll("button, textarea")) {
+    if (element.closest('.questionInteraction')) continue;
     const feature = element.closest(".historyPagination") ? "review_history" : element.id === "submitButton" || element.closest(".answerForm") ? "submit_answer" : "learn";
     element.disabled = disabled || element.dataset.navAvailable === "false" || !can(feature);
     if (!can(feature)) element.title = featureMessage(feature);
   }
-  if ($("submitButton") && !disabled) $("submitButton").disabled = !$("answerInput").value.trim() || !can("submit_answer");
+  $("answerInput")?.questionControl?.setDisabled(disabled || !can('submit_answer'));
+  if ($("submitButton") && !disabled) $("submitButton").disabled = !answerReady($("answerInput")) || !can("submit_answer");
   for (const element of $("historyPanel").querySelectorAll("button")) element.disabled = disabled || !can("review_history");
   for (const element of $("reviewNotice").querySelectorAll("button")) element.disabled = disabled || !can("review_history");
   $("pauseButton").hidden = state.status !== "in_progress";
@@ -1463,7 +1482,7 @@ async function openTopic(id, subjectId) {
   await start();
 }
 
-const { initPortal } = await import("./portal.js?v=ed1e66598212b7cf");
+const { initPortal } = await import("./portal.js?v=efb88fa48288272a");
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {
     try { return await fetchGuideAsset(url, subjectId); }

@@ -261,3 +261,41 @@ mjx-container[jax="SVG"] text { font-family: "Microsoft YaHei", sans-serif; }
   .lesson { margin: 0; }
   .step { border: 0; padding: 0; }
 }
+/* Shared question interactions inherit each subject's existing theme. */
+.questionInteraction { margin: 16px 0; }
+.judgmentItem { border: 1px solid #d6dce1; border-radius: 6px; padding: 12px 16px; margin: 14px 0; }
+.judgmentItem legend { padding: 0 6px; font-weight: 600; white-space: pre-wrap; }
+.judgmentChoice { display: inline-flex; align-items: center; gap: 8px; padding: 8px 18px 8px 0; cursor: pointer; }
+.judgmentChoice input { width: 18px; height: 18px; accent-color: var(--link-color, #0577C7); }
+.inlineBlank { display: inline-block; width: 9em; max-width: 100%; min-height: 36px; margin: 3px 5px; padding: 5px 8px; border: 0; border-bottom: 2px solid var(--link-color, #0577C7); background: #f3f6f8; font: inherit; color: inherit; vertical-align: baseline; }
+.inlineBlank:focus-visible, .matchingSlot:focus-visible, .matchingOption:focus-visible { outline: 3px solid var(--link-color, #0577C7); outline-offset: 2px; }
+.matchingRows { display: grid; gap: 24px; }
+.matchingRow { display: grid; grid-template-columns: minmax(0,2fr) 24px minmax(0,3fr); align-items: stretch; gap: 12px; }
+.matchingCell { display: flex; min-width: 0; background: white; border: 1px solid #ededed; border-radius: 6px; }
+.matchingMoves { display: flex; flex-direction: column; justify-content: center; padding: 4px; }
+.matchingMove { border: 0; border-radius: 4px; padding: 4px 7px; background: transparent; cursor: pointer; }
+.matchingMove:hover { background: #ededed; }
+.matchingMove:disabled { opacity: .3; cursor: default; }
+.matchingArrow { align-self: center; }
+.matchingArrow { font-size: 26px; text-align: center; color: var(--link-color, #0577C7); }
+.matchingSlot { flex: 1; min-width: 0; min-height: 64px; border: 1px dashed #aab5bd; border-radius: 4px; padding: 8px 16px; background: #fff; color: #52616b; font: inherit; line-height: 1.5; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.matchingSlot.occupied { border-color: transparent; color: #15202b; }
+.matchingSlot.fixedSlot { background: #f2f4f6; border-color: #aab5bd; cursor: default; }
+.matchingBanks { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 48px; margin-top: 18px; }
+.matchingBank { padding: 10px; border-radius: 6px; background: #f4f6f8; min-width: 0; }
+.matchingBankTitle, .interactionHint { color: #52616b; font-size: 14px; margin: 0 0 10px; }
+.matchingOption { display: block; width: 100%; padding: 9px; margin: 7px 0; border: 1px solid #aab5bd; border-radius: 5px; background: white; color: #15202b; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; cursor: grab; }
+.matchingOption[aria-pressed="true"] { outline: 2px solid var(--link-color, #0577C7); background: #eaf3f8; }
+.matchingOption:disabled { opacity: .4; cursor: default; }
+.matchingSlot:disabled { cursor: default; }
+.matchingSlot p, .matchingOption p, .statementBody p { margin: 0; }
+.matchingSlot .outlineNode, .matchingOption .outlineNode { margin: 0; }
+.statementBody, .statementBody .outlineNode, .statementBody p { display: inline; }
+.srOnly { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (max-width: 600px) {
+  .matchingRow { gap: 8px; grid-template-columns: minmax(0,1fr); }
+  .matchingArrow { transform: rotate(90deg); line-height: 24px; }
+  .matchingRow > .matchingCell:last-child { margin-left: 20px; }
+  .matchingBanks { gap: 12px; }
+  .matchingSlot, .matchingOption { padding: 8px; font-size: 14px; }
+}

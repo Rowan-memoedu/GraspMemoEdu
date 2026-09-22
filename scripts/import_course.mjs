@@ -129,12 +129,20 @@ export function sourceQuestions(topic) {
     for (const [i, node] of [module, ...practices].entries()) {
       const id = i === 0 ? `${moduleId}-question` : `${moduleId}-practice-${i}`;
       const explanation = node.children.filter(child => /^Explanation$/i.test(child.head));
-      const question = node.children.filter(child => !/^Explanation$/i.test(child.head) && !practices.includes(child));
+      const interactions = node.children.filter(child => /^Interaction$/i.test(child.head));
+      if (interactions.length > 1) throw new Error(`Duplicate Interaction: ${id}`);
+      let interaction;
+      if (interactions.length) {
+        if (interactions[0].lines.some(line => line.trim()) || interactions[0].children.length !== 1) throw new Error(`Interaction needs one JSON child: ${id}`);
+        interaction = JSON.parse(text(interactions[0].children[0]));
+        if (!interaction || typeof interaction !== 'object' || Array.isArray(interaction)) throw new Error(`Invalid Interaction: ${id}`);
+      }
+      const question = node.children.filter(child => !/^(Explanation|Interaction)$/i.test(child.head) && !practices.includes(child));
       if (explanation.length !== 1 || !question.length) throw new Error(`Missing question or Explanation: ${id}`);
       if (!explanation[0].children.length) throw new Error(`Empty Explanation: ${id}`);
       const match = i ? node.head.match(practiceHead) : null;
       const grouped = match && match[2] !== undefined;
-      questions.push({id, moduleId, title:grouped ? `Practice ${i}` : node.head,
+      questions.push({id, moduleId, title:grouped ? `Practice ${i}` : node.head, ...(interaction ? {interaction} : {}),
         ...(grouped ? {source_practice:{label:`${match[1]}.${match[2]}`, group:Number(match[1]), member:Number(match[2])}} : {}),
         line:node.line, node, questionNodes:question,
         explanationNodes:explanation[0].children, question:question.map(text).join('\n')});
@@ -248,6 +256,7 @@ export async function inspectCourse(sourcePath) {
     modules:content.modules.map((module, index) => ({id:`example-${index + 1}`, title:module.head,
       question_ids:content.questions.filter(q => q.moduleId === `example-${index + 1}`).map(q => q.id)})),
     questions:content.questions.map(q => ({id:q.id, module_id:q.moduleId, title:q.title, line:q.line,
+      ...(q.interaction ? {interaction:q.interaction} : {}),
       ...(q.source_practice ? {source_practice:q.source_practice} : {}),
       image_paths:imagePaths(q.question + '\n' + q.explanationNodes.map(text).join('\n')),
       question_image_paths:imagePaths(q.question), explanation_image_paths:imagePaths(q.explanationNodes.map(text).join('\n')),
@@ -287,6 +296,7 @@ export async function importCourse(sourcePath, sidecarPath, outputPath, auditPat
   const course = {id:sidecar.course_id, title:topic.head, source_sha256:sourceHash,
     introduction:{id:'introduction', title:'Introduction', html:render.nodes(content.introduction.children, true)}, modules:[], math_css:render.css};
   const formulaChanges = [];
+  const interactionTexts = spec => spec?.type === 'true_false' ? spec.statements : spec?.type === 'matching' ? [...spec.left, ...spec.right] : [];
   for (const [index, module] of content.modules.entries()) {
     const moduleId = `example-${index + 1}`;
     const members = content.questions.filter(q => q.moduleId === moduleId);
@@ -298,8 +308,11 @@ export async function importCourse(sourcePath, sidecarPath, outputPath, auditPat
       const explanationNodes = applyErrata(question.explanationNodes, corrections);
       formulaChanges.push(...corrections);
       const html = render.nodes(question.questionNodes);
+      const interaction = question.interaction ? structuredClone(question.interaction) : null;
+      for (const item of interactionTexts(interaction)) item.html = render.nodes([{head: item.text, lines: [], children: [], line: question.line}]);
       const notice = corrections.length ? `<p class="contentErratum" role="note">${escape(corrections.map(c => c.display_note).join(' '))}</p>` : '';
       return {id:question.id, title:question.title, question:question.question, html,
+        ...(interaction ? {interaction} : {}),
         explanation_html:notice + render.nodes(explanationNodes), reference_answer:answer.reference_answer,
         answer_type:answer.answer_type, constraints:answer.constraints,
         source_line:question.line, ...(question.source_practice ? {source_practice:question.source_practice} : {}),
@@ -307,7 +320,9 @@ export async function importCourse(sourcePath, sidecarPath, outputPath, auditPat
     });
     course.modules.push({id:moduleId, title:module.head, example:built[0], practices:built.slice(1)});
   }
-  const originalFormulas = [...source.matchAll(/\$\$([\s\S]*?)\$\$|\$([^$\n]+)\$/g)].map(match => (match[1] ?? match[2]).replace(/^ +/gm, '').trim());
+  const formulaSource = content.questions.some(q => q.interaction)
+    ? [text(content.introduction), ...content.questions.flatMap(q => [q.question, ...interactionTexts(q.interaction).map(i => i.text), ...q.explanationNodes.map(text)])].join('\n') : source;
+  const originalFormulas = [...formulaSource.matchAll(/\$\$([\s\S]*?)\$\$|\$([^$\n]+)\$/g)].map(match => (match[1] ?? match[2]).replace(/^ +/gm, '').trim());
   if (originalFormulas.length !== render.formulas.length) throw new Error('Formula count changed');
   const differences = [];
   for (let index = 0; index < originalFormulas.length; index++) {

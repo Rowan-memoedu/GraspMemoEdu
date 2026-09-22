@@ -1,5 +1,7 @@
 # GraspMemoEdu
 
+通用架构的职责与学科开发边界见 [共用平台](docs/shared-platform.md)。新增题型支持判断、多空填空、配对及复刻/复现判题，作者配置见 [题型规范](docs/question-types.md)；顶部学科/课程目录与选中文字纠错见 [导航与反馈](docs/content-navigation.md)。
+
 当前正式后端已于 2026-09-21 迁至腾讯云 `https://124.221.144.155`，GitHub Pages 前端地址保持不变。部署、证书续期、备份和回滚边界见 [腾讯云部署](docs/tencent-deployment.md)。下文 Windows 命令仅作隔离开发示例，必须显式指定隔离数据目录；正式管理在服务器执行，不要对本机回滚快照或旧维护任务执行它们。
 
 课程图谱使用独立的 `Import-Graph.ps1` / `graph-import`，支持先于 Topic 导入、差异预览、重复更新、历史恢复及离线可视化。Topic 导入不覆盖图谱，图谱更新不改正文和学习进度。标准格式和工作流见 [独立课程图谱](docs/course-graph.md)。

@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .service import DomainError
 from .public_limits import PublicLimitError
+from .question_types import public_interaction, display_answer, demo_answer
 
 
 def review_route_feature(path, method):
@@ -57,6 +58,8 @@ def register_review_routes(app, identity, admission_lock, limits, schedule, outs
                 "SELECT question,reason FROM review_submissions WHERE session=? AND learner=? AND topic=? AND status='judged'",
                 (state['session_id'], learner.learner_id, learner.topic_id))}
         state['answers'] = [{**answer, 'title': learner.questions[answer['question_id']]['title'],
+                             'interaction': public_interaction(learner.questions[answer['question_id']]),
+                             'answer_display': display_answer(learner.questions[answer['question_id']], answer['answer']),
                              'html': learner.questions[answer['question_id']]['html'],
                              'explanation_html': learner.questions[answer['question_id']]['explanation_html'],
                              'feedback': {'correct': answer['correct'], 'reason': reasons.get(answer['question_id'])}}
@@ -107,7 +110,7 @@ def register_review_routes(app, identity, admission_lock, limits, schedule, outs
         if state['status'] != 'in_progress' or state['pending_submission_id'] or 'submit' not in state['actions']:
             raise DomainError('demo_answer_unavailable', '当前页面没有可作答的题目。', 409)
         return {'session_id': session_id, 'question_id': state['practice']['id'],
-                'answer': learner.questions[state['practice']['id']]['reference_answer']}
+                'answer': demo_answer(learner.questions[state['practice']['id']])}
 
     @app.post('/api/review/sessions/{session_id}/submit')
     def submit(session_id: str, payload: ReviewAnswer, request: Request):

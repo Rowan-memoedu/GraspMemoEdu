@@ -13,6 +13,7 @@ import uuid
 from .judging import judge_answer
 from .practice import LESSON_POLICY, apply_practice_result
 from .practice_queue import PersistentPracticeQueue
+from .question_types import validate_interaction, public_interaction, parse_answer, display_answer
 
 
 def now():
@@ -109,6 +110,10 @@ class LearningService:
                                ['question', 'reference_answer', 'html', 'explanation_html', 'answer_type', 'constraints'])):
                     raise DomainError('invalid_course', '题目缺少独立标准答案、题型、约束或解析。', 422)
                 self.questions[question['id']] = question
+                try:
+                    validate_interaction(question.get('interaction'), question['question'])
+                except (ValueError, TypeError, KeyError, TimeoutError) as exc:
+                    raise DomainError('invalid_course', '题型配置或标准答案无效。', 422) from exc
 
     def _connect(self):
         con = sqlite3.connect(self.db_path, timeout=30, isolation_level=None)
@@ -245,6 +250,9 @@ class LearningService:
             question = self.questions.get(saved['question_id'])
             if question:
                 step.update(title=question['title'], html=question['html'], explanation_html=None)
+                if question.get('interaction'):
+                    step['interaction'] = public_interaction(question)
+                    step['answer_display'] = display_answer(question, saved.get('answer'))
                 if saved['phase'] == 'reading' or (saved['kind'] == 'practice' and saved['phase'] == 'feedback'):
                     step['explanation_html'] = question['explanation_html']
             elif saved['kind'] == 'introduction':
@@ -478,6 +486,10 @@ class LearningService:
             answer = payload.get('answer')
             if not isinstance(answer, str) or not answer.strip() or len(answer) > 2000:
                 raise DomainError('invalid_answer', '请输入有效答案（最多 2000 字）。', 422)
+            try:
+                parse_answer(self.questions[step['question_id']], answer)
+            except (ValueError, TypeError, KeyError) as exc:
+                raise DomainError('invalid_answer', '请完成全部作答，且不要重复使用配对选项。', 422) from exc
             if old:
                 con.execute("UPDATE submissions SET status='pending',correct=NULL,reason=NULL,updated_at=? WHERE id=?", (now(), submission_id))
             else:

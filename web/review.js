@@ -1,4 +1,6 @@
-import { t, translateMessage, learningTitle } from './i18n.js?v=ed1e66598212b7cf';
+import { t, translateMessage, learningTitle } from './i18n.js?v=efb88fa48288272a';
+import {questionInput, answerReady} from './question-input.js?v=efb88fa48288272a';
+import {reportableContent} from './content-report.js?v=efb88fa48288272a';
 
 const node = (tag, cls = '', text) => {
   const item = document.createElement(tag); item.className = cls;
@@ -137,7 +139,7 @@ export function createReviewView(bridge) {
   function submit(event) {
     event?.preventDefault();
     const input = root.querySelector('#reviewAnswerInput');
-    if (busy || !input?.value.trim() || !state?.actions.includes('submit') || !can('submit_answer')) return;
+    if (busy || !answerReady(input) || !state?.actions.includes('submit') || !can('submit_answer')) return;
     const answer = input.value.trim(); const previous = json(submissionKey());
     const body = previous?.question_id === state.practice.id && previous.answer === answer ? previous : {...payload(), answer, elapsed_ms: tick(true)};
     write(submissionKey(), JSON.stringify(body));
@@ -202,9 +204,17 @@ export function createReviewView(bridge) {
     const question = isCurrent ? state.practice : answer;
     if (!question) { selected = null; return render(); }
     const pageIds = pages(); const index = pageIds.indexOf(selected || state.practice.id);
-    card.append(node('h2', 'stepTitle', t('review.questionNumber', {number: index + 1})), content(question.html));
+    const stem = content(question.html);
+    const questionId = isCurrent ? state.practice.id : answer.question_id;
+    const reportContext = {topic_id: topic, question_id: questionId, task_id: `review:${state.session_id}`};
+    reportableContent(stem, reportContext, `question:${questionId}`, state.course_version);
+    const editable = isCurrent && state.status === 'in_progress' && state.actions.includes('submit');
+    const structured = question.interaction && question.interaction.type !== 'text';
+    card.append(node('h2', 'stepTitle', t('review.questionNumber', {number: index + 1})), stem);
+    if (structured && !editable) card.append(questionInput(question.interaction, {id: 'reviewSubmittedInteraction',
+      stem, value: answer?.answer || (isCurrent ? read(draftKey()) || '' : ''), disabled: true}).element);
     if (answer) {
-      const submitted = node('details', 'submittedAnswer'); submitted.append(node('summary', '', t('查看已提交答案')), node('pre', '', answer.answer)); card.append(submitted);
+      const submitted = node('details', 'submittedAnswer'); submitted.append(node('summary', '', t('查看已提交答案')), node('pre', '', answer.answer_display ?? answer.answer)); card.append(submitted);
     }
     const feedback = isCurrent ? state.feedback : answer?.feedback || answer;
     if (feedback && typeof feedback.correct === 'boolean') {
@@ -212,16 +222,23 @@ export function createReviewView(bridge) {
       const detail = node('div'); detail.append(node('strong', 'feedbackTitle', feedback.correct ? t('回答正确') : t('本题回答有误')));
       if (feedback.reason) detail.append(node('p', 'feedbackReason', feedback.reason));
       box.append(node('span', 'feedbackIcon', feedback.correct ? '✓' : '!'), detail); card.append(box);
-      if (question.explanation_html) card.append(node('h3', 'exampleExplanationHeader', t('Explanation · 解析')), content(question.explanation_html));
+      if (question.explanation_html) card.append(node('h3', 'exampleExplanationHeader', t('Explanation · 解析')),
+        reportableContent(content(question.explanation_html), reportContext, `explanation:${questionId}`, state.course_version));
     }
-    if (isCurrent && state.status === 'in_progress' && state.actions.includes('submit')) {
+    if (editable) {
       const form = node('form', 'learningActions answerForm'); form.id = 'reviewAnswerForm'; form.addEventListener('submit', submit);
-      const label = node('label', '', t('你的答案')); label.htmlFor = 'reviewAnswerInput';
-      const input = node('textarea', 'answerInput'); input.id = 'reviewAnswerInput'; input.rows = 3; input.maxLength = 2000; input.spellcheck = false;
+      const control = structured ? questionInput(question.interaction, {id: 'reviewAnswerInput', stem,
+        value: read(draftKey()) || '', formId: 'reviewAnswerForm', disabled: busy || !can('submit_answer')}) : null;
+      const label = node(structured ? 'p' : 'label', '', t('你的答案')); label.htmlFor = 'reviewAnswerInput';
+      const input = control?.input || node('textarea', 'answerInput'); input.id = 'reviewAnswerInput'; input.rows = 3; input.maxLength = 2000; input.spellcheck = false;
       input.value = read(draftKey()) || ''; input.disabled = busy;
-      input.addEventListener('input', () => { write(draftKey(), input.value); root.querySelector('#reviewSubmitButton').disabled = busy || !input.value.trim(); });
+      input.addEventListener('input', () => { write(draftKey(), input.value); root.querySelector('#reviewSubmitButton').disabled = busy || !answerReady(input) || !can('submit_answer'); });
       input.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && !event.isComposing) submit(event); });
-      form.append(label, input); card.append(form);
+      form.append(label, control?.element || input);
+      form.append(node('p', 'inputHint', t(question.interaction?.grading === 'exact' ? 'question.exactHint'
+        : question.interaction?.grading === 'semantic' ? 'question.semanticHint'
+        : structured ? 'question.completeHint' : '只要描述清楚正确答案的形式即可，表达方式不限，夹杂口语也没关系。Ctrl + Enter 提交。')));
+      card.append(form);
     }
     if (isCurrent && state.pending_submission_id) { const waiting = node('p', 'waiting', t('review.judging')); waiting.setAttribute('role', 'status'); card.append(waiting); }
     if (!state.actions.length && state.dependency_ready === false) card.append(node('p', 'featureNotice', translateMessage('请先完成前置知识的学习和待复习内容，并解除前置知识的暂停状态。')));
@@ -231,14 +248,14 @@ export function createReviewView(bridge) {
     if (!isCurrent) nav.append(button(t('下一页'), 'primaryButton', () => choose(pageIds[index + 1])));
     else if (state.actions.includes('continue')) nav.append(button(t('下一页'), 'primaryButton', () => mutate('continue', payload()), 'reviewContinueButton'));
     else if (state.actions.includes('submit')) {
-      const send = button(t('Submit'), 'primaryButton', submit, 'reviewSubmitButton'); send.disabled = busy || !root.querySelector('#reviewAnswerInput')?.value.trim();
+      const send = button(t('Submit'), 'primaryButton', submit, 'reviewSubmitButton'); send.disabled = busy;
       send.setAttribute('form', 'reviewAnswerForm'); nav.append(send);
     } else if (state.status !== 'in_progress') nav.append(home());
     for (const item of nav.querySelectorAll('button')) if (busy) item.disabled = true;
     card.append(nav); main.append(card);
     layout.append(renderHistory(), main); root.replaceChildren(layout);
     const input = root.querySelector('#reviewAnswerInput'), send = root.querySelector('#reviewSubmitButton');
-    if (send) send.disabled = busy || !input?.value.trim() || !can('submit_answer');
+    if (send) send.disabled = busy || !answerReady(input) || !can('submit_answer');
     if (focus && input && !input.disabled) { input.focus({preventScroll: true}); input.setSelectionRange(...focus); }
     let css = document.getElementById('reviewMathStyle'); if (!css) { css = node('style'); css.id = 'reviewMathStyle'; document.head.append(css); }
     css.textContent = state.math_css || '';

@@ -242,3 +242,34 @@ body.portalModalOpen { overflow: hidden; }
   .topicBreadcrumb { font-size: 12px; }
 }
 @media print { .topRibbon, .topicBreadcrumb, .portalStart, .answerHelp, .feedbackDialog, .graphDialog { display: none !important; } body { padding-top: 0; } }
+.catalogToggle { border: 0; background: transparent; color: inherit; font: inherit; padding: 8px 12px; cursor: pointer; }
+.catalogToggle[aria-expanded="true"] { background: #222; color: #fff; border-radius: 4px; }
+.catalogPanel { position: absolute; left: 0; right: 0; top: 100%; background: #111; color: white; z-index: 50; box-shadow: 0 8px 20px #0003; max-height: 80vh; overflow-y: auto; }
+.catalogPanelContent { max-width: 1140px; margin: auto; padding: 28px 24px; display: grid; grid-template-columns: 180px minmax(0,1fr); gap: 32px; }
+.catalogSubjects { display: flex; flex-direction: column; gap: 6px; }
+.catalogSubject, .catalogRetry { background: transparent; border: 1px solid #555; border-radius: 4px; padding: 10px 16px; color: #fff; font: inherit; cursor: pointer; }
+.catalogSubject { text-align: left; border-color: transparent; }
+.catalogSubject[aria-pressed="true"] { background: #333; border-color: #888; }
+.catalogCourseArea h2 { margin: 0 0 20px; font-size: 20px; color: white; }
+.catalogCourseGrid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 18px; }
+.catalogCourse { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; background: #222; border: 1px solid #444; border-radius: 6px; color: #fff; padding: 18px; text-align: left; font: inherit; cursor: pointer; overflow-wrap: anywhere; }
+.catalogCourse:hover:not(:disabled) { border-color: #fff; }
+.catalogCourse:disabled { opacity: .5; cursor: default; }
+.catalogCourse > span, .catalogDraftHint { font-size: 13px; color: #ccc; }
+.catalogCourse .catalogBadge { border: 1px solid #777; padding: 2px 6px; border-radius: 4px; }
+.catalogStatus { color: #ddd; }
+.catalogDraftHint { margin-top: 24px; }
+.reportSelectionButton { position: fixed; right: 24px; bottom: 24px; z-index: 70; border: 1px solid #555; border-radius: 6px; padding: 12px 18px; color: #fff; background: #222; font: inherit; box-shadow: 0 3px 15px #0003; cursor: pointer; }
+.correctionPreview { white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px; background: #f5f5f5; line-height: 1.5; }
+.correctionPreview strong { background: #fff1a6; color: #222; }
+.correctionFields h3 { font-size: 16px; margin: 16px 0 6px; }
+.correctionFields textarea { width: 100%; box-sizing: border-box; }
+.feedbackDialog:has(.correctionFields:not([hidden])) { width: min(800px, calc(100vw - 32px)); }
+.feedbackDialog:has(.correctionFields:not([hidden])) textarea { min-height: 62px; }
+@media (max-width: 767px) {
+  .catalogPanelContent { grid-template-columns: minmax(0,1fr); padding: 20px 16px; gap: 20px; }
+  .catalogSubjects { flex-direction: row; flex-wrap: wrap; }
+  .catalogSubject { padding: 8px; }
+  .catalogCourseGrid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .reportSelectionButton { right: 12px; bottom: 12px; max-width: calc(100vw - 24px); }
+}

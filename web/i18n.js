@@ -1,7 +1,7 @@
 // UI strings only. Course HTML, names, answers and explanations never enter this module.
-import {readerMessages} from './reader-messages.js?v=ed1e66598212b7cf';
-import {portalMessages} from './portal-messages.js?v=ed1e66598212b7cf';
-import {staticMessages} from './static-messages.js?v=ed1e66598212b7cf';
+import {readerMessages} from './reader-messages.js?v=efb88fa48288272a';
+import {portalMessages} from './portal-messages.js?v=efb88fa48288272a';
+import {staticMessages} from './static-messages.js?v=efb88fa48288272a';
 
 export const LANGUAGE_KEY = 'math-learning-web:ui-language';
 export const messages = {...staticMessages, ...readerMessages, ...portalMessages};
@@ -67,6 +67,10 @@ const errors = {
   '此身份尚无该任务的已完成作答记录。': 'There are no completed answers for this lesson under this identity.',
   '显示名称需要 1 至 100 个可显示字符。': 'Your display name must contain 1–100 visible characters.',
   '请填写反馈内容。': 'Please enter your feedback.',
+  '请完成全部作答，且不要重复使用配对选项。': 'Complete every item and use each matching option only once.',
+  '所选文字与正文不一致，请重新选择。': 'The selection does not match the text. Please select it again.',
+  '正文版本已变化，请刷新后重新选择文字。': 'The content version has changed. Refresh and select the text again.',
+  '文字纠错需要指定对应 Topic。': 'A text correction must identify its topic.',
   '当前账号没有使用此功能的权限。': 'This feature is not enabled for your account.',
   '该功能需注册账号才能使用': 'An account is required to use this feature.',
   '该功能需注册账号才能使用。': 'An account is required to use this feature.',

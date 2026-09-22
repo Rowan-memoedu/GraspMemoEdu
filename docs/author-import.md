@@ -115,3 +115,6 @@ $python = 'D:/AppData/MathLearningWeb/venv/Scripts/python.exe'
 `--package` 一次传入整批包，整批合计最多两题。该入口需显式调用，普通导入和安装不会触发。2026-09-21 已将 22 篇 Topic 安装到物理课程“运动学进阶”（`rigid-constraints`）；原数学课程、图谱及学习记录保留。
 
 准备包逻辑在 `math_learning/author_import.py`，安装在 `math_learning/topic_install.py`，渲染沿用 `scripts/import_course.mjs`，共享图片校验在 `math_learning/topic_assets.py`。后续新增输入格式或内容类型时在这些边界扩展，不改变既有学习/复习状态机。当前不支持自动更新已有 Topic 或任意 Markdown 排版。
+## 通用题型扩展
+
+判断题、多空填空、带干扰项配对及复刻/复现判题，使用每题的显式 `Interaction` 节点；字段、例子和边界见 [题型与判题](question-types.md)。不写此节点的原课程保持现有行为。

@@ -21,6 +21,7 @@ from .judging import judge_answer
 from .practice import PracticePolicy, REVIEW_POLICY, apply_practice_result
 from .practice_queue import VERSION as PRACTICE_QUEUE_VERSION
 from .service import DomainError, encode
+from .question_types import public_interaction, parse_answer
 
 
 class ReviewBackend:
@@ -390,6 +391,8 @@ class ReviewBackend:
                               'kind': 'practice', 'explanation_html':
                               question['explanation_html'] if state['phase'] == 'feedback' else None}
         result['feedback'] = state.get('feedback')
+        if question.get('interaction'):
+            result['practice']['interaction'] = public_interaction(question)
         result['answers'] = state['answers']
         result['actions'] = ([] if state['status'] != 'in_progress' or state['pending_submission_id']
                              else ['submit'] if state['phase'] == 'answer' else ['continue'])
@@ -528,6 +531,10 @@ class ReviewBackend:
             self._guard_session(con, state, data, revision=not bool(old))
             if state['phase'] != 'answer':
                 raise DomainError('already_answered', '当前题目已经获得判定。')
+            try:
+                parse_answer(self.learning.questions[data['question_id']], answer)
+            except (ValueError, TypeError, KeyError) as exc:
+                raise DomainError('invalid_answer', '请完成全部作答，且不要重复使用配对选项。', 422) from exc
             stamp = self._now().isoformat()
             if old:
                 con.execute("UPDATE review_submissions SET status='pending',correct=NULL,reason=NULL,updated_at=?,run_token=NULL WHERE id=?", (stamp, submission_id))

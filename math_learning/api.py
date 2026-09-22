@@ -27,6 +27,7 @@ from .subjects import Subjects
 from .guide import register_guide_routes
 from .guest_reset import register_guest_reset_routes
 from .review import ReviewBackend
+from .question_types import demo_answer as interaction_demo_answer
 from .review_api import register_review_routes, review_route_feature
 from .public_limits import BodyLimitMiddleware, PublicLimits, PublicLimitError
 
@@ -73,6 +74,25 @@ class ProfileUpdate(BaseModel):
     timezone: str | None = Field(default=None, min_length=1, max_length=100)
 
 
+class CorrectionQuote(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    exact: str = Field(min_length=1, max_length=2000)
+    prefix: str = Field(max_length=50)
+    suffix: str = Field(max_length=50)
+    start: int = Field(ge=0, strict=True)
+    end: int = Field(ge=1, strict=True)
+
+
+class TextCorrection(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    content_block_id: str = Field(min_length=1, max_length=300)
+    content_version: str = Field(min_length=1, max_length=128)
+    quote: CorrectionQuote
+    operation: str = Field(pattern='^(replace|delete)$')
+    replacement: str = Field(max_length=2000)
+    comment: str = Field(default='', max_length=2000)
+
+
 class Feedback(BaseModel):
     model_config = ConfigDict(extra='forbid')
     message: str = Field(min_length=1, max_length=4000)
@@ -80,6 +100,7 @@ class Feedback(BaseModel):
     topic_id: str | None = Field(default=None, min_length=1, max_length=128)
     task_id: str | None = Field(default=None, min_length=1, max_length=135)
     question_id: str | None = Field(default=None, min_length=1, max_length=256)
+    correction: TextCorrection | None = None
 
 
 class ServiceCache(dict):
@@ -519,7 +540,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                 or step['id'] != state['active_step_id'] or 'submit' not in step['actions']):
             raise DomainError('demo_answer_unavailable', '当前页面没有可作答的题目。', 409)
         return {'step_id': step['id'], 'question_id': step['question_id'],
-                'answer': learner.questions[step['question_id']]['reference_answer']}
+                'answer': interaction_demo_answer(learner.questions[step['question_id']])}
 
     @app.get('/api/state')
     def state(request: Request):

@@ -13,6 +13,10 @@ import json
 from math import isqrt
 from pathlib import Path
 import re
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from math_learning.question_types import validate_interaction
 
 
 def sha256(value: str | bytes) -> str:
@@ -94,12 +98,26 @@ def collect_questions(topic: Node) -> list[dict]:
         for ordinal, node in enumerate([module, *practices]):
             question_id = f"{module_id}-question" if ordinal == 0 else f"{module_id}-practice-{ordinal}"
             explanation = [n for n in node.children if n.head.lower() == "explanation"]
-            question = [n for n in node.children if n.head.lower() != "explanation" and n not in practices]
+            configurations = [n for n in node.children if n.head.lower() == 'interaction']
+            if len(configurations) > 1:
+                raise ValueError('Duplicate Interaction')
+            interaction = None
+            if configurations:
+                config = configurations[0]
+                if any(line.strip() for line in config.lines) or len(config.children) != 1:
+                    raise ValueError('Interaction needs one JSON child')
+                interaction = json.loads(node_text(config.children[0]))
+                if not isinstance(interaction, dict):
+                    raise ValueError('Interaction must be a JSON object')
+            question = [n for n in node.children if n.head.lower() not in ('explanation', 'interaction') and n not in practices]
             if len(explanation) != 1 or not question:
                 raise ValueError(f"Missing question or Explanation in {question_id}")
             record = {"id": question_id, "module_id": module_id, "line": node.line,
                            "question": "\n".join(node_text(n) for n in question),
                            "explanation": "\n".join(node_text(n) for n in explanation[0].children)}
+            validate_interaction(interaction, record['question'])
+            if interaction is not None:
+                record['interaction'] = interaction
             match = PRACTICE_HEAD.fullmatch(node.head) if ordinal else None
             if match and match[2] is not None:
                 record["source_practice"] = {"label": f"{match[1]}.{match[2]}",

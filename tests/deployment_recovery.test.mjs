@@ -6,7 +6,7 @@ import test from 'node:test';
 // Run the actual request/identity code with isolated storage and fake transport.
 // No public service, real credentials, learning records, or timers are touched.
 const source = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8')
-  .replace(/^import .*;\r?\n/, '')
+  .replace(/^import .*;\r?\n/gm, '')
   .split('$("identityButton").addEventListener')[0]
   .replaceAll('import.meta.url', '"https://site.example/app.js"');
 function setup({ nextOrigin = 'https://new.example', status = 502, role = 'guest', invalidConfig = false, newEndpointFails = false } = {}) {
