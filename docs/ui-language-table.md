@@ -2,7 +2,7 @@
 
 本表从当前界面词库自动生成。修改以词库为准，随后重新生成并检查本表。术语约定见 [界面语言规范](ui-language.md)。
 
-共 476 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
+共 481 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
 
 不包括作者课程正文、题目、答案、解析或用户输入。首页的学科双语副标题按约定保留。
 
@@ -248,6 +248,11 @@
 
 | English | 中文 |
 |---|---|
+| Administrator | 管理员 |
+| Administrator mode: normal learning flow, without saved learning records or scheduled reviews. | 管理员模式：正常学习流程；学习记录不保存，也不生成后续推送。 |
+| All atomic flashcards are available. Learning is not saved and does not schedule future reviews. | 全部原子卡片，可直接进入；本次学习不保存记录，也不会生成后续推送。 |
+| Open flashcard | 进入卡片 |
+| This flashcard is complete. | 本张卡片已完成。 |
 | Atomic retrieval training | 原子化提取训练 |
 | Review | 复习 |
 | Your answer | 你的答案 |

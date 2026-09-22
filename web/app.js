@@ -1,6 +1,7 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=842cc571a4ea8008";
-import {questionInput, answerReady} from './question-input.js?v=842cc571a4ea8008';
-import {reportableContent} from './content-report.js?v=842cc571a4ea8008';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=f0de4845259eae4b";
+import {questionInput, answerReady} from './question-input.js?v=f0de4845259eae4b';
+import {reportableContent} from './content-report.js?v=f0de4845259eae4b';
+import {createLearningCache} from './learning-cache.js?v=f0de4845259eae4b';
 
 applyStaticTranslations();
 
@@ -11,13 +12,10 @@ const STATE_TIMEOUT = 9000;
 const DEPLOYMENT_REFRESH_INTERVAL = 30000;
 
 function storageRead(storage, key, fallback = null) {
-  try { return storage.getItem(STORAGE_PREFIX + key) ?? fallback; } catch { return fallback; }
+  return learningCache.read(storage, STORAGE_PREFIX + key, fallback);
 }
 function storageWrite(storage, key, value) {
-  try {
-    if (value === null) storage.removeItem(STORAGE_PREFIX + key);
-    else storage.setItem(STORAGE_PREFIX + key, value);
-  } catch { /* The server remains the source of saved learning progress. */ }
+  learningCache.write(storage, STORAGE_PREFIX + key, value);
 }
 function readJSON(key) {
   try { return JSON.parse(storageRead(sessionStorage, key)); } catch { return null; }
@@ -63,6 +61,7 @@ let sessionToken = null;
 let sessionPromise = null;
 let identityToken = "";
 let access = null;
+const learningCache = createLearningCache(() => access);
 let identityPromise = null;
 let identityBusy = false;
 let identityRecoveryAllowed = true;
@@ -465,6 +464,7 @@ function invalidateIdentityView() {
   identityPromise = null;
   clearLearningView();
   drafts.clear();
+  learningCache.clear();
   portal?.suspendIdentity();
 }
 
@@ -1482,7 +1482,7 @@ async function openTopic(id, subjectId) {
   await start();
 }
 
-const { initPortal } = await import("./portal.js?v=842cc571a4ea8008");
+const { initPortal } = await import("./portal.js?v=f0de4845259eae4b");
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {
     try { return await fetchGuideAsset(url, subjectId); }

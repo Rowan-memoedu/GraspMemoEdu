@@ -23,6 +23,8 @@ from .service import DomainError, LearningService, create_learning_service
 from .atomic_content import is_atomic
 from .atomic_api import register_atomic_routes
 from .access import AccessStore
+from .access import credential_digest
+from .learning_storage import MemoryLearningStore, administrator
 from .catalog import Catalog
 from .dashboard import DashboardStore
 from .subjects import Subjects
@@ -144,13 +146,32 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     executor_stopping = threading.Event()
     public_host = urlsplit(settings.public_api_origin).netloc.lower() if settings.public_api_origin else None
 
-    def service_for(learner_id, topic_id=None):
+    preview_stores = {}
+
+    def forget_preview(token):
+        scope = credential_digest('preview', token or '')
+        with services_lock:
+            for key in [key for key in learning_services if len(key) == 3 and key[2] == scope]:
+                learning_services.pop(key)
+            for key in [key for key in preview_stores if key[1] == scope]:
+                preview_stores.pop(key).close()
+
+    def service_for(learner_id, topic_id=None, session_scope=None):
         topic_id = topic_id or catalog.default_topic_id
-        key = (learner_id, topic_id)
+        admin = administrator(settings.data_dir, learner_id)
+        scope = credential_digest('preview', session_scope or '')
+        key = (learner_id, topic_id, scope) if admin else (learner_id, topic_id)
         with services_lock:
             if key not in learning_services:
+                runtime = None
+                if admin:
+                    store_key = (learner_id, scope)
+                    if store_key not in preview_stores:
+                        preview_stores[store_key] = MemoryLearningStore()
+                    runtime = preview_stores[store_key]
                 learning_services[key] = create_learning_service(
                     catalog.topic(topic_id), settings.data_dir, service.judge, learner_id=learner_id,
+                    **({'runtime': runtime} if runtime else {}),
                     **({'clock': atomic_clock} if is_atomic(catalog.topic(topic_id)) and atomic_clock else {}))
                 if not is_atomic(learning_services[key].course):
                     ReviewBackend(learning_services[key])
@@ -178,7 +199,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                                        (access['learner_id'], topic_id)).fetchone()
             if not previous:
                 dependency_policy.require(access, topic_id)
-        learner = service_for(access['learner_id'], topic_id)
+        learner = service_for(access['learner_id'], topic_id, request.headers.get('x-learning-identity'))
         if is_atomic(learner.course) and path.startswith('/api/review/'):
             raise DomainError('wrong_training_mode', '原子训练请使用记忆点复习页面。', 422)
         return access, learner
@@ -223,12 +244,12 @@ def create_app(settings: Settings | None = None, service: LearningService | None
 
     def outstanding_count(con):
         tables = {row[0] for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-        return sum(con.execute(f"SELECT COUNT(*) FROM {table} WHERE status IN ('pending','running')").fetchone()[0]
-                   for table in ('submissions', 'review_submissions') if table in tables)
+        return max(len(scheduled_submissions), sum(con.execute(f"SELECT COUNT(*) FROM {table} WHERE status IN ('pending','running')").fetchone()[0]
+                   for table in ('submissions', 'review_submissions') if table in tables))
 
     def schedule(learner, submission_id, review=False):
         # Called under admission_lock. A transport retry never adds another queue item.
-        key = (review, submission_id)
+        key = (id(learner.runtime) if learner.runtime is not None else None, review, submission_id)
         if key in scheduled_submissions:
             # A service-error retry may have become pending while its previous
             # worker is still flushing logs. That accepted work must survive.
@@ -245,6 +266,8 @@ def create_app(settings: Settings | None = None, service: LearningService | None
             try:
                 (learner.review_backend if review else learner).process_submission(submission_id)
             finally:
+                if learner.runtime is not None:
+                    learner.runtime.release_job()
                 with admission_lock:
                     scheduled_submissions.discard(key)
                     retry_requested = key in reschedule_submissions
@@ -252,9 +275,17 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                     if retry_requested and not executor_stopping.is_set():
                         schedule(learner, submission_id, review)
 
+        retained = False
         try:
-            executor.submit(run)
+            if learner.runtime is not None:
+                learner.runtime.retain_job()
+                retained = True
+            future = executor.submit(run)
+            if learner.runtime is not None:
+                future.add_done_callback(lambda finished: learner.runtime.release_job() if finished.cancelled() else None)
         except BaseException:
+            if retained:
+                learner.runtime.release_job()
             scheduled_submissions.discard(key)
             reschedule_submissions.discard(key)
             raise
@@ -273,6 +304,8 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         with admission_lock:
             executor_stopping.set()
         executor.shutdown(wait=False, cancel_futures=True)
+        for runtime in preview_stores.values():
+            runtime.close()
 
     app = FastAPI(title='MathLearningWeb', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     # The subsequently registered boundary middleware wraps this body limiter.
@@ -345,6 +378,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                 response.headers['Vary'] = 'Origin'
             return response
         public_paths = {'/api/health', '/api/access', '/api/access/guest', '/api/access/login', '/api/access/logout',
+                        '/api/materials', '/api/materials/open',
                         '/api/state', '/api/demo-answer', '/api/guest/reset', '/api/choose', '/api/continue', '/api/select', '/api/pause', '/api/submit',
                         '/api/subjects', '/api/catalog', '/api/catalog/select', '/api/dashboard', '/api/profile', '/api/feedback', '/api/guide', '/api/atomic/reviews'}
         task_answers_path = path.startswith('/api/tasks/') and path.endswith('/answers') and path.count('/') == 4
@@ -452,11 +486,17 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     def login(payload: InvitationLogin, request: Request):
         if request.state.public_transport:
             public_limits.consume('login', public_limits.login_per_minute)
-        return access_store.login(payload.invitation_code, request.headers.get('x-learning-identity'))
+        previous = request.headers.get('x-learning-identity')
+        result = access_store.login(payload.invitation_code, previous)
+        forget_preview(previous)
+        return result
 
     @app.post('/api/access/logout')
     def logout(payload: GuestAccess, request: Request):
-        return access_store.logout(request.headers.get('x-learning-identity'))
+        token = request.headers.get('x-learning-identity')
+        result = access_store.logout(token)
+        forget_preview(token)
+        return result
 
     @app.get('/api/catalog')
     def course_catalog(request: Request):
@@ -624,6 +664,8 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         result = learner.submission(submission_id)
         return public_submission(result, access, learner)
 
+    from .materials import register_material_routes
+    register_material_routes(app, catalog, access_store, subjects, identity, public_state)
     register_atomic_routes(app, catalog, access_store, subjects, dependency_policy, clock=atomic_clock)
     register_guide_routes(app, settings, access_store, subjects)
     register_guest_reset_routes(app, identity, public_state, Action)

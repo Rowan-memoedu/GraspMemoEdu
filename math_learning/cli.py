@@ -299,6 +299,7 @@ def main():
     provision.add_argument('--batch', required=True)
     provision.add_argument('--learners', type=int, default=10)
     provision.add_argument('--tests', type=int, default=5)
+    provision.add_argument('--admins', type=int, default=0, help='创建不记录学习状态的管理员账号')
     provision.add_argument('--output', type=Path, required=True)
     for operation, help_text in [('account-disable', '停用账号并注销全部会话'),
                                  ('account-enable', '重新启用账号'),
@@ -395,7 +396,7 @@ def main():
                                             split_permissions(args.features), purpose=args.purpose))
         elif args.command == 'account-provision':
             output(AccountAdmin(make_access_store(settings)).provision(
-                args.batch, learners=args.learners, tests=args.tests, output=args.output))
+                args.batch, learners=args.learners, tests=args.tests, admins=args.admins, output=args.output))
         elif args.command in ('account-disable', 'account-enable'):
             output(make_access_store(settings).set_enabled(args.learner, args.command == 'account-enable'))
         elif args.command == 'account-revoke-sessions':

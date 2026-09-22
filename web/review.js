@@ -1,6 +1,7 @@
-import { t, translateMessage, learningTitle } from './i18n.js?v=842cc571a4ea8008';
-import {questionInput, answerReady} from './question-input.js?v=842cc571a4ea8008';
-import {reportableContent} from './content-report.js?v=842cc571a4ea8008';
+import { t, translateMessage, learningTitle } from './i18n.js?v=f0de4845259eae4b';
+import {questionInput, answerReady} from './question-input.js?v=f0de4845259eae4b';
+import {reportableContent} from './content-report.js?v=f0de4845259eae4b';
+import {createLearningCache} from './learning-cache.js?v=f0de4845259eae4b';
 
 const node = (tag, cls = '', text) => {
   const item = document.createElement(tag); item.className = cls;
@@ -13,13 +14,14 @@ const button = (text, cls, action, id) => {
   item.addEventListener('click', action); return item;
 };
 const content = html => { const item = node('div', 'courseContent'); item.innerHTML = html || ''; return item; };
-const read = key => { try { return sessionStorage.getItem(key); } catch { return null; } };
-const write = (key, value) => { try { value === null ? sessionStorage.removeItem(key) : sessionStorage.setItem(key, value); } catch { /* Server progress remains authoritative. */ } };
-const json = key => { try { return JSON.parse(read(key)); } catch { return null; } };
 
 // The backend owns queue growth, mastery and FSRS. This view only submits the
 // current Practice and renders saved responses, using the Lesson transport/UI.
 export function createReviewView(bridge) {
+  const cache = createLearningCache(() => state?.access || bridge.getAccess());
+  const read = key => cache.read(sessionStorage, key);
+  const write = (key, value) => cache.write(sessionStorage, key, value);
+  const json = key => { try { return JSON.parse(read(key)); } catch { return null; } };
   let state = null, topic = null, module = null, epoch = 0, timer = null, busy = false;
   let selected = null, failure = null, learner = null, clock = { key: null, total: 0, started: null };
   let rendered = null, historyOpen = true;
@@ -277,5 +279,5 @@ export function createReviewView(bridge) {
   window.addEventListener('online', () => { if (topic) refresh(); });
   document.addEventListener('visibilitychange', () => { tick(document.hidden); if (!document.hidden && topic) refresh(); });
   document.getElementById('guestDemoCheckbox').addEventListener('change', prefill);
-  return {open, stop};
+  return {open, stop, reset() { stop(); cache.clear(); clock = {key: null, total: 0, started: null}; }};
 }

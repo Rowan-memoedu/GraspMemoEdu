@@ -7,19 +7,19 @@
     <meta name="referrer" content="no-referrer">
     <meta name="description" data-i18n-content="site.description" content="选择学科，按自己的进度阅读、练习与复习。">
     <title data-i18n="site.title">GraspMemoEdu</title>
-    <link rel="icon" href="./favicon.svg?v=842cc571a4ea8008" type="image/svg+xml">
-    <link rel="stylesheet" href="./styles.css?v=842cc571a4ea8008">
-    <link rel="stylesheet" href="./portal.css?v=842cc571a4ea8008">
-    <link rel="stylesheet" href="./subjects.css?v=842cc571a4ea8008">
-    <link rel="stylesheet" href="./course-graph.css?v=842cc571a4ea8008">
-    <script type="module" src="./app.js?v=842cc571a4ea8008"></script>
+    <link rel="icon" href="./favicon.svg?v=f0de4845259eae4b" type="image/svg+xml">
+    <link rel="stylesheet" href="./styles.css?v=f0de4845259eae4b">
+    <link rel="stylesheet" href="./portal.css?v=f0de4845259eae4b">
+    <link rel="stylesheet" href="./subjects.css?v=f0de4845259eae4b">
+    <link rel="stylesheet" href="./course-graph.css?v=f0de4845259eae4b">
+    <script type="module" src="./app.js?v=f0de4845259eae4b"></script>
   </head>
   <body>
     <a class="skipLink" id="skipContent" href="#portalContent" data-i18n="nav.skip">跳到主要内容</a>
     <header class="topRibbon">
       <div class="topBarContainer">
-        <a class="platformHomeLink" href="#/" aria-label="GraspMemoEdu 主页" data-i18n-aria-label="nav.home"><img src="./favicon.svg?v=842cc571a4ea8008" width="34" height="34" alt=""><span>GraspMemoEdu</span></a>
-        <a class="portalLogo" href="#/" aria-label="GraspMemoEdu 主页" data-i18n-aria-label="nav.home"><img src="./favicon.svg?v=842cc571a4ea8008" width="34" height="34" alt=""><span data-i18n="site.title">GraspMemoEdu</span></a>
+        <a class="platformHomeLink" href="#/" aria-label="GraspMemoEdu 主页" data-i18n-aria-label="nav.home"><img src="./favicon.svg?v=f0de4845259eae4b" width="34" height="34" alt=""><span>GraspMemoEdu</span></a>
+        <a class="portalLogo" href="#/" aria-label="GraspMemoEdu 主页" data-i18n-aria-label="nav.home"><img src="./favicon.svg?v=f0de4845259eae4b" width="34" height="34" alt=""><span data-i18n="site.title">GraspMemoEdu</span></a>
         <a id="subjectContext" class="subjectContext" href="#/" hidden></a>
         <nav class="mainNavigation" aria-label="主要导航" data-i18n-aria-label="nav.main">
           <button id="catalogToggle" class="catalogToggle" type="button" aria-expanded="false" aria-controls="catalogPanel" data-i18n="catalog.title">目录</button>
@@ -44,6 +44,7 @@
       <section id="catalogPanel" class="catalogPanel" aria-label="学科与课程目录" data-i18n-aria-label="catalog.title" hidden></section>
     </header>
     <section id="identityNotice" class="identityNotice" role="status" hidden></section>
+    <section id="adminLearningNotice" class="identityNotice" role="status" data-i18n="admin.sessionNotice" hidden>管理员模式：正常学习流程；学习记录不保存，也不生成后续推送。</section>
     <main class="portalShell" id="portalContent" tabindex="-1"><section class="portalLoading" aria-live="polite"><span class="spinner" aria-hidden="true"></span><p data-i18n="loading.courses">正在读取课程…</p></section></main>
     <div class="appLayout" id="appLayout" hidden>
       <aside id="historySidebar" class="historySidebar" aria-label="学习记录" data-i18n-aria-label="history.title">

@@ -33,12 +33,18 @@ class DomainError(Exception):
 class LearningService:
     """Transactional learning state. No network call holds a database transaction."""
 
-    def __init__(self, course: dict, data_dir: Path, judge=None, learner_id='local'):
+    def __init__(self, course: dict, data_dir: Path, judge=None, learner_id='local', *, runtime=None):
         self.course, self.data_dir, self.judge = course, Path(data_dir), judge
+        self.runtime = runtime
+        if runtime is None:
+            from .learning_storage import administrator
+            if administrator(data_dir, learner_id):
+                raise DomainError('admin_persistence_forbidden', '管理员学习必须使用临时会话。', 403)
         # Attached by the website or trusted review integration.
         self.review_backend = None
         self.learner_id, self.topic_id = learner_id, course['id']
-        self.data_dir.mkdir(parents=True, exist_ok=True)
+        if runtime is None:
+            self.data_dir.mkdir(parents=True, exist_ok=True)
         self.db_path = self.data_dir / 'learning.sqlite3'
         self.log_path = self.data_dir / 'logs/events.jsonl'
         self._log_lock = threading.Lock()
@@ -125,6 +131,8 @@ class LearningService:
                     raise DomainError('invalid_course', '题型配置或标准答案无效。', 422) from exc
 
     def _connect(self):
+        if self.runtime is not None:
+            return self.runtime.connect()
         con = sqlite3.connect(self.db_path, timeout=30, isolation_level=None)
         con.row_factory = sqlite3.Row
         con.execute('PRAGMA foreign_keys=ON')
@@ -626,6 +634,8 @@ class LearningService:
         SQLite is authoritative. A failed log write never rolls back learning;
         the next read/startup retries all events, using stable IDs exactly once.
         """
+        if self.runtime is not None:
+            return True
         try:
             self.log_path.parent.mkdir(parents=True, exist_ok=True)
             with self._log_lock, (self.log_path.parent / '.events.lock').open('a+b') as lock:
@@ -661,6 +671,8 @@ class LearningService:
             return False
 
     def backup(self, path):
+        if self.runtime is not None:
+            raise DomainError('admin_persistence_forbidden', '管理员临时学习不生成备份。', 403)
         path = Path(path)
         if path.resolve() == self.db_path.resolve() or path.exists():
             raise DomainError('backup_exists', '备份目标必须是新的独立文件。', 422)

@@ -24,6 +24,8 @@ class DependencyPolicy:
         return self.missing_count(con, access, topic_id, dependencies, current_time) == 0
 
     def missing_count(self, con, access, topic_id, dependencies=None, current_time=None):
+        if access.get('is_admin'):
+            return 0
         course_id = self.catalog.topic_courses[topic_id]
         dependencies = dependencies if dependencies is not None else self.dependencies(course_id)
         allowed = {topic['id'] for topic in access['topics']}

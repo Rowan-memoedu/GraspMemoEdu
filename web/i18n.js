@@ -1,7 +1,7 @@
 // UI strings only. Course HTML, names, answers and explanations never enter this module.
-import {readerMessages} from './reader-messages.js?v=842cc571a4ea8008';
-import {portalMessages} from './portal-messages.js?v=842cc571a4ea8008';
-import {staticMessages} from './static-messages.js?v=842cc571a4ea8008';
+import {readerMessages} from './reader-messages.js?v=f0de4845259eae4b';
+import {portalMessages} from './portal-messages.js?v=f0de4845259eae4b';
+import {staticMessages} from './static-messages.js?v=f0de4845259eae4b';
 
 export const LANGUAGE_KEY = 'math-learning-web:ui-language';
 export const messages = {...staticMessages, ...readerMessages, ...portalMessages};

@@ -1,11 +1,11 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=842cc571a4ea8008";
-import { createReviewView } from "./review.js?v=842cc571a4ea8008";
-import { renderCourseGraph } from "./course-graph.js?v=842cc571a4ea8008";
-import {questionInput} from './question-input.js?v=842cc571a4ea8008';
-import {reportableContent, installContentReporting} from './content-report.js?v=842cc571a4ea8008';
-import {createCatalogPicker} from './catalog-picker.js?v=842cc571a4ea8008';
-import {createAtomicView} from './atomic.js?v=842cc571a4ea8008';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=842cc571a4ea8008";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=f0de4845259eae4b";
+import { createReviewView } from "./review.js?v=f0de4845259eae4b";
+import { renderCourseGraph } from "./course-graph.js?v=f0de4845259eae4b";
+import {questionInput} from './question-input.js?v=f0de4845259eae4b';
+import {reportableContent, installContentReporting} from './content-report.js?v=f0de4845259eae4b';
+import {createCatalogPicker} from './catalog-picker.js?v=f0de4845259eae4b';
+import {createAtomicView} from './atomic.js?v=f0de4845259eae4b';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=f0de4845259eae4b";
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -150,7 +150,8 @@ export function initPortal(bridge) {
     $("userMenuButton").textContent = initials || t("portal.g.13");
     $("userMenuButton").setAttribute("aria-label", t("portal.userMenu", { name }));
     $("menuDisplayName").textContent = name;
-    $("menuRole").textContent = expired ? t("portal.session.expired.14") : current?.role === "account" ? t("portal.learning.account.15") : t("portal.guest.16");
+    $("menuRole").textContent = expired ? t("portal.session.expired.14") : current?.is_admin ? t('admin.identity') : current?.role === "account" ? t("portal.learning.account.15") : t("portal.guest.16");
+    $('adminLearningNotice').hidden = expired || !current?.is_admin;
     $("menuAccountPurpose").hidden = current?.role !== "account" || current?.purpose !== "test";
     $("logoutButton").hidden = current?.role !== "account";
   }
@@ -272,8 +273,14 @@ export function initPortal(bridge) {
         document.title = pageTitle(t('atomic.reviewTitle'));
         const list = node('section', 'atomicReviewList');
         root.replaceChildren(node('h1', 'portalPageTitle', t('atomic.reviewTitle')), list);
+        if (data.all_materials) list.append(node('p', 'inputHint', t('admin.allCards')));
         for (const item of data.items) {
           const card = node('article', 'courseChoice');
+          if (item.kind === 'atomic_card') {
+            card.append(node('h2', '', item.title), node('p', '', `${item.course_title} · ${item.topic_title}`),
+              link(t('admin.enterCard'), `#/review/${encode(item.topic_id)}/atomic?card=${encode(item.id)}`, 'primaryButton'));
+            list.append(card); continue;
+          }
           card.append(node('h2', '', item.title), node('p', '', t('atomic.dueCount', {count: item.due_count})));
           if (item.paused) card.append(node('p', 'atomicPaused', t('atomic.paused')));
           else if (!item.dependency_ready) card.append(node('p', '', t('portal.prerequisitesRequired')));
@@ -301,7 +308,7 @@ export function initPortal(bridge) {
         if (state.training_mode === 'atomic_retrieval') await atomic.open(topicId, 'learn', state);
         else { root.hidden = true; await bridge.openTopic(topicId, subjectId); }
       } else if (/^\/review\/[^/]+\/[^/]+$/.test(path)) {
-        if (path.split('/')[3] === 'atomic') await atomic.open(decodeURIComponent(path.split('/')[2]), 'review');
+        if (path.split('/')[3] === 'atomic') await atomic.open(decodeURIComponent(path.split('/')[2]), 'review', null, params.get('card'));
         else await review.open(decodeURIComponent(path.split("/")[2]), decodeURIComponent(path.split("/")[3]), params.get("session"));
       } else root.replaceChildren(errorBox(t("portal.this.page.does.not.exist.24"), () => navigate("/"), t("portal.page.not.found.25")));
       if (ticket !== sequence) return;
@@ -913,7 +920,7 @@ export function initPortal(bridge) {
       feedbackInput.value = "";
     },
     permissionsChanged() { catalogPicker.reset(); catalog = null; dashboards.clear(); answerCache.clear(); },
-    async identityChanged() { subjects = null; catalog = null; profile = null; dashboards.clear(); answerCache.clear(); scrolls.clear(); await route(); },
+    async identityChanged() { review.reset(); atomic.reset(); subjects = null; catalog = null; profile = null; dashboards.clear(); answerCache.clear(); scrolls.clear(); await route(); },
     progressChanged() { /* Returning to Learn reads current server progress without changing it. */ },
     showFeedback,
   };

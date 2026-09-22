@@ -1,6 +1,7 @@
-import {t, translateMessage} from './i18n.js?v=842cc571a4ea8008';
-import {questionInput, answerReady} from './question-input.js?v=842cc571a4ea8008';
-import {reportableContent} from './content-report.js?v=842cc571a4ea8008';
+import {t, translateMessage} from './i18n.js?v=f0de4845259eae4b';
+import {questionInput, answerReady} from './question-input.js?v=f0de4845259eae4b';
+import {reportableContent} from './content-report.js?v=f0de4845259eae4b';
+import {createLearningCache} from './learning-cache.js?v=f0de4845259eae4b';
 
 const node = (tag, cls = '', text) => {
   const el = document.createElement(tag); el.className = cls;
@@ -11,10 +12,11 @@ const button = (text, action, cls = 'secondaryButton') => {
   const el = node('button', cls, text); el.type = 'button'; el.addEventListener('click', action); return el;
 };
 const content = html => { const el = node('div', 'courseContent'); el.innerHTML = html || ''; return el; };
-const read = key => { try { return sessionStorage.getItem(key); } catch { return null; } };
-const write = (key, value) => { try { value === null ? sessionStorage.removeItem(key) : sessionStorage.setItem(key, value); } catch { /* Progress is stored on the server. */ } };
 
 export function createAtomicView(bridge) {
+  const cache = createLearningCache(() => state?.access || bridge.getAccess());
+  const read = key => cache.read(sessionStorage, key);
+  const write = (key, value) => cache.write(sessionStorage, key, value);
   const root = bridge.root;
   let state = null, topic = null, learner = null, epoch = 0, timer = null, busy = false, selected = null, failure = null;
   const active = ticket => ticket === epoch && topic && learner === bridge.getAccess()?.learner_id;
@@ -182,7 +184,7 @@ export function createAtomicView(bridge) {
       } else if (state.chunk) main.append(renderChunk(state.chunk));
       else if (state.current) main.append(renderQuestion(state.current));
       else if (state.phase === 'completed') {
-        main.append(node('p', 'atomicComplete', t('atomic.completed')));
+        main.append(node('p', 'atomicComplete', t(state.mode === 'review' ? 'atomic.reviewCompleted' : 'atomic.completed')));
         const review = node('a', 'primaryButton', t('atomic.reviewTitle')); review.href = bridge.reviewHref(); main.append(review);
       } else main.append(node('p', 'atomicWaiting', t('atomic.waiting')),
         ...(state.next_available_at ? [node('p', '', t('atomic.availableAt', {time: bridge.formatDate(state.next_available_at)}))] : []),
@@ -197,15 +199,16 @@ export function createAtomicView(bridge) {
     }
     page.append(sidebar, main); root.replaceChildren(page);
   }
-  async function open(topicId, mode = 'learn', initial = null) {
+  async function open(topicId, mode = 'learn', initial = null, cardId = null) {
     stop(); topic = topicId; learner = bridge.getAccess()?.learner_id;
     const ticket = epoch;
-    const next = initial || await call('state');
+    const next = cardId ? await call('materials/open', {method: 'POST', body: {request_id: crypto.randomUUID(), kind: 'atomic_card', id: cardId}})
+      : initial || await call('state');
     if (!active(ticket)) return;
     accept(next, true);
     if (mode === 'review' && state.mode !== 'review' && state.completed_at && !state.pause) await mutate('choose', {choice: 'review'});
     else if (mode === 'review' && state.mode === 'review' && state.phase === 'waiting') await mutate('continue');
     if (state.pending_submission_id || savedSubmission()) await refresh();
   }
-  return {open, stop};
+  return {open, stop, reset() { stop(); cache.clear(); }};
 }

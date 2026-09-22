@@ -18,12 +18,12 @@ from .service import DomainError, LearningService, encode
 
 
 class AtomicLearningService(LearningService):
-    def __init__(self, course, data_dir, judge=None, learner_id='local', *, clock=None, engine=None):
+    def __init__(self, course, data_dir, judge=None, learner_id='local', *, clock=None, engine=None, runtime=None):
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self.engine = engine or FSRSEngine()
         self.chunks = {c['id']: c for c in course['memory_chunks']}
         self.point_chunks = {p['id']: c['id'] for c in course['memory_chunks'] for p in c['points']}
-        super().__init__(course, data_dir, judge, learner_id)
+        super().__init__(course, data_dir, judge, learner_id, runtime=runtime)
 
     def _time(self):
         return utc_time(self.clock())
@@ -76,6 +76,9 @@ class AtomicLearningService(LearningService):
         state['active'] = None
         state['active_step_id'] = str(uuid.uuid4())
         state['pending_chunk'] = None
+        if state.get('preview_single_card'):
+            state.update(phase='completed', status='completed')
+            return
         if state['mode'] == 'learn' and all(p['mastered'] for p in state['points'].values()):
             state.update(status='completed', phase='completed', completed_at=self._time().isoformat())
             return
@@ -134,13 +137,38 @@ class AtomicLearningService(LearningService):
                   'server_time': self._time().isoformat(), 'completed_at': state['completed_at'],
                   'learned_count': sum(p['mastered'] for p in state['points'].values()),
                   'point_count': len(state['points']), 'current': None, 'chunk': None,
-                  'introduction': self.course['introduction'] if learned or not state['started_at'] else None}
+                  'introduction': self.course['introduction'] if learned or not state['started_at'] or state.get('preview_single_card') else None}
         if state['active']:
             result['current'] = self._question(state['active'], feedback=state['active']['phase'] == 'feedback')
         if state['phase'] == 'chunk' and not state['pause']:
             chunk = self.chunks[state['pending_chunk']]
             result['chunk'] = {key: chunk[key] for key in ('id', 'title', 'html', 'anchors')}
         return result
+
+    def preview_card(self, card_id, request_id):
+        if self.runtime is None:
+            raise DomainError('feature_forbidden', '仅管理员临时会话可直接进入卡片。', 403)
+        card = self.questions.get(card_id)
+        if card is None:
+            raise DomainError('unknown_card', '未找到此卡片。', 404)
+        with self._transaction() as con:
+            state = self._load(con)
+            payload = {'request_id': request_id, 'card_id': card_id}
+            replay, fingerprint = self._request(con, 'preview_card', payload)
+            if replay:
+                return self._public(state)
+            if state['pending_submission_id']:
+                raise DomainError('submission_pending', '答案正在判定，请稍候。')
+            revision = state['revision']
+            self._new_attempt(state, 0)
+            shown = self._time().isoformat()
+            state.update(revision=revision, preview_single_card=True, mode='review', phase='answer',
+                         started_at=shown, active_step_id=str(uuid.uuid4()))
+            state['active'] = {'id': state['active_step_id'], 'card_id': card_id, 'point_ids': card['point_ids'],
+                               'mode': 'review', 'shown_at': shown, 'phase': 'answer'}
+            self._save(con, state)
+            self._record_action(con, 'preview_card', payload, fingerprint)
+        return self._public(state)
 
     def choose(self, payload):
         with self._transaction() as con:

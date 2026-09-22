@@ -1,4 +1,9 @@
 export const portalMessages = {
+  'admin.identity': ['管理员', 'Administrator'],
+  'admin.sessionNotice': ['管理员模式：正常学习流程；学习记录不保存，也不生成后续推送。', 'Administrator mode: normal learning flow, without saved learning records or scheduled reviews.'],
+  'admin.allCards': ['全部原子卡片，可直接进入；本次学习不保存记录，也不会生成后续推送。', 'All atomic flashcards are available. Learning is not saved and does not schedule future reviews.'],
+  'admin.enterCard': ['进入卡片', 'Open flashcard'],
+  'atomic.reviewCompleted': ['本张卡片已完成。', 'This flashcard is complete.'],
   'atomic.title': ['原子化提取训练', 'Atomic retrieval training'],
   'atomic.reviewTitle': ['复习', 'Review'],
   'atomic.answer': ['你的答案', 'Your answer'],

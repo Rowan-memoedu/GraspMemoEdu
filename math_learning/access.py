@@ -69,6 +69,8 @@ class AccessStore:
                 con.execute('ALTER TABLE access_principals ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1))')
             if 'batch_id' not in columns:
                 con.execute('ALTER TABLE access_principals ADD COLUMN batch_id TEXT')
+            if 'is_admin' not in columns:
+                con.execute('ALTER TABLE access_principals ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0 CHECK(is_admin IN (0,1))')
             # Legacy lists were explicit snapshots. Never infer that an old
             # all-current-topics list authorized future content or features.
             for name in ('topics_default', 'features_default'):
@@ -112,9 +114,10 @@ class AccessStore:
 
     def _public(self, row):
         guest = row['role'] == 'guest'
-        features = list(GUEST_FEATURES) if guest else (list(FEATURES) if row['features_default'] else json.loads(row['features']))
+        admin = not guest and bool(row['is_admin'])
+        features = list(GUEST_FEATURES) if guest else (list(FEATURES) if admin or row['features_default'] else json.loads(row['features']))
         topic_ids = ([topic for topic in self.topics if topic in self.guest_topic_ids] if guest else
-                     (list(self.topics) if row['topics_default'] else json.loads(row['topic_ids'])))
+                     (list(self.topics) if admin or row['topics_default'] else json.loads(row['topic_ids'])))
         result = {
             'role': row['role'], 'learner_id': row['learner_id'],
             'display_name': row['display_name'],
@@ -124,6 +127,8 @@ class AccessStore:
         if not guest:
             result.update(purpose=row['purpose'], enabled=bool(row['enabled']), batch_id=row['batch_id'],
                           permission_defaults={'topics': bool(row['topics_default']), 'features': bool(row['features_default'])})
+        if admin:
+            result.update(is_admin=True, learning_policy={'persistence': 'memory', 'content_scope': 'all', 'scheduled_delivery': False})
         return result
 
     def _new_identity(self, con, learner_id, *, account=False):
@@ -210,7 +215,9 @@ class AccessStore:
         return list(dict.fromkeys(topic_ids)), [feature for feature in FEATURES if feature in features]
 
     def _insert_account(self, con, display_name, topic_ids=None, features=None,
-                        purpose='learner', batch_id=None, learner_id=None, invitation=None):
+                        purpose='learner', batch_id=None, learner_id=None, invitation=None, is_admin=False):
+        if type(is_admin) is not bool:
+            raise ValueError('Administrator flag must be boolean')
         if not isinstance(display_name, str) or not display_name.strip() or len(display_name) > 100:
             raise DomainError('invalid_account_name', '账号显示名称需要 1 至 100 个字符。', 422)
         if purpose not in ACCOUNT_PURPOSES:
@@ -225,10 +232,10 @@ class AccessStore:
         invitation = invitation or 'MLW-' + secrets.token_urlsafe(24)
         now = timestamp()
         con.execute('''INSERT INTO access_principals
-            (learner_id,role,display_name,features,topic_ids,invitation_digest,created_at,updated_at,purpose,batch_id,topics_default,features_default)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''',
+            (learner_id,role,display_name,features,topic_ids,invitation_digest,created_at,updated_at,purpose,batch_id,topics_default,features_default,is_admin)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)''',
             (learner_id, 'account', display_name.strip(), json.dumps(features), json.dumps(topic_ids),
-             credential_digest('invitation', invitation), now, now, purpose, batch_id, int(topics_default), int(features_default)))
+             credential_digest('invitation', invitation), now, now, purpose, batch_id, int(topics_default), int(features_default), int(is_admin)))
         row = con.execute('SELECT * FROM access_principals WHERE learner_id=?', (learner_id,)).fetchone()
         return {'account': self._public(row), 'invitation_code': invitation,
                 'notice': '邀请码可重复登录同一账号，请通过可信方式交付给对应学习者。'}

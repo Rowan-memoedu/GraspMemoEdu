@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import test from 'node:test';
+import {createLearningCache} from '../web/learning-cache.js';
 
 // Run the actual request/identity code with isolated storage and fake transport.
 // No public service, real credentials, learning records, or timers are touched.
@@ -22,7 +23,7 @@ function setup({ nextOrigin = 'https://new.example', status = 502, role = 'guest
   if (role === 'guest') localStorage.setItem('math-learning-web:guest-identity:https://old.example', 'original-token');
   else localStorage.setItem('math-learning-web:guest-identity:https://old.example', 'separate-guest-token');
   const context = vm.createContext({
-    URL, AbortController, setTimeout, clearTimeout, console, localStorage, sessionStorage,
+    URL, AbortController, setTimeout, clearTimeout, console, localStorage, sessionStorage, createLearningCache,
     Date: { now: () => clock }, t: value => value, translateMessage: value => value,
     applyStaticTranslations() {}, document: { hasFocus: () => true },
     window: { location: { origin: 'https://site.example' }, matchMedia: () => ({ matches: false }) },

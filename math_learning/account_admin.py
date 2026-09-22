@@ -229,9 +229,11 @@ class AccountAdmin:
         for account, expected in zip(manifest['accounts'], templates):
             required = {'learner_id', 'display_name', 'purpose', 'topic_ids', 'features', 'invitation_code'}
             modes = {'topics_default', 'features_default'}
-            if (not isinstance(account, dict) or not required <= set(account) or set(account) - required - modes
+            if (not isinstance(account, dict) or not required <= set(account) or set(account) - required - modes - {'is_admin'}
                     or any(type(account[key]) is not bool for key in modes & set(account))):
                 raise ValueError('Invalid manifest account')
+            if type(account.get('is_admin', False)) is not bool or account.get('is_admin', False) != expected.get('is_admin', False):
+                raise ValueError('Invalid administrator designation')
             if kind != 'rotate' and any((key in account) != (key in manifest['request'])
                                        or account.get(key) != manifest['request'].get(key) for key in modes):
                 raise ValueError('Manifest permission mode differs from request')
@@ -251,7 +253,8 @@ class AccountAdmin:
     @staticmethod
     def _receipt(kind, batch_id, database, path, accounts, already_exists):
         return {'operation': kind, 'batch_id': batch_id, 'database': database, 'output': str(path),
-                'account_count': len(accounts), 'learners': sum(a['purpose'] == 'learner' for a in accounts),
+                'account_count': len(accounts), 'learners': sum(a['purpose'] == 'learner' and not a.get('is_admin') for a in accounts),
+                'admins': sum(bool(a.get('is_admin')) for a in accounts),
                 'tests': sum(a['purpose'] == 'test' for a in accounts),
                 'already_exists': already_exists, 'manifest_available': path.is_file()}
 
@@ -295,7 +298,8 @@ class AccountAdmin:
                                                    None if account.get('topics_default') else account['topic_ids'],
                                                    None if account.get('features_default') else account['features'],
                                                    purpose=account['purpose'], batch_id=batch_id,
-                                                   learner_id=account['learner_id'], invitation=account['invitation_code'])
+                                                   learner_id=account['learner_id'], invitation=account['invitation_code'],
+                                                   **({'is_admin': True} if account.get('is_admin') else {}))
                 public = [{key: value for key, value in account.items() if key != 'invitation_code'} for account in manifest['accounts']]
                 con.execute('INSERT INTO account_admin_operations VALUES (?,?,?,?,?,?,?,?)',
                             (operation_id, kind, _canonical(manifest['request']), str(path), hashlib.sha256(blob).hexdigest(),
@@ -308,17 +312,21 @@ class AccountAdmin:
         except (OSError, sqlite3.Error, subprocess.SubprocessError):
             raise DomainError('account_export_failed', '私密导出或数据库提交失败；本次账号变更已撤销，可用相同参数重试。', 422) from None
 
-    def provision(self, batch_id, *, learners=10, tests=5, output):
+    def provision(self, batch_id, *, learners=10, tests=5, admins=0, output):
         if not isinstance(batch_id, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,99}', batch_id):
             raise DomainError('invalid_batch', '批次名需要 1 至 100 个英文字母、数字、点、下划线或连字符。', 422)
-        if any(type(count) is not int or count < 0 for count in (learners, tests)) or not 1 <= learners + tests <= 1000:
+        if any(type(count) is not int or count < 0 for count in (learners, tests, admins)) or not 1 <= learners + tests + admins <= 1000:
             raise DomainError('invalid_account_count', '每批账号总数需要为 1 至 1000，且各用途数量不能为负。', 422)
         topics, features = list(self.store.topics), list(FEATURES)
         defaults = {'topics_default': True, 'features_default': True}
         request = {'learners': learners, 'tests': tests, 'topic_ids': topics, 'features': features, **defaults}
+        if admins:
+            request['admins'] = admins
         entries = [{'display_name': f'{label} {index:02d}', 'purpose': purpose, 'topic_ids': topics, 'features': features, **defaults}
                    for purpose, label, count in [('learner', '学习者', learners), ('test', '测试账号', tests)]
                    for index in range(1, count + 1)]
+        entries += [{'display_name': f'管理员 {index:02d}', 'purpose': 'learner', 'is_admin': True,
+                     'topic_ids': topics, 'features': features, **defaults} for index in range(1, admins + 1)]
         return self._run('provision', 'batch:' + batch_id, batch_id, request, output, entries)
 
     def create(self, display_name, topic_ids=None, features=None, *, purpose='learner', output):
@@ -339,6 +347,7 @@ class AccountAdmin:
             return [{'learner_id': learner_id, 'display_name': row['display_name'], 'purpose': row['purpose'],
                      'topic_ids': list(self.store.topics) if row['topics_default'] else json.loads(row['topic_ids']),
                      'features': list(FEATURES) if row['features_default'] else json.loads(row['features']),
-                     'topics_default': bool(row['topics_default']), 'features_default': bool(row['features_default'])}]
+                     'topics_default': bool(row['topics_default']), 'features_default': bool(row['features_default']),
+                     **({'is_admin': True} if row['is_admin'] else {})}]
         operation_id = 'rotate:' + hashlib.sha256(str(Path(output).resolve()).encode()).hexdigest()
         return self._run('rotate', operation_id, None, {'learner_id': learner_id}, output, template)
