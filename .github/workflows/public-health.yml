@@ -31,8 +31,11 @@ jobs:
             fi
           else
             if [ -z "$existing" ]; then
-              gh issue create --title "$title" \
+              created=$(gh issue create --title "$title" \
                 --body '定时公网检查失败；请查看此工作流运行日志以及云端 nginx 和 graspmemoedu 服务。仅记录公开健康状态，不含学生数据。'
+              )
+              gh issue edit "$created" --add-assignee "$GITHUB_REPOSITORY_OWNER" || \
+                echo 'Failed to assign monitoring issue; issue remains open.' >&2
             fi
             exit 1
           fi
