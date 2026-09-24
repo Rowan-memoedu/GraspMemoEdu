@@ -417,6 +417,21 @@ class PublicAccessAcceptanceTests(unittest.TestCase):
         self.assertTrue(result["correct"])
         self.assertEqual(result["state"]["modules"][0]["mastery"], 4)
 
+    def test_daily_global_judge_quota_blocks_new_guest_without_changing_progress(self):
+        self.app.state.public_limits.daily.global_limit = 1
+        first, _ = self._guest()
+        second, _ = self._guest()
+        self._mutate("choose", first, choice="mastered")
+        self._mutate("choose", second, choice="mastered")
+        used = self._mutate("submit", first, answer="service-error")
+        self.assertEqual(self._wait_for_submission(first, used["submission_id"])["status"], "error")
+        before = self._state(second)
+        payload = self._payload(second, answer="correct")
+        response = self.client.post("/api/submit", json=payload, headers=self._headers(second))
+        self._assert_rate_error(response, "daily_judge_quota")
+        self.assertEqual(self._state(second), before)
+        self.assertEqual(self._rows("SELECT COUNT(*) FROM submissions WHERE id=?", (payload["request_id"],)), [(0,)])
+
     def test_eight_pending_judgements_are_enforced_under_parallel_requests(self):
         identities, before, payloads = [], {}, {}
         for _ in range(10):

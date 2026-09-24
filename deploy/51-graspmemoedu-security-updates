@@ -1,0 +1,2 @@
+// Append the Ubuntu security pocket to the existing allowed origins.
+Unattended-Upgrade::Allowed-Origins:: "${distro_id}:${distro_codename}-security";

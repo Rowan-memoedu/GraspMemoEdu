@@ -139,7 +139,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     if service.review_backend is None and not is_atomic(service.course):
         ReviewBackend(service)
     services_lock = threading.Lock()
-    public_limits = PublicLimits()
+    public_limits = PublicLimits(data_dir=settings.data_dir)
     admission_lock = threading.Lock()
     scheduled_submissions = set()
     reschedule_submissions = set()
@@ -651,7 +651,8 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                 quota_key = 'submit:' + learner.learner_id
                 if request.state.public_transport:
                     public_limits.check(quota_key, public_limits.submissions_per_minute)
-                result = learner.submit(data)
+                with public_limits.daily.reserve(learner.learner_id, access['role']):
+                    result = learner.submit(data)
                 if request.state.public_transport:
                     public_limits.record(quota_key)
             if result['status'] == 'pending':

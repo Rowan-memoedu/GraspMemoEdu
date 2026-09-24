@@ -101,6 +101,20 @@ class ReviewAPITests(unittest.TestCase):
         self.call('POST', '/api/review/configure', {}, 403)
         self.call('POST', base + '/unlock', {}, 403)
 
+    def test_review_and_lesson_share_daily_judge_quota(self):
+        self.app.state.public_limits.daily.global_limit = 1
+        state = self.enroll()
+        self.answer(state, True)
+        lesson = self.learner.state()
+        choice = {'request_id': 'daily-choice', 'expected_revision': lesson['revision'],
+                  'attempt_id': lesson['attempt_id'], 'step_id': lesson['active_step_id'], 'choice': 'mastered'}
+        lesson = self.learner.choose(choice)
+        choice.pop('choice')
+        choice.update(request_id='daily-lesson-answer', expected_revision=lesson['revision'], answer='correct')
+        result = self.call('POST', '/api/submit', choice, 429)
+        self.assertEqual(result['detail']['code'], 'daily_judge_quota')
+        self.assertEqual(self.learner.state()['pending_submission_id'], None)
+
     def test_shared_pending_limit_blocks_both_directions(self):
         state = self.enroll()
         self.app.state.public_limits.max_pending = 1

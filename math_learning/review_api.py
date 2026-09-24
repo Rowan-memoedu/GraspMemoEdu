@@ -133,7 +133,8 @@ def register_review_routes(app, identity, admission_lock, limits, schedule, outs
                 quota_key = 'submit:' + learner.learner_id
                 if request.state.public_transport:
                     limits.check(quota_key, limits.submissions_per_minute)
-                result = backend.submit(session_id, data)
+                with limits.daily.reserve(learner.learner_id, access['role']):
+                    result = backend.submit(session_id, data)
                 if request.state.public_transport:
                     limits.record(quota_key)
             if result['status'] == 'pending':
