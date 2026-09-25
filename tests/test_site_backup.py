@@ -1,6 +1,7 @@
 """Portable site backups using synthetic courses and guest-only private fixtures."""
 
 from contextlib import closing
+from datetime import datetime
 import base64
 import hashlib
 import json
@@ -10,6 +11,7 @@ import unittest
 from unittest.mock import patch
 import uuid
 import zipfile
+from zoneinfo import ZoneInfo
 
 from math_learning.access import AccessStore
 from math_learning.catalog import Catalog
@@ -19,6 +21,7 @@ from math_learning.dashboard import DashboardStore
 from math_learning.guide import GuideReader
 from math_learning.service import DomainError, LearningService
 from math_learning.site_backup import backup_site, restore_site
+from math_learning.public_limits import DailyJudgeQuota, judge_usage_report
 from tests.fixtures import DeterministicJudge, synthetic_course, temporary_test_directory
 from scripts.verify_content import collect_questions, parse_outline, sha256
 
@@ -104,6 +107,24 @@ class SiteBackupAcceptanceTests(unittest.TestCase):
         result = backup_bundle(self.settings, path)
         self.assertEqual(result['format'], 2)
         return path
+
+    def test_backup_restores_daily_judge_usage_without_changing_learning_data(self):
+        learner_id = self.guest['access']['learner_id']
+        quota = DailyJudgeQuota(self.data)
+        with quota.reserve(learner_id, 'guest'):
+            pass
+        archive = self._backup()
+        with zipfile.ZipFile(archive) as saved:
+            self.assertIn('judge-daily-quota.sqlite3', saved.namelist())
+        destination = self.root / 'quota-restored'
+        restore_site(archive, destination)
+        day = datetime.now(ZoneInfo('Asia/Shanghai')).date().isoformat()
+        report = judge_usage_report(destination, day=day, learner_id=learner_id)
+        self.assertEqual(report['global_used'], 1)
+        self.assertEqual(report['identities'][0]['used'], 1)
+        corrupted = self._edited_archive(archive, lambda manifest, blobs:
+                                         blobs.__setitem__('judge-daily-quota.sqlite3', b'not a database'))
+        self._assert_invalid_without_target(corrupted)
 
     def _edited_archive(self, original, mutation):
         with zipfile.ZipFile(original) as archive:

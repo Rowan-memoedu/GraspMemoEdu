@@ -2,10 +2,11 @@
 
 from collections import deque
 from contextlib import closing, contextmanager
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 import math
 import os
 from pathlib import Path
+import re
 import sqlite3
 import threading
 import time
@@ -67,8 +68,10 @@ class DailyJudgeQuota:
     zone = ZoneInfo('Asia/Shanghai')
 
     @staticmethod
-    def configured_limit(name, default):
+    def configured_limit(name, default, *, allow_unlimited=False):
         value = int(os.environ.get(name, default))
+        if allow_unlimited and value == 0:
+            return None
         if value <= 0:
             raise ValueError(f'{name} must be a positive integer')
         return value
@@ -76,9 +79,9 @@ class DailyJudgeQuota:
     def __init__(self, data_dir, now=None):
         self.path = Path(data_dir) / 'judge-daily-quota.sqlite3'
         self.now = now or (lambda: datetime.now(self.zone))
-        self.global_limit = self.configured_limit('MATH_JUDGE_DAILY_GLOBAL', 600)
-        self.guest_limit = self.configured_limit('MATH_JUDGE_DAILY_GUEST', 30)
-        self.account_limit = self.configured_limit('MATH_JUDGE_DAILY_ACCOUNT', 300)
+        self.global_limit = self.configured_limit('MATH_JUDGE_DAILY_GLOBAL', 2000)
+        self.guest_limit = self.configured_limit('MATH_JUDGE_DAILY_GUEST', 100)
+        self.account_limit = self.configured_limit('MATH_JUDGE_DAILY_ACCOUNT', 0, allow_unlimited=True)
         with closing(self._connect()) as con:
             con.execute('''CREATE TABLE IF NOT EXISTS usage (
                 day TEXT NOT NULL, scope TEXT NOT NULL, count INTEGER NOT NULL,
@@ -89,6 +92,8 @@ class DailyJudgeQuota:
 
     @contextmanager
     def reserve(self, learner_id, role):
+        if role not in ('guest', 'account'):
+            raise ValueError('Unknown learner role')
         now = self.now().astimezone(self.zone)
         day = now.date().isoformat()
         midnight = datetime.combine(now.date() + timedelta(days=1), datetime.min.time(), self.zone)
@@ -100,7 +105,7 @@ class DailyJudgeQuota:
             try:
                 for scope, limit in (('global', self.global_limit), (own_scope, own_limit)):
                     used = con.execute('SELECT count FROM usage WHERE day=? AND scope=?', (day, scope)).fetchone()
-                    if used and used[0] >= limit:
+                    if limit is not None and used and used[0] >= limit:
                         raise PublicLimitError('daily_judge_quota',
                                                '今日判题额度已用完，请明日再试；本次未计入作答。', retry_after)
                 yield
@@ -111,6 +116,50 @@ class DailyJudgeQuota:
             except BaseException:
                 con.rollback()
                 raise
+
+
+def judge_usage_report(data_dir, *, day=None, role='all', learner_id=None):
+    """Read-only, private per-identity usage for one China-local calendar day."""
+    if role not in ('all', 'account', 'guest'):
+        raise ValueError('Unknown report role')
+    day = day or datetime.now(DailyJudgeQuota.zone).date().isoformat()
+    if not isinstance(day, str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', day):
+        raise ValueError('Day must be YYYY-MM-DD')
+    date.fromisoformat(day)
+    root = Path(data_dir)
+    principals_path = root / 'learning.sqlite3'
+    with closing(sqlite3.connect(principals_path.resolve().as_uri() + '?mode=ro', uri=True)) as con:
+        con.row_factory = sqlite3.Row
+        principals = con.execute('''SELECT learner_id,role,display_name,purpose,enabled,is_admin
+            FROM access_principals WHERE role IN ('account','guest')''').fetchall()
+    entries = {(row['role'], row['learner_id']): {
+        'role': row['role'], 'learner_id': row['learner_id'],
+        'display_name': row['display_name'], 'used': 0, 'identity_exists': True,
+        **({'purpose': row['purpose'], 'enabled': bool(row['enabled']),
+            'is_admin': bool(row['is_admin'])} if row['role'] == 'account' else {})
+    } for row in principals}
+    quota_path = root / 'judge-daily-quota.sqlite3'
+    if not quota_path.is_file():
+        raise FileNotFoundError('判题用量数据库不存在，无法生成可信报表。')
+    with closing(sqlite3.connect(quota_path.resolve().as_uri() + '?mode=ro', uri=True)) as con:
+        usage = con.execute('SELECT scope,count FROM usage WHERE day=?', (day,)).fetchall()
+    global_used = 0
+    for scope, count in usage:
+        if scope == 'global':
+            global_used = count
+            continue
+        kind, separator, identity = scope.partition(':')
+        if not separator or kind not in ('account', 'guest'):
+            raise ValueError('Unknown judge usage scope')
+        entry = entries.setdefault((kind, identity), {
+            'role': kind, 'learner_id': identity, 'display_name': None,
+            'used': 0, 'identity_exists': False})
+        entry['used'] = count
+    selected = [entry for (kind, identity), entry in entries.items()
+                if (role == 'all' or kind == role) and (learner_id is None or identity == learner_id)]
+    selected.sort(key=lambda entry: (entry['role'], -entry['used'], entry['display_name'] or '', entry['learner_id']))
+    return {'day': day, 'timezone': 'Asia/Shanghai', 'global_used': global_used,
+            'identities': selected}
 
 
 class BodyLimitMiddleware:

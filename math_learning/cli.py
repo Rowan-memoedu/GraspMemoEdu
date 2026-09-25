@@ -310,6 +310,10 @@ def main():
     rotate.add_argument('--learner', required=True)
     rotate.add_argument('--output', type=Path, required=True)
     sub.add_parser('account-list', help='查看账号及当前 Topic/功能权限，不显示邀请码')
+    usage_report = sub.add_parser('judge-usage-report', help='只读查询每日判题用量，包含零用量账号和游客，不显示邀请码')
+    usage_report.add_argument('--day', help='北京时间日期 YYYY-MM-DD；默认今天')
+    usage_report.add_argument('--role', choices=('all', 'account', 'guest'), default='all')
+    usage_report.add_argument('--learner', help='只查看指定 learner_id')
     feedback = sub.add_parser('feedback-list', help='仅在本机查看收到的支持与内容纠错反馈')
     feedback.add_argument('--limit', type=int, default=30)
     permissions = sub.add_parser('account-permissions', help='设置账号权限；下一次 API 请求生效')
@@ -405,6 +409,9 @@ def main():
             output(AccountAdmin(make_access_store(settings)).rotate(args.learner, output=args.output))
         elif args.command == 'account-list':
             output({'accounts': make_access_store(settings).list_principals(accounts_only=True)})
+        elif args.command == 'judge-usage-report':
+            from .public_limits import judge_usage_report
+            output(judge_usage_report(settings.data_dir, day=args.day, role=args.role, learner_id=args.learner))
         elif args.command == 'feedback-list':
             database = settings.data_dir / 'learning.sqlite3'
             rows = []

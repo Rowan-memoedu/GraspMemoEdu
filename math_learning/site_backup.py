@@ -131,6 +131,8 @@ def _validate_payload(manifest, blobs):
     if not isinstance(versions, dict) or not isinstance(sources, dict) or not isinstance(portable, dict):
         raise ValueError('Invalid manifest data')
     topics, expected_files = {}, {'catalog.json', 'learning.sqlite3'}
+    if 'judge-daily-quota.sqlite3' in blobs:
+        expected_files.add('judge-daily-quota.sqlite3')
     for course in portable['courses']:
         for declaration in course['topics']:
             topic_id = Catalog._identifier(declaration['id'])
@@ -228,6 +230,17 @@ def backup_site(settings, destination=None):
             if topic_id not in catalog.topics:
                 retired_versions.setdefault(topic_id, []).append(version)
         blobs['learning.sqlite3'] = snapshot_path.read_bytes()
+        quota_path = settings.data_dir / 'judge-daily-quota.sqlite3'
+        if quota_path.is_file():
+            quota_snapshot = Path(folder) / 'judge-daily-quota.sqlite3'
+            with closing(sqlite3.connect(quota_path)) as source:
+                with closing(sqlite3.connect(quota_snapshot)) as snapshot:
+                    source.backup(snapshot)
+                    if (snapshot.execute('PRAGMA integrity_check').fetchone()[0] != 'ok'
+                            or not snapshot.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='usage'").fetchone()
+                            or snapshot.execute('SELECT 1 FROM usage WHERE count < 0 LIMIT 1').fetchone()):
+                        raise DomainError('backup_failed', '判题用量数据库校验失败，未创建备份。', 500)
+            blobs['judge-daily-quota.sqlite3'] = quota_snapshot.read_bytes()
     sources_index = {}
     for topic_id, topic in catalog.topics.items():
         path = catalog.topic_paths[topic_id]
@@ -373,6 +386,12 @@ def restore_site(backup, destination):
                                                          for _, topic_id, version in rows)):
                     raise ValueError('Database topics differ from the catalog')
                 learners = [(learner_id, topic_id) for learner_id, topic_id, _ in rows if topic_id in topics]
+            if 'judge-daily-quota.sqlite3' in blobs:
+                with closing(sqlite3.connect(staged / 'judge-daily-quota.sqlite3')) as con:
+                    if (con.execute('PRAGMA integrity_check').fetchone()[0] != 'ok'
+                            or not con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='usage'").fetchone()
+                            or con.execute('SELECT 1 FROM usage WHERE count < 0 LIMIT 1').fetchone()):
+                        raise ValueError('Invalid judge usage database')
             for learner_id, topic_id in learners:
                 create_learning_service(catalog.topic(topic_id), staged, learner_id=learner_id).recover_interrupted()
             for topic_id, sources in manifest['sources'].items():
