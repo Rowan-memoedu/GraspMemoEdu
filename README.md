@@ -20,7 +20,7 @@ Topic 支持既有综合范式训练，以及面向英语、语文、生物、�
 
 界面默认中文，可在设置切换英文。统一译法与内容边界见 [界面语言规范](docs/ui-language.md)，完整文案见 [中英对照表](docs/ui-language-table.md)。
 
-公开入口：[GraspMemoEdu](https://amymiller76717-sudo.github.io/GraspMemoEdu-Pages/)。其他电脑、手机可直接打开，自动进入游客模式，无需填写服务地址、配对码或授予本地网络权限。后端、课程和学习记录运行并保存在腾讯云；原始邀请码管理文件仍留在本机私密目录，服务器保存认证所需哈希。源码仓库为私有 `amymiller76717-sudo/GraspMemoEdu`；本机源码目录保留原名。
+公开入口：[GraspMemoEdu](https://rowan-memoedu.github.io/GraspMemoEdu-Pages/)。其他电脑、手机可直接打开，自动进入游客模式，无需填写服务地址、配对码或授予本地网络权限。后端、课程和学习记录运行并保存在腾讯云；原始邀请码管理文件仍留在本机私密目录，服务器保存认证所需哈希。源码仓库为私有 `Rowan-memoedu/GraspMemoEdu`；本机源码目录保留原名。
 
 游客可进入全部六科学习、提交答案和回看已发布内容；主动暂停仍提示「该功能需注册账号才能使用」，后端同样限制。邀请码账号在全部学科通用，默认开放全部 Topic 和功能并自动继承新增内容；管理员明确设置的 Topic 或功能列表分别覆盖默认权限，见 [账号管理](docs/accounts.md)。
 
@@ -28,7 +28,7 @@ Topic 支持既有综合范式训练，以及面向英语、语文、生物、�
 
 ## 打开与启动
 
-正式网址：[GraspMemoEdu](https://amymiller76717-sudo.github.io/GraspMemoEdu-Pages/)。腾讯云上的 systemd 持续托管后端，个人电脑关闭、休眠或退出 ChatGPT 桌面端中的 Codex 均不影响网站运行。运维命令见 [腾讯云部署](docs/tencent-deployment.md)。
+正式网址：[GraspMemoEdu](https://rowan-memoedu.github.io/GraspMemoEdu-Pages/)。腾讯云上的 systemd 持续托管后端，个人电脑关闭、休眠或退出 ChatGPT 桌面端中的 Codex 均不影响网站运行。运维命令见 [腾讯云部署](docs/tencent-deployment.md)。
 
 `D:/AppData/MathLearningWeb` 已标为迁移回滚快照，旧启动、维护和默认管理入口会拒绝使用它，不能与云端同时写入。开发时必须显式指定独立数据目录；本机 8765 属于 AnkiConnect，不要占用。示例（先向隔离目录导入测试数据）：
 
@@ -192,7 +192,7 @@ node scripts/inspect_page.mjs
 
 公开页面仅含 HTML、JS、CSS、图标、`.nojekyll` 和只含 `api_origin` 的 `deployment.json`。连接配置由发布时写入，网页没有配置入口。服务不可用时只显示提示和重试。游客身份在切换后端网址时会先到新后端验证，成功后迁移；连接错误不会清除旧身份或悄悄创建替代身份。
 
-前端发布仓库为 `amymiller76717-sudo/GraspMemoEdu-Pages`，与私有源码仓库独立。正式服务只允许已配置网页来源及自身公开来源。`settings.json` 的 `public_api_origin` 指定精确公开 HTTPS 地址；nginx 保留公开 Host，后端据此识别公开请求。云端后端只监听 `127.0.0.1:18768`，由 nginx 提供公网 HTTPS。
+前端发布仓库为 `Rowan-memoedu/GraspMemoEdu-Pages`，与私有源码仓库独立。正式服务只允许已配置网页来源及自身公开来源。`settings.json` 的 `public_api_origin` 指定精确公开 HTTPS 地址；nginx 保留公开 Host，后端据此识别公开请求。云端后端只监听 `127.0.0.1:18768`，由 nginx 提供公网 HTTPS。
 
 修改前端后，先应用 `python scripts/version_web_assets.py --patch` 输出的补丁，为 HTML、CSS 和整套模块引用生成同一内容版本号；再导出到新的构建目录。脚本验证版本号和源码、导出一致，并检查远端完整文件清单，遇到额外文件会停止：
 

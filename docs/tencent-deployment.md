@@ -52,7 +52,7 @@ For planned server maintenance, stop `graspmemoedu-healthcheck.timer` before del
 
 ## Deployment acceptance
 
-Run `python scripts/verify_deployed_guides.py https://124.221.144.155 --origin https://amymiller76717-sudo.github.io` after proxy/content changes. This checks every subject guide and all referenced resources through public HTTPS, including authenticated browser CORS preflights. A successful `/api/guide` JSON response alone is insufficient: the initial migration omitted asset proxy routes, causing both mathematics and physics images to return 404. The 2026-09-21 correction was applied with `nginx -t` and a graceful reload.
+Run `python scripts/verify_deployed_guides.py https://124.221.144.155 --origin https://rowan-memoedu.github.io` after proxy/content changes. This checks every subject guide and all referenced resources through public HTTPS, including authenticated browser CORS preflights. A successful `/api/guide` JSON response alone is insufficient: the initial migration omitted asset proxy routes, causing both mathematics and physics images to return 404. The 2026-09-21 correction was applied with `nginx -t` and a graceful reload.
 
 ## Backup portability
 

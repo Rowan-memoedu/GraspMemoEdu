@@ -4,7 +4,7 @@ from urllib.request import urlopen
 
 
 API = 'https://124.221.144.155'
-PAGE = 'https://amymiller76717-sudo.github.io/GraspMemoEdu-Pages/'
+PAGE = 'https://rowan-memoedu.github.io/GraspMemoEdu-Pages/'
 
 
 def main():

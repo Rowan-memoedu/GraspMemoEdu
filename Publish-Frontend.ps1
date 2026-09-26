@@ -1,5 +1,5 @@
 param(
-    [string]$Repository = 'amymiller76717-sudo/GraspMemoEdu-Pages',
+    [string]$Repository = 'Rowan-memoedu/GraspMemoEdu-Pages',
     [string]$ExportDirectory = 'D:\Artifacts\MathLearningWeb\pages-ready',
     [string]$EvidenceDirectory = 'D:\Artifacts\MathLearningWeb\publication'
 )
