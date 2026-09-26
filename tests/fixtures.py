@@ -67,7 +67,7 @@ def temporary_test_directory():
     # The Windows development host keeps disposable run data on D:.
     root = os.environ.get("MLW_TEST_TEMP_ROOT")
     if root is None and os.name == "nt" and Path("D:/").exists():
-        root = "D:/Artifacts/MathLearningWeb/test-runs"
+        root = "D:/Artifacts/GraspMemoEdu/test-runs"
     if root:
         Path(root).mkdir(parents=True, exist_ok=True)
-    return tempfile.TemporaryDirectory(prefix="math-learning-", dir=root)
+    return tempfile.TemporaryDirectory(prefix="graspmemoedu-", dir=root)

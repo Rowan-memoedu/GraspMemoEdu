@@ -7,9 +7,9 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import uvicorn
-from math_learning.api import create_app
-from math_learning.config import Settings
-from math_learning.course_graph import import_graph
+from graspmemoedu.api import create_app
+from graspmemoedu.config import Settings
+from graspmemoedu.course_graph import import_graph
 from scripts.install_author_course import install_course
 from tests.fixtures import synthetic_course
 
@@ -26,7 +26,7 @@ def main():
     parser.add_argument('--port', type=int, default=8779)
     args = parser.parse_args()
     root = args.output.resolve()
-    allowed = Path('D:/Artifacts/MathLearningWeb/illustrated-import-20260921/qa').resolve()
+    allowed = Path('D:/Artifacts/GraspMemoEdu/illustrated-import-20260921/qa').resolve()
     if not args.output.is_absolute() or not root.is_relative_to(allowed) or root == allowed or root.exists():
         raise ValueError('Use a new absolute child of the illustrated-import QA directory')
     if args.port in (8765, 8767) or not 1024 <= args.port <= 65535:

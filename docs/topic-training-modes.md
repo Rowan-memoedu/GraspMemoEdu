@@ -51,7 +51,7 @@
 `point_ids` 引用这个 Topic 内的稳定记忆点 ID。增加同点变式时添加新卡并引用相同 ID；综合卡引用多个 ID。所有点仍须有单点卡，避免初学必须依赖未学的其他点。题型配置复用 [题型与判题](question-types.md)。
 
 ```powershell
-$env:MATH_LEARNING_PYTHON = 'D:\AppData\MathLearningWeb\venv\Scripts\python.exe'
+$env:GRASPMEMOEDU_PYTHON = 'D:\AppData\GraspMemoEdu\venv\Scripts\python.exe'
 node scripts/import_atomic_topic.mjs <source.json> <new-topic.json>
 ```
 

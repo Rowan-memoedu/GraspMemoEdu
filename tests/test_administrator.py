@@ -9,12 +9,12 @@ import unittest
 import uuid
 
 from fastapi.testclient import TestClient
-from math_learning.access import FEATURES
-from math_learning.account_admin import AccountAdmin
-from math_learning.api import create_app
-from math_learning.config import Settings
-from math_learning.service import LearningService, DomainError
-from math_learning.site_backup import backup_site, restore_site
+from graspmemoedu.access import FEATURES
+from graspmemoedu.account_admin import AccountAdmin
+from graspmemoedu.api import create_app
+from graspmemoedu.config import Settings
+from graspmemoedu.service import LearningService, DomainError
+from graspmemoedu.site_backup import backup_site, restore_site
 from tests.fixtures import synthetic_course, DeterministicJudge, temporary_test_directory
 from tests.atomic_fixtures import atomic_topic
 

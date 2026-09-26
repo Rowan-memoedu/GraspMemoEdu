@@ -146,7 +146,7 @@ class ReviewedContentTests(unittest.TestCase):
         import sys
         result = subprocess.run(["node", str(script), str(self.source), str(self.sidecar), str(output), str(audit), str(self.review)],
                                 capture_output=True, text=True, encoding="utf-8",
-                                env={**os.environ, "MATH_LEARNING_PYTHON": sys.executable})
+                                env={**os.environ, "GRASPMEMOEDU_PYTHON": sys.executable})
         self.assertEqual(result.returncode, 0, result.stderr)
         course = json.loads(output.read_text(encoding="utf-8"))
         self.assertEqual(course["id"], "synthetic-physics")

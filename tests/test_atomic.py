@@ -9,10 +9,10 @@ import unittest
 import uuid
 
 from fsrs import Card
-from math_learning.atomic import AtomicLearningService
-from math_learning.atomic_content import validate_atomic
-from math_learning.question_types import demo_answer
-from math_learning.service import DomainError
+from graspmemoedu.atomic import AtomicLearningService
+from graspmemoedu.atomic_content import validate_atomic
+from graspmemoedu.question_types import demo_answer
+from graspmemoedu.service import DomainError
 from atomic_fixtures import atomic_topic
 
 
@@ -166,7 +166,7 @@ class AtomicTests(unittest.TestCase):
     def test_judge_failure_recovery_and_pause_during_judging(self):
         self.service.choose(self.action(choice='learn')); self.advance()
         original = self.raw()['points']
-        with patch('math_learning.atomic.judge_answer', return_value=(None, 'retry')):
+        with patch('graspmemoedu.atomic.judge_answer', return_value=(None, 'retry')):
             _, result = self.submit('红色')
         self.assertEqual(result['status'], 'error')
         self.assertEqual(self.raw()['points'], original)
@@ -176,7 +176,7 @@ class AtomicTests(unittest.TestCase):
             entered.set(); finish.wait(10); return True, 'correct'
         payload = self.action(answer='红色')
         self.service.submit(payload)
-        with patch('math_learning.atomic.judge_answer', side_effect=wait_for_judge):
+        with patch('graspmemoedu.atomic.judge_answer', side_effect=wait_for_judge):
             worker = threading.Thread(target=self.service.process_submission, args=(payload['request_id'],))
             worker.start()
             try:
@@ -219,7 +219,7 @@ class AtomicTests(unittest.TestCase):
         self.finish_initial(); self.when += timedelta(hours=6, minutes=1)
         self.service.choose(self.action(choice='review'))
         payload = self.action(answer='{"a":"红色","b":"蓝色"}')
-        with patch('math_learning.atomic.judge_answer', return_value=(True, 'correct')) as judge:
+        with patch('graspmemoedu.atomic.judge_answer', return_value=(True, 'correct')) as judge:
             workers = [threading.Thread(target=lambda: (self.service.submit(payload), self.service.process_submission(payload['request_id']))) for _ in range(2)]
             for worker in workers: worker.start()
             for worker in workers: worker.join(10)

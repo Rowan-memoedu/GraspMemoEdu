@@ -7,11 +7,11 @@ import unittest
 import uuid
 
 from fastapi.testclient import TestClient
-from math_learning.api import create_app
-from math_learning.atomic import AtomicLearningService
-from math_learning.config import Settings
-from math_learning.question_types import demo_answer
-from math_learning.site_backup import backup_site, restore_site
+from graspmemoedu.api import create_app
+from graspmemoedu.atomic import AtomicLearningService
+from graspmemoedu.config import Settings
+from graspmemoedu.question_types import demo_answer
+from graspmemoedu.site_backup import backup_site, restore_site
 from atomic_fixtures import atomic_topic
 
 

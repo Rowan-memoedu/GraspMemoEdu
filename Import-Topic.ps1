@@ -5,13 +5,13 @@ param(
     [Parameter(Mandatory)][string]$CourseId,
     [string]$Unit,
     [string]$RunDirectory,
-    [string]$DataDirectory = 'D:\AppData\MathLearningWeb',
+    [string]$DataDirectory = 'D:\AppData\GraspMemoEdu',
     [switch]$PrepareOnly
 )
 $ErrorActionPreference = 'Stop'
-$pythonPath = 'D:\AppData\MathLearningWeb\venv\Scripts\python.exe'
+$pythonPath = 'D:\AppData\GraspMemoEdu\venv\Scripts\python.exe'
 $operation = if ($PrepareOnly) { 'author-prepare' } else { 'author-import' }
-$arguments = @('-m', 'math_learning', '--data-dir', $DataDirectory, $operation, '--source', $Source, '--topic-id', $TopicId)
+$arguments = @('-m', 'graspmemoedu', '--data-dir', $DataDirectory, $operation, '--source', $Source, '--topic-id', $TopicId)
 if (-not $PrepareOnly) {
     $arguments += @('--subject', $Subject, '--course', $CourseId)
     if ($Unit) { $arguments += @('--unit', $Unit) }

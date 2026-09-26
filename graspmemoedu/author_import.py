@@ -311,7 +311,7 @@ def _call(client, folder, stage, instruction, data, validator, ids, *, assets=No
 def _node(*args):
     result = subprocess.run(['node', str(ROOT / 'scripts/import_course.mjs'), *map(str, args)],
                             cwd=ROOT, capture_output=True, text=True, encoding='utf-8', timeout=180,
-                            env={**os.environ, 'MATH_LEARNING_PYTHON': sys.executable})
+                            env={**os.environ, 'GRASPMEMOEDU_PYTHON': sys.executable})
     if result.returncode:
         raise ValueError('Markdown conversion failed: ' + result.stderr[-3000:])
     return result.stdout

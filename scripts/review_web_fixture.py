@@ -1,6 +1,6 @@
 """Loopback-only synthetic website fixture; never opens formal learning data.
 
-Run: python scripts/review_web_fixture.py --output D:/Artifacts/MathLearningWeb/review-web/run-unique
+Run: python scripts/review_web_fixture.py --output D:/Artifacts/GraspMemoEdu/review-web/run-unique
 Then: node scripts/review_web_acceptance.mjs http://127.0.0.1:8779 OUTPUT
 Pass --real-judge to reuse MathAnswerJudge instead of the explicit arithmetic oracle.
 """
@@ -18,10 +18,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from fastapi import FastAPI, Request, HTTPException
 import uvicorn
-from math_learning.api import create_app
-from math_learning.config import Settings
-from math_learning.judge import ExistingJudge
-from math_learning.service import LearningService
+from graspmemoedu.api import create_app
+from graspmemoedu.config import Settings
+from graspmemoedu.judge import ExistingJudge
+from graspmemoedu.service import LearningService
 
 
 def make_course():
@@ -47,9 +47,9 @@ def main():
     parser.add_argument('--real-judge', action='store_true')
     args = parser.parse_args()
     root = args.output.resolve()
-    artifact_root = Path('D:/Artifacts/MathLearningWeb/review-web').resolve()
+    artifact_root = Path('D:/Artifacts/GraspMemoEdu/review-web').resolve()
     if not args.output.is_absolute() or not root.is_relative_to(artifact_root) or root.exists():
-        raise ValueError('Use a NEW directory below D:/Artifacts/MathLearningWeb/review-web')
+        raise ValueError('Use a NEW directory below D:/Artifacts/GraspMemoEdu/review-web')
     if args.port in (8765, 8767):
         raise ValueError('Never use a formal service port')
     with socket.socket() as probe:

@@ -1,4 +1,4 @@
-param([string]$DataDirectory = 'D:\AppData\MathLearningWeb')
+param([string]$DataDirectory = 'D:\AppData\GraspMemoEdu')
 $ErrorActionPreference = 'Stop'
 $pidFile = Join-Path $DataDirectory 'runtime\tunnel\tunnel.json'
 if (-not (Test-Path -LiteralPath $pidFile)) { Write-Output '没有此入口管理的公网隧道。'; exit 0 }

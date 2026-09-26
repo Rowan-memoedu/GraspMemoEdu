@@ -16,9 +16,9 @@ import uuid
 
 from fastapi.testclient import TestClient
 
-from math_learning.api import create_app
-from math_learning.config import Settings
-from math_learning.service import LearningService
+from graspmemoedu.api import create_app
+from graspmemoedu.config import Settings
+from graspmemoedu.service import LearningService
 from tests.fixtures import synthetic_course, temporary_test_directory
 
 
@@ -209,7 +209,7 @@ class PublicAccessAcceptanceTests(unittest.TestCase):
         for headers in ({}, self._headers(), self._headers(origin=self.public_origin)):
             response = self.client.get("/api/health", headers=headers)
             self.assertEqual(response.status_code, 200, response.text)
-            self.assertEqual(response.json(), {"status": "ok", "service": "MathLearningWeb"})
+            self.assertEqual(response.json(), {"status": "ok", "service": "GraspMemoEdu"})
             self.assertNotIn(self.settings.instance_id, response.text)
         local = self.client.get(self.local_origin + "/api/health")
         self.assertEqual(local.status_code, 200, local.text)

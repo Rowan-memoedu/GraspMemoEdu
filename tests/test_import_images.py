@@ -38,7 +38,7 @@ class ImportImagesTests(unittest.TestCase):
 
     def run_node(self, *args):
         return subprocess.run(['node', str(SCRIPT), *map(str, args)], capture_output=True, text=True,
-                              encoding='utf-8', env={**os.environ, 'MATH_LEARNING_PYTHON': sys.executable})
+                              encoding='utf-8', env={**os.environ, 'GRASPMEMOEDU_PYTHON': sys.executable})
 
     def test_inspect_hashes_paths_and_render_embedded_image_without_source_mutation(self):
         result = self.run_node('--inspect', self.source)

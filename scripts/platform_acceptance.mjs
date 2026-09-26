@@ -1,6 +1,6 @@
 /** Multi-subject platform, real Chrome/HTTP, isolated synthetic fixture only.
- * python scripts/platform_fixture.py --output D:/Artifacts/MathLearningWeb/platform/fixture-UNIQUE
- * node scripts/platform_acceptance.mjs http://127.0.0.1:8779 D:/Artifacts/MathLearningWeb/platform/browser-UNIQUE
+ * python scripts/platform_fixture.py --output D:/Artifacts/GraspMemoEdu/platform/fixture-UNIQUE
+ * node scripts/platform_acceptance.mjs http://127.0.0.1:8779 D:/Artifacts/GraspMemoEdu/platform/browser-UNIQUE
  */
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -120,9 +120,9 @@ try{
    const initialAccount=JSON.parse(await fs.readFile(accountFile,'utf8'));
    assert.equal(initialAccount.account.purpose,'test');
    const dataDir=path.resolve(path.dirname(accountFile),'data');
-   assert.ok(dataDir.toLowerCase().startsWith(path.resolve('D:/Artifacts/MathLearningWeb/platform').toLowerCase()+path.sep));
-   const account=JSON.parse(execFileSync('D:/AppData/MathLearningWeb/venv/Scripts/python.exe',['-c',
-     'import json,sys; from pathlib import Path; from math_learning.access import AccessStore; from math_learning.catalog import Catalog; from math_learning.config import Settings; p=Path(sys.argv[1]); c=Catalog.load(Settings.load(p)); a=AccessStore(p,list(c.topics.values())); print(json.dumps(a.create_account("Isolated browser test",purpose="test")))',dataDir],{encoding:'utf8',windowsHide:true}));
+   assert.ok(dataDir.toLowerCase().startsWith(path.resolve('D:/Artifacts/GraspMemoEdu/platform').toLowerCase()+path.sep));
+   const account=JSON.parse(execFileSync('D:/AppData/GraspMemoEdu/venv/Scripts/python.exe',['-c',
+     'import json,sys; from pathlib import Path; from graspmemoedu.access import AccessStore; from graspmemoedu.catalog import Catalog; from graspmemoedu.config import Settings; p=Path(sys.argv[1]); c=Catalog.load(Settings.load(p)); a=AccessStore(p,list(c.topics.values())); print(json.dumps(a.create_account("Isolated browser test",purpose="test")))',dataDir],{encoding:'utf8',windowsHide:true}));
    await navigate('/');await page.locator('#userMenuButton').click();await page.locator('#identityButton').click();
    await page.locator('#invitationCode').fill(account.invitation_code);
    await page.locator('#identitySubmitButton').click();await page.locator('#identityDialog').waitFor({state:'hidden'});

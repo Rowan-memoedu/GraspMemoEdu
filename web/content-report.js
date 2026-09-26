@@ -1,4 +1,4 @@
-import {t} from './i18n.js?v=f0de4845259eae4b';
+import {t} from './i18n.js?v=c9b4ecad728ac974';
 
 const blocks = new WeakMap();
 export function reportableContent(element, context, contentBlockId, contentVersion) {

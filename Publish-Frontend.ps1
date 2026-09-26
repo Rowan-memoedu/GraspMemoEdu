@@ -1,7 +1,7 @@
 param(
     [string]$Repository = 'Rowan-memoedu/GraspMemoEdu-Pages',
-    [string]$ExportDirectory = 'D:\Artifacts\MathLearningWeb\pages-ready',
-    [string]$EvidenceDirectory = 'D:\Artifacts\MathLearningWeb\publication'
+    [string]$ExportDirectory = 'D:\Artifacts\GraspMemoEdu\pages-ready',
+    [string]$EvidenceDirectory = 'D:\Artifacts\GraspMemoEdu\publication'
 )
 $ErrorActionPreference = 'Stop'
 & python (Join-Path $PSScriptRoot 'scripts/version_web_assets.py')

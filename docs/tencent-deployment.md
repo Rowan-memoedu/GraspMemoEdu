@@ -16,6 +16,10 @@ GitHub Pages remains the frontend. The backend uses the existing Tencent Lightho
 
 ## Operations
 
+Local source, data, cache and artifact roots use `GraspMemoEdu`; the Python package and CLI are `graspmemoedu`. Website-specific environment variables use `GRASPMEMOEDU_`, including `GRASPMEMOEDU_JUDGE_API_KEY`, `GRASPMEMOEDU_JUDGE_BASE_URL` and `GRASPMEMOEDU_JUDGE_MODEL`. The independent MathAnswerJudge project's own environment interface remains separate. Renaming never changes course/Topic IDs, database schemas or learning records.
+
+The frontend upgrades previous browser-storage keys on the same origin, preserving identities, language and drafts, with newer values taking precedence. Browser storage cannot cross the changed Pages domain: invitation-code users can sign in again to reach their existing server-side progress. Historical backup files remain original evidence and use the same restore format.
+
 SSH uses the existing `ubuntu` account and its existing key. Do not copy credentials into documentation or Git.
 
 ```sh
@@ -24,22 +28,22 @@ sudo journalctl -u graspmemoedu -n 50
 sudo systemctl list-timers 'graspmemoedu-*'
 sudo /usr/local/sbin/graspmemoedu-backup
 cd /opt/graspmemoedu/app
-sudo -u graspmemoedu /opt/graspmemoedu/venv/bin/python -m math_learning --data-dir /var/lib/graspmemoedu account-list
+sudo -u graspmemoedu /opt/graspmemoedu/venv/bin/python -m graspmemoedu --data-dir /var/lib/graspmemoedu account-list
 ```
 
 Let's Encrypt IP certificates use the shortlived profile. `graspmemoedu-cert-renew.timer` checks every six hours and reloads nginx after renewal. `graspmemoedu-healthcheck.timer` checks the local HTTPS/backend chain every minute; it cannot detect an outage between an external student and the cloud firewall. `graspmemoedu-backup.timer` creates and restores a verification copy daily, retaining timestamped archives for seven days under `/var/backups/graspmemoedu`. These server backups share the server's failure domain; the migration snapshot is separately retained on the Windows machine.
 
 The private GitHub repository runs `.github/workflows/public-health.yml` twice an hour from outside Tencent. It checks public HTTPS health, the published Pages endpoint and the homepage. On failure it opens one private monitoring issue and marks the run failed; on recovery it closes the issue. GitHub notification delivery depends on the account's Actions/Issues notification settings and scheduled checks may run late. It does not restart the server.
 
-Paid judging has a durable daily quota in `/var/lib/graspmemoedu/judge-daily-quota.sqlite3`, shared by Lesson and Review and by all visitors. Defaults: 2000 accepted judging attempts across the site per day, no per-account cap, and 100 per guest identity, resetting at 00:00 Asia/Shanghai. Account usage is still counted in the global total and the private report. An error-result retry can require another judging call and therefore another unit; exact idempotent replays do not. Rejected or malformed answers do not consume a unit. The production settings are in `/etc/systemd/system/graspmemoedu.service.d/99-judge-quota.conf` (source: `deploy/99-judge-quota.conf`). `MATH_JUDGE_DAILY_GLOBAL` and `MATH_JUDGE_DAILY_GUEST` require positive integers; `MATH_JUDGE_DAILY_ACCOUNT=0` disables only the per-account cap. After changing them, run `systemctl daemon-reload`, then restart only `graspmemoedu.service`. Existing 12/minute per learner and eight-pending limits remain. This caps accepted calls, not provider-side currency spend or charges from calls already in flight.
+Paid judging has a durable daily quota in `/var/lib/graspmemoedu/judge-daily-quota.sqlite3`, shared by Lesson and Review and by all visitors. Defaults: 2000 accepted judging attempts across the site per day, no per-account cap, and 100 per guest identity, resetting at 00:00 Asia/Shanghai. Account usage is still counted in the global total and the private report. An error-result retry can require another judging call and therefore another unit; exact idempotent replays do not. Rejected or malformed answers do not consume a unit. The production settings are in `/etc/systemd/system/graspmemoedu.service.d/99-judge-quota.conf` (source: `deploy/99-judge-quota.conf`). `GRASPMEMOEDU_JUDGE_DAILY_GLOBAL` and `GRASPMEMOEDU_JUDGE_DAILY_GUEST` require positive integers; `GRASPMEMOEDU_JUDGE_DAILY_ACCOUNT=0` disables only the per-account cap. After changing them, run `systemctl daemon-reload`, then restart only `graspmemoedu.service`. Existing 12/minute per learner and eight-pending limits remain. This caps accepted calls, not provider-side currency spend or charges from calls already in flight.
 
 The private, read-only report lists every account and guest (including zero usage), showing `learner_id`, display name and daily accepted judging count. Query it on the server; never publish these identities through the public website:
 
 ```sh
 cd /opt/graspmemoedu/app
-sudo -u graspmemoedu /opt/graspmemoedu/venv/bin/python -m math_learning --data-dir /var/lib/graspmemoedu judge-usage-report
-sudo -u graspmemoedu /opt/graspmemoedu/venv/bin/python -m math_learning --data-dir /var/lib/graspmemoedu judge-usage-report --day 2026-09-25 --role guest
-sudo -u graspmemoedu /opt/graspmemoedu/venv/bin/python -m math_learning --data-dir /var/lib/graspmemoedu judge-usage-report --learner '<learner_id>'
+sudo -u graspmemoedu /opt/graspmemoedu/venv/bin/python -m graspmemoedu --data-dir /var/lib/graspmemoedu judge-usage-report
+sudo -u graspmemoedu /opt/graspmemoedu/venv/bin/python -m graspmemoedu --data-dir /var/lib/graspmemoedu judge-usage-report --day 2026-09-25 --role guest
+sudo -u graspmemoedu /opt/graspmemoedu/venv/bin/python -m graspmemoedu --data-dir /var/lib/graspmemoedu judge-usage-report --learner '<learner_id>'
 ```
 
 The report does not create learning records or send judging requests. Counts begin when the daily quota database was introduced on 2026-09-24; earlier judging is not reconstructed. Site backups include the usage database when present; older archives without it remain restorable, but cannot produce a trustworthy usage report.

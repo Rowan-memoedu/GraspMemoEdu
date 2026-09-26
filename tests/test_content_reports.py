@@ -6,9 +6,9 @@ import unittest
 
 from fastapi.testclient import TestClient
 
-from math_learning.api import create_app
-from math_learning.config import Settings
-from math_learning.service import LearningService
+from graspmemoedu.api import create_app
+from graspmemoedu.config import Settings
+from graspmemoedu.service import LearningService
 from tests.fixtures import synthetic_course, temporary_test_directory
 
 

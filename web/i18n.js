@@ -1,9 +1,31 @@
 // UI strings only. Course HTML, names, answers and explanations never enter this module.
-import {readerMessages} from './reader-messages.js?v=f0de4845259eae4b';
-import {portalMessages} from './portal-messages.js?v=f0de4845259eae4b';
-import {staticMessages} from './static-messages.js?v=f0de4845259eae4b';
+import {readerMessages} from './reader-messages.js?v=c9b4ecad728ac974';
+import {portalMessages} from './portal-messages.js?v=c9b4ecad728ac974';
+import {staticMessages} from './static-messages.js?v=c9b4ecad728ac974';
 
-export const LANGUAGE_KEY = 'math-learning-web:ui-language';
+export const LANGUAGE_KEY = 'graspmemoedu:ui-language';
+// Read the previous namespace once on the same origin. Renaming the public
+// domain cannot grant access to another origin's browser storage.
+export function migrateLegacyStorage(storage) {
+  if (!storage) return;
+  const oldPrefix = 'math-learning-web:';
+  const keys = Array.from({length: storage.length}, (_, index) => storage.key(index));
+  for (const key of keys) {
+    if (!key?.startsWith(oldPrefix)) continue;
+    try {
+      const target = 'graspmemoedu:' + key.slice(oldPrefix.length);
+      const value = storage.getItem(key);
+      if (value === null) continue;
+      if (storage.getItem(target) === null) storage.setItem(target, value);
+      // Newer state wins, and obsolete identity keys must not restore a login
+      // after a later logout. A failed write leaves the original for retry.
+      if (storage.getItem(target) !== null) storage.removeItem(key);
+    } catch { /* Preserve inaccessible entries and retry on a later load. */ }
+  }
+}
+for (const name of ['localStorage', 'sessionStorage']) {
+  try { migrateLegacyStorage(globalThis[name]); } catch { /* Storage may be disabled. */ }
+}
 export const messages = {...staticMessages, ...readerMessages, ...portalMessages};
 const translatedMessages = new Map(Object.values(messages).flatMap(pair => pair.map(value => [value, pair])));
 const validLanguage = value => value === 'en' ? 'en' : 'zh-CN';

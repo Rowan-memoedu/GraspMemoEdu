@@ -1,4 +1,4 @@
-param([string]$DataDirectory = 'D:\AppData\MathLearningWeb', [int]$Port = 8767)
+param([string]$DataDirectory = 'D:\AppData\GraspMemoEdu', [int]$Port = 8767)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Assert-LocalLearningData.ps1')
 Assert-LocalLearningData -DataDirectory $DataDirectory

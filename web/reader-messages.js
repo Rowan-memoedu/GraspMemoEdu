@@ -77,7 +77,7 @@ export const readerMessages = {
   ],
   "数学学习": [
     "数学学习",
-    "Math Learning"
+    "GraspMemoEdu"
   ],
   "正在读取学习记录…": [
     "正在读取学习记录…",

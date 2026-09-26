@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from math_learning.author_import import prepare_topic, _answers, _reviews, _object, CompatibleClient
+from graspmemoedu.author_import import prepare_topic, _answers, _reviews, _object, CompatibleClient
 
 
 class FakeClient:
@@ -53,7 +53,7 @@ class AuthorImportTests(unittest.TestCase):
         return '{}'
 
     def run_prepare(self, client):
-        with patch('math_learning.author_import._node', side_effect=self.node), patch('math_learning.author_import.Catalog._validate_topic'):
+        with patch('graspmemoedu.author_import._node', side_effect=self.node), patch('graspmemoedu.author_import.Catalog._validate_topic'):
             return prepare_topic(self.source, 'physics-speed', self.run, client=client, mode='semantic')
 
     def test_approved_package_binds_source_answers_and_complete_review(self):
@@ -146,7 +146,7 @@ class AuthorImportTests(unittest.TestCase):
             payloads.append((json.loads(request.data), timeout))
             return io.BytesIO(b'{"choices":[{"finish_reason":"stop","message":{"content":"{}"}}]}')
         client = CompatibleClient('https://api.deepseek.com', 'fixture-secret', 'deepseek-flash')
-        with patch('math_learning.author_import.urllib.request.build_opener') as build:
+        with patch('graspmemoedu.author_import.urllib.request.build_opener') as build:
             build.return_value.open.side_effect = opened
             client.complete([{'role': 'user', 'content': 'Extract JSON'}])
             client.review_complete([{'role': 'user', 'content': 'Review JSON'}])

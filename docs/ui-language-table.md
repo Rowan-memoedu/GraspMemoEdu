@@ -128,7 +128,7 @@
 | Sign in again | 重新登录 |
 | Return to your guest session | 返回原游客模式 |
 | Please sign in again | 账号需要重新登录 |
-| Math Learning | 数学学习 |
+| GraspMemoEdu | 数学学习 |
 | Loading learning history… | 正在读取学习记录… |
 | Loading your progress | 正在读取学习进度 |
 | Your learning content will open here shortly. | 稍等片刻，学习内容将在这里打开。 |
@@ -300,11 +300,11 @@
 | Guest | 游客 |
 | The course catalog is temporarily unavailable. | 课程目录暂时无法读取。 |
 | Course learning records are temporarily unavailable. | 课程学习记录暂时无法读取。 |
-| Learn · Math Learning | 学习 · 数学学习 |
-| Courses · Math Learning | 课程 · 数学学习 |
-| Guide · Math Learning | 指南 · 数学学习 |
-| Q&A · Math Learning | 常见问题 · 数学学习 |
-| Settings · Math Learning | 设置 · 数学学习 |
+| Learn · GraspMemoEdu | 学习 · 数学学习 |
+| Courses · GraspMemoEdu | 课程 · 数学学习 |
+| Guide · GraspMemoEdu | 指南 · 数学学习 |
+| Q&A · GraspMemoEdu | 常见问题 · 数学学习 |
+| Settings · GraspMemoEdu | 设置 · 数学学习 |
 | This page does not exist. | 这个页面不存在。 |
 | Page not found | 未找到页面 |
 | Content unavailable | 当前内容尚未开放 |

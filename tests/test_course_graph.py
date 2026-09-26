@@ -6,12 +6,12 @@ import unittest
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
-from math_learning.api import create_app
-from math_learning.catalog import Catalog
-from math_learning.config import Settings
-from math_learning.course_graph import GraphStore, import_graph, preview_html, read_graph, revision, validate_graph
-from math_learning.service import LearningService
-from math_learning.site_backup import backup_site, restore_site
+from graspmemoedu.api import create_app
+from graspmemoedu.catalog import Catalog
+from graspmemoedu.config import Settings
+from graspmemoedu.course_graph import GraphStore, import_graph, preview_html, read_graph, revision, validate_graph
+from graspmemoedu.service import LearningService
+from graspmemoedu.site_backup import backup_site, restore_site
 from tests.fixtures import synthetic_course, DeterministicJudge, temporary_test_directory
 
 
@@ -65,7 +65,7 @@ class CourseGraphTests(unittest.TestCase):
         first = import_graph(self.settings, self.source, apply=True)
         self.graph['edges'] = []
         self.write(self.source, self.graph)
-        with patch('math_learning.course_graph.os.replace', side_effect=OSError('commit failed')):
+        with patch('graspmemoedu.course_graph.os.replace', side_effect=OSError('commit failed')):
             with self.assertRaises(OSError):
                 import_graph(self.settings, self.source, apply=True)
         self.assertEqual(revision(read_graph(first['path'])), first['revision'])

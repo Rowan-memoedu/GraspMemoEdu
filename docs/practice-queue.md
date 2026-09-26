@@ -37,10 +37,10 @@ Lesson 第四错、复习第三错或主动暂停，沿用原有 Topic 暂停机
 
 `tests/test_practice_queue.py`、`tests/test_lesson_grouped_queue.py` 和 `tests/test_review_grouped_queue.py` 覆盖抽题、事务、跨轮持久化及升级兼容。
 
-真实判题验收使用 `D:/Artifacts/MathLearningWeb/grouped-practice` 下尚不存在的隔离目录：
+真实判题验收使用 `D:/Artifacts/GraspMemoEdu/grouped-practice` 下尚不存在的隔离目录：
 
 ```powershell
-& 'D:/AppData/MathLearningWeb/venv/Scripts/python.exe' scripts/verify_grouped_queue.py --output 'D:/Artifacts/MathLearningWeb/grouped-practice/new-canary' --real-judge
+& 'D:/AppData/GraspMemoEdu/venv/Scripts/python.exe' scripts/verify_grouped_queue.py --output 'D:/Artifacts/GraspMemoEdu/grouped-practice/new-canary' --real-judge
 ```
 
 该脚本的 `--real-judge` 前五次调用现有真实判题，随后使用明确标记的算术测试判题器，检验整个题库的覆盖及复用顺序。回执区分两类调用；不访问正式数据库。

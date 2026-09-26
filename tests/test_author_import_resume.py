@@ -6,7 +6,7 @@ import unittest
 import zlib
 from unittest.mock import patch
 
-from math_learning.author_import import prepare_topic, resume_topic as _resume_topic
+from graspmemoedu.author_import import prepare_topic, resume_topic as _resume_topic
 from tests.fixtures import temporary_test_directory
 from tests.test_author_import_images import png
 
@@ -43,8 +43,8 @@ class ImportResumeTests(unittest.TestCase):
         self.source = self.root / 'original.md'
         self.source.write_text(json.dumps({'q1': '1+1', 'q2': '2*1'}), encoding='utf-8')
         self.old, self.new = self.root / 'old', self.root / 'new'
-        self.mock_node = patch('math_learning.author_import._node', side_effect=self.node)
-        self.mock_validate = patch('math_learning.author_import.Catalog._validate_topic')
+        self.mock_node = patch('graspmemoedu.author_import._node', side_effect=self.node)
+        self.mock_validate = patch('graspmemoedu.author_import.Catalog._validate_topic')
         self.mock_node.start(); self.mock_validate.start()
         self.addCleanup(self.mock_node.stop); self.addCleanup(self.mock_validate.stop)
 
@@ -67,7 +67,7 @@ class ImportResumeTests(unittest.TestCase):
     def test_complete_package_reuses_all_questions_without_api_and_keeps_old_evidence(self):
         self.assertEqual(self.prepare(ResumeFake())['status'], 'approved')
         old_files = {p.name: p.read_bytes() for p in self.old.iterdir()}
-        with patch('math_learning.author_import.make_client', side_effect=AssertionError('No API needed')):
+        with patch('graspmemoedu.author_import.make_client', side_effect=AssertionError('No API needed')):
             result = resume_topic(self.old, self.new)
         self.assertEqual(result['status'], 'approved', result)
         self.assertEqual(result['reuse_counts']['reviewed_questions'], 2)
@@ -101,7 +101,7 @@ class ImportResumeTests(unittest.TestCase):
         resolution = {'schema_version': 1, 'questions': [{'id': 'q1', 'source_sha256': source_hash,
             'question_sha256': hashlib.sha256(b'1+1').hexdigest(), 'assets': [], 'reviewer': 'Codex',
             'decision': 'approved', 'rationale': 'Verified the arithmetic independently.', 'evidence': ['1 + 1 = 2.']}]}
-        with patch('math_learning.author_import.make_client', side_effect=AssertionError('No API needed')):
+        with patch('graspmemoedu.author_import.make_client', side_effect=AssertionError('No API needed')):
             result = resume_topic(self.old, self.new, resolutions=resolution)
         self.assertEqual(result['status'], 'approved', result)
         q = next(q for q in json.loads((self.new / 'review.json').read_text())['questions'] if q['id'] == 'q1')
@@ -111,7 +111,7 @@ class ImportResumeTests(unittest.TestCase):
         self.assertEqual(q['resolution'], resolution['questions'][0])
         self.assertEqual(result['reuse_counts']['human_resolutions'], 1)
         third = self.root / 'third'
-        with patch('math_learning.author_import.make_client', side_effect=AssertionError('No API needed')):
+        with patch('graspmemoedu.author_import.make_client', side_effect=AssertionError('No API needed')):
             continued = resume_topic(self.new, third)
         self.assertEqual(continued['status'], 'approved', continued)
         self.assertEqual(continued['reuse_counts']['human_resolutions'], 1)
@@ -148,7 +148,7 @@ class ImportResumeTests(unittest.TestCase):
                               'size': len(raw), 'mime': 'image/png'}]
             data['questions'][0]['image_paths'] = ['assets/q1.png']
             return json.dumps(data)
-        with patch('math_learning.author_import._node', side_effect=image_node):
+        with patch('graspmemoedu.author_import._node', side_effect=image_node):
             self.assertEqual(self.prepare(ResumeFake())['status'], 'approved')
             payload = b'Comment\x00changed'
             chunk = struct.pack('>I', len(payload)) + b'tEXt' + payload + struct.pack('>I', zlib.crc32(b'tEXt' + payload))

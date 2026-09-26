@@ -16,10 +16,10 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 import uvicorn
-from math_learning.api import create_app
-from math_learning.config import Settings
-from math_learning.course_graph import read_graph, revision
-from math_learning.service import LearningService
+from graspmemoedu.api import create_app
+from graspmemoedu.config import Settings
+from graspmemoedu.course_graph import read_graph, revision
+from graspmemoedu.service import LearningService
 from tests.fixtures import DeterministicJudge, synthetic_course, temporary_test_directory
 
 
@@ -39,7 +39,7 @@ def run(source, output):
             'topics': [{'id': topic['id'], 'path': 'topic.json'}]}]}), encoding='utf-8')
         before = {name: (data / name).read_bytes() for name in ('catalog.json', 'topic.json')}
         def command(path, *args):
-            result = subprocess.run([sys.executable, '-m', 'math_learning', '--data-dir', str(data),
+            result = subprocess.run([sys.executable, '-m', 'graspmemoedu', '--data-dir', str(data),
                                      'graph-import', '--source', str(path), *args],
                                     cwd=ROOT, capture_output=True, text=True, encoding='utf-8', timeout=60)
             if result.returncode:

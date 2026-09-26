@@ -14,9 +14,9 @@ import sys
 import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from math_learning.catalog import Catalog
-from math_learning.config import Settings
-from math_learning.subjects import Subjects
+from graspmemoedu.catalog import Catalog
+from graspmemoedu.config import Settings
+from graspmemoedu.subjects import Subjects
 from scripts.verify_content import collect_questions, parse_outline, sha256
 
 SUBJECTS = {'physics': '物理', 'english': '英语', 'chinese': '语文', 'biology': '生物', 'chemistry': '化学'}
@@ -62,7 +62,7 @@ def initialize(data_dir, *, apply=False, node='node'):
                               for topic in course['topics']]) for course in current.courses.values()]}
     subjects = json.loads(old_subjects) if old_subjects else {'subjects': []}
     files = {}
-    cache = Path('D:/Artifacts/MathLearningWeb/test-runs') if os.name == 'nt' else Path(tempfile.gettempdir())
+    cache = Path('D:/Artifacts/GraspMemoEdu/test-runs') if os.name == 'nt' else Path(tempfile.gettempdir())
     cache.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='subject-import-', dir=cache) as temporary:
         stage = Path(temporary)
@@ -74,7 +74,7 @@ def initialize(data_dir, *, apply=False, node='node'):
             stage_dir.mkdir(parents=True)
             (stage_dir / 'source.md').write_bytes(source)
             (stage_dir / 'answers.json').write_bytes(answers)
-            env = dict(os.environ, MATH_LEARNING_PYTHON=sys.executable)
+            env = dict(os.environ, GRASPMEMOEDU_PYTHON=sys.executable)
             process = subprocess.run([node, str(REPO / 'scripts/import_course.mjs'), str(stage_dir / 'source.md'),
                 str(stage_dir / 'answers.json'), str(stage_dir / 'topic.json'), str(stage_dir / 'audit.json')],
                 env=env, capture_output=True, text=True, encoding='utf-8', timeout=120)

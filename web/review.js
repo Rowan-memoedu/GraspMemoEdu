@@ -1,7 +1,7 @@
-import { t, translateMessage, learningTitle } from './i18n.js?v=f0de4845259eae4b';
-import {questionInput, answerReady} from './question-input.js?v=f0de4845259eae4b';
-import {reportableContent} from './content-report.js?v=f0de4845259eae4b';
-import {createLearningCache} from './learning-cache.js?v=f0de4845259eae4b';
+import { t, translateMessage, learningTitle } from './i18n.js?v=c9b4ecad728ac974';
+import {questionInput, answerReady} from './question-input.js?v=c9b4ecad728ac974';
+import {reportableContent} from './content-report.js?v=c9b4ecad728ac974';
+import {createLearningCache} from './learning-cache.js?v=c9b4ecad728ac974';
 
 const node = (tag, cls = '', text) => {
   const item = document.createElement(tag); item.className = cls;
@@ -28,7 +28,7 @@ export function createReviewView(bridge) {
   const root = bridge.root;
   const active = ticket => ticket === epoch && topic && bridge.getAccess()?.learner_id === learner;
   const can = feature => Boolean((state?.access || bridge.getAccess())?.features?.includes(feature));
-  const prefix = () => `math-learning-web:review:${bridge.getApiOrigin()}:${learner}:${topic}:${state?.session_id}`;
+  const prefix = () => `graspmemoedu:review:${bridge.getApiOrigin()}:${learner}:${topic}:${state?.session_id}`;
   const draftKey = () => `${prefix()}:draft:${state.practice.id}`;
   const submissionKey = () => `${prefix()}:submission`;
   const call = (path, options) => bridge.request(`review/${path}?topic_id=${encodeURIComponent(topic)}`, options);

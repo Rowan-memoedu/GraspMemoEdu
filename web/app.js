@@ -1,12 +1,12 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=f0de4845259eae4b";
-import {questionInput, answerReady} from './question-input.js?v=f0de4845259eae4b';
-import {reportableContent} from './content-report.js?v=f0de4845259eae4b';
-import {createLearningCache} from './learning-cache.js?v=f0de4845259eae4b';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=c9b4ecad728ac974";
+import {questionInput, answerReady} from './question-input.js?v=c9b4ecad728ac974';
+import {reportableContent} from './content-report.js?v=c9b4ecad728ac974';
+import {createLearningCache} from './learning-cache.js?v=c9b4ecad728ac974';
 
 applyStaticTranslations();
 
 const $ = (id) => document.getElementById(id);
-const STORAGE_PREFIX = "math-learning-web:";
+const STORAGE_PREFIX = "graspmemoedu:";
 const REQUEST_TIMEOUT = 18000;
 const STATE_TIMEOUT = 9000;
 const DEPLOYMENT_REFRESH_INTERVAL = 30000;
@@ -1444,7 +1444,7 @@ window.addEventListener("pagehide", () => syncAnswerClock(true));
 window.addEventListener("online", () => refreshState({ force: true }));
 document.addEventListener("visibilitychange", () => { syncAnswerClock(); if (!document.hidden && !actionBusy && !pauseBusy) refreshState(); });
 try {
-  channel = new BroadcastChannel("math-learning-web-progress");
+  channel = new BroadcastChannel("graspmemoedu-progress");
   channel.onmessage = (event) => {
     if (event.data?.type === "identity-changed" && event.data.scope === scope()) scheduleIdentitySync();
     if (event.data?.type === "state-changed" && event.data.scope === scope() && event.data.learner_id === learnerScope()) {
@@ -1482,7 +1482,7 @@ async function openTopic(id, subjectId) {
   await start();
 }
 
-const { initPortal } = await import("./portal.js?v=f0de4845259eae4b");
+const { initPortal } = await import("./portal.js?v=c9b4ecad728ac974");
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {
     try { return await fetchGuideAsset(url, subjectId); }

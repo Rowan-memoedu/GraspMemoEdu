@@ -1,11 +1,11 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=f0de4845259eae4b";
-import { createReviewView } from "./review.js?v=f0de4845259eae4b";
-import { renderCourseGraph } from "./course-graph.js?v=f0de4845259eae4b";
-import {questionInput} from './question-input.js?v=f0de4845259eae4b';
-import {reportableContent, installContentReporting} from './content-report.js?v=f0de4845259eae4b';
-import {createCatalogPicker} from './catalog-picker.js?v=f0de4845259eae4b';
-import {createAtomicView} from './atomic.js?v=f0de4845259eae4b';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=f0de4845259eae4b";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=c9b4ecad728ac974";
+import { createReviewView } from "./review.js?v=c9b4ecad728ac974";
+import { renderCourseGraph } from "./course-graph.js?v=c9b4ecad728ac974";
+import {questionInput} from './question-input.js?v=c9b4ecad728ac974';
+import {reportableContent, installContentReporting} from './content-report.js?v=c9b4ecad728ac974';
+import {createCatalogPicker} from './catalog-picker.js?v=c9b4ecad728ac974';
+import {createAtomicView} from './atomic.js?v=c9b4ecad728ac974';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=c9b4ecad728ac974";
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {

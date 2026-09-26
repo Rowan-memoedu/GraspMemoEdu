@@ -16,7 +16,7 @@ import re
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from math_learning.question_types import validate_interaction
+from graspmemoedu.question_types import validate_interaction
 
 
 def sha256(value: str | bytes) -> str:

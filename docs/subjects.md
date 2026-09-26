@@ -52,7 +52,7 @@
 修改 `subjects.json` 后，通过既有本机入口重新加载后端：
 
 ```powershell
-pwsh -NoProfile -File D:/Projects/MathLearningWeb/Start-PublicLearning.ps1 -RestartBackend
+pwsh -NoProfile -File D:/Projects/GraspMemoEdu/Start-PublicLearning.ps1 -RestartBackend
 ```
 
 指南正文、图片仍会在打开页面时约每 5 秒检查更新，无需重启。配置仅在本机修改，公开网页没有管理或连接配置入口。
@@ -71,7 +71,7 @@ pwsh -NoProfile -File D:/Projects/MathLearningWeb/Start-PublicLearning.ps1 -Rest
 
 - `web/subjects.js` / `subjects.css`：平台首页、空学科页面、主题与路径。
 - `web/portal.js`：六科共用的课程、任务、指南、账号设置入口。
-- `math_learning/subjects.py`：本地配置、课程归属与公开字段白名单。
+- `graspmemoedu/subjects.py`：本地配置、课程归属与公开字段白名单。
 - 现有 Lesson、Practice、FSRS 和账号代码：各学科复用，保持原规则。
 
 五科测试内容沿用现有 Example、Introduction、Practice 与复习机制，不引入专属模块、判题提示词或不同评分算法。当前不要在 `subjects.json` 中填写尚未支持的 `prompt`、`rating` 或插件字段。共用结构的后续修改直接作用于六科，无需复制页面。
@@ -83,9 +83,9 @@ pwsh -NoProfile -File D:/Projects/MathLearningWeb/Start-PublicLearning.ps1 -Rest
 `scripts/initialize_subject_test_courses.py` 从确定性 Markdown 和答案 sidecar 调用正式导入管线生成五科测试内容。每个 Topic 有两个 Example，每个模块有十五道 Practice，可验证练习补题、完成评分及 FSRS 复习。默认只预览，加 `--apply` 才安装：
 
 ```powershell
-& D:/AppData/MathLearningWeb/venv/Scripts/python.exe scripts/initialize_subject_test_courses.py --data-dir D:/Artifacts/MathLearningWeb/isolated-subject-fixture/data
+& D:/AppData/GraspMemoEdu/venv/Scripts/python.exe scripts/initialize_subject_test_courses.py --data-dir D:/Artifacts/GraspMemoEdu/isolated-subject-fixture/data
 # 在本机服务停止期间应用；随后用正常入口启动。
-& D:/AppData/MathLearningWeb/venv/Scripts/python.exe scripts/initialize_subject_test_courses.py --data-dir D:/Artifacts/MathLearningWeb/isolated-subject-fixture/data --apply
+& D:/AppData/GraspMemoEdu/venv/Scripts/python.exe scripts/initialize_subject_test_courses.py --data-dir D:/Artifacts/GraspMemoEdu/isolated-subject-fixture/data --apply
 ```
 
 数学课程和既有文件保持不变；已有指南不覆盖，尚未填写的预留指南会加入测试说明。重复执行幂等，测试文件被人工改动或 ID 冲突时停止，不强行覆盖。所有配置在写入前验证，异常回滚本轮写入。课程内容、源稿、答案和导入回执位于本机 `test-content/<学科>`，不进入公开静态仓库。

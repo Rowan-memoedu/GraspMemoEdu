@@ -9,9 +9,9 @@ import unittest
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
-from math_learning.access import AccessStore
-from math_learning.cli import main
-from math_learning.public_limits import DailyJudgeQuota, PublicLimitError, judge_usage_report
+from graspmemoedu.access import AccessStore
+from graspmemoedu.cli import main
+from graspmemoedu.public_limits import DailyJudgeQuota, PublicLimitError, judge_usage_report
 
 
 class DailyJudgeQuotaTests(unittest.TestCase):
@@ -57,7 +57,7 @@ class DailyJudgeQuotaTests(unittest.TestCase):
             pass
 
     def test_invalid_or_zero_configuration_fails_closed(self):
-        with patch.dict('os.environ', {'MATH_JUDGE_DAILY_GLOBAL': '0'}):
+        with patch.dict('os.environ', {'GRASPMEMOEDU_JUDGE_DAILY_GLOBAL': '0'}):
             with self.assertRaises(ValueError):
                 DailyJudgeQuota(Path(self.temporary.name))
 
@@ -67,9 +67,9 @@ class DailyJudgeQuotaTests(unittest.TestCase):
         account = store.create_account('Student A')['account']
         unused = store.create_account('Student B')['account']
         guest = store.create_guest()['access']
-        with patch.dict('os.environ', {'MATH_JUDGE_DAILY_GLOBAL': '5',
-                                    'MATH_JUDGE_DAILY_ACCOUNT': '0',
-                                    'MATH_JUDGE_DAILY_GUEST': '100'}):
+        with patch.dict('os.environ', {'GRASPMEMOEDU_JUDGE_DAILY_GLOBAL': '5',
+                                    'GRASPMEMOEDU_JUDGE_DAILY_ACCOUNT': '0',
+                                    'GRASPMEMOEDU_JUDGE_DAILY_GUEST': '100'}):
             quota = DailyJudgeQuota(root, now=lambda: self.now)
         self.assertIsNone(quota.account_limit)
         for _ in range(4):
@@ -89,7 +89,7 @@ class DailyJudgeQuotaTests(unittest.TestCase):
         self.assertEqual([row['used'] for row in judge_usage_report(root, day='2026-09-24', role='guest')['identities']], [1])
         self.assertEqual(len(judge_usage_report(root, day='2026-09-24', learner_id=unused['learner_id'])['identities']), 1)
         self.assertEqual(sum(row['used'] for row in judge_usage_report(root, day='2026-09-25')['identities']), 0)
-        with patch('sys.argv', ['math_learning', '--data-dir', str(root), 'judge-usage-report',
+        with patch('sys.argv', ['graspmemoedu', '--data-dir', str(root), 'judge-usage-report',
                                 '--day', '2026-09-24', '--role', 'account']):
             stream = io.StringIO()
             with redirect_stdout(stream):

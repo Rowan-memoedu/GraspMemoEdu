@@ -5,8 +5,8 @@ from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-from math_learning import cli
-from math_learning.config import Settings
+from graspmemoedu import cli
+from graspmemoedu.config import Settings
 from tests.fixtures import synthetic_course, temporary_test_directory
 
 
@@ -23,7 +23,7 @@ class PermissionCliTests(unittest.TestCase):
 
     def command(self, *args):
         output = io.StringIO()
-        with patch('sys.argv', ['math_learning', '--data-dir', str(self.root), 'account-permissions',
+        with patch('sys.argv', ['graspmemoedu', '--data-dir', str(self.root), 'account-permissions',
                                 '--learner', self.account['learner_id'], *args]), contextlib.redirect_stdout(output):
             cli.main()
         return json.loads(output.getvalue())

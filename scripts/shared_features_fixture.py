@@ -12,11 +12,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from fastapi import FastAPI, HTTPException, Request
 import uvicorn
-from math_learning.api import create_app
-from math_learning.author_import import prepare_topic
-from math_learning.config import Settings
-from math_learning.judge import ExistingJudge
-from math_learning.service import LearningService
+from graspmemoedu.api import create_app
+from graspmemoedu.author_import import prepare_topic
+from graspmemoedu.config import Settings
+from graspmemoedu.judge import ExistingJudge
+from graspmemoedu.service import LearningService
 from tests.question_fixtures import author_source
 
 
@@ -27,7 +27,7 @@ def main():
     parser.add_argument('--real-judge', action='store_true')
     args = parser.parse_args()
     root = args.output.resolve()
-    if (not args.output.is_absolute() or not root.is_relative_to(Path('D:/Artifacts/MathLearningWeb/shared-features').resolve())
+    if (not args.output.is_absolute() or not root.is_relative_to(Path('D:/Artifacts/GraspMemoEdu/shared-features').resolve())
             or root.exists() or args.port in (8765, 8767, 18768)):
         raise ValueError('Use a new isolated artifact directory and non-production port')
     with socket.socket() as probe:

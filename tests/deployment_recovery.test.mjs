@@ -18,10 +18,10 @@ function setup({ nextOrigin = 'https://new.example', status = 502, role = 'guest
   const localStorage = store(), sessionStorage = store(), calls = [];
   let clock = 100000, configs = 0;
   const identity = { learner_id: role + '-original', role, features: [], topics: [] };
-  localStorage.setItem('math-learning-web:identity:https://old.example', 'original-token');
-  localStorage.setItem('math-learning-web:identity-role:https://old.example', role);
-  if (role === 'guest') localStorage.setItem('math-learning-web:guest-identity:https://old.example', 'original-token');
-  else localStorage.setItem('math-learning-web:guest-identity:https://old.example', 'separate-guest-token');
+  localStorage.setItem('graspmemoedu:identity:https://old.example', 'original-token');
+  localStorage.setItem('graspmemoedu:identity-role:https://old.example', role);
+  if (role === 'guest') localStorage.setItem('graspmemoedu:guest-identity:https://old.example', 'original-token');
+  else localStorage.setItem('graspmemoedu:guest-identity:https://old.example', 'separate-guest-token');
   const context = vm.createContext({
     URL, AbortController, setTimeout, clearTimeout, console, localStorage, sessionStorage, createLearningCache,
     Date: { now: () => clock }, t: value => value, translateMessage: value => value,
@@ -65,8 +65,8 @@ for (const role of ['guest', 'account']) test(`${role}: gateway failure reloads 
   assert.equal(fixture.driver.snapshot().identityToken, 'original-token');
   assert.equal(fixture.calls.filter(call => call.url.endsWith('/api/access')).length, role === 'guest' ? 1 : 2);
   assert.equal(fixture.calls.filter(call => call.url.endsWith('/api/access/guest')).length, 0);
-  assert.equal(fixture.localStorage.getItem('math-learning-web:identity:https://new.example'), 'original-token');
-  assert.equal(fixture.localStorage.getItem('math-learning-web:guest-identity:https://new.example'), role === 'guest' ? 'original-token' : 'separate-guest-token');
+  assert.equal(fixture.localStorage.getItem('graspmemoedu:identity:https://new.example'), 'original-token');
+  assert.equal(fixture.localStorage.getItem('graspmemoedu:guest-identity:https://new.example'), role === 'guest' ? 'original-token' : 'separate-guest-token');
 });
 
 test('unchanged config preserves identity and rate-limits checks without read loops', async () => {
@@ -134,7 +134,7 @@ test('actual refreshState releases its busy flag after endpoint replacement', as
 
 test('only verified matching learner tab drafts and uncertain submissions migrate', async () => {
   const fixture = setup(); await fixture.driver.init();
-  const prefix = 'math-learning-web:';
+  const prefix = 'graspmemoedu:';
   fixture.sessionStorage.setItem(prefix + 'draft:https://old.example:guest-original:topic:step', 'my draft');
   fixture.sessionStorage.setItem(prefix + 'draft:https://old.example:someone-else:topic:step', 'private other draft');
   fixture.sessionStorage.setItem(prefix + 'submission:https://old.example:guest-original:topic', '{"request_id":"same-id"}');

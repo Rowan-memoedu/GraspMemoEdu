@@ -5,11 +5,11 @@ from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import uvicorn
-from math_learning.api import create_app
-from math_learning.config import Settings
-from math_learning.service import LearningService
-from math_learning.judge import ExistingJudge
-from math_learning.account_admin import AccountAdmin
+from graspmemoedu.api import create_app
+from graspmemoedu.config import Settings
+from graspmemoedu.service import LearningService
+from graspmemoedu.judge import ExistingJudge
+from graspmemoedu.account_admin import AccountAdmin
 from tests.fixtures import synthetic_course
 from tests.atomic_fixtures import atomic_topic
 
@@ -17,7 +17,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--output', type=Path, required=True)
 args = parser.parse_args()
 root = args.output.resolve()
-assert not root.exists() and root.is_relative_to(Path('D:/Artifacts/MathLearningWeb').resolve())
+assert not root.exists() and root.is_relative_to(Path('D:/Artifacts/GraspMemoEdu').resolve())
 root.mkdir(parents=True)
 topics = {}
 for name in ('before', 'after'):

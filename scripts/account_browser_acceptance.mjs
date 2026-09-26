@@ -102,9 +102,9 @@ function manage(account, command, extra = []) {
   assert.equal(account.purpose, 'test');
   // Check the authoritative DB purpose before invoking any local mutation.
   const checker = "import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); r=c.execute('SELECT purpose FROM access_principals WHERE learner_id=?',(sys.argv[2],)).fetchone(); assert r and r[0]=='test'";
-  const python = 'D:/AppData/MathLearningWeb/venv/Scripts/python.exe';
+  const python = 'D:/AppData/GraspMemoEdu/venv/Scripts/python.exe';
   execFileSync(python, ['-c', checker, path.join(dataDirectory, 'learning.sqlite3'), account.learner_id], {stdio:'pipe'});
-  const result = execFileSync(python, ['-m','math_learning','--data-dir',dataDirectory,command,'--learner',account.learner_id,...extra], {cwd:path.resolve(import.meta.dirname,'..'),encoding:'utf8',stdio:'pipe'});
+  const result = execFileSync(python, ['-m','graspmemoedu','--data-dir',dataDirectory,command,'--learner',account.learner_id,...extra], {cwd:path.resolve(import.meta.dirname,'..'),encoding:'utf8',stdio:'pipe'});
   return JSON.parse(result);
 }
 async function logout(device) {

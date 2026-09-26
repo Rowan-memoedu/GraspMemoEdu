@@ -12,10 +12,10 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from fastapi import FastAPI, HTTPException, Request
 import uvicorn
-from math_learning.api import create_app
-from math_learning.config import Settings
-from math_learning.judge import ExistingJudge
-from math_learning.service import create_learning_service
+from graspmemoedu.api import create_app
+from graspmemoedu.config import Settings
+from graspmemoedu.judge import ExistingJudge
+from graspmemoedu.service import create_learning_service
 from tests.atomic_fixtures import atomic_author_source
 
 
@@ -26,7 +26,7 @@ def main():
     parser.add_argument('--real-judge', action='store_true')
     args = parser.parse_args()
     root = args.output.resolve()
-    if (not args.output.is_absolute() or not root.is_relative_to(Path('D:/Artifacts/MathLearningWeb').resolve())
+    if (not args.output.is_absolute() or not root.is_relative_to(Path('D:/Artifacts/GraspMemoEdu').resolve())
             or root.exists() or args.port in (8765, 8767, 18768)):
         raise ValueError('Use a new artifact directory and an isolated port')
     with socket.socket() as probe: probe.bind(('127.0.0.1', args.port))
@@ -41,7 +41,7 @@ def main():
         source_file.write_text(json.dumps(source, ensure_ascii=False), encoding='utf-8')
         output = data / f'{subject}.json'
         subprocess.run(['node', 'scripts/import_atomic_topic.mjs', str(source_file), str(output)],
-                       check=True, env={**os.environ, 'MATH_LEARNING_PYTHON': sys.executable})
+                       check=True, env={**os.environ, 'GRASPMEMOEDU_PYTHON': sys.executable})
         courses.append({'id': subject + '-course', 'title': '原子训练隔离验收',
                         'topics': [{'id': source['id'], 'path': output.name}]})
         subjects.append({'id': subject, 'course_ids': [subject + '-course']})

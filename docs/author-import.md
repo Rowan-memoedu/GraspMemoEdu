@@ -9,7 +9,7 @@ Topic 内容与课程图谱独立导入。此入口不创建或覆盖图谱关�
 ## 一条命令
 
 ```powershell
-pwsh -NoProfile -File 'D:/Projects/MathLearningWeb/Import-Topic.ps1' `
+pwsh -NoProfile -File 'D:/Projects/GraspMemoEdu/Import-Topic.ps1' `
   -Source 'D:/Artifacts/我的物理稿.md' `
   -TopicId 'physics-my-topic' -Subject physics -CourseId test-physics-course
 ```
@@ -17,7 +17,7 @@ pwsh -NoProfile -File 'D:/Projects/MathLearningWeb/Import-Topic.ps1' `
 成功返回 `status: installed`、Topic 路径和审核包路径。随后加载新目录：
 
 ```powershell
-pwsh -NoProfile -File 'D:/Projects/MathLearningWeb/Start-PublicLearning.ps1' -RestartBackend
+pwsh -NoProfile -File 'D:/Projects/GraspMemoEdu/Start-PublicLearning.ps1' -RestartBackend
 ```
 
 账号默认开放全部 Topic 和功能，新增内容自动继承；明确设置的 Topic 或功能列表覆盖各自默认值。权限管理仍在本机 CLI，见 [账号管理](accounts.md)。历史测试课程已下线，不随导入器更新重新发布。
@@ -63,7 +63,7 @@ pwsh -NoProfile -File 'D:/Projects/MathLearningWeb/Start-PublicLearning.ps1' -Re
 ```
 
 ```powershell
-& 'D:/AppData/MathLearningWeb/venv/Scripts/python.exe' scripts/install_author_course.py --plan '<课程安装计划.json>' --data-dir 'D:/AppData/MathLearningWeb'
+& 'D:/AppData/GraspMemoEdu/venv/Scripts/python.exe' scripts/install_author_course.py --plan '<课程安装计划.json>' --data-dir 'D:/AppData/GraspMemoEdu'
 ```
 
 此入口只新增课程：先在隔离目录验证全部包，再切换课程与学科配置，保存切换前配置。已有图谱使用相同 Course/Topic ID，不重编号。原课程、学习记录和权限不改写；默认权限账号自动继承新内容。已有课程仍使用单 Topic 安装入口。失败留下的未激活内容供检查，不自动删除或覆盖。安装成功后按上文重载服务。
@@ -87,9 +87,9 @@ pwsh -NoProfile -File 'D:/Projects/MathLearningWeb/Start-PublicLearning.ps1' -Re
 在项目目录运行；`--data-dir` 放在子命令之前。
 
 ```powershell
-$python = 'D:/AppData/MathLearningWeb/venv/Scripts/python.exe'
-& $python -m math_learning author-prepare --source 'D:/Artifacts/我的物理稿.md' --topic-id physics-my-topic --run-dir 'D:/Artifacts/MathLearningWeb/author-import/runs/my-new-run'
-& $python -m math_learning author-install --package 'D:/Artifacts/MathLearningWeb/author-import/runs/my-new-run' --subject physics --course test-physics-course
+$python = 'D:/AppData/GraspMemoEdu/venv/Scripts/python.exe'
+& $python -m graspmemoedu author-prepare --source 'D:/Artifacts/我的物理稿.md' --topic-id physics-my-topic --run-dir 'D:/Artifacts/GraspMemoEdu/author-import/runs/my-new-run'
+& $python -m graspmemoedu author-install --package 'D:/Artifacts/GraspMemoEdu/author-import/runs/my-new-run' --subject physics --course test-physics-course
 ```
 
 `author-prepare` 只产生审核包；`author-install` 不再次调用 LLM。`author-import` 合并两步。Course 有多个显式 Unit 时须提供 `--unit`（PowerShell 为 `-Unit`）。每次 prepare 使用新运行目录。后续发现问题只局部修复并验证受影响部分，不整篇重跑；保留已成功的提取、转换和审核结果。审核误报的人工纠正须附具体证据，保留原拒绝结论并明确标记人工核对，不能伪装成 LLM 自动通过。相同包重复 install 返回 `already_installed`。
@@ -102,7 +102,7 @@ $python = 'D:/AppData/MathLearningWeb/venv/Scripts/python.exe'
 
 有正文或附件修复时加 `--source '<更正后的MD>'`，按当前机械规则更新字段、引用和哈希，保留旧包，不重跑逐题 API。历史语义拒绝不作为机械导入门禁，也不被改写成模型批准。
 
-默认运行材料位于 `D:/Artifacts/MathLearningWeb/author-import/runs`；已入库内容位于数据目录的 `imported-topics/<TopicId>`。API 请求、响应、逐题理由和 `manifest.json` 留在本机，不能加入源码仓库。返回失败状态时进程退出码非零。未激活的残留目录或锁须核对原运行进程后处理，不自动删除。
+默认运行材料位于 `D:/Artifacts/GraspMemoEdu/author-import/runs`；已入库内容位于数据目录的 `imported-topics/<TopicId>`。API 请求、响应、逐题理由和 `manifest.json` 留在本机，不能加入源码仓库。返回失败状态时进程退出码非零。未激活的残留目录或锁须核对原运行进程后处理，不自动删除。
 
 ## API 与扩展边界
 
@@ -114,7 +114,7 @@ $python = 'D:/AppData/MathLearningWeb/venv/Scripts/python.exe'
 
 `--package` 一次传入整批包，整批合计最多两题。该入口需显式调用，普通导入和安装不会触发。2026-09-21 已将 22 篇 Topic 安装到物理课程“运动学进阶”（`rigid-constraints`）；原数学课程、图谱及学习记录保留。
 
-准备包逻辑在 `math_learning/author_import.py`，安装在 `math_learning/topic_install.py`，渲染沿用 `scripts/import_course.mjs`，共享图片校验在 `math_learning/topic_assets.py`。后续新增输入格式或内容类型时在这些边界扩展，不改变既有学习/复习状态机。当前不支持自动更新已有 Topic 或任意 Markdown 排版。
+准备包逻辑在 `graspmemoedu/author_import.py`，安装在 `graspmemoedu/topic_install.py`，渲染沿用 `scripts/import_course.mjs`，共享图片校验在 `graspmemoedu/topic_assets.py`。后续新增输入格式或内容类型时在这些边界扩展，不改变既有学习/复习状态机。当前不支持自动更新已有 Topic 或任意 Markdown 排版。
 ## 通用题型扩展
 
 判断题、多空填空、带干扰项配对及复刻/复现判题，使用每题的显式 `Interaction` 节点；字段、例子和边界见 [题型与判题](question-types.md)。不写此节点的原课程保持现有行为。

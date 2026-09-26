@@ -11,12 +11,12 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
-from math_learning.api import Action
-from math_learning.catalog import Catalog
-from math_learning.config import Settings
-from math_learning.dashboard import DashboardStore
-from math_learning.guest_reset import register_guest_reset_routes
-from math_learning.service import DomainError, LearningService
+from graspmemoedu.api import Action
+from graspmemoedu.catalog import Catalog
+from graspmemoedu.config import Settings
+from graspmemoedu.dashboard import DashboardStore
+from graspmemoedu.guest_reset import register_guest_reset_routes
+from graspmemoedu.service import DomainError, LearningService
 from tests.fixtures import DeterministicJudge, synthetic_course, temporary_test_directory
 
 

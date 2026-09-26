@@ -5,9 +5,9 @@ import sys
 import unittest
 from unittest.mock import patch
 
-from math_learning.catalog import Catalog
-from math_learning.course_graph import import_graph
-from math_learning.subjects import Subjects
+from graspmemoedu.catalog import Catalog
+from graspmemoedu.course_graph import import_graph
+from graspmemoedu.subjects import Subjects
 from scripts.install_author_course import install_course
 from scripts import prepare_topic_batch
 from tests import test_topic_install as topic_fixture

@@ -8,13 +8,13 @@ import unittest
 import zipfile
 
 from fastapi.testclient import TestClient
-from math_learning.api import create_app
-from math_learning.access import AccessStore
-from math_learning.catalog import Catalog
-from math_learning.config import Settings
-from math_learning.service import LearningService, DomainError
-from math_learning.subjects import Subjects
-from math_learning.site_backup import backup_site, restore_site
+from graspmemoedu.api import create_app
+from graspmemoedu.access import AccessStore
+from graspmemoedu.catalog import Catalog
+from graspmemoedu.config import Settings
+from graspmemoedu.service import LearningService, DomainError
+from graspmemoedu.subjects import Subjects
+from graspmemoedu.site_backup import backup_site, restore_site
 from tests.fixtures import synthetic_course, temporary_test_directory, DeterministicJudge
 
 
@@ -228,7 +228,7 @@ class SubjectAcceptanceTests(unittest.TestCase):
         self.assertEqual(self.client.get(path, headers=self.headers).status_code, 401)
 
     def test_guest_scope_is_derived_without_rewriting_principals_or_accounts(self):
-        from math_learning.cli import make_access_store
+        from graspmemoedu.cli import make_access_store
         store = AccessStore(self.data, list(self.topics.values()))
         old_guest = store.create_guest()
         account = store.create_account('Existing math only', topic_ids=['topic-a'], purpose='test')

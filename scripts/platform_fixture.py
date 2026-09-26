@@ -8,9 +8,9 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import uvicorn
-from math_learning.api import create_app
-from math_learning.config import Settings
-from math_learning.service import LearningService
+from graspmemoedu.api import create_app
+from graspmemoedu.config import Settings
+from graspmemoedu.service import LearningService
 from review_web_fixture import make_course
 from initialize_subject_test_courses import initialize
 
@@ -21,9 +21,9 @@ def main():
     parser.add_argument('--port', type=int, default=8779)
     args = parser.parse_args()
     root = args.output.resolve()
-    allowed = Path('D:/Artifacts/MathLearningWeb/platform').resolve()
+    allowed = Path('D:/Artifacts/GraspMemoEdu/platform').resolve()
     if not args.output.is_absolute() or not root.is_relative_to(allowed) or root.exists():
-        raise ValueError('Use a new absolute directory below D:/Artifacts/MathLearningWeb/platform')
+        raise ValueError('Use a new absolute directory below D:/Artifacts/GraspMemoEdu/platform')
     if args.port in (8765, 8767):
         raise ValueError('Formal service ports are forbidden')
     with socket.socket() as probe:

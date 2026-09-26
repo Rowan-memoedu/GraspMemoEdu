@@ -11,10 +11,10 @@ import sys
 import unittest
 from unittest.mock import patch
 
-from math_learning.catalog import Catalog
-from math_learning.config import Settings
-from math_learning.service import DomainError
-from math_learning.topic_install import install_topic
+from graspmemoedu.catalog import Catalog
+from graspmemoedu.config import Settings
+from graspmemoedu.service import DomainError
+from graspmemoedu.topic_install import install_topic
 from scripts.verify_content import collect_questions, parse_outline, sha256
 from tests.fixtures import synthetic_course, temporary_test_directory
 
@@ -72,7 +72,7 @@ class TopicInstallTests(unittest.TestCase):
         result = subprocess.run(['node', str(converter), str(source), str(cls.package / 'answers.json'),
             str(cls.package / 'topic.json'), str(cls.package / 'audit.json'), str(cls.package / 'review.json')],
             capture_output=True, text=True, encoding='utf-8', timeout=180,
-            env={**os.environ, 'MATH_LEARNING_PYTHON': sys.executable})
+            env={**os.environ, 'GRASPMEMOEDU_PYTHON': sys.executable})
         if result.returncode:
             raise AssertionError(result.stderr)
         cls.manifest = {'schema_version': 1, 'status': 'approved', 'topic_id': 'imported-physics',
@@ -176,7 +176,7 @@ class TopicInstallTests(unittest.TestCase):
         self.assert_not_activated()
 
     def test_graph_first_then_real_topic_import_preserves_graph_and_binds_content(self):
-        from math_learning.course_graph import GraphStore, import_graph
+        from graspmemoedu.course_graph import GraphStore, import_graph
         source = self.root / 'graph.json'
         graph = {'schema_version': 1, 'subject_id': 'physics', 'course_id': 'physics-course', 'title': 'Physics',
                  'nodes': [{'topic_id': 'imported-physics', 'title': 'Speed'}, {'topic_id': 'pending', 'title': 'Later'}],
@@ -193,7 +193,7 @@ class TopicInstallTests(unittest.TestCase):
         self.assertEqual((self.data / 'learning.sqlite3').read_bytes(), self.database_before)
 
     def test_topic_first_then_graph_updates_do_not_change_topic_or_progress(self):
-        from math_learning.course_graph import import_graph
+        from graspmemoedu.course_graph import import_graph
         installed = self.install()
         topic_path = Path(installed['topic_path'])
         before = topic_path.read_bytes()
@@ -209,7 +209,7 @@ class TopicInstallTests(unittest.TestCase):
         self.assertEqual((self.data / 'learning.sqlite3').read_bytes(), self.database_before)
 
     def test_commit_failure_leaves_catalog_inactive_and_allows_recovery(self):
-        with patch('math_learning.topic_install.os.replace', side_effect=OSError('simulated commit failure')):
+        with patch('graspmemoedu.topic_install.os.replace', side_effect=OSError('simulated commit failure')):
             with self.assertRaisesRegex(OSError, 'simulated commit failure'):
                 self.install()
         self.assert_not_activated()
@@ -255,8 +255,8 @@ class ImageTopicInstallTests(unittest.TestCase):
         self.assert_not_activated()
 
     def test_restored_image_source_reimports_through_real_converter(self):
-        from math_learning.site_backup import backup_site, restore_site
-        from math_learning.service import LearningService
+        from graspmemoedu.site_backup import backup_site, restore_site
+        from graspmemoedu.service import LearningService
         self.install()
         catalog = Catalog.load(self.settings)
         LearningService(catalog.topic(catalog.default_topic_id), self.data)
@@ -270,7 +270,7 @@ class ImageTopicInstallTests(unittest.TestCase):
         result = subprocess.run(['node', str(converter), index['source_path'], index['answers_path'],
                                  str(output), str(self.root / 'reimport-audit.json'), index['review_path']],
                                 capture_output=True, text=True, encoding='utf-8', timeout=180,
-                                env={**os.environ, 'MATH_LEARNING_PYTHON': sys.executable})
+                                env={**os.environ, 'GRASPMEMOEDU_PYTHON': sys.executable})
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(output.read_text()), catalog.topic('imported-physics'))
 

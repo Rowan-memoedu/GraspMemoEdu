@@ -15,10 +15,10 @@ import sys
 import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from math_learning.fsrs_engine import utc_time
-from math_learning.judge import ExistingJudge
-from math_learning.review import ReviewBackend
-from math_learning.service import DomainError, LearningService
+from graspmemoedu.fsrs_engine import utc_time
+from graspmemoedu.judge import ExistingJudge
+from graspmemoedu.review import ReviewBackend
+from graspmemoedu.service import DomainError, LearningService
 
 
 def make_course():
@@ -48,9 +48,9 @@ def main():
     parser.add_argument('--real-judge', action='store_true')
     args = parser.parse_args()
     root = args.output.resolve()
-    allowed = Path('D:/Artifacts/MathLearningWeb/grouped-practice').resolve()
+    allowed = Path('D:/Artifacts/GraspMemoEdu/grouped-practice').resolve()
     if not args.output.is_absolute() or root.exists() or not root.is_relative_to(allowed):
-        raise ValueError('Use a new directory under D:/Artifacts/MathLearningWeb/grouped-practice')
+        raise ValueError('Use a new directory under D:/Artifacts/GraspMemoEdu/grouped-practice')
     root.mkdir(parents=True)
     course = make_course()
     calls, delivered, rounds, snapshots = [], [], [], []

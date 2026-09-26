@@ -8,12 +8,12 @@ import unittest
 from unittest.mock import Mock, patch
 import uuid
 
-from math_learning.author_import import prepare_topic
-from math_learning.judging import judge_answer
-from math_learning.question_types import (validate_interaction, public_interaction, parse_answer,
+from graspmemoedu.author_import import prepare_topic
+from graspmemoedu.judging import judge_answer
+from graspmemoedu.question_types import (validate_interaction, public_interaction, parse_answer,
     deterministic_verdict, semantic_arguments, display_answer, demo_answer)
-from math_learning.review import ReviewBackend
-from math_learning.service import LearningService, DomainError
+from graspmemoedu.review import ReviewBackend
+from graspmemoedu.service import LearningService, DomainError
 from tests.fixtures import temporary_test_directory
 from tests.question_fixtures import interactions, interaction_course, author_source
 
@@ -59,7 +59,7 @@ class QuestionTypeTests(unittest.TestCase):
 
     def test_regex_timeout_is_retryable_not_wrong(self):
         question = self.question(0)
-        with patch('math_learning.question_types.exact', side_effect=TimeoutError):
+        with patch('graspmemoedu.question_types.exact', side_effect=TimeoutError):
             self.assertIsNone(judge_answer(None, question, '42')[0])
 
     def test_one_false_item_makes_whole_question_wrong(self):
@@ -183,7 +183,7 @@ class QuestionWorkflowTests(unittest.TestCase):
     def test_author_import_roundtrip_all_types_safe_rendering_and_no_answer_leak(self):
         source = self.root / 'source.md'
         source.write_text(author_source(), encoding='utf-8')
-        with patch('math_learning.author_import.make_client', side_effect=AssertionError('Mechanical import only')):
+        with patch('graspmemoedu.author_import.make_client', side_effect=AssertionError('Mechanical import only')):
             result = prepare_topic(source, 'interaction-fixture', self.root / 'imported')
         self.assertEqual(result['status'], 'approved', result)
         topic = json.loads((self.root / 'imported/topic.json').read_text(encoding='utf-8'))

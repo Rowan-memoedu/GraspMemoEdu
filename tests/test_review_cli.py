@@ -10,10 +10,10 @@ import unittest
 from unittest.mock import patch
 import uuid
 
-from math_learning import cli
-from math_learning.config import Settings
-from math_learning.review import ReviewBackend
-from math_learning.service import LearningService
+from graspmemoedu import cli
+from graspmemoedu.config import Settings
+from graspmemoedu.review import ReviewBackend
+from graspmemoedu.service import LearningService
 from tests.fixtures import synthetic_course, temporary_test_directory, DeterministicJudge
 
 
@@ -35,7 +35,7 @@ class ReviewCLITests(unittest.TestCase):
     def invoke(self, command, *extra, status=0):
         stdout, stderr = io.StringIO(), io.StringIO()
         code = 0
-        with patch.object(sys, 'argv', ['math-learning', '--data-dir', str(self.root), command,
+        with patch.object(sys, 'argv', ['graspmemoedu', '--data-dir', str(self.root), command,
                                         '--learner', 'fixture', '--topic', self.course['id'], *extra]), redirect_stdout(stdout), redirect_stderr(stderr):
             try:
                 cli.main()

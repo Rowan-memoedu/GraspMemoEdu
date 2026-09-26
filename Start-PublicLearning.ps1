@@ -1,9 +1,9 @@
 param(
-    [string]$DataDirectory = 'D:\AppData\MathLearningWeb',
+    [string]$DataDirectory = 'D:\AppData\GraspMemoEdu',
     [int]$Port = 8767,
     [string]$CloudflaredPath = 'D:\Applications\cloudflared\cloudflared.exe',
-    [string]$Repository = 'amymiller76717-sudo/GraspMemoEdu-Pages',
-    [string]$ArtifactDirectory = 'D:\Artifacts\MathLearningWeb\public-internet',
+    [string]$Repository = 'Rowan-memoedu/GraspMemoEdu-Pages',
+    [string]$ArtifactDirectory = 'D:\Artifacts\GraspMemoEdu\public-internet',
     [switch]$SkipPublish,
     [switch]$RepairOnly,
     [switch]$RestartBackend
@@ -16,7 +16,7 @@ function Read-SharedLog([string]$Path) {
     $reader = [IO.StreamReader]::new($stream)
     try { return $reader.ReadToEnd() } finally { $reader.Dispose() }
 }
-$pythonPath = 'D:\AppData\MathLearningWeb\venv\Scripts\python.exe'
+$pythonPath = 'D:\AppData\GraspMemoEdu\venv\Scripts\python.exe'
 $CloudflaredPath = (Resolve-Path -LiteralPath $CloudflaredPath).Path
 $settingsPath = Join-Path $DataDirectory 'settings.json'
 if (-not (Test-Path -LiteralPath $settingsPath -PathType Leaf)) { throw '请先完成本机学习服务配置。' }
@@ -52,7 +52,7 @@ try {
         for ($probe = 0; $probe -lt 3; $probe++) {
             try {
                 $health = Invoke-RestMethod -Uri ($record.origin + '/api/health') -TimeoutSec 8
-                if ($health.service -eq 'MathLearningWeb') { $reachable = $true; break }
+                if ($health.service -eq 'GraspMemoEdu') { $reachable = $true; break }
             } catch { }
             Start-Sleep -Seconds 2
         }
@@ -96,7 +96,7 @@ try {
     if ($originChanged) {
         $settings.public_api_origin = $record.origin
         $settings.port = $Port
-        $settings.allowed_origins = @(@($settings.allowed_origins) + 'https://amymiller76717-sudo.github.io' | Where-Object { $_ } | Sort-Object -Unique)
+        $settings.allowed_origins = @(@($settings.allowed_origins) + 'https://rowan-memoedu.github.io' | Where-Object { $_ } | Sort-Object -Unique)
         $settings | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath ($settingsPath + '.pending') -Encoding utf8NoBOM
         Move-Item -LiteralPath ($settingsPath + '.pending') -Destination $settingsPath -Force
     }
@@ -110,7 +110,7 @@ try {
     for ($attempt = 0; $attempt -lt 30; $attempt++) {
         try {
             $health = Invoke-RestMethod -Uri ($record.origin + '/api/health') -TimeoutSec 8
-            if ($health.service -eq 'MathLearningWeb' -and -not $health.instance_id) { $ready = $true; break }
+            if ($health.service -eq 'GraspMemoEdu' -and -not $health.instance_id) { $ready = $true; break }
         } catch { }
         Start-Sleep -Seconds 2
     }
@@ -125,7 +125,7 @@ try {
         $evidenceDirectory = Join-Path $releaseDirectory 'publication'
         Push-Location $PSScriptRoot
         try {
-            & $pythonPath -m math_learning --data-dir $DataDirectory export-web --output $exportDirectory --api-origin $record.origin
+            & $pythonPath -m graspmemoedu --data-dir $DataDirectory export-web --output $exportDirectory --api-origin $record.origin
             if ($LASTEXITCODE -ne 0) { throw '公开网页导出失败。' }
             & pwsh -NoLogo -NoProfile -File (Join-Path $PSScriptRoot 'Publish-Frontend.ps1') -Repository $Repository -ExportDirectory $exportDirectory -EvidenceDirectory $evidenceDirectory
             if ($LASTEXITCODE -ne 0) { throw '公开网页发布失败；公网后端仍在运行，可重试发布。' }

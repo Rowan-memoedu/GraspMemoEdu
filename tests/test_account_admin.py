@@ -18,10 +18,10 @@ import threading
 import unittest
 from unittest.mock import patch
 
-from math_learning.access import AccessStore, FEATURES
-from math_learning.account_admin import AccountAdmin, _private_permissions
-from math_learning import cli
-from math_learning.service import DomainError
+from graspmemoedu.access import AccessStore, FEATURES
+from graspmemoedu.account_admin import AccountAdmin, _private_permissions
+from graspmemoedu import cli
+from graspmemoedu.service import DomainError
 from tests.fixtures import synthetic_course, temporary_test_directory
 
 
@@ -162,7 +162,7 @@ $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
                 self.assertEqual(path.stat().st_size, 0)
                 raise DomainError('account_export_permissions', 'Synthetic permission failure', 422)
             return real_permissions(path, apply=apply)
-        with patch('math_learning.account_admin._private_permissions', side_effect=deny_file):
+        with patch('graspmemoedu.account_admin._private_permissions', side_effect=deny_file):
             with self.assertRaises(DomainError) as caught:
                 self.provision(learners=2, tests=1)
         self.assertEqual(caught.exception.code, 'account_export_permissions')
@@ -176,7 +176,7 @@ $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
         for target, effect in [('persist', partial_write), ('fsync', OSError('Synthetic flush failure'))]:
             with self.subTest(target=target):
                 manager = (patch.object(self.admin, '_persist', side_effect=effect) if target == 'persist'
-                           else patch('math_learning.account_admin.os.fsync', side_effect=effect))
+                           else patch('graspmemoedu.account_admin.os.fsync', side_effect=effect))
                 with manager, self.assertRaises(DomainError) as caught:
                     self.provision(learners=2, tests=1)
                 self.assertEqual(caught.exception.code, 'account_export_failed')
@@ -328,7 +328,7 @@ $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
         course_path.write_text(json.dumps(synthetic_course()), encoding='utf-8')
         stdout, stderr = io.StringIO(), io.StringIO()
         status = 0
-        with patch.object(sys, 'argv', ['math-learning', '--data-dir', str(self.root), *arguments]), redirect_stdout(stdout), redirect_stderr(stderr):
+        with patch.object(sys, 'argv', ['graspmemoedu', '--data-dir', str(self.root), *arguments]), redirect_stdout(stdout), redirect_stderr(stderr):
             try:
                 cli.main()
             except SystemExit as exc:

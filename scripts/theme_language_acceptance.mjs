@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 const [base,accountFile,out]=process.argv.slice(2);
 assert.equal(new URL(base).hostname,'127.0.0.1');assert.ok(!['8765','8767'].includes(new URL(base).port));
-assert.ok(path.resolve(accountFile).toLowerCase().startsWith(path.resolve('D:/Artifacts/MathLearningWeb/platform').toLowerCase()+path.sep));
+assert.ok(path.resolve(accountFile).toLowerCase().startsWith(path.resolve('D:/Artifacts/GraspMemoEdu/platform').toLowerCase()+path.sep));
 const account=JSON.parse(await fs.readFile(accountFile,'utf8'));assert.equal(account.account.purpose,'test');
 const require=createRequire(path.join(os.homedir(),'.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/_entry.cjs'));
 const {chromium}=require('playwright');

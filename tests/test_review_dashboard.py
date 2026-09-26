@@ -8,12 +8,12 @@ import unittest
 from unittest.mock import patch
 import uuid
 
-from math_learning.access import AccessStore
-from math_learning.catalog import Catalog
-from math_learning.config import Settings
-from math_learning.dashboard import DashboardStore
-from math_learning.review import ReviewBackend
-from math_learning.service import DomainError, LearningService
+from graspmemoedu.access import AccessStore
+from graspmemoedu.catalog import Catalog
+from graspmemoedu.config import Settings
+from graspmemoedu.dashboard import DashboardStore
+from graspmemoedu.review import ReviewBackend
+from graspmemoedu.service import DomainError, LearningService
 from tests.fixtures import DeterministicJudge, synthetic_course, temporary_test_directory
 
 
@@ -43,7 +43,7 @@ class ReviewDashboardTests(unittest.TestCase):
         return datetime.fromisoformat(result['due_at'])
 
     def dashboard(self, access=None, **kwargs):
-        with patch('math_learning.dashboard.now', return_value=self.time.isoformat()):
+        with patch('graspmemoedu.dashboard.now', return_value=self.time.isoformat()):
             return self.store.dashboard(access or self.access, 'arithmetic-revisited', **kwargs)
 
     def begin(self, module='module-1'):
@@ -84,7 +84,7 @@ class ReviewDashboardTests(unittest.TestCase):
         self.assertIsNone(result['course']['start_date'])
         state = self.begin()
         resumed = DashboardStore(self.catalog, self.access_store)
-        with patch('math_learning.dashboard.now', return_value=self.time.isoformat()):
+        with patch('graspmemoedu.dashboard.now', return_value=self.time.isoformat()):
             result = resumed.dashboard(self.access, 'arithmetic-revisited')
         tasks = [task for task in result['tasks'] if task['type'] == 'Review']
         self.assertEqual(len(tasks), 1)

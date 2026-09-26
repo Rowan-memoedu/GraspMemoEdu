@@ -37,7 +37,7 @@ class GroupedPracticeTests(unittest.TestCase):
     def node(self, *args):
         return subprocess.run(["node", str(ROOT / "scripts/import_course.mjs"), *map(str, args)],
                               capture_output=True, text=True, encoding="utf-8", timeout=120,
-                              env={**os.environ, "MATH_LEARNING_PYTHON": sys.executable})
+                              env={**os.environ, "GRASPMEMOEDU_PYTHON": sys.executable})
 
     def test_grouped_source_imports_with_flat_titles_and_preserved_source(self):
         original = outline(LABELS, modules=2)

@@ -16,12 +16,12 @@ import uuid
 
 from fastapi.testclient import TestClient
 
-from math_learning.access import AccessStore, FEATURES, credential_digest
-from math_learning.api import create_app
-from math_learning.catalog import Catalog
-from math_learning.config import Settings
-from math_learning.service import DomainError, LearningService
-from math_learning.site_backup import backup_site, restore_site
+from graspmemoedu.access import AccessStore, FEATURES, credential_digest
+from graspmemoedu.api import create_app
+from graspmemoedu.catalog import Catalog
+from graspmemoedu.config import Settings
+from graspmemoedu.service import DomainError, LearningService
+from graspmemoedu.site_backup import backup_site, restore_site
 from tests.fixtures import synthetic_course, temporary_test_directory
 
 

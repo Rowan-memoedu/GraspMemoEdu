@@ -37,7 +37,7 @@ for (const card of topic.flashcards) {
 }
 topic.math_css = render.css;
 const repo = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const result = spawnSync(process.env.MATH_LEARNING_PYTHON || 'python', ['-m', 'math_learning.atomic_author'],
+const result = spawnSync(process.env.GRASPMEMOEDU_PYTHON || 'python', ['-m', 'graspmemoedu.atomic_author'],
   {cwd: repo, input: JSON.stringify({topic, statements}), encoding: 'utf8', maxBuffer: 32 * 1024 * 1024});
 if (result.status !== 0) throw new Error(result.stderr || 'Atomic topic validation failed');
 await fs.mkdir(path.dirname(path.resolve(outputPath)), {recursive: true});

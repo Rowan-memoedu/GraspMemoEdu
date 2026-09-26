@@ -307,7 +307,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         for runtime in preview_stores.values():
             runtime.close()
 
-    app = FastAPI(title='MathLearningWeb', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(title='GraspMemoEdu', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     # The subsequently registered boundary middleware wraps this body limiter.
     app.add_middleware(BodyLimitMiddleware, maximum=16384)
     app.state.service = service
@@ -461,8 +461,8 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     @app.get('/api/health')
     def health(request: Request):
         if request.state.public_transport:
-            return {'status': 'ok', 'service': 'MathLearningWeb'}
-        return {'status': 'ok', 'service': 'MathLearningWeb', 'course_ready': True, 'instance_id': settings.instance_id}
+            return {'status': 'ok', 'service': 'GraspMemoEdu'}
+        return {'status': 'ok', 'service': 'GraspMemoEdu', 'course_ready': True, 'instance_id': settings.instance_id}
 
     @app.get('/api/session')
     def session():

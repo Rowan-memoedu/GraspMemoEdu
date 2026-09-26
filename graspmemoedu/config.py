@@ -8,11 +8,11 @@ from urllib.parse import urlsplit
 
 @dataclass
 class Settings:
-    data_dir: Path = field(default_factory=lambda: Path(os.environ.get('MATH_LEARNING_DATA', 'D:/AppData/MathLearningWeb')))
+    data_dir: Path = field(default_factory=lambda: Path(os.environ.get('GRASPMEMOEDU_DATA', 'D:/AppData/GraspMemoEdu')))
     course_path: Path | None = None
     catalog_path: Path | None = None
     guide_path: Path | None = None
-    judge_project: Path = field(default_factory=lambda: Path(os.environ.get('MATH_JUDGE_PROJECT', 'D:/Projects/MathAnswerJudge')))
+    judge_project: Path = field(default_factory=lambda: Path(os.environ.get('GRASPMEMOEDU_JUDGE_PROJECT', 'D:/Projects/MathAnswerJudge')))
     host: str = '127.0.0.1'
     port: int = 8767
     allowed_origins: tuple[str, ...] = ()
@@ -48,7 +48,7 @@ class Settings:
 
     @classmethod
     def load(cls, data_dir=None):
-        root = Path(data_dir or os.environ.get('MATH_LEARNING_DATA', 'D:/AppData/MathLearningWeb'))
+        root = Path(data_dir or os.environ.get('GRASPMEMOEDU_DATA', 'D:/AppData/GraspMemoEdu'))
         path = root / 'settings.json'
         data = json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
         allowed = {'course_path', 'catalog_path', 'guide_path', 'judge_project', 'port', 'allowed_origins', 'public_api_origin'}

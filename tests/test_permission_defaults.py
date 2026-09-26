@@ -5,8 +5,8 @@ import sqlite3
 import unittest
 from unittest.mock import patch
 
-from math_learning.access import AccessStore, FEATURES, GUEST_FEATURES
-from math_learning.service import DomainError
+from graspmemoedu.access import AccessStore, FEATURES, GUEST_FEATURES
+from graspmemoedu.service import DomainError
 from tests.fixtures import temporary_test_directory
 
 
@@ -31,7 +31,7 @@ class PermissionDefaultTests(unittest.TestCase):
         self.assertEqual(account['permission_defaults'], {'topics': True, 'features': True})
         store = self.expanded()
         self.assertEqual({t['id'] for t in store.resolve(self.token)['topics']}, {'math', 'physics', 'chemistry'})
-        with patch('math_learning.access.FEATURES', (*FEATURES, 'future_feature')):
+        with patch('graspmemoedu.access.FEATURES', (*FEATURES, 'future_feature')):
             self.assertIn('future_feature', store.resolve(self.token)['features'])
 
     def test_explicit_empty_and_subset_do_not_expand(self):

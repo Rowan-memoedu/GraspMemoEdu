@@ -133,7 +133,7 @@ def install_topic(settings, package, *, subject_id, course_id, unit_id=None):
                 asset.parent.mkdir(parents=True, exist_ok=True)
                 asset.write_bytes(raw)
             converter = Path(__file__).resolve().parents[1] / 'scripts/import_course.mjs'
-            env = {**os.environ, 'MATH_LEARNING_PYTHON': sys.executable}
+            env = {**os.environ, 'GRASPMEMOEDU_PYTHON': sys.executable}
             result = subprocess.run(['node', str(converter), str(stage / 'source.md'), str(stage / 'answers.json'),
                                      str(stage / 'topic.json'), str(stage / 'audit.json'), str(stage / 'review.json')],
                                     capture_output=True, text=True, encoding='utf-8', timeout=180, env=env,

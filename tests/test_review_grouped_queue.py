@@ -7,9 +7,9 @@ import random
 import unittest
 import uuid
 
-from math_learning.fsrs_engine import utc_time
-from math_learning.review import ReviewBackend
-from math_learning.service import LearningService, encode
+from graspmemoedu.fsrs_engine import utc_time
+from graspmemoedu.review import ReviewBackend
+from graspmemoedu.service import LearningService, encode
 from tests.fixtures import DeterministicJudge, synthetic_course, temporary_test_directory
 
 

@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory)][string]$Origin,
-    [string]$Repository = 'amymiller76717-sudo/GraspMemoEdu-Pages'
+    [string]$Repository = 'Rowan-memoedu/GraspMemoEdu-Pages'
 )
 $ErrorActionPreference = 'Stop'
 if ($Origin -notmatch '^https://[a-z0-9-]+\.trycloudflare\.com$') { throw '公网地址格式不正确。' }

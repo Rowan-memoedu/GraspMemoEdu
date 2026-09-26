@@ -8,11 +8,11 @@ import sys
 import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from math_learning.catalog import Catalog
-from math_learning.config import Settings
-from math_learning.course_graph import GraphStore
-from math_learning.subjects import Subjects
-from math_learning.topic_install import encoded, import_lock, install_topic, read_package
+from graspmemoedu.catalog import Catalog
+from graspmemoedu.config import Settings
+from graspmemoedu.course_graph import GraphStore
+from graspmemoedu.subjects import Subjects
+from graspmemoedu.topic_install import encoded, import_lock, install_topic, read_package
 
 
 def install_course(settings, plan):

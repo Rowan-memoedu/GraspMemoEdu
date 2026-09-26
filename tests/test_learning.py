@@ -18,7 +18,7 @@ import uuid
 from pathlib import Path
 from unittest import mock
 
-from math_learning.service import DomainError, LearningService
+from graspmemoedu.service import DomainError, LearningService
 
 from tests.fixtures import DeterministicJudge, synthetic_course, temporary_test_directory
 
@@ -587,7 +587,7 @@ class LearningAcceptanceTests(unittest.TestCase):
         self.choose("unmastered")
         self.advance()
         prior_log = self.service.log_path.read_text(encoding="utf-8")
-        with mock.patch("math_learning.service.os.replace", side_effect=OSError("Synthetic log disk unavailable")):
+        with mock.patch("graspmemoedu.service.os.replace", side_effect=OSError("Synthetic log disk unavailable")):
             state = self.service.pause({"request_id": str(uuid.uuid4())})
             self.assertEqual(state["status"], "paused")
             self.assertFalse(self.service.flush_logs())

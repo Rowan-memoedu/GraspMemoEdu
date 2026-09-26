@@ -7,7 +7,7 @@
 恢复默认权限（立即生效，不改变邀请码或学习记录）：
 
 ```powershell
-& 'D:/AppData/MathLearningWeb/venv/Scripts/python.exe' -m math_learning account-permissions --learner '<learner_id>' --default-topics --default-features
+& 'D:/AppData/GraspMemoEdu/venv/Scripts/python.exe' -m graspmemoedu account-permissions --learner '<learner_id>' --default-topics --default-features
 ```
 
 `--topics` 与 `--default-topics` 互斥，`--features` 与 `--default-features` 互斥。显式列出当前全部 Topic 仍是固定列表；希望继承以后新增内容时使用默认模式。旧数据库没有记录是否曾显式设置，程序保守保留其列表；本次正式初始批次按原始建号记录核对后将未限制的默认权限迁入继承模式，真正不同的权限仍保留覆盖。
@@ -19,10 +19,10 @@
 在 PowerShell 中执行：
 
 ```powershell
-Set-Location 'D:\Projects\MathLearningWeb'
-$python = 'D:\AppData\MathLearningWeb\venv\Scripts\python.exe'
-$data = 'D:\AppData\MathLearningWeb'
-& $python -m math_learning.cli --data-dir $data account-provision `
+Set-Location 'D:\Projects\GraspMemoEdu'
+$python = 'D:\AppData\GraspMemoEdu\venv\Scripts\python.exe'
+$data = 'D:\AppData\GraspMemoEdu'
+& $python -m graspmemoedu.cli --data-dir $data account-provision `
   --batch initial-20260920 --learners 10 --tests 5 `
   --output "$data\admin\invitations-initial-20260920.json"
 ```
@@ -43,13 +43,13 @@ JSON 是初始邀请码的唯一账本。它包含批次、数据库精确路径
 ## 查看、建号与权限
 
 ```powershell
-& $python -m math_learning.cli --data-dir $data account-list
+& $python -m graspmemoedu.cli --data-dir $data account-list
 
-& $python -m math_learning.cli --data-dir $data account-create `
+& $python -m graspmemoedu.cli --data-dir $data account-create `
   --name '新的学习者' --purpose learner `
   --output "$data\admin\new-learner.json"
 
-& $python -m math_learning.cli --data-dir $data account-permissions `
+& $python -m graspmemoedu.cli --data-dir $data account-permissions `
   --learner '<account-list返回的learner_id>' `
   --topics 'digits-to-letters' --features 'learn,submit_answer,review_history'
 ```
@@ -61,13 +61,13 @@ JSON 是初始邀请码的唯一账本。它包含批次、数据库精确路径
 ## 停用、换码和注销
 
 ```powershell
-& $python -m math_learning.cli --data-dir $data account-disable --learner '<learner_id>'
-& $python -m math_learning.cli --data-dir $data account-enable --learner '<learner_id>'
+& $python -m graspmemoedu.cli --data-dir $data account-disable --learner '<learner_id>'
+& $python -m graspmemoedu.cli --data-dir $data account-enable --learner '<learner_id>'
 
-& $python -m math_learning.cli --data-dir $data account-rotate `
+& $python -m graspmemoedu.cli --data-dir $data account-rotate `
   --learner '<learner_id>' --output "$data\admin\rotation-20260920.json"
 
-& $python -m math_learning.cli --data-dir $data account-revoke-sessions --learner '<learner_id>'
+& $python -m graspmemoedu.cli --data-dir $data account-revoke-sessions --learner '<learner_id>'
 ```
 
 停用会拒绝该账号登录并撤销全部会话，保留学习记录。重新启用不会恢复旧会话，学习者需要重新登录。

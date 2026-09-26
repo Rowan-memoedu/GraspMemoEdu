@@ -43,16 +43,16 @@ Topic Markdown/审核包负责教学内容；`course-graph.json` 负责图谱。
 
 ```powershell
 # 只校验、列出差异，并生成离线可视化。
-pwsh -NoProfile -File D:/Projects/MathLearningWeb/Import-Graph.ps1 `
+pwsh -NoProfile -File D:/Projects/GraspMemoEdu/Import-Graph.ps1 `
   -Source D:/Artifacts/MyCourse/course-graph.json `
   -PreviewHtml D:/Artifacts/MyCourse/course-graph.html
 
 # 安装整份图谱，也可同时指定 PreviewHtml。
-pwsh -NoProfile -File D:/Projects/MathLearningWeb/Import-Graph.ps1 `
+pwsh -NoProfile -File D:/Projects/GraspMemoEdu/Import-Graph.ps1 `
   -Source D:/Artifacts/MyCourse/course-graph.json -Apply
 ```
 
-CLI 为 `python -m math_learning --data-dir <目录> graph-import --source <文件> [--apply] [--preview-html <HTML>]`。默认只预览，不写正式图谱或数据库。自动化可选用 `--expected-revision <上次 previous_revision>` 防止旧预览覆盖并发更新，首次为 `none`；这不是批准口令。
+CLI 为 `python -m graspmemoedu --data-dir <目录> graph-import --source <文件> [--apply] [--preview-html <HTML>]`。默认只预览，不写正式图谱或数据库。自动化可选用 `--expected-revision <上次 previous_revision>` 防止旧预览覆盖并发更新，首次为 `none`；这不是批准口令。
 
 Topic 仍使用 `Import-Topic.ps1` 或 `author-prepare` / `author-install`，课程需按原流程配置。图谱导入不会创建空教学课程或伪造 Topic。后续正文导入并重载内容目录后，图谱按 ID 自动显示可用；图谱更新本身在下次打开时生效，无需重启服务。
 

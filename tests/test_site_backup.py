@@ -13,15 +13,15 @@ import uuid
 import zipfile
 from zoneinfo import ZoneInfo
 
-from math_learning.access import AccessStore
-from math_learning.catalog import Catalog
-from math_learning.cli import backup_bundle, restore_bundle
-from math_learning.config import Settings
-from math_learning.dashboard import DashboardStore
-from math_learning.guide import GuideReader
-from math_learning.service import DomainError, LearningService
-from math_learning.site_backup import backup_site, restore_site
-from math_learning.public_limits import DailyJudgeQuota, judge_usage_report
+from graspmemoedu.access import AccessStore
+from graspmemoedu.catalog import Catalog
+from graspmemoedu.cli import backup_bundle, restore_bundle
+from graspmemoedu.config import Settings
+from graspmemoedu.dashboard import DashboardStore
+from graspmemoedu.guide import GuideReader
+from graspmemoedu.service import DomainError, LearningService
+from graspmemoedu.site_backup import backup_site, restore_site
+from graspmemoedu.public_limits import DailyJudgeQuota, judge_usage_report
 from tests.fixtures import DeterministicJudge, synthetic_course, temporary_test_directory
 from scripts.verify_content import collect_questions, parse_outline, sha256
 

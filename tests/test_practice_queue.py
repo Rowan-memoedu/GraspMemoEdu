@@ -6,8 +6,8 @@ import sqlite3
 from types import SimpleNamespace
 import unittest
 
-from math_learning.practice_queue import PersistentPracticeQueue, VERSION
-from math_learning.service import DomainError
+from graspmemoedu.practice_queue import PersistentPracticeQueue, VERSION
+from graspmemoedu.service import DomainError
 from tests.fixtures import synthetic_course
 
 

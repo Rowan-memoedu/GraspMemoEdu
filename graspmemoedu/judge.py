@@ -7,7 +7,7 @@ import threading
 
 def independent_settings():
     """Only dedicated judge variables; live user settings override inherited values."""
-    names = ('MATH_JUDGE_API_KEY', 'MATH_JUDGE_BASE_URL', 'MATH_JUDGE_MODEL')
+    names = ('GRASPMEMOEDU_JUDGE_API_KEY', 'GRASPMEMOEDU_JUDGE_BASE_URL', 'GRASPMEMOEDU_JUDGE_MODEL')
     values = {name: os.environ.get(name, '') for name in names}
     if os.name == 'nt':
         import winreg

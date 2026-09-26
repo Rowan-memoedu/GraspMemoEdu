@@ -4,7 +4,7 @@
 
 | 层 | 入口 | 职责 |
 | --- | --- | --- |
-| 学科外观与路由 | `web/subjects.js`、`math_learning/subjects.py` | 六科学科主题、路由、课程归属；旧数学路径继续兼容 |
+| 学科外观与路由 | `web/subjects.js`、`graspmemoedu/subjects.py` | 六科学科主题、路由、课程归属；旧数学路径继续兼容 |
 | 课程与内容 | `catalog.py`、`author_import.py`、`scripts/import_course.mjs` | 作者 Markdown 机械导入、离线公式、来源校验、稳定 Topic ID |
 | Lesson | `service.py`、`web/app.js` | 掌握选择、指导、练习、暂停、幂等提交、历史与草稿 |
 | 复习 | `review.py`、`review_api.py`、`web/review.js` | FSRS、到期任务、持久练习队列；沿用原评分政策 |

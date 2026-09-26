@@ -7,8 +7,8 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from math_learning.author_import import prepare_topic
-from math_learning.catalog import Catalog
+from graspmemoedu.author_import import prepare_topic
+from graspmemoedu.catalog import Catalog
 
 
 def main():

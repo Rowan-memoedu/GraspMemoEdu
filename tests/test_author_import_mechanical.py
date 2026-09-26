@@ -4,7 +4,7 @@ from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-from math_learning.author_import import prepare_topic, resume_topic, sample_batch_integrity
+from graspmemoedu.author_import import prepare_topic, resume_topic, sample_batch_integrity
 from tests.fixtures import temporary_test_directory
 
 
@@ -25,7 +25,7 @@ class MechanicalImportTests(unittest.TestCase):
 
     def test_default_mechanical_mapping_has_no_api_and_exact_explanation_answers(self):
         before = self.source.read_bytes()
-        with patch('math_learning.author_import.make_client', side_effect=AssertionError('API forbidden')):
+        with patch('graspmemoedu.author_import.make_client', side_effect=AssertionError('API forbidden')):
             result = prepare_topic(self.source, 'mechanical-fixture', self.root / 'run')
         self.assertEqual(result['status'], 'approved', result)
         self.assertEqual(result['review_mode'], 'mechanical')
@@ -54,7 +54,7 @@ class MechanicalImportTests(unittest.TestCase):
 
     def test_missing_explanation_fails_structure_without_calling_api(self):
         self.source.write_text(self.source.read_text().replace('    - Explanation', '    - Missing field', 1))
-        with patch('math_learning.author_import.make_client', side_effect=AssertionError('API forbidden')):
+        with patch('graspmemoedu.author_import.make_client', side_effect=AssertionError('API forbidden')):
             result = prepare_topic(self.source, 'mechanical-fixture', self.root / 'run')
         self.assertEqual(result['status'], 'failed')
         self.assertFalse((self.root / 'run/topic.json').exists())
@@ -66,7 +66,7 @@ class MechanicalImportTests(unittest.TestCase):
         manifest.update(status='failed', error='Old semantic rejection')
         (old / 'manifest.json').write_text(json.dumps(manifest))
         old_manifest = (old / 'manifest.json').read_bytes()
-        with patch('math_learning.author_import.make_client', side_effect=AssertionError('API forbidden')):
+        with patch('graspmemoedu.author_import.make_client', side_effect=AssertionError('API forbidden')):
             result = resume_topic(old, self.root / 'resumed')
         self.assertEqual(result['status'], 'approved', result)
         self.assertFalse(result['semantic_review_performed'])

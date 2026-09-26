@@ -4,9 +4,9 @@ import unittest
 from unittest import mock
 import os
 
-from math_learning.catalog import Catalog
-from math_learning.config import Settings
-from math_learning.subjects import Subjects
+from graspmemoedu.catalog import Catalog
+from graspmemoedu.config import Settings
+from graspmemoedu.subjects import Subjects
 from scripts.initialize_subject_test_courses import initialize, SUBJECTS, source_bundle
 from scripts.verify_content import collect_questions, parse_outline
 from tests.fixtures import synthetic_course, temporary_test_directory

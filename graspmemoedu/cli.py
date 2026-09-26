@@ -253,7 +253,7 @@ def main():
         if command != 'author-install':
             author.add_argument('--source', type=Path, required=True)
             author.add_argument('--topic-id', required=True)
-            author.add_argument('--run-dir', type=Path, help='新审核产物目录；默认 D:/Artifacts/MathLearningWeb/author-import/runs')
+            author.add_argument('--run-dir', type=Path, help='新审核产物目录；默认 D:/Artifacts/GraspMemoEdu/author-import/runs')
         else:
             author.add_argument('--package', type=Path, required=True)
         if command != 'author-prepare':
@@ -359,7 +359,7 @@ def main():
                     if args.topic_id in catalog.topics:
                         raise ValueError('Topic ID already exists; use author-install with the approved package to check idempotency')
                 stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')
-                folder = args.run_dir or Path('D:/Artifacts/MathLearningWeb/author-import/runs') / (args.topic_id + '-' + stamp)
+                folder = args.run_dir or Path('D:/Artifacts/GraspMemoEdu/author-import/runs') / (args.topic_id + '-' + stamp)
                 manifest = prepare_topic(args.source, args.topic_id, folder)
                 if manifest['status'] != 'approved':
                     output({'status': 'failed', 'package': str(folder), 'report': str(folder / 'manifest.json'),

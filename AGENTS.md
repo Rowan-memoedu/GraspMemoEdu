@@ -1,14 +1,14 @@
-# MathLearningWeb
+# GraspMemoEdu
 
 - 产品品牌为 GraspMemoEdu，整体多学科框架以 RemNote「搭建掌握式学习平台」（MQrYfdVzLFh4tV96K）及用户后续修订为准。古典衬线风格只用于总首页；数学与全局设置恢复原模板视觉，其他学科沿用同一模板并替换配色、名称与徽标。数学只保留既有课程，不额外加测试课；其余五科测试课程、Topic 及配套测试指南已下线，测试原文件仍留本机；物理正式课程「运动学进阶」现已发布，共 22 个 Topic，其余四科仍为空；未经新的明确要求，不得重新发布测试内容。共用结构在当前仓库维护，不复制六份网站。
 - 学科路由为 `#/subjects/<id>/...`；旧数学路径继续兼容。账号、身份存储与 Topic ID 不因学科拆分改变。正式课程归属、名称及指南由服务器 `/var/lib/graspmemoedu/subjects.json` 配置；配色和首页/导航栏共用徽标统一在 `web/subjects.js` 维护，见 `docs/subjects.md`。不得将服务器或本机路径暴露给公开前端。
-- 腾讯云托管的多学科学习应用；Lesson 产品行为以 `D:/Artifacts/MathLearningWebPlan/01-需求与方案.md`、`04-推送系统补充需求.md` 为准，复习后端以 `docs/review-backend.md` 为准，当前实现/运维以 README 为准。
+- 腾讯云托管的多学科学习应用；Lesson 产品行为以 `D:/Artifacts/GraspMemoEduPlan/01-需求与方案.md`、`04-推送系统补充需求.md` 为准，复习后端以 `docs/review-backend.md` 为准，当前实现/运维以 README 为准。
 - 主页布局以 `D:/Artifacts/MathTopicPipeline/MathAcademy-learn-主页复刻需求.md` 为准；Course「再探小学算术」组织 Topic「数字化为字母」，不改变其 ID、版本和既有进度。网站主页产生真实 Lesson 和到期 Review 任务，尚未接入 XP 或测验。
 - 正式 GUIDE 由服务器 `/var/lib/graspmemoedu/guide/guide.md` 与相对 assets 单向发布；内容分极简使用流程和系统工作原理，配图用本网站真实截图标注。更新指南不能夹带技术配置说明或暴露其他文件。
 - 技术栈：Python/FastAPI/SQLite，原生 HTML/CSS/JS，离线 MathJax SVG；复用 `D:/Projects/MathAnswerJudge`，不在网页判题。
 - 正式启动由腾讯云 `graspmemoedu.service` 管理，只监听 127.0.0.1:18768。Windows 启动脚本仅用于显式指定的隔离开发目录。8765 属于 AnkiConnect，不要终止。
-- 活动开发源码仅在本仓库；正式数据在腾讯云 `/var/lib/graspmemoedu`，本机 `D:/AppData/MathLearningWeb` 仅作回滚快照及原稿存档，证据在 `D:/Artifacts/MathLearningWeb`。课程正文、答案表、数据库、配对信息和密钥不进入 Git。
-- 修改后运行 `D:/AppData/MathLearningWeb/venv/Scripts/python.exe -m unittest discover -s tests -v`。实际学习流程须用独立验收目录和真实判题核验，不能消耗正式进度。
+- 活动开发源码仅在本仓库；正式数据在腾讯云 `/var/lib/graspmemoedu`，本机 `D:/AppData/GraspMemoEdu` 仅作回滚快照及原稿存档，证据在 `D:/Artifacts/GraspMemoEdu`。课程正文、答案表、数据库、配对信息和密钥不进入 Git。
+- 修改后运行 `D:/AppData/GraspMemoEdu/venv/Scripts/python.exe -m unittest discover -s tests -v`。实际学习流程须用独立验收目录和真实判题核验，不能消耗正式进度。
 - 课程默认只做机械导入：解析结构、按字段注入、搬运附件及校验来源一致性；不得逐题检查数学、答案、图注或配图细节。API 仅可用于极少量抽样，检查整体性损坏，不作为逐题语义门禁。后续只局部修复，不整篇重跑，不增加全量细节检查。
 - 界面术语以 `docs/ui-language.md` 为准，完整对照表从生产词库生成并检查；Introduction 为“指导”，Guide 为“指南”。UI 本地化不得翻译课程正文、答案或解析。
 - 作者 Markdown 导入使用 `Import-Topic.ps1` 或 `author-prepare` / `author-install`，规范见 `docs/author-import.md`。复用原转换器，原稿 Explanation 机械映射为判题参考，不经 LLM 改写；来源包留本机并明确标注机械校验。只新增至已有 Course，不覆盖 Topic 或自动扩大账号权限，安装后重载后端。
@@ -18,7 +18,7 @@
 - 课程版本不匹配须保留旧进度；暂停与评分由 SQLite 事务决定；在途判题不持有数据库锁，旧轮次结果不能推进新轮次。
 - 后端只绑定回环地址；禁止 Web 解锁。管理命令精确指定学习者、Topic、模块、暂停事件。
 - 启动入口要验证进程开始时间及实例 ID。后台服务启动不能放入会在正常退出时清理整个 Job 的测试超时器。
-- 已获公开发布及更名授权；源码仓库为私有 GraspMemoEdu，独立公开仓库 GraspMemoEdu-Pages 仅发布 web 静态资产和仅含公开 API 地址的 deployment.json。本机目录继续沿用 MathLearningWeb。前端不提供连接配置；访客通过公共 HTTPS API 自动进入游客模式。修改 web 后先更新整套资源版本号再导出；发布后核对实际资产哈希及真实浏览器加载效果，流程见 README。
+- 已获公开发布及更名授权；源码仓库为私有 GraspMemoEdu，独立公开仓库 GraspMemoEdu-Pages 仅发布 web 静态资产和仅含公开 API 地址的 deployment.json。本机源码、数据、缓存和产物目录统一使用 GraspMemoEdu，Python 模块使用 graspmemoedu，专用环境变量使用 GRASPMEMOEDU_ 前缀。前端不提供连接配置；访客通过公共 HTTPS API 自动进入游客模式。修改 web 后先更新整套资源版本号再导出；发布后核对实际资产哈希及真实浏览器加载效果，流程见 README。
 - 已授权完整邀请码账号搭建与测试：access_* 表与学习状态同库，凭据仅存哈希；每浏览器游客独立，账号按 Topic 和功能授权。游客可访问全部六科及其已发布 Topic、指南，仍禁止主动暂停，原自动暂停规则不变；账号的明确 Topic 权限保持原授权。初始 15 个账号中 10 个正式使用、5 个固定 test 用途；先做独立验收，再仅使用 test 账号公网验收。原始邀请码只保存在本机私密管理目录，不能写入源码、回执或公开资产。
 - 管理正式账号、权限与内容须通过 SSH 在服务器运行 CLI；本机导入只用于准备来源包与隔离验收，不直接更新正式网站。网页不得暴露管理员接口。每个身份按 learner_id 隔离，状态和提交结果都须核对归属。
 - 账号默认动态开放全部当前及后续 Topic、功能；明确权限列表按 Topic/功能两个维度分别覆盖，空列表禁止该维度。`account-permissions --default-topics --default-features` 恢复继承。游客限制不变；旧无模式记录保守保留，已确认默认的正式初始批次按建号记录迁移。

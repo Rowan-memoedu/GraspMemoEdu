@@ -110,23 +110,23 @@ export const portalMessages = {
   ],
   "portal.learn.math.learning.19": [
     "学习 · 数学学习",
-    "Learn · Math Learning"
+    "Learn · GraspMemoEdu"
   ],
   "portal.courses.math.learning.20": [
     "课程 · 数学学习",
-    "Courses · Math Learning"
+    "Courses · GraspMemoEdu"
   ],
   "portal.guide.math.learning.21": [
     "指南 · 数学学习",
-    "Guide · Math Learning"
+    "Guide · GraspMemoEdu"
   ],
   "portal.q.a.math.learning.22": [
     "常见问题 · 数学学习",
-    "Q&A · Math Learning"
+    "Q&A · GraspMemoEdu"
   ],
   "portal.settings.math.learning.23": [
     "设置 · 数学学习",
-    "Settings · Math Learning"
+    "Settings · GraspMemoEdu"
   ],
   "portal.this.page.does.not.exist.24": [
     "这个页面不存在。",

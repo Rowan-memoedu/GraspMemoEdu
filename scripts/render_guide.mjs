@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 
 const bundled = process.env.CODEX_NODE_MODULES || path.join(os.homedir(), '.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules');
 const mathRuntime = process.env.MATH_TOPIC_PDF_RUNTIME || 'D:/Caches/MathTopicPdf/node_modules';
-const guideRuntime = process.env.MATH_LEARNING_NODE_MODULES || 'D:/Caches/MathLearningWeb/node-runtime/node_modules';
+const guideRuntime = process.env.GRASPMEMOEDU_NODE_MODULES || 'D:/Caches/GraspMemoEdu/node-runtime/node_modules';
 const br = createRequire(path.join(bundled, '_entry.cjs'));
 const mr = createRequire(path.join(mathRuntime, '_entry.cjs'));
 const gr = createRequire(path.join(guideRuntime, '_entry.cjs'));

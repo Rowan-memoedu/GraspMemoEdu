@@ -4,14 +4,14 @@ import json
 from pathlib import Path
 import unittest
 
-from math_learning.access import AccessStore
-from math_learning.catalog import Catalog
-from math_learning.config import Settings
-from math_learning.course_graph import import_graph
-from math_learning.dashboard import DashboardStore
-from math_learning.review import ReviewBackend
-from math_learning.service import DomainError, LearningService
-from math_learning.subjects import Subjects
+from graspmemoedu.access import AccessStore
+from graspmemoedu.catalog import Catalog
+from graspmemoedu.config import Settings
+from graspmemoedu.course_graph import import_graph
+from graspmemoedu.dashboard import DashboardStore
+from graspmemoedu.review import ReviewBackend
+from graspmemoedu.service import DomainError, LearningService
+from graspmemoedu.subjects import Subjects
 from tests.fixtures import DeterministicJudge, synthetic_course, temporary_test_directory
 
 

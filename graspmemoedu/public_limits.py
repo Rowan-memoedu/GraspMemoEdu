@@ -79,9 +79,9 @@ class DailyJudgeQuota:
     def __init__(self, data_dir, now=None):
         self.path = Path(data_dir) / 'judge-daily-quota.sqlite3'
         self.now = now or (lambda: datetime.now(self.zone))
-        self.global_limit = self.configured_limit('MATH_JUDGE_DAILY_GLOBAL', 2000)
-        self.guest_limit = self.configured_limit('MATH_JUDGE_DAILY_GUEST', 100)
-        self.account_limit = self.configured_limit('MATH_JUDGE_DAILY_ACCOUNT', 0, allow_unlimited=True)
+        self.global_limit = self.configured_limit('GRASPMEMOEDU_JUDGE_DAILY_GLOBAL', 2000)
+        self.guest_limit = self.configured_limit('GRASPMEMOEDU_JUDGE_DAILY_GUEST', 100)
+        self.account_limit = self.configured_limit('GRASPMEMOEDU_JUDGE_DAILY_ACCOUNT', 0, allow_unlimited=True)
         with closing(self._connect()) as con:
             con.execute('''CREATE TABLE IF NOT EXISTS usage (
                 day TEXT NOT NULL, scope TEXT NOT NULL, count INTEGER NOT NULL,

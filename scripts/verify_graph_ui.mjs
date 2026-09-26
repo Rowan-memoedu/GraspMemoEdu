@@ -27,8 +27,8 @@ const report = {checks: [], errors: [], nodes: graph.nodes.length, edges: graph.
 try {
   const context = await browser.newContext({viewport: {width: 1365, height: 960}});
   await context.addInitScript(({base, token}) => {
-    localStorage.setItem('math-learning-web:identity:' + base, token);
-    localStorage.setItem('math-learning-web:identity-role:' + base, 'account');
+    localStorage.setItem('graspmemoedu:identity:' + base, token);
+    localStorage.setItem('graspmemoedu:identity-role:' + base, 'account');
   }, {base, token: login.identity_token});
   const page = await context.newPage(); page.on('pageerror', error => report.errors.push(error.message));
   await page.goto(`${base}/#/subjects/${subject}/courses`, {waitUntil: 'networkidle'});

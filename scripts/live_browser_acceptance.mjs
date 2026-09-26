@@ -5,7 +5,7 @@ import os from 'node:os';
 import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
 
-const [base = 'http://127.0.0.1:8766', destination = 'D:/Artifacts/MathLearningWeb/browser-live', courseFile = 'D:/AppData/MathLearningWeb/courses/digits-to-letters.json'] = process.argv.slice(2);
+const [base = 'http://127.0.0.1:8766', destination = 'D:/Artifacts/GraspMemoEdu/browser-live', courseFile = 'D:/AppData/GraspMemoEdu/courses/digits-to-letters.json'] = process.argv.slice(2);
 const require = createRequire(path.join(os.homedir(), '.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/_entry.cjs'));
 const { chromium } = require('playwright');
 const course = JSON.parse(await fs.readFile(courseFile, 'utf8'));

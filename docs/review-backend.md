@@ -6,11 +6,11 @@
 
 ## 组件与边界
 
-- `math_learning/fsrs_engine.py`：调用上游 `Scheduler`，不修改 FSRS 公式。数字 1/2/3/4 分别对应 Again/Hard/Good/Easy。
-- `math_learning/practice.py`：Lesson 与复习共用补题、错误计数与结算逻辑；两者分别使用自己的规则。
-- `math_learning/practice_queue.py`：每个学习者/Example 的持久分组题源，跨 Lesson 和复习接续，与单轮题量及评分分开。
-- `math_learning/judging.py`：共用现有 MathAnswerJudge 判题约定；网络判题不持有数据库写锁。
-- `math_learning/review.py`：Example 卡片、到期任务、复习轮次、评分记录、参数配置和优化接口。
+- `graspmemoedu/fsrs_engine.py`：调用上游 `Scheduler`，不修改 FSRS 公式。数字 1/2/3/4 分别对应 Again/Hard/Good/Easy。
+- `graspmemoedu/practice.py`：Lesson 与复习共用补题、错误计数与结算逻辑；两者分别使用自己的规则。
+- `graspmemoedu/practice_queue.py`：每个学习者/Example 的持久分组题源，跨 Lesson 和复习接续，与单轮题量及评分分开。
+- `graspmemoedu/judging.py`：共用现有 MathAnswerJudge 判题约定；网络判题不持有数据库写锁。
+- `graspmemoedu/review.py`：Example 卡片、到期任务、复习轮次、评分记录、参数配置和优化接口。
 
 每个 `learner_id + topic_id + module_id` 对应一张 FSRS 卡片。Practice 只是这张卡片某次复习时的抽题，不建立自己的调度卡片。课程版本不匹配时拒绝沿用旧卡，保留原数据。首次成功结算 Lesson 模块后，以该模块评分和真实完成时间调用 FSRS；后续完整复习轮次各调用一次。
 
@@ -21,8 +21,8 @@ FSRS 计算与四档评分遵循上游实现。默认使用上游的目标保留
 ## 接收已有 Lesson 评分
 
 ```python
-from math_learning.service import LearningService
-from math_learning.review import ReviewBackend
+from graspmemoedu.service import LearningService
+from graspmemoedu.review import ReviewBackend
 
 lesson = LearningService(course, data_dir, judge, learner_id=learner_id)
 reviews = ReviewBackend(lesson)
@@ -123,7 +123,7 @@ reviews.configure_scheduler(desired_retention=0.95, reschedule_existing=True)
 优化在本机运行，不上传学习记录。普通调度依赖很小；优化的可选运行环境单独锁定在 `requirements-optimizer.txt`：
 
 ```powershell
-& 'D:\AppData\MathLearningWeb\venv\Scripts\python.exe' -m pip install --no-compile --cache-dir 'D:\Caches\pip' -r 'D:\Projects\MathLearningWeb\requirements-optimizer.txt'
+& 'D:\AppData\GraspMemoEdu\venv\Scripts\python.exe' -m pip install --no-compile --cache-dir 'D:\Caches\pip' -r 'D:\Projects\GraspMemoEdu\requirements-optimizer.txt'
 ```
 
 ```python
@@ -146,8 +146,8 @@ reviews.apply_optimization(candidate["optimization_id"],
 ## 验证
 
 ```powershell
-& 'D:\AppData\MathLearningWeb\venv\Scripts\python.exe' -m unittest tests.test_review -v
-& 'D:\AppData\MathLearningWeb\venv\Scripts\python.exe' scripts/verify_review_backend.py --real-judge --output 'D:\Artifacts\MathLearningWeb\fsrs-backend\<新的验收目录>'
+& 'D:\AppData\GraspMemoEdu\venv\Scripts\python.exe' -m unittest tests.test_review -v
+& 'D:\AppData\GraspMemoEdu\venv\Scripts\python.exe' scripts/verify_review_backend.py --real-judge --output 'D:\Artifacts\GraspMemoEdu\fsrs-backend\<新的验收目录>'
 ```
 
 测试包含四档评分与上游对照、到期边界、随机补题、规则版本、重复/并发请求、暂停与在途判题、重启、身份隔离、保留度设置、重排、备份恢复，以及超过上游门槛的真实参数优化。真实判题 Canary 使用独立生成的算术课程、新数据目录和模拟推进的时钟，验证 Lesson 评分 → FSRS → 到期领取 → 错一题补两题 → 评分 2 → 下一次调度 → 重启回读。不会打开正式网站数据库。

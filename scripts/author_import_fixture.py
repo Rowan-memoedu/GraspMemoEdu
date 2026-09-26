@@ -8,9 +8,9 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import uvicorn
-from math_learning.api import create_app
-from math_learning.config import Settings
-from math_learning.topic_install import install_topic, read_package
+from graspmemoedu.api import create_app
+from graspmemoedu.config import Settings
+from graspmemoedu.topic_install import install_topic, read_package
 from tests.fixtures import synthetic_course
 
 
@@ -25,9 +25,9 @@ def main():
     parser.add_argument('--port', type=int, default=8779)
     args = parser.parse_args()
     root = args.output.resolve()
-    allowed = Path('D:/Artifacts/MathLearningWeb/author-import/qa').resolve()
+    allowed = Path('D:/Artifacts/GraspMemoEdu/author-import/qa').resolve()
     if not args.output.is_absolute() or not root.is_relative_to(allowed) or root == allowed or root.exists():
-        raise ValueError('Use a new absolute child of D:/Artifacts/MathLearningWeb/author-import/qa')
+        raise ValueError('Use a new absolute child of D:/Artifacts/GraspMemoEdu/author-import/qa')
     if args.port in (8765, 8767) or not 1024 <= args.port <= 65535:
         raise ValueError('Use an isolated local port; formal service ports are forbidden')
     with socket.socket() as probe:

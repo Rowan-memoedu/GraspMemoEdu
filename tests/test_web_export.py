@@ -10,7 +10,7 @@ class PublicExportTests(unittest.TestCase):
     def export(self, root, origin):
         output = root / 'web'
         result = subprocess.run(
-            [sys.executable, '-m', 'math_learning', '--data-dir', str(root / 'data'),
+            [sys.executable, '-m', 'graspmemoedu', '--data-dir', str(root / 'data'),
              'export-web', '--output', str(output), '--api-origin', origin],
             capture_output=True, text=True, encoding='utf-8')
         return result, output

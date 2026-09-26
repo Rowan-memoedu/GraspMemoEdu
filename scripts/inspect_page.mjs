@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { createRequire } from 'node:module';
-const [base='http://127.0.0.1:8767',out='D:/Artifacts/MathLearningWeb/formal-preview']=process.argv.slice(2);
+const [base='http://127.0.0.1:8767',out='D:/Artifacts/GraspMemoEdu/formal-preview']=process.argv.slice(2);
 const require=createRequire(path.join(os.homedir(),'.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/_entry.cjs'));
 const {chromium}=require('playwright');
 await fs.mkdir(out,{recursive:true});

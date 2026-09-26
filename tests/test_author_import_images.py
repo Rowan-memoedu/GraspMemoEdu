@@ -7,8 +7,8 @@ import unittest
 from unittest.mock import patch
 import zlib
 
-from math_learning.author_import import prepare_topic, _batches
-from math_learning.topic_assets import validate_assets, read_local_asset
+from graspmemoedu.author_import import prepare_topic, _batches
+from graspmemoedu.topic_assets import validate_assets, read_local_asset
 from tests.fixtures import temporary_test_directory
 
 
@@ -63,7 +63,7 @@ class AuthorImportImageTests(unittest.TestCase):
         return '{}'
 
     def run_prepare(self, client):
-        with patch('math_learning.author_import._node', side_effect=self.node), patch('math_learning.author_import.Catalog._validate_topic'):
+        with patch('graspmemoedu.author_import._node', side_effect=self.node), patch('graspmemoedu.author_import.Catalog._validate_topic'):
             return prepare_topic(self.source, 'visual-topic', self.folder, client, mode='semantic')
 
     def test_real_image_parts_split_batches_bind_hashes_and_snapshot_only_references(self):

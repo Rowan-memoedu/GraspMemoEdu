@@ -6,7 +6,7 @@ import random
 import unittest
 import uuid
 
-from math_learning.service import LearningService
+from graspmemoedu.service import LearningService
 from tests.fixtures import DeterministicJudge, synthetic_course, temporary_test_directory
 
 

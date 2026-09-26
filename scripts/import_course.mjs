@@ -275,7 +275,7 @@ export async function importCourse(sourcePath, sidecarPath, outputPath, auditPat
   const reviewHash = reviewPath ? digest(await fs.readFile(reviewPath)) : null;
   const sourceHash = digest(sourceBuffer);
   if (sourceHash !== sidecar.source_sha256) throw new Error('Source changed since the answer sidecar was reviewed');
-  const check = spawnSync(process.env.MATH_LEARNING_PYTHON || 'python', [path.join(here, 'verify_content.py'), sourcePath, sidecarPath, ...(reviewPath ? ['--review', reviewPath] : [])],
+  const check = spawnSync(process.env.GRASPMEMOEDU_PYTHON || 'python', [path.join(here, 'verify_content.py'), sourcePath, sidecarPath, ...(reviewPath ? ['--review', reviewPath] : [])],
     {encoding:'utf8', maxBuffer:32 * 1024 * 1024, env:{...process.env, PYTHONIOENCODING:'utf-8'}, windowsHide:true});
   if (check.status !== 0) throw new Error(`${reviewPath ? 'Reviewed content' : 'Independent arithmetic'} verification failed: ${check.stderr || check.error || check.status}`);
   const audit = JSON.parse(check.stdout);

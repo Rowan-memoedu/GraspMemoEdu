@@ -16,10 +16,10 @@ import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from math_learning.fsrs_engine import utc_time
-from math_learning.judge import ExistingJudge
-from math_learning.review import ReviewBackend
-from math_learning.service import LearningService
+from graspmemoedu.fsrs_engine import utc_time
+from graspmemoedu.judge import ExistingJudge
+from graspmemoedu.review import ReviewBackend
+from graspmemoedu.service import LearningService
 
 
 def make_course():

@@ -14,10 +14,10 @@ import uuid
 
 from fsrs import Card, Rating, Scheduler
 
-from math_learning.fsrs_engine import FSRSEngine, utc_time
-from math_learning.practice import PracticePolicy
-from math_learning.review import ReviewBackend
-from math_learning.service import DomainError, LearningService
+from graspmemoedu.fsrs_engine import FSRSEngine, utc_time
+from graspmemoedu.practice import PracticePolicy
+from graspmemoedu.review import ReviewBackend
+from graspmemoedu.service import DomainError, LearningService
 from tests.fixtures import DeterministicJudge, synthetic_course, temporary_test_directory
 
 
