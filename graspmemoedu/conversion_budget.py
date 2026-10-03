@@ -8,8 +8,7 @@ import sqlite3
 import uuid
 
 
-class BudgetStopped(RuntimeError):
-    pass
+from .conversion_run import ConversionStopped as BudgetStopped
 
 
 DEFAULT_LIMITS = {

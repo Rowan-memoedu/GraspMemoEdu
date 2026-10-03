@@ -166,18 +166,18 @@ class BudgetTests(unittest.TestCase):
             return raw_result({'questions': [{'id': s['id'], 'distractors': [{'value': str(n)} for n in (1,2,3,4,6)]}
                                              for s in sources]}, response_id='sample-' + str(counter[0]))
         client.complete_limited.side_effect = generate
-        result = run_conversion(course, self.root, [4], limits=limits(), client_factory=lambda: client)
+        result = run_conversion(course, self.root, [4], client_factory=lambda: client)
         self.assertEqual(result['status'], 'sample_review_required')
         self.assertEqual(counter[0], 2)
         self.assertFalse((self.root / 'bank.json').exists())
         sample = json.loads((self.root / 'sample.json').read_text())
         self.assertEqual(len(sample), 8)
         self.assertEqual(len({item['source']['id'].split('-example')[0] for item in sample[:5]}), 5)
-        run_conversion(course, self.root, [4], limits=limits(), client_factory=lambda: client)
+        run_conversion(course, self.root, [4], client_factory=lambda: client)
         self.assertEqual(counter[0], 2)
         changed = deepcopy(course); changed['title'] += ' changed'
         with self.assertRaises(BudgetStopped):
-            run_conversion(changed, self.root, [4], limits=limits(), client_factory=lambda: client)
+            run_conversion(changed, self.root, [4], client_factory=lambda: client)
 
     def test_existing_bank_readback_never_builds_a_client(self):
         course = synthetic_course(1)

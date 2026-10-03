@@ -10,7 +10,7 @@ import subprocess
 import uuid
 
 from .author_import import make_client, _object
-from .conversion_budget import ConversionBudget, BudgetStopped
+from .conversion_run import ConversionRun, ConversionStopped as BudgetStopped
 from .question_bank import digest, source_questions, validate_bank
 from scripts.verify_content import ExactTex, normalize_tex
 
@@ -150,11 +150,14 @@ def write_json(path, value):
     os.replace(temporary, path)
 
 
-def bounded_call(client_factory, budget, folder, sources, *, retry=False):
-    messages = [{'role': 'system', 'content': SYSTEM},
-                {'role': 'user', 'content': GENERATE + '\n输入数据：\n' + json.dumps(sources, ensure_ascii=False)}]
+def bounded_call(client_factory, budget, folder, sources, *, retry=False, adapter=None, repair_errors=None):
+    request_sources = [dict(s, local_validation_error=repair_errors[s['id']])
+                       if repair_errors and s['id'] in repair_errors else s for s in sources]
+    messages = adapter.messages(request_sources) if adapter else [
+        {'role': 'system', 'content': SYSTEM},
+        {'role': 'user', 'content': GENERATE + '\n输入数据：\n' + json.dumps(request_sources, ensure_ascii=False)}]
     request = {'model': budget.limits['model'], 'thinking': budget.limits['thinking'],
-               'max_tokens': budget.limits['max_output_tokens'], 'prompt_version': PROMPT_VERSION,
+               'max_tokens': budget.limits['max_output_tokens'], 'prompt_version': adapter.version if adapter else PROMPT_VERSION,
                'messages': messages, 'repair_attempt': retry}
     key = digest(request)
     folder.mkdir(parents=True, exist_ok=True)
@@ -176,21 +179,21 @@ def bounded_call(client_factory, budget, folder, sources, *, retry=False):
     except BaseException as exc:
         budget.uncertain(reservation, type(exc).__name__)
         raise
-    print(json.dumps({'budget': budget.summary()}), flush=True)
+    print(json.dumps({'usage': budget.summary()}), flush=True)
     if raw.get('choices', [{}])[0].get('finish_reason') != 'stop':
         budget.stop('Model did not finish within frozen output limit')
         raise BudgetStopped('Truncated/incomplete model output; no automatic retry')
     return _object(raw), key
 
 
-def generate_batch(client_factory, budget, folder, sources):
+def generate_batch(client_factory, budget, folder, sources, *, adapter=None):
     """At most one local-validation repair, only for the failed source items."""
     if not 1 <= len(sources) <= 4 or len({s['id'] for s in sources}) != len(sources):
         raise ValueError('A batch contains one to four distinct source questions')
-    remaining, accepted = list(sources), {}
+    remaining, accepted, errors = list(sources), {}, {}
     for attempt in range(2):
         try:
-            response, key = bounded_call(client_factory, budget, folder, remaining, retry=bool(attempt))
+            response, key = bounded_call(client_factory, budget, folder, remaining, retry=bool(attempt), adapter=adapter, repair_errors=errors)
         except (ValueError, KeyError, TypeError):
             response, key = {}, None
         rows = response.get('questions') if isinstance(response, dict) and set(response) == {'questions'} else None
@@ -203,11 +206,13 @@ def generate_batch(client_factory, budget, folder, sources):
         for source in remaining:
             try:
                 candidate = {'distractors': indexed[source['id']]['distractors']}
-                checks = validate_candidates(source, candidate)
+                checks = adapter.validate(source, candidate) if adapter else validate_candidates(source, candidate)
                 accepted[source['id']] = {'source_sha256': digest(source), 'candidate': candidate,
-                                          'checks': checks, 'request_key': key, 'prompt_version': PROMPT_VERSION}
-            except (KeyError, ValueError, TypeError, ArithmeticError):
+                                          'checks': checks, 'request_key': key,
+                                          'prompt_version': adapter.version if adapter else PROMPT_VERSION}
+            except (KeyError, ValueError, TypeError, ArithmeticError) as exc:
                 failed.append(source)
+                errors[source['id']] = str(exc)[:300] or type(exc).__name__
         remaining = failed
         if not remaining:
             return accepted
@@ -294,7 +299,7 @@ def production_plan(course, blank_modules):
     return plan, sources, originals
 
 
-def run_conversion(course, output, blank_modules, *, limits=None, sample_reviewed=False, client_factory=make_client):
+def run_conversion(course, output, blank_modules, *, config=None, sample_reviewed=False, client_factory=make_client):
     output = Path(output)
     target = output / 'bank.json'
     if target.exists():
@@ -306,7 +311,7 @@ def run_conversion(course, output, blank_modules, *, limits=None, sample_reviewe
     if plan_path.exists() and json.loads(plan_path.read_text(encoding='utf-8')) != plan:
         raise BudgetStopped('Input or workflow changed; stop this batch and redesign offline')
     write_json(plan_path, plan)
-    budget = ConversionBudget(output / 'budget.sqlite3', plan, limits)
+    budget = ConversionRun(output / 'run.sqlite3', plan, config)
     budget.assert_resumable()
     cached, cache_root = {}, output / 'validated-items'
     cache_root.mkdir(exist_ok=True)
@@ -335,11 +340,11 @@ def run_conversion(course, output, blank_modules, *, limits=None, sample_reviewe
             cached[source['id']] = artifact
     if not sample_reviewed and sources:
         write_json(sample_path, [{'source': s, 'artifact': cached[s['id']]} for s in sample_sources])
-        return {'status': 'sample_review_required', 'sample': str(sample_path), 'budget': budget.summary()}
+        return {'status': 'sample_review_required', 'sample': str(sample_path), 'usage': budget.summary()}
     results = {qid: build_variant(q, cached.get(qid)) for qid, q in originals.items()}
     report = {**plan, 'pilot': False, 'converted': len(results), 'failed': [],
               'model': budget.limits['model'], 'empirically_calibrated': False,
-              'sample_reviewed': sample_reviewed, 'budget': budget.summary()}
+              'sample_reviewed': sample_reviewed, 'usage': budget.summary()}
     bank = {'schema': 1, 'topic_id': course['id'], 'course_version': course['version'],
             'questions': dict(sorted(results.items())), 'math_css': '', 'provenance': report}
     uncompiled = output / 'bank.uncompiled.json'
@@ -348,7 +353,7 @@ def run_conversion(course, output, blank_modules, *, limits=None, sample_reviewe
                     str(uncompiled), str(target)], check=True)
     checked = audit_conversion(json.loads(target.read_text(encoding='utf-8')), course, blank_modules)
     write_json(output / 'report.json', report)
-    return {'status': 'validated', 'bank': str(target), **checked, 'budget': budget.summary()}
+    return {'status': 'validated', 'bank': str(target), **checked, 'usage': budget.summary()}
 
 
 def main():
@@ -358,7 +363,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--blank-modules', type=int, nargs='+', default=[4])
     parser.add_argument('--verify-only', action='store_true', help='Local readback only; no model or credentials')
-    parser.add_argument('--budget', type=Path, help='Frozen explicit limits; omitted means zero paid requests')
+    parser.add_argument('--config', type=Path, help='Frozen model, thinking and output configuration')
     parser.add_argument('--sample-reviewed', action='store_true', help='Resume after Codex reviewed the existing eight-item sample')
     args = parser.parse_args()
     course = json.loads(args.course.read_text(encoding='utf-8-sig'))
@@ -366,8 +371,8 @@ def main():
         result = audit_conversion(json.loads((args.output / 'bank.json').read_text(encoding='utf-8')), course, args.blank_modules)
         result.update(api_requests=0, status='verified')
     else:
-        limits = json.loads(args.budget.read_text(encoding='utf-8')) if args.budget else None
-        result = run_conversion(course, args.output, args.blank_modules, limits=limits, sample_reviewed=args.sample_reviewed)
+        config = json.loads(args.config.read_text(encoding='utf-8')) if args.config else None
+        result = run_conversion(course, args.output, args.blank_modules, config=config, sample_reviewed=args.sample_reviewed)
     print(json.dumps(result), flush=True)
 
 

@@ -1,13 +1,19 @@
 import fs from 'node:fs/promises';
 import {renderer} from './import_course.mjs';
 
-const [source, target] = process.argv.slice(2);
+const [source, target, coursePath] = process.argv.slice(2);
 if (!source || !target || source === target) throw new Error('Specify distinct source and compiled output');
 const bank = JSON.parse(await fs.readFile(source, 'utf8'));
+const course = coursePath ? JSON.parse(await fs.readFile(coursePath, 'utf8')) : null;
+const originals = new Map((course?.modules || []).flatMap(m => [m.example, ...m.practices]).map(q => [q.id, q]));
 const render = await renderer();
 const html = text => render.nodes([{head: text, lines: [], children: [], line: 1}]);
-for (const question of Object.values(bank.questions)) {
-  question.html = html(question.question);
+for (const [id, question] of Object.entries(bank.questions)) {
+  const original = originals.get(id);
+  if (course && (!original || !question.question.startsWith(original.question))) throw new Error('Conversion changed the source stem');
+  // The source HTML already contains validated, embedded diagrams. Preserve it
+  // exactly and render only the appended input instruction.
+  question.html = original ? original.html + html(question.question.slice(original.question.length)) : html(question.question);
   for (const option of question.interaction.options || []) option.html = html(option.text);
 }
 bank.math_css = render.css;
