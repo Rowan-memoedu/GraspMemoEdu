@@ -1,11 +1,11 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=c9b4ecad728ac974";
-import { createReviewView } from "./review.js?v=c9b4ecad728ac974";
-import { renderCourseGraph } from "./course-graph.js?v=c9b4ecad728ac974";
-import {questionInput} from './question-input.js?v=c9b4ecad728ac974';
-import {reportableContent, installContentReporting} from './content-report.js?v=c9b4ecad728ac974';
-import {createCatalogPicker} from './catalog-picker.js?v=c9b4ecad728ac974';
-import {createAtomicView} from './atomic.js?v=c9b4ecad728ac974';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=c9b4ecad728ac974";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=e46cb838a8177c78";
+import { createReviewView } from "./review.js?v=e46cb838a8177c78";
+import { renderCourseGraph } from "./course-graph.js?v=e46cb838a8177c78";
+import {questionInput} from './question-input.js?v=e46cb838a8177c78';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=e46cb838a8177c78';
+import {createCatalogPicker} from './catalog-picker.js?v=e46cb838a8177c78';
+import {createAtomicView} from './atomic.js?v=e46cb838a8177c78';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=e46cb838a8177c78";
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -31,6 +31,7 @@ export function initPortal(bridge) {
   let refreshTimer = null, menuTimer = null, popoverTimer = null, pageTimer = null;
   let guideObjectUrls = [];
   let graphScroll = 0, feedbackContext = {}, feedbackBusy = false, renderedDay = null;
+  let helpReporting = null;
   const dashboards = new Map(), scrolls = new Map(), answerCache = new Map();
   const routeKey = () => location.hash || "#/";
   const selectedDashboard = () => dashboards.get(selectedCourse);
@@ -150,7 +151,9 @@ export function initPortal(bridge) {
     $("userMenuButton").textContent = initials || t("portal.g.13");
     $("userMenuButton").setAttribute("aria-label", t("portal.userMenu", { name }));
     $("menuDisplayName").textContent = name;
-    $("menuRole").textContent = expired ? t("portal.session.expired.14") : current?.is_admin ? t('admin.identity') : current?.role === "account" ? t("portal.learning.account.15") : t("portal.guest.16");
+    $("menuRole").textContent = expired ? t("portal.session.expired.14") : current?.is_admin ? t('admin.identity') : current?.role === 'account' ? t(current.is_advanced_learner ? 'account.advancedLearner' : 'account.standardLearner') + ' · ' + t(current.is_student ? 'account.student' : 'account.nonStudent') : t("portal.guest.16");
+    $('helpInboxLink').hidden = !current?.is_admin;
+    helpReporting?.refresh();
     $('adminLearningNotice').hidden = expired || !current?.is_admin;
     $("menuAccountPurpose").hidden = current?.role !== "account" || current?.purpose !== "test";
     $("logoutButton").hidden = current?.role !== "account";
@@ -278,13 +281,13 @@ export function initPortal(bridge) {
           const card = node('article', 'courseChoice');
           if (item.kind === 'atomic_card') {
             card.append(node('h2', '', item.title), node('p', '', `${item.course_title} · ${item.topic_title}`),
-              link(t('admin.enterCard'), `#/review/${encode(item.topic_id)}/atomic?card=${encode(item.id)}`, 'primaryButton'));
+              link(t('admin.enterCard'), subjectHref(currentRoute?.subjectId, `/review/${encode(item.topic_id)}/atomic?card=${encode(item.id)}`), 'primaryButton'));
             list.append(card); continue;
           }
           card.append(node('h2', '', item.title), node('p', '', t('atomic.dueCount', {count: item.due_count})));
           if (item.paused) card.append(node('p', 'atomicPaused', t('atomic.paused')));
           else if (!item.dependency_ready) card.append(node('p', '', t('portal.prerequisitesRequired')));
-          else card.append(link(t(item.active ? 'atomic.resumeReview' : 'atomic.startReview'), `#/review/${encode(item.topic_id)}/atomic`, 'primaryButton'));
+          else card.append(link(t(item.active ? 'atomic.resumeReview' : 'atomic.startReview'), subjectHref(currentRoute?.subjectId, `/review/${encode(item.topic_id)}/atomic`), 'primaryButton'));
           list.append(card);
         }
         if (!data.items.length) list.append(emptyBox(t('atomic.noDue')));
@@ -294,6 +297,9 @@ export function initPortal(bridge) {
         document.title = pageTitle(t("nav.guide")); await renderGuide(ticket);
       } else if (path === "/help") {
         document.title = pageTitle(t("nav.help")); renderHelp();
+      } else if (path === '/help-requests') {
+        document.title = pageTitle(t('help.inbox'));
+        await renderHelpInbox(ticket);
       } else if (path === "/settings") {
         document.title = pageTitle(t("nav.settings")); renderSettings();
       } else if (/^\/courses\/[^/]+\/progress$/.test(path)) {
@@ -843,6 +849,32 @@ export function initPortal(bridge) {
     page.append(form); root.replaceChildren(page);
   }
 
+  async function renderHelpInbox(ticket) {
+    const page = node('section', 'helpInbox'); page.append(node('h1', 'portalPageTitle', t('help.inbox')));
+    const list = node('div', 'helpRequestList'); page.append(list); root.replaceChildren(page);
+    let offset = 0, busy = false;
+    const more = control(t('help.more'), 'secondaryButton', load); more.hidden = true; page.append(more);
+    async function load() {
+      if (busy) return; busy = true; more.disabled = true;
+      try {
+        const result = await bridge.request(`help-requests?offset=${offset}`);
+        if (ticket !== sequence) return;
+        if (!result.items.length && offset === 0) list.append(emptyBox(t('help.empty')));
+        for (const item of result.items) {
+          const card = node('article', 'courseChoice helpRequest');
+          card.append(node('h2', '', item.display_name), node('p', '', apiDate(item.created_at, true)),
+            node('p', '', `${item.course_title} · ${item.topic_title} · ${item.request.content_block_id}`),
+            node('p', 'helpRequestMessage', item.request.message));
+          const context = node('details'); context.append(node('summary', '', t('help.context')), node('p', 'helpRequestContext', item.content_text));
+          card.append(context, link(t('help.location'), subjectHref(item.subject_id, '/topic/' + encode(item.request.topic_id)), 'textButton'));
+          list.append(card);
+        }
+        offset = result.next_offset; more.hidden = offset === null;
+      } catch (error) { if (ticket === sequence) list.append(errorBox(translateMessage(error.message), load)); }
+      finally { busy = false; more.disabled = false; }
+    }
+    await load();
+  }
   const feedbackDialog = node("dialog", "feedbackDialog"), feedbackForm = node("form"), feedbackHeading = node("div", "dialogHeading"), feedbackTitle = node("h2", "", t("portal.feedback.122"));
   const feedbackClose = control("×", "iconButton", () => feedbackDialog.close()); feedbackClose.setAttribute("aria-label", t("portal.close.feedback.123")); feedbackHeading.append(feedbackTitle, feedbackClose);
   const feedbackLabel = node("label", "", t("portal.describe.the.issue.you.encountered.124")), feedbackInput = node("textarea"); feedbackInput.id = "feedbackMessage"; feedbackLabel.htmlFor = feedbackInput.id; feedbackInput.maxLength = 4000; feedbackInput.required = true; feedbackInput.rows = 7;
@@ -869,9 +901,9 @@ export function initPortal(bridge) {
     const matchesSelected = !context.topic_id || selectedDashboard()?.topics?.some((topic) => topic.id === context.topic_id);
     feedbackContext = { ...(selectedCourse && matchesSelected ? { course_id: selectedCourse } : {}), ...context };
     const correction = Boolean(context.correction);
-    feedbackTitle.textContent = correction ? t('correction.title') : context.question_id ? t("portal.report.a.content.error.127") : t("portal.feedback.122");
+    feedbackTitle.textContent = context.help_request ? t('help.request') : correction ? t('correction.title') : context.question_id ? t("portal.report.a.content.error.127") : t("portal.feedback.122");
     correctionFields.hidden = !correction; replacementInput.value = ''; replacementInput.disabled = false;
-    feedbackLabel.textContent = t(correction ? 'correction.comment' : 'portal.describe.the.issue.you.encountered.124');
+    feedbackLabel.textContent = t(context.help_request ? 'help.prompt' : correction ? 'correction.comment' : 'portal.describe.the.issue.you.encountered.124');
     feedbackInput.required = !correction; feedbackInput.rows = correction ? 2 : 7; feedbackInput.maxLength = correction ? 2000 : 4000;
     previewCorrection();
     feedbackStatus.textContent = ""; feedbackInput.value = ""; feedbackInput.hidden = false; feedbackLabel.hidden = false; feedbackSubmit.hidden = false; feedbackCancel.textContent = t("portal.cancel.125");
@@ -880,21 +912,24 @@ export function initPortal(bridge) {
   }
   feedbackForm.addEventListener("submit", async (event) => {
     event.preventDefault(); if (feedbackBusy || (!feedbackContext.correction && !feedbackInput.value.trim())) return;
-    feedbackBusy = true; feedbackSubmit.disabled = true; feedbackClose.disabled = true; feedbackCancel.disabled = true; feedbackStatus.textContent = t("portal.saving.feedback.128");
+    feedbackBusy = true; feedbackSubmit.disabled = true; feedbackClose.disabled = true; feedbackCancel.disabled = true; feedbackStatus.textContent = t(feedbackContext.help_request ? 'help.saving' : "portal.saving.feedback.128");
     try {
       feedbackInput.disabled = true; replacementInput.disabled = true;
       const correction = feedbackContext.correction ? {...feedbackContext.correction,
         operation: replacementInput.value === '' ? 'delete' : 'replace', replacement: replacementInput.value, comment: feedbackInput.value.trim()} : null;
-      const result = await call("feedback", { method: "POST", body: { message: feedbackInput.value.trim() || t('correction.title'),
-        ...feedbackContext, ...(correction ? {correction} : {}) } });
+      const {topic_id, question_id, content_block_id, content_version, request_id} = feedbackContext;
+      const result = await call(feedbackContext.help_request ? 'help-requests' : 'feedback', {method: 'POST', body:
+        feedbackContext.help_request ? {topic_id, question_id, content_block_id, content_version, request_id, message: feedbackInput.value.trim()}
+          : { message: feedbackInput.value.trim() || t('correction.title'), ...feedbackContext, ...(correction ? {correction} : {}) }});
       if (result.status !== "saved") throw new Error(t("portal.feedback.was.not.confirmed.as.saved.please.try.again.129"));
-      feedbackStatus.textContent = t("portal.feedback.saved.thank.you.130"); correctionFields.hidden = true; feedbackInput.hidden = true; feedbackLabel.hidden = true; feedbackSubmit.hidden = true; feedbackCancel.textContent = t("portal.close.131");
+      feedbackStatus.textContent = t(feedbackContext.help_request ? 'help.saved' : "portal.feedback.saved.thank.you.130"); correctionFields.hidden = true; feedbackInput.hidden = true; feedbackLabel.hidden = true; feedbackSubmit.hidden = true; feedbackCancel.textContent = t("portal.close.131");
     } catch (error) { feedbackStatus.textContent = translateMessage(error.message); }
     finally { feedbackBusy = false; feedbackSubmit.disabled = false; feedbackClose.disabled = false; feedbackCancel.disabled = false; feedbackInput.disabled = false; replacementInput.disabled = false; }
   });
   feedbackDialog.addEventListener("cancel", (event) => { if (feedbackBusy) event.preventDefault(); });
   feedbackDialog.addEventListener('close', () => { feedbackContext = {}; feedbackInput.value = ''; replacementInput.value = ''; });
   const contentReporting = installContentReporting(showFeedback);
+  helpReporting = installHelpRequests(bridge.getAccess, context => showFeedback({...context, help_request: true, request_id: crypto.randomUUID()}));
 
   window.addEventListener("hashchange", route);
   history.scrollRestoration = "manual";

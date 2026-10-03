@@ -5,7 +5,7 @@ import sqlite3
 import unittest
 from unittest.mock import patch
 
-from graspmemoedu.access import AccessStore, FEATURES, GUEST_FEATURES
+from graspmemoedu.access import AccessStore, FEATURES, STANDARD_FEATURES, GUEST_FEATURES, FEATURE_REQUIREMENTS
 from graspmemoedu.service import DomainError
 from tests.fixtures import temporary_test_directory
 
@@ -31,7 +31,7 @@ class PermissionDefaultTests(unittest.TestCase):
         self.assertEqual(account['permission_defaults'], {'topics': True, 'features': True})
         store = self.expanded()
         self.assertEqual({t['id'] for t in store.resolve(self.token)['topics']}, {'math', 'physics', 'chemistry'})
-        with patch('graspmemoedu.access.FEATURES', (*FEATURES, 'future_feature')):
+        with patch('graspmemoedu.access.FEATURES', (*FEATURES, 'future_feature')), patch.dict(FEATURE_REQUIREMENTS, {'future_feature': {}}):
             self.assertIn('future_feature', store.resolve(self.token)['features'])
 
     def test_explicit_empty_and_subset_do_not_expand(self):
@@ -58,7 +58,7 @@ class PermissionDefaultTests(unittest.TestCase):
         current = self.store.resolve(self.token)
         self.assertEqual(current['permission_defaults'], {'topics': False, 'features': True})
         self.assertEqual([t['id'] for t in current['topics']], ['physics'])
-        self.assertEqual(current['features'], list(FEATURES))
+        self.assertEqual(current['features'], list(STANDARD_FEATURES))
         self.store.set_permissions(self.learner_id, reset_topics=True)
         self.assertEqual(self.expanded().resolve(self.token)['permission_defaults'], {'topics': True, 'features': True})
         self.assertEqual(len(self.expanded().resolve(self.token)['topics']), 3)

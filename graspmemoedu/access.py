@@ -14,11 +14,30 @@ import uuid
 from .service import DomainError
 
 
-FEATURES = ('learn', 'submit_answer', 'review_history', 'pause_topic')
+FEATURE_REQUIREMENTS = {'learn': {}, 'submit_answer': {}, 'review_history': {}, 'pause_topic': {},
+                        'request_help': {'student': True}}
+FEATURES = tuple(FEATURE_REQUIREMENTS)
+STANDARD_FEATURES = tuple(feature for feature, requirements in FEATURE_REQUIREMENTS.items() if not requirements)
 GUEST_FEATURES = FEATURES[:3]
 REGISTER_MESSAGE = '该功能需注册账号才能使用'
 ACCOUNT_SESSION_DAYS = 30
 ACCOUNT_PURPOSES = ('learner', 'test')
+
+
+def feature_eligible(access, feature):
+    """A feature grant and every declared qualification are required.
+
+    New features declare advanced_learner and/or student once in this registry.
+    Administrator content access continues to include every registered feature.
+    """
+    requirements = FEATURE_REQUIREMENTS.get(feature)
+    if requirements is None:
+        return False
+    account = access.get('role') == 'account'
+    if account and access.get('is_admin'):
+        return True
+    return all(not required or account and bool(access.get('is_' + qualification))
+               for qualification, required in requirements.items())
 
 
 def timestamp():
@@ -71,6 +90,10 @@ class AccessStore:
                 con.execute('ALTER TABLE access_principals ADD COLUMN batch_id TEXT')
             if 'is_admin' not in columns:
                 con.execute('ALTER TABLE access_principals ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0 CHECK(is_admin IN (0,1))')
+            if 'is_advanced_learner' not in columns:
+                con.execute('ALTER TABLE access_principals ADD COLUMN is_advanced_learner INTEGER NOT NULL DEFAULT 0 CHECK(is_advanced_learner IN (0,1))')
+            if 'is_student' not in columns:
+                con.execute('ALTER TABLE access_principals ADD COLUMN is_student INTEGER NOT NULL DEFAULT 0 CHECK(is_student IN (0,1))')
             # Legacy lists were explicit snapshots. Never infer that an old
             # all-current-topics list authorized future content or features.
             for name in ('topics_default', 'features_default'):
@@ -121,7 +144,9 @@ class AccessStore:
         result = {
             'role': row['role'], 'learner_id': row['learner_id'],
             'display_name': row['display_name'],
-            'features': [feature for feature in FEATURES if feature in features],
+            'is_advanced_learner': not guest and bool(row['is_advanced_learner']),
+            'is_student': not guest and bool(row['is_student']),
+            'features': [],
             'topics': [self.topics[topic_id] for topic_id in topic_ids if topic_id in self.topics],
         }
         if not guest:
@@ -129,6 +154,7 @@ class AccessStore:
                           permission_defaults={'topics': bool(row['topics_default']), 'features': bool(row['features_default'])})
         if admin:
             result.update(is_admin=True, learning_policy={'persistence': 'memory', 'content_scope': 'all', 'scheduled_delivery': False})
+        result['features'] = [feature for feature in FEATURES if feature in features and feature_eligible(result, feature)]
         return result
 
     def _new_identity(self, con, learner_id, *, account=False):
@@ -176,6 +202,13 @@ class AccessStore:
             raise DomainError('topic_forbidden', REGISTER_MESSAGE, 403)
         if topic_id not in {topic['id'] for topic in access['topics']}:
             raise DomainError('topic_forbidden', '当前身份没有访问此 Topic 的权限。', 403)
+        requirements = FEATURE_REQUIREMENTS.get(feature, {})
+        if feature and not feature_eligible(access, feature):
+            if requirements.get('advanced_learner') and not (access.get('is_admin') or access.get('is_advanced_learner')):
+                raise DomainError('advanced_learner_required', '此功能需要高阶学习者资格。', 403)
+            if requirements.get('student'):
+                raise DomainError('student_required', '此功能需要学员资格。', 403)
+            raise DomainError('feature_forbidden', '当前账号没有使用此功能的权限。', 403)
         if feature and feature not in access['features']:
             message = REGISTER_MESSAGE if access['role'] == 'guest' and feature == 'pause_topic' else '当前账号没有使用此功能的权限。'
             raise DomainError('feature_forbidden', message, 403)
@@ -215,9 +248,12 @@ class AccessStore:
         return list(dict.fromkeys(topic_ids)), [feature for feature in FEATURES if feature in features]
 
     def _insert_account(self, con, display_name, topic_ids=None, features=None,
-                        purpose='learner', batch_id=None, learner_id=None, invitation=None, is_admin=False):
+                        purpose='learner', batch_id=None, learner_id=None, invitation=None, is_admin=False,
+                        is_advanced_learner=False, is_student=False):
         if type(is_admin) is not bool:
             raise ValueError('Administrator flag must be boolean')
+        if type(is_advanced_learner) is not bool or type(is_student) is not bool:
+            raise DomainError('invalid_learner_qualification', '学习者资格必须为 true 或 false。', 422)
         if not isinstance(display_name, str) or not display_name.strip() or len(display_name) > 100:
             raise DomainError('invalid_account_name', '账号显示名称需要 1 至 100 个字符。', 422)
         if purpose not in ACCOUNT_PURPOSES:
@@ -232,17 +268,19 @@ class AccessStore:
         invitation = invitation or 'MLW-' + secrets.token_urlsafe(24)
         now = timestamp()
         con.execute('''INSERT INTO access_principals
-            (learner_id,role,display_name,features,topic_ids,invitation_digest,created_at,updated_at,purpose,batch_id,topics_default,features_default,is_admin)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+            (learner_id,role,display_name,features,topic_ids,invitation_digest,created_at,updated_at,purpose,batch_id,topics_default,features_default,is_admin,is_advanced_learner,is_student)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
             (learner_id, 'account', display_name.strip(), json.dumps(features), json.dumps(topic_ids),
-             credential_digest('invitation', invitation), now, now, purpose, batch_id, int(topics_default), int(features_default), int(is_admin)))
+             credential_digest('invitation', invitation), now, now, purpose, batch_id, int(topics_default), int(features_default), int(is_admin), int(is_advanced_learner), int(is_student)))
         row = con.execute('SELECT * FROM access_principals WHERE learner_id=?', (learner_id,)).fetchone()
         return {'account': self._public(row), 'invitation_code': invitation,
                 'notice': '邀请码可重复登录同一账号，请通过可信方式交付给对应学习者。'}
 
-    def create_account(self, display_name, topic_ids=None, features=None, *, purpose='learner', batch_id=None):
+    def create_account(self, display_name, topic_ids=None, features=None, *, purpose='learner', batch_id=None,
+                       is_advanced_learner=False, is_student=False):
         with self._transaction() as con:
-            return self._insert_account(con, display_name, topic_ids, features, purpose, batch_id)
+            return self._insert_account(con, display_name, topic_ids, features, purpose, batch_id,
+                                        is_advanced_learner=is_advanced_learner, is_student=is_student)
 
     @staticmethod
     def _account(con, learner_id):
@@ -281,7 +319,12 @@ class AccessStore:
             count = con.execute('DELETE FROM access_identities WHERE learner_id=?', (learner_id,)).rowcount
         return {'learner_id': learner_id, 'revoked_sessions': count}
 
-    def set_permissions(self, learner_id, topic_ids=None, features=None, *, reset_topics=False, reset_features=False):
+    def set_permissions(self, learner_id, topic_ids=None, features=None, *, reset_topics=False, reset_features=False,
+                        is_advanced_learner=None, is_student=None):
+        if is_advanced_learner is not None and type(is_advanced_learner) is not bool:
+            raise DomainError('invalid_learner_tier', '高阶学习者资格必须为 true 或 false。', 422)
+        if is_student is not None and type(is_student) is not bool:
+            raise DomainError('invalid_student_status', '学员资格必须为 true 或 false。', 422)
         if type(reset_topics) is not bool or type(reset_features) is not bool:
             raise DomainError('invalid_permission_reset', '恢复默认权限的选项必须为 true 或 false。', 422)
         if (reset_topics and topic_ids is not None) or (reset_features and features is not None):
@@ -296,8 +339,10 @@ class AccessStore:
             features_default = 1 if reset_features else (0 if features is not None else row['features_default'])
             topic_json = '[]' if reset_topics else (json.dumps(validated_topics) if topic_ids is not None else row['topic_ids'])
             feature_json = '[]' if reset_features else (json.dumps(validated_features) if features is not None else row['features'])
-            con.execute('UPDATE access_principals SET topic_ids=?,features=?,topics_default=?,features_default=?,updated_at=? WHERE learner_id=?',
-                        (topic_json, feature_json, topics_default, features_default, timestamp(), learner_id))
+            advanced = row['is_advanced_learner'] if is_advanced_learner is None else int(is_advanced_learner)
+            student = row['is_student'] if is_student is None else int(is_student)
+            con.execute('UPDATE access_principals SET topic_ids=?,features=?,topics_default=?,features_default=?,is_advanced_learner=?,is_student=?,updated_at=? WHERE learner_id=?',
+                        (topic_json, feature_json, topics_default, features_default, advanced, student, timestamp(), learner_id))
             row = con.execute('SELECT * FROM access_principals WHERE learner_id=?', (learner_id,)).fetchone()
         return self._public(row)
 

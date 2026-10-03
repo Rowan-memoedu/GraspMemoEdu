@@ -1,7 +1,7 @@
 // UI strings only. Course HTML, names, answers and explanations never enter this module.
-import {readerMessages} from './reader-messages.js?v=c9b4ecad728ac974';
-import {portalMessages} from './portal-messages.js?v=c9b4ecad728ac974';
-import {staticMessages} from './static-messages.js?v=c9b4ecad728ac974';
+import {readerMessages} from './reader-messages.js?v=e46cb838a8177c78';
+import {portalMessages} from './portal-messages.js?v=e46cb838a8177c78';
+import {staticMessages} from './static-messages.js?v=e46cb838a8177c78';
 
 export const LANGUAGE_KEY = 'graspmemoedu:ui-language';
 // Read the previous namespace once on the same origin. Renaming the public
@@ -94,6 +94,14 @@ const errors = {
   '正文版本已变化，请刷新后重新选择文字。': 'The content version has changed. Refresh and select the text again.',
   '文字纠错需要指定对应 Topic。': 'A text correction must identify its topic.',
   '当前账号没有使用此功能的权限。': 'This feature is not enabled for your account.',
+  '此功能需要高阶学习者资格。': 'This feature requires advanced learner status.',
+  '此功能需要学员资格。': 'This feature requires student status.',
+  '此页面仅供管理员查看。': 'Only administrators can view this page.',
+  '请填写需要答疑的问题。': 'Enter your question about the content.',
+  '同一请求标识不能用于不同内容。': 'This request ID was already used for different content.',
+  '正文版本已变化，请刷新后重新提交答疑请求。': 'The content has changed. Refresh and submit your question again.',
+  '未找到此答疑请求对应的内容。': 'The content linked to this question was not found.',
+  '答疑请求过于频繁，请稍后重试。': 'Too many help requests. Please try again later.',
   '该功能需注册账号才能使用': 'An account is required to use this feature.',
   '该功能需注册账号才能使用。': 'An account is required to use this feature.',
   '课程版本已变化，原进度已保留。请先由管理者处理版本迁移。': 'The course was updated. Your progress is preserved; please contact the administrator.',

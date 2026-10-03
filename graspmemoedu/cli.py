@@ -301,6 +301,9 @@ def main():
     provision.add_argument('--tests', type=int, default=5)
     provision.add_argument('--admins', type=int, default=0, help='创建不记录学习状态的管理员账号')
     provision.add_argument('--output', type=Path, required=True)
+    for account_parser in (account_create, provision):
+        account_parser.add_argument('--advanced-learner', action='store_true', help='创建高阶学习者；默认普通')
+        account_parser.add_argument('--student', action='store_true', help='创建学员；默认非学员')
     for operation, help_text in [('account-disable', '停用账号并注销全部会话'),
                                  ('account-enable', '重新启用账号'),
                                  ('account-revoke-sessions', '注销账号的全部会话，保留邀请码')]:
@@ -322,6 +325,16 @@ def main():
     permissions.add_argument('--features', help='逗号分隔功能权限；空字符串清空；省略则保留')
     permissions.add_argument('--default-topics', action='store_true', help='恢复默认开放全部当前及后续 Topic')
     permissions.add_argument('--default-features', action='store_true', help='恢复默认开放全部当前及后续功能')
+    tier = permissions.add_mutually_exclusive_group()
+    tier.add_argument('--advanced-learner', dest='is_advanced_learner', action='store_const', const=True, default=None,
+                      help='设为高阶学习者；现有 Topic 和功能授权继续生效')
+    tier.add_argument('--standard-learner', dest='is_advanced_learner', action='store_const', const=False,
+                      help='恢复普通学习者资格')
+    student = permissions.add_mutually_exclusive_group()
+    student.add_argument('--student', dest='is_student', action='store_const', const=True, default=None,
+                         help='设为学员；独立于普通或高阶资格')
+    student.add_argument('--non-student', dest='is_student', action='store_const', const=False,
+                         help='设为非学员；保留普通或高阶资格')
     args = parser.parse_args()
     try:
         if args.command == 'restore':
@@ -394,13 +407,16 @@ def main():
             store = make_access_store(settings)
             if args.output is not None:
                 output(AccountAdmin(store).create(args.name, split_permissions(args.topics),
-                       split_permissions(args.features), purpose=args.purpose, output=args.output))
+                       split_permissions(args.features), purpose=args.purpose, output=args.output,
+                       is_advanced_learner=args.advanced_learner, is_student=args.student))
             else:
                 output(store.create_account(args.name, split_permissions(args.topics),
-                                            split_permissions(args.features), purpose=args.purpose))
+                                            split_permissions(args.features), purpose=args.purpose,
+                                            is_advanced_learner=args.advanced_learner, is_student=args.student))
         elif args.command == 'account-provision':
             output(AccountAdmin(make_access_store(settings)).provision(
-                args.batch, learners=args.learners, tests=args.tests, admins=args.admins, output=args.output))
+                args.batch, learners=args.learners, tests=args.tests, admins=args.admins, output=args.output,
+                is_advanced_learner=args.advanced_learner, is_student=args.student))
         elif args.command in ('account-disable', 'account-enable'):
             output(make_access_store(settings).set_enabled(args.learner, args.command == 'account-enable'))
         elif args.command == 'account-revoke-sessions':
@@ -422,11 +438,12 @@ def main():
                         rows = [dict(row) for row in con.execute('SELECT * FROM feedback ORDER BY created_at DESC,id DESC LIMIT ?', (max(1, min(500, args.limit)),))]
             output({'feedback': rows})
         elif args.command == 'account-permissions':
-            if args.topics is None and args.features is None and not args.default_topics and not args.default_features:
-                raise DomainError('permissions_required', '请指定 --topics 或 --features；空字符串表示清空。', 422)
+            if args.topics is None and args.features is None and not args.default_topics and not args.default_features and args.is_advanced_learner is None and args.is_student is None:
+                raise DomainError('permissions_required', '请指定权限列表、恢复默认权限或学习者资格。', 422)
             output(make_access_store(settings).set_permissions(
                 args.learner, split_permissions(args.topics), split_permissions(args.features),
-                reset_topics=args.default_topics, reset_features=args.default_features))
+                reset_topics=args.default_topics, reset_features=args.default_features,
+                is_advanced_learner=args.is_advanced_learner, is_student=args.is_student))
         elif args.command == 'pair':
             # An exact origin and a local, manually supplied credential are both required.
             origins = tuple(dict.fromkeys([*settings.allowed_origins, args.origin]))

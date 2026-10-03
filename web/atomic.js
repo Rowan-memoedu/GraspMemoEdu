@@ -1,7 +1,7 @@
-import {t, translateMessage} from './i18n.js?v=c9b4ecad728ac974';
-import {questionInput, answerReady} from './question-input.js?v=c9b4ecad728ac974';
-import {reportableContent} from './content-report.js?v=c9b4ecad728ac974';
-import {createLearningCache} from './learning-cache.js?v=c9b4ecad728ac974';
+import {t, translateMessage} from './i18n.js?v=e46cb838a8177c78';
+import {questionInput, answerReady} from './question-input.js?v=e46cb838a8177c78';
+import {reportableContent, helpableContent} from './content-report.js?v=e46cb838a8177c78';
+import {createLearningCache} from './learning-cache.js?v=e46cb838a8177c78';
 
 const node = (tag, cls = '', text) => {
   const el = document.createElement(tag); el.className = cls;
@@ -93,8 +93,7 @@ export function createAtomicView(bridge) {
     } finally { if (active(ticket)) { busy = false; schedule(); } }
   }
   function marked(html, block, cardId) {
-    return reportableContent(content(html), {topic_id: topic, ...(cardId ? {question_id: cardId} : {}),
-      content_block_id: block, content_version: state.course_version});
+    return reportableContent(content(html), {topic_id: topic, ...(cardId ? {question_id: cardId} : {})}, block, state.course_version);
   }
   function renderQuestion(question, history = false) {
     const box = node('section', 'atomicQuestion'); box.dataset.cardId = question.card_id;
@@ -142,8 +141,10 @@ export function createAtomicView(bridge) {
     const annotation = node('div', 'atomicAnnotation'), source = node('div', 'atomicSource');
     source.append(node('p', 'eyebrow', t('atomic.fromIntroduction')));
     for (const anchor of chunk.anchors) source.append(node('p', 'atomicAnchor', anchor.quote));
+    source.classList.add('courseContent');
+    helpableContent(source, {topic_id: topic}, 'introduction', state.course_version);
     const arrow = node('span', 'atomicArrow', '↘'); arrow.setAttribute('aria-hidden', 'true');
-    const note = node('aside', 'atomicChunkNote'); note.append(content(chunk.html));
+    const note = node('aside', 'atomicChunkNote'); note.append(helpableContent(content(chunk.html), {topic_id: topic}, `chunk:${chunk.id}`, state.course_version));
     annotation.append(source, arrow, note); box.append(annotation);
     box.append(button(t('atomic.startCards'), () => mutate('continue'), 'primaryButton'));
     return box;

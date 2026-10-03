@@ -133,6 +133,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     subjects = Subjects(settings, catalog)
     access_store = AccessStore(settings.data_dir, [{'id': topic['id'], 'title': topic['title']} for topic in catalog.topics.values()])
     dashboard_store = DashboardStore(catalog, access_store, subjects, atomic_clock=atomic_clock)
+    from .help_requests import register_help_routes
     dependency_policy = dashboard_store.dependency_policy
     learning_services = ServiceCache(catalog.default_topic_id)
     learning_services[(service.learner_id, service.topic_id)] = service
@@ -380,7 +381,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         public_paths = {'/api/health', '/api/access', '/api/access/guest', '/api/access/login', '/api/access/logout',
                         '/api/materials', '/api/materials/open',
                         '/api/state', '/api/demo-answer', '/api/guest/reset', '/api/choose', '/api/continue', '/api/select', '/api/pause', '/api/submit',
-                        '/api/subjects', '/api/catalog', '/api/catalog/select', '/api/dashboard', '/api/profile', '/api/feedback', '/api/guide', '/api/atomic/reviews'}
+                        '/api/subjects', '/api/catalog', '/api/catalog/select', '/api/dashboard', '/api/profile', '/api/feedback', '/api/help-requests', '/api/guide', '/api/atomic/reviews'}
         task_answers_path = path.startswith('/api/tasks/') and path.endswith('/answers') and path.count('/') == 4
         review_feature = review_route_feature(path, request.method)
         review_path = review_feature is not None
@@ -666,6 +667,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         return public_submission(result, access, learner)
 
     from .materials import register_material_routes
+    register_help_routes(app, catalog, access_store, subjects)
     register_material_routes(app, catalog, access_store, subjects, identity, public_state)
     register_atomic_routes(app, catalog, access_store, subjects, dependency_policy, clock=atomic_clock)
     register_guide_routes(app, settings, access_store, subjects)

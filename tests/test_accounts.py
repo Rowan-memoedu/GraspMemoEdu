@@ -16,7 +16,7 @@ import uuid
 
 from fastapi.testclient import TestClient
 
-from graspmemoedu.access import AccessStore, FEATURES, credential_digest
+from graspmemoedu.access import AccessStore, FEATURES, STANDARD_FEATURES, credential_digest
 from graspmemoedu.api import create_app
 from graspmemoedu.catalog import Catalog
 from graspmemoedu.config import Settings
@@ -160,7 +160,7 @@ class AccountAcceptanceTests(unittest.TestCase):
         self.assertEqual(first['access']['role'], 'account')
         self.assertEqual(first['access']['purpose'], 'test')
         self.assertTrue(first['access']['enabled'])
-        self.assertEqual(set(first['access']['features']), set(FEATURES))
+        self.assertEqual(set(first['access']['features']), set(STANDARD_FEATURES))
         changed = self._action(first['identity_token'], 'choose', choice='mastered')
         shared = self._state(second['identity_token'])
         self.assertEqual(shared['revision'], changed['revision'])
@@ -457,7 +457,7 @@ class AccountAcceptanceTests(unittest.TestCase):
         access = self._request('GET', '/api/access', token)
         self.assertEqual(access['purpose'], 'test')
         self.assertTrue(access['enabled'])
-        self.assertEqual(set(access['features']), set(FEATURES))
+        self.assertEqual(set(access['features']), set(STANDARD_FEATURES))
 
     def test_parallel_duplicate_submission_from_two_devices_judges_and_scores_once(self):
         account = self._account()

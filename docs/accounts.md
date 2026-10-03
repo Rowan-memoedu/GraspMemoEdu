@@ -42,6 +42,22 @@ JSON 是初始邀请码的唯一账本。它包含批次、数据库精确路径
 
 ## 查看、建号与权限
 
+账号支持两个独立资格：普通／高阶学习者、学员／非学员。两项交叉组合，默认普通、非学员。现有学习功能仍按原权限规则开放；资格不替代明确的 Topic 或功能授权。管理员继续拥有全部功能。学员获得 `request_help`（请求答疑）；高阶专属功能尚未指定。
+
+新功能在共享注册表 `access.FEATURE_REQUIREMENTS` 声明要求：`{'advanced_learner': True}`、`{'student': True}` 或 `{'advanced_learner': True, 'student': True}`。同时声明时须同时满足。服务端与前端返回的有效功能列表统一应用资格和账号功能授权。
+
+在服务器将一个邀请码账号设为高阶或恢复普通资格：
+
+```sh
+cd /opt/graspmemoedu/app
+sudo -u graspmemoedu /opt/graspmemoedu/venv/bin/python -m graspmemoedu --data-dir /var/lib/graspmemoedu account-permissions --learner '<learner_id>' --advanced-learner
+sudo -u graspmemoedu /opt/graspmemoedu/venv/bin/python -m graspmemoedu --data-dir /var/lib/graspmemoedu account-permissions --learner '<learner_id>' --standard-learner
+sudo -u graspmemoedu /opt/graspmemoedu/venv/bin/python -m graspmemoedu --data-dir /var/lib/graspmemoedu account-permissions --learner '<learner_id>' --student
+sudo -u graspmemoedu /opt/graspmemoedu/venv/bin/python -m graspmemoedu --data-dir /var/lib/graspmemoedu account-permissions --learner '<learner_id>' --non-student
+```
+
+`--advanced-learner` 与 `--standard-learner` 互斥，`--student` 与 `--non-student` 互斥；两个维度可以组合，例如 `--advanced-learner --student`。可与现有权限选项一起使用；省略某维度时保留该维度原值。`account-list`、权限修改回执及登录身份均返回 `is_advanced_learner` 和 `is_student`。调整下一次请求生效，不需要换邀请码或清空进度；网页显示两个资格，不能修改它们。普通和高阶账号均正常记录进度与复习参数，资格随数据库备份恢复。
+
 ```powershell
 & $python -m graspmemoedu.cli --data-dir $data account-list
 
@@ -85,3 +101,11 @@ JSON 是初始邀请码的唯一账本。它包含批次、数据库精确路径
 若数据库已记录批次完成，但原清单丢失，重复执行只会返回 `already_exists=true` 和 `manifest_available=false`，不会重建账号或伪造原码。需要恢复访问时，对精确账号执行换码并保存新的私密文件。
 
 常规应用备份包含账号哈希、权限、会话与学习进度，**不能恢复原始邀请码**。`admin` 下的原始 JSON 清单应另做受访问控制的私密备份；数据库恢复目录变更后，不要把旧清单直接当作新目录的建号输入。
+
+## 学员答疑
+
+普通学员和高阶学员在学习、复习和可查看的历史内容框右上角均显示“请求答疑”，沿用内容反馈弹窗。取消不保存，失败保留输入，重复提交同一请求只保存一次。服务端同时核验学员资格、Topic 与功能权限、正文版本和内容位置。每个身份每分钟最多提交三条新请求。
+
+请求保存在正式 SQLite 的 `help_requests` 表，随完整网站备份恢复；不进入学习状态、评分或 FSRS 推送。记录包括学习者身份与当时名称、提交时间、问题、课程、Topic、内容位置、版本及正文快照。邀请码和会话凭据不进入答疑记录。
+
+管理员从账号菜单打开“答疑请求”（`#/help-requests`），分页查看全部请求和正文快照，并可前往对应 Topic。`GET /api/help-requests` 仅管理员可读；其他学习者不能读取自己或他人的请求。网页仍不提供建号、权限修改或解锁接口。

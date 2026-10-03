@@ -2,7 +2,7 @@
 
 本表从当前界面词库自动生成。修改以词库为准，随后重新生成并检查本表。术语约定见 [界面语言规范](ui-language.md)。
 
-共 481 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
+共 502 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
 
 不包括作者课程正文、题目、答案、解析或用户输入。首页的学科双语副标题按约定保留。
 
@@ -249,6 +249,19 @@
 | English | 中文 |
 |---|---|
 | Administrator | 管理员 |
+| Advanced learner | 高阶学习者 |
+| Standard learner | 普通学习者 |
+| Student | 学员 |
+| Non-student | 非学员 |
+| Request help | 请求答疑 |
+| Help requests | 答疑请求 |
+| Describe your question about this content. | 请说明你对这段内容的疑问。 |
+| Your help request has been saved. | 答疑请求已保存。 |
+| Saving your help request… | 正在保存答疑请求… |
+| No help requests yet. | 暂无答疑请求。 |
+| Open the Topic | 查看对应 Topic |
+| Content context | 对应内容 |
+| Load more | 加载更多 |
 | Administrator mode: normal learning flow, without saved learning records or scheduled reviews. | 管理员模式：正常学习流程；学习记录不保存，也不生成后续推送。 |
 | All atomic flashcards are available. Learning is not saved and does not schedule future reviews. | 全部原子卡片，可直接进入；本次学习不保存记录，也不会生成后续推送。 |
 | Open flashcard | 进入卡片 |
@@ -501,6 +514,14 @@
 | The content version has changed. Refresh and select the text again. | 正文版本已变化，请刷新后重新选择文字。 |
 | A text correction must identify its topic. | 文字纠错需要指定对应 主题。 |
 | This feature is not enabled for your account. | 当前账号没有使用此功能的权限。 |
+| This feature requires advanced learner status. | 此功能需要高阶学习者资格。 |
+| This feature requires student status. | 此功能需要学员资格。 |
+| Only administrators can view this page. | 此页面仅供管理员查看。 |
+| Enter your question about the content. | 请填写需要答疑的问题。 |
+| This request ID was already used for different content. | 同一请求标识不能用于不同内容。 |
+| The content has changed. Refresh and submit your question again. | 正文版本已变化，请刷新后重新提交答疑请求。 |
+| The content linked to this question was not found. | 未找到此答疑请求对应的内容。 |
+| Too many help requests. Please try again later. | 答疑请求过于频繁，请稍后重试。 |
 | An account is required to use this feature. | 该功能需注册账号才能使用 |
 | An account is required to use this feature. | 该功能需注册账号才能使用。 |
 | The course was updated. Your progress is preserved; please contact the administrator. | 课程版本已变化，原进度已保留。请先由管理员处理版本迁移。 |

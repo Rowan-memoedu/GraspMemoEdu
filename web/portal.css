@@ -191,6 +191,11 @@ body.portalModalOpen { overflow: hidden; }
 .topicBreadcrumb { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 18px 0 10px; font-size: 13px; border-bottom: 1px solid #ececec; }
 .topicBreadcrumb a { color: var(--link-color); text-decoration: none; }
 .topicBreadcrumb a:hover { text-decoration: underline; }
+.courseContent[data-help-block] { position: relative; }
+.courseContent:has(> .requestHelpButton) { padding-top: 32px; }
+.requestHelpButton { position: absolute; right: 0; top: 0; font-size: 13px; }
+.helpRequestMessage, .helpRequestContext { white-space: pre-wrap; overflow-wrap: anywhere; }
+.helpRequestContext { color: #777; font-size: 14px; }
 .topicPage .historySidebar { top: 74px; max-height: calc(100dvh - 98px); }
 .topicPage .lesson { margin-top: 26px; }
 .topicPage .step { scroll-margin-top: 70px; }

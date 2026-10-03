@@ -1,17 +1,40 @@
-import {t} from './i18n.js?v=c9b4ecad728ac974';
+import {t} from './i18n.js?v=e46cb838a8177c78';
 
 const blocks = new WeakMap();
+const helpBlocks = new WeakMap();
+let helpPolicy = null, showHelp = null;
+export function helpableContent(element, context, contentBlockId, contentVersion) {
+  if (!contentVersion || !context.topic_id) return element;
+  element.dataset.helpBlock = contentBlockId;
+  helpBlocks.set(element, {...context, content_block_id: contentBlockId, content_version: contentVersion});
+  updateHelpButton(element);
+  return element;
+}
+function updateHelpButton(element) {
+  let action = element.querySelector(':scope > [data-help-action]');
+  if (!helpPolicy?.()?.features?.includes('request_help')) { action?.remove(); return; }
+  if (action) return;
+  action = document.createElement('button'); action.type = 'button'; action.className = 'textButton requestHelpButton';
+  action.dataset.helpAction = 'true'; action.textContent = t('help.request');
+  action.addEventListener('click', () => showHelp?.(helpBlocks.get(element)));
+  element.prepend(action);
+}
+export function installHelpRequests(getAccess, open) {
+  helpPolicy = getAccess; showHelp = open;
+  return {refresh() { document.querySelectorAll('[data-help-block]').forEach(updateHelpButton); }};
+}
 export function reportableContent(element, context, contentBlockId, contentVersion) {
   if (!contentVersion || !context.topic_id) return element;
   element.dataset.reportBlock = contentBlockId;
   blocks.set(element, {...context, correction: {content_block_id: contentBlockId, content_version: contentVersion}});
-  return element;
+  return helpableContent(element, context, contentBlockId, contentVersion);
 }
 
 // Blanks replace author markers in the live DOM. Restore the markers in a
 // detached range clone so the reported character offsets match stored HTML.
 function rangeText(range) {
   const fragment = range.cloneContents();
+  fragment.querySelectorAll('[data-help-action]').forEach(action => action.remove());
   for (const input of fragment.querySelectorAll('[data-blank-id]')) input.replaceWith(document.createTextNode(`{{blank:${input.dataset.blankId}}}`));
   return fragment.textContent;
 }
