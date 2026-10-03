@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import importlib.util
 import json
 import os
 import re
@@ -16,6 +15,7 @@ import urllib.error
 from urllib.parse import urlsplit
 
 from .catalog import Catalog
+from .import_settings import settings as import_settings
 from .topic_assets import canonical_asset_path, read_local_asset, validate_assets
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -76,7 +76,7 @@ class CompatibleClient:
         if (parsed.scheme != 'https' or parsed.hostname != 'api.deepseek.com'
                 or parsed.port not in (None, 443) or parsed.path not in ('', '/', '/v1', '/v1/')
                 or parsed.username or parsed.password or parsed.query or parsed.fragment):
-            raise ValueError('Dedicated Codex credential requires the official DeepSeek HTTPS endpoint')
+            raise ValueError('Dedicated import credential requires the official DeepSeek HTTPS endpoint')
         self.base_url, self._api_key, self.model, self.timeout = base_url, api_key, model, timeout
 
     def complete(self, messages):
@@ -116,21 +116,8 @@ class CompatibleClient:
 
 
 def make_client():
-    """Reuse installed producer's configuration discovery, never its production queue."""
-    helper = Path.home() / '.codex/skills/ai-production-supervisor/scripts/run_ai_batch.py'
-    if not helper.is_file():
-        raise ValueError('Installed ai-production-supervisor configuration helper is missing')
-    spec = importlib.util.spec_from_file_location('_author_producer_config', helper)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    module.load_env_file()
-    key = os.environ.get('DEEPSEEK_CODEX_API_KEY')
-    if not key:
-        raise ValueError('DEEPSEEK_CODEX_API_KEY is not configured')
-    base = os.environ.get('AUTHOR_IMPORT_BASE_URL', os.environ.get('AI_PRODUCER_BASE_URL', 'https://api.deepseek.com'))
-    model = os.environ.get('AUTHOR_IMPORT_MODEL', os.environ.get('AI_PRODUCER_MODEL', 'deepseek-flash'))
-    model, _, _ = module.prepare_request({'input': ''}, '{{input}}', ROOT, base, model)
-    return CompatibleClient(base, key, model)
+    """Use only the import-specific configuration, including after a user edit."""
+    return CompatibleClient(**import_settings())
 
 
 def _object(response):

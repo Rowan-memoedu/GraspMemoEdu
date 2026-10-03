@@ -106,7 +106,7 @@ $python = 'D:/AppData/GraspMemoEdu/venv/Scripts/python.exe'
 
 ## API 与扩展边界
 
-默认机械导入无需 API 凭据。可选 API 抽样只检查字段丢失、大片乱码、图片未呈现等整体性损坏；每批最多抽两题，不按每篇循环抽样，不核算答案或评价配图细节。抽样使用专用 `DEEPSEEK_CODEX_API_KEY`（进程或 Windows 用户环境），仅发送抽中内容到 DeepSeek 官方 HTTPS 地址，不使用网站判题凭据。未经明确要求不启动历史逐题提取或审核。
+默认机械导入无需 API 凭据。可选 API 抽样只检查字段丢失、大片乱码、图片未呈现等整体性损坏；每批最多抽两题，不按每篇循环抽样，不核算答案或评价配图细节。导入及内容转换使用独立 `GRASPMEMOEDU_IMPORT_API_KEY`；Windows 用户变量优先于继承的进程值，每次创建客户端重新读取。缺失或为空时停止，不回退到 Codex 通用外包、网站判题、旧 Markdown 或其他功能的密钥。可选 `GRASPMEMOEDU_IMPORT_BASE_URL`、`GRASPMEMOEDU_IMPORT_MODEL` 默认分别为 `https://api.deepseek.com`、`deepseek-flash`，只允许 DeepSeek 官方 HTTPS 地址。未经明确要求不启动历史逐题提取或审核。
 
 ```powershell
 & $python scripts/sample_import_integrity.py --package '<包1>' '<包2>' --output '<抽样记录新目录>' --max-questions 2
