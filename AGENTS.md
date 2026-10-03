@@ -1,5 +1,7 @@
 # GraspMemoEdu
 
+- 网站可逆下线已准备：用户说“网站下线”执行 `scripts/site_availability.py offline`，说“恢复上线”执行 `online`，按 `docs/site-availability.md` 核验；只切换 Pages 发布及 GraspMemoEdu 公网访问，保留课程、账号和学习数据，不额外二次批准。准备阶段保持在线；下线时不得用日常发布脚本绕过关闭状态，不覆盖待恢复配置或其他网站的 nginx 配置。
+
 - 产品品牌为 GraspMemoEdu，整体多学科框架以 RemNote「搭建掌握式学习平台」（MQrYfdVzLFh4tV96K）及用户后续修订为准。古典衬线风格只用于总首页；数学与全局设置恢复原模板视觉，其他学科沿用同一模板并替换配色、名称与徽标。数学只保留既有课程，不额外加测试课；其余五科测试课程、Topic 及配套测试指南已下线，测试原文件仍留本机；物理正式课程「运动学进阶」现已发布，共 22 个 Topic，其余四科仍为空；未经新的明确要求，不得重新发布测试内容。共用结构在当前仓库维护，不复制六份网站。
 - 学科路由为 `#/subjects/<id>/...`；旧数学路径继续兼容。账号、身份存储与 Topic ID 不因学科拆分改变。正式课程归属、名称及指南由服务器 `/var/lib/graspmemoedu/subjects.json` 配置；配色和首页/导航栏共用徽标统一在 `web/subjects.js` 维护，见 `docs/subjects.md`。不得将服务器或本机路径暴露给公开前端。
 - 腾讯云托管的多学科学习应用；Lesson 产品行为以 `D:/Artifacts/GraspMemoEduPlan/01-需求与方案.md`、`04-推送系统补充需求.md` 为准，复习后端以 `docs/review-backend.md` 为准，当前实现/运维以 README 为准。

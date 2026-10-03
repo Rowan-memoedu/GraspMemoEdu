@@ -47,6 +47,9 @@ if ($created) {
     $info = Invoke-Api POST 'user/repos' @{name=$name;private=$false;auto_init=$true;description='GraspMemoEdu static frontend. Course data, answers and credentials remain local.'}
 } else {
     if ($repo[0].isPrivate) { throw 'Refusing to change visibility of an existing private repository.' }
+    # An intentional shutdown must not be undone by a routine frontend update.
+    $null = & gh api ('repos/' + $Repository + '/pages') 2>$null
+    if ($LASTEXITCODE -ne 0) { throw 'Pages is disabled or unavailable. Restore site availability before publishing.' }
     $info = Invoke-Api GET ('repos/' + $Repository)
 }
 $branch = $info.default_branch
@@ -74,6 +77,7 @@ if ($pageExit -eq 0) {
     $pages = $pageRaw | ConvertFrom-Json
     $null = Invoke-Api PUT ('repos/' + $Repository + '/pages') @{source=@{branch=$branch;path='/'};build_type='legacy'}
 } else {
+    if (-not $created) { throw 'Pages became unavailable during publication. Refusing to recreate a disabled site.' }
     if (($pageRaw -join '') -notmatch '"status"\s*:\s*"404"|"message"\s*:\s*"Not Found"') { throw 'Unable to inspect Pages state.' }
     $pages = Invoke-Api POST ('repos/' + $Repository + '/pages') @{source=@{branch=$branch;path='/'};build_type='legacy'}
 }
