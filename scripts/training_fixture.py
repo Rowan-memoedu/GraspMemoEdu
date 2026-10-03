@@ -3,6 +3,7 @@ import argparse
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 import json
+import hashlib
 from pathlib import Path
 import socket
 import subprocess
@@ -48,8 +49,14 @@ def main():
     compiled = root / 'training-bank.json'
     subprocess.run(['node', str(Path(__file__).with_name('import_training_bank.mjs')), str(source_path), str(compiled)], check=True)
     install(compiled, data)
-    course = synthetic_course(1); path = data / 'topic.json'; path.write_text(json.dumps(course), encoding='utf-8')
+    course = synthetic_course(1)
+    for module in course['modules']:
+        for question in [module['example'], *module['practices']]:
+            question['reference_answer'] = '5'
+    course['version'] = hashlib.sha256(json.dumps(course, sort_keys=True).encode()).hexdigest()
+    path = data / 'topic.json'; path.write_text(json.dumps(course), encoding='utf-8')
     (data / 'catalog.json').write_text(json.dumps({'courses': [{'id': 'legacy-course', 'title': '原课程隔离基线',
+        'units': [{'id': 'chapter', 'title': '基础概念', 'topic_ids': [course['id']]}],
         'topics': [{'id': course['id'], 'path': 'topic.json'}]}]}), encoding='utf-8')
     when = [datetime.now(timezone.utc)]
     app = create_app(Settings(data_dir=data, course_path=path, port=args.port),

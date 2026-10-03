@@ -120,7 +120,7 @@ def validate_saved(con, catalog):
     tables = {row[0] for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     identities = {(bank['id'], q['id'], bank['version']) for bank in catalog.banks.values()
                   for group in bank['groups'] for q in group.get('questions', [])}
-    for table in ('training_memory', 'training_attempts', 'training_ratings'):
+    for table in ('training_memory', 'training_attempts', 'training_ratings', 'training_suspensions'):
         if table in tables:
             for row in con.execute(f'SELECT DISTINCT bank,question,version FROM {table}'):
                 if tuple(row) not in identities:

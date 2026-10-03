@@ -90,6 +90,48 @@ class TrainingTests(unittest.TestCase):
         attempt = self.open(); self.service.reveal(attempt); self.service.rate(attempt, 1)
         self.assertEqual(memory, self.memory()); self.assertTrue(self.service.state(attempt)['result']['practice_only'])
 
+    def test_stop_reviews_preserves_card_and_survives_restart_and_manual_practice(self):
+        self.answer(self.open()); memory = self.memory()
+        # Stopping also works before the next due date, without FSRS rating 5.
+        attempt = self.open(); self.service.reveal(attempt)
+        self.service.fsrs.schedule = lambda *args: self.fail('Stop must never call FSRS')
+        self.service.stop_reviews(attempt); self.service.stop_reviews(attempt)
+        state = self.service.state(attempt)
+        self.assertTrue(state['stopped']); self.assertTrue(state['result']['stop_requested'])
+        self.assertIsNone(state['due_at']); self.assertIsNone(state['result']['rating'])
+        self.assertEqual(memory, self.memory())
+        with self.assertRaises(DomainError): self.service.rate(attempt, 4)
+        self.now += timedelta(days=365)
+        self.service = TrainingService(self.catalog, self.root, 'learner', self.service.judge, clock=lambda: self.now)
+        self.assertEqual(self.service.reviews([self.bank]), {'items': [], 'next_due_at': None})
+        state, _ = self.answer(self.open(), 'wrong')
+        self.assertEqual(state['mode'], 'practice'); self.assertTrue(state['stopped'])
+        self.assertEqual(memory, self.memory())
+        attempt = self.open(); self.service.reveal(attempt); self.service.rate(attempt, 3)
+        self.assertEqual(memory, self.memory()); self.assertTrue(self.service.state(attempt)['stopped'])
+
+    def test_stop_before_first_rating_blocks_inflight_and_other_open_attempts(self):
+        pending, shown = self.open(), self.open()
+        request = self.service.submit({'request_id': str(uuid.uuid4()), 'attempt_id': pending, 'answer': '2'})
+        self.service.reveal(shown); self.service.stop_reviews(shown)
+        self.service.process_submission(request)
+        self.assertIsNone(self.memory()); self.assertTrue(self.service.state(pending)['stopped'])
+        with closing(self.service._connect()) as con:
+            self.assertEqual(con.execute('SELECT COUNT(*) FROM training_suspensions').fetchone()[0], 1)
+            self.assertEqual(con.execute('SELECT COUNT(*) FROM training_ratings WHERE rating=5').fetchone()[0], 0)
+            validate_saved(con, self.catalog)
+            self.catalog.banks.clear()
+            with self.assertRaises(ValueError): validate_saved(con, self.catalog)
+
+    def test_stop_requires_revealed_answer_and_is_owner_scoped(self):
+        attempt = self.open()
+        with self.assertRaises(DomainError): self.service.stop_reviews(attempt)
+        self.service.reveal(attempt); self.service.stop_reviews(attempt)
+        other = TrainingService(self.catalog, self.root, 'other', self.service.judge, clock=lambda: self.now)
+        with self.assertRaises(DomainError): other.stop_reviews(attempt)
+        result, _ = self.answer(self.open(service=other), service=other)
+        self.assertFalse(result['stopped']); self.assertTrue(result['result']['scheduled'])
+
     def test_review_again_does_not_return_card_to_initial_learning(self):
         self.answer(self.open())
         self.now += timedelta(hours=6, seconds=1)
@@ -152,8 +194,10 @@ class TrainingTests(unittest.TestCase):
         preview = TrainingService(self.catalog, self.root, 'admin', self.service.judge, runtime=runtime, clock=lambda: self.now)
         state, _ = self.answer(self.open(service=preview), service=preview)
         self.assertEqual(state['phase'], 'done')
+        stopped = self.open(service=preview); preview.reveal(stopped); preview.stop_reviews(stopped)
+        self.assertTrue(preview.state(stopped)['stopped'])
         with closing(sqlite3.connect(self.root / 'learning.sqlite3')) as con:
-            for table in ('training_attempts', 'training_memory', 'training_submissions', 'training_ratings'):
+            for table in ('training_attempts', 'training_memory', 'training_submissions', 'training_ratings', 'training_suspensions'):
                 self.assertEqual(con.execute(f'SELECT COUNT(*) FROM {table} WHERE learner=?', ('admin',)).fetchone()[0], 0)
 
     def test_content_tree_identity_immutability_and_backup_version_validation(self):

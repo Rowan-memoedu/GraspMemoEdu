@@ -4,17 +4,18 @@
 
 ## 共用层与独立数据
 
-`training_content.py` 管理题库，`training.py` 管理作答和单题排期，`training_api.py` 注册公开学习端点，`web/training.js` 管理页面。复用 `question_types.py`、`judging.py`、`FSRSEngine`、`questionInput` 和身份/配额/后台判题队列。题库题目不进入原课程 Catalog，不改变 Topic ID、课程内容、学习任务或原课程复习记录。
+`training_content.py` 管理题库，`training.py` 管理作答和单题排期，`training_api.py` 注册公开学习端点，`web/training.js` 管理页面。题组树直接调用学习主页的 `courseSidebar`、`taskTree` 和任务卡组件；训练页直接复用 `index.html` 的阅读框架及原样式，左侧保留学习记录和移动端抽屉。`learning-ui.js` 的作答表单同时用于原 Lesson 和训练页，仅由各自调用者处理提交。复用 `question_types.py`、`judging.py`、`FSRSEngine`、`questionInput` 和身份/配额/后台判题队列。题库题目不进入原课程 Catalog，不改变 Topic ID、课程内容、学习任务或原课程复习记录。
 
 题库数据位于私密数据目录的 `training-banks/<bank-id>.json`。它与用于现有课程题型转换的 `question-banks/<topic-id>/<revision>.json` 不同，二者不互相收集内容。本次交付只有架构，不附带正式题库内容。
 
-SQLite 新增 `training_attempts`、`training_submissions`、`training_memory`、`training_ratings` 和 `training_preferences`。每个身份、题库版本、题目只有一张记忆卡；不限作答次数。题目内容和选项顺序在开始本次作答时冻结。客户端刷新恢复同一次作答；请求重试不会再判题或重复排期。两次并发作答只有匹配记忆卡版本的一次能更新排期，另一次保存为额外训练。
+SQLite 使用 `training_attempts`、`training_submissions`、`training_memory`、`training_ratings`、`training_preferences` 和 `training_suspensions`。每个身份、题库版本、题目只有一张记忆卡；不限作答次数。题目内容和选项顺序在开始本次作答时冻结。客户端刷新恢复同一次作答；请求重试不会再判题或重复排期。两次并发作答只有匹配记忆卡版本的一次能更新排期，另一次保存为额外训练。
 
 ## 评分
 
 - 普通作答与现有原子化卡片一致：首次答错记 1；首次答对不产生新评分，首次复习定在 6 小时后，并保留此前答错产生的 FSRS 状态。正式复习答错 1、答对 3。
-- 账号同时拥有高阶学习者资格和 `training_self_rating` 功能时，问答题可以留空点击 `Show Answer`，显示 `Explanation` 后按重来、困难、良好、简单选择 1–4 分。默认开启，可在设置关闭。非空输入仍走共享判题；填空、判断、选择、配对只允许普通作答。仅查看答案不产生记忆卡或评分。
-- 已进入排期的卡片尚未到期时，主动重做只保存作答记录，既不更新 FSRS，也不修改到期时间，自评同样遵循此规则。
+- 账号同时拥有高阶学习者资格和 `training_self_rating` 功能时，问答题可以留空点击 `Show Answer`，显示 `Explanation` 后出现五个不同颜色的按钮。1–4 的小字分别为“做错了”“勉强做对，但很困难”“正常做对”“轻松做对”；5 为“极度熟悉，不必再练”。不显示按钮上方的额外评分提示语。默认开启，可在设置关闭。非空输入仍走共享判题；填空、判断、选择、配对只允许普通作答。仅查看答案不产生记忆卡或评分。
+- 第五个按钮通过独立 `training/stop` 操作停止此身份、题库版本、题目的后续推送，不向 FSRS 传入评分 5。保留已有卡片及作答记录；刷新、重启、备份恢复和在途判题都不会恢复推送。
+- 五个按钮下方为“提前复习”。已进入排期的卡片尚未到期时，提前复习只保存作答记录，既不更新 FSRS，也不修改到期时间，自评同样遵循此规则。停止推送的题目仍可手动复习，但不会因此恢复推送。
 - 语义判题故障不计错；保留原提交以便重试。普通作答继续使用共享判题并发和每日配额。
 - 六科顶部“复习”统一展示到期题库卡片。原子化学科的既有复习区独立保留，原课程学习主页的 Review 任务不变。
 
@@ -46,4 +47,4 @@ sudo systemctl restart graspmemoedu
 
 ## 验收
 
-后端回归为 `tests/test_training.py` 与 `tests/test_training_api.py`。`scripts/training_fixture.py` 在新的 `D:/Artifacts/GraspMemoEdu` 子目录启动合成题库；`scripts/training_acceptance.mjs` 使用隔离 Chrome 上下文和真实判题检查导航、任意选题、草稿、普通作答、四级自评、复习、设置和管理员缓存边界。它们不向正式站点导入验收题目，也不使用正式学习者进度。
+后端回归为 `tests/test_training.py` 与 `tests/test_training_api.py`。`scripts/training_fixture.py` 在新的 `D:/Artifacts/GraspMemoEdu` 子目录启动合成题库；`scripts/training_acceptance.mjs` 使用隔离 Chrome 上下文和真实判题检查导航、任意选题、草稿、普通作答、五个按钮、停止推送、复习、设置和管理员缓存边界，并对照原学习页检查桌面与手机的布局及组件尺寸。它们不向正式站点导入验收题目，也不使用正式学习者进度。

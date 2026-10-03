@@ -597,7 +597,7 @@ class PublicAccessAcceptanceTests(unittest.TestCase):
                    "/api/review/sessions/{session_id}/pause", "/api/review/sessions/{session_id}/demo-answer",
                    "/api/review/submissions/{submission_id}"}
         allowed.update('/api/training/' + name for name in ('catalog', 'bank', 'group', 'open', 'state', 'submit',
-                       'submission', 'reveal', 'rate', 'history', 'reviews', 'preferences'))
+                       'submission', 'reveal', 'rate', 'history', 'reviews', 'preferences', 'stop'))
         self.assertLessEqual({route.path for route in self.app.routes}, allowed)
         atomic_route = next(route for route in self.app.routes if route.path == '/api/atomic/reviews')
         self.assertEqual(atomic_route.methods, {'GET'})

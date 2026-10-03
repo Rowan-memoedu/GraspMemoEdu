@@ -1,20 +1,23 @@
-import {t, translateMessage} from './i18n.js?v=318501d54750dd15';
-import {questionInput, answerReady} from './question-input.js?v=318501d54750dd15';
-import {createLearningCache} from './learning-cache.js?v=318501d54750dd15';
+import {t, translateMessage} from './i18n.js?v=5c1d9a1a6408ac9a';
+import {questionInput, answerReady} from './question-input.js?v=5c1d9a1a6408ac9a';
+import {createLearningCache} from './learning-cache.js?v=5c1d9a1a6408ac9a';
 
 const node = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const button = (text, cls, action) => { const n = node('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
 const encode = encodeURIComponent;
 const query = fields => new URLSearchParams(fields).toString();
 const html = (content, cls = 'courseContent') => { const n = node('div', cls); n.innerHTML = content || ''; return n; };
-const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy'];
+const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy', 'training.retire'];
+import {answerEditor, readerFrame} from './learning-ui.js?v=5c1d9a1a6408ac9a';
 
 export function createTrainingView(bridge) {
   const {root, request, href, formatDate, getAccess} = bridge;
+  const readerTemplate = document.getElementById('appLayout').cloneNode(true);
   let cacheAccess = getAccess();
   const cache = createLearningCache(() => cacheAccess);
   let epoch = 0, selection = 0, timer = null, group = null, current = null, sidebar, main;
   let elapsed = 0, activeSince = null, clockKey = null, visibilityHandler = null;
+  let reader = null;
   const key = (kind, id) => `graspmemoedu:training:${cacheAccess?.learner_id}:${kind}:${id}`;
   const read = (kind, id) => cache.read(localStorage, key(kind, id));
   const save = (kind, id, value) => cache.write(localStorage, key(kind, id), value);
@@ -36,6 +39,7 @@ export function createTrainingView(bridge) {
     flushClock(); clockKey = null; ++epoch; ++selection; clearTimeout(timer);
     if (visibilityHandler) document.removeEventListener('visibilitychange', visibilityHandler);
     visibilityHandler = null; group = current = null; cache.clear();
+    reader?.destroy(); reader = null;
     document.getElementById('trainingMathStyle')?.remove();
   }
   function error(container, failure, retry) {
@@ -62,31 +66,38 @@ export function createTrainingView(bridge) {
       if (!data.banks.length) grid.append(node('p', 'portalEmpty', t('training.empty')));
     } else if (parts.length === 2) {
       const bank = await request('training/bank?' + query({bank_id: parts[1]})); if (e !== epoch) return;
-      const tree = node('div', 'trainingTree');
-      root.replaceChildren(link(t('training.back'), '/banks', 'textButton'), node('h1', 'portalPageTitle', bank.title),
-        node('h2', 'trainingSectionTitle', t('training.groups')), tree);
-      function branch(parent, target) {
-        for (const group of bank.groups.filter(g => (g.parent_id || null) === parent)) {
-          const children = bank.groups.some(g => g.parent_id === group.id);
-          const row = node(children ? 'details' : 'article', 'trainingGroup');
-          const heading = node(children ? 'summary' : 'h3', '', group.title); row.append(heading);
-          if (children) row.open = true;
-          if (group.question_count) row.append(node('span', 'inputHint', t('training.count', {count: group.question_count})),
-            link(t('training.start'), groupPath(bank.id, group.id), 'primaryButton'));
-          if (children) { const nested = node('div', 'trainingBranch'); branch(group.id, nested); row.append(nested); }
-          target.append(row);
-        }
-      }
-      branch(null, tree);
+      const count = bank.groups.reduce((n, g) => n + g.question_count, 0);
+      const completed = bank.groups.reduce((n, g) => n + (g.completed_count || 0), 0);
+      const containers = bank.groups.filter(g => bank.groups.some(child => child.parent_id === g.id));
+      const data = {course: {id: bank.id, title: bank.title, progress: count ? completed / count * 100 : 0},
+        tasks: bank.groups.filter(g => g.question_count).map(g => ({id: g.id, topic_id: g.id, type: 'Lesson',
+          title: g.title, question_count: g.question_count, progress: g.completed_count / g.question_count * 100})),
+        pending_hierarchy: containers.map(g => ({...g, topic_ids: bank.groups.filter(child => child.question_count
+          && (child.id === g.id || child.parent_id === g.id && !containers.some(c => c.id === child.id))).map(child => child.id)}))};
+      const layout = node('div', 'dashboardLayout'), tasks = node('div', 'dashboardTasks');
+      const pending = node('section', 'incompleteTasks'); pending.setAttribute('aria-label', t('training.groups'));
+      tasks.append(pending);
+      layout.append(bridge.courseSidebar(data, {training: true, href: `/banks/${encode(bank.id)}`, questionCount: count,
+        onProgress: () => pending.scrollIntoView({block: 'start'})}), tasks);
+      root.replaceChildren(layout);
+      bridge.taskTree(pending, data, {training: true, label: t('training.groups'), startLabel: t('training.start'),
+        target: task => groupPath(bank.id, task.id)});
+      if (!count) pending.append(node('p', 'portalEmpty', t('training.empty')));
     } else if (parts.length === 3) {
       const nextGroup = await request('training/group?' + query({bank_id: parts[1], group_id: parts[2]}));
       if (e !== epoch) return;
       group = nextGroup;
       const style = node('style'); style.id = 'trainingMathStyle'; style.textContent = group.math_css; document.head.append(style);
-      const layout = node('div', 'trainingLayout'); sidebar = node('aside', 'trainingSidebar'); main = node('section', 'trainingQuestion');
-      sidebar.setAttribute('aria-label', t('training.history')); layout.append(sidebar, main);
-      root.replaceChildren(link(t('training.back'), `/banks/${encode(group.bank_id)}`, 'textButton'),
-        node('h1', 'portalPageTitle', group.title), layout);
+      reader = readerFrame(readerTemplate, 'training');
+      const refs = reader.refs;
+      sidebar = refs.historyPanel; main = refs.stepCard;
+      root.hidden = true; root.after(reader.frame); document.body.classList.add('topicPage');
+      refs.loadingState.hidden = true; refs.courseShell.hidden = false;
+      refs.topicHomeLink.href = href(`/banks/${encode(group.bank_id)}`); refs.topicHomeLink.textContent = '← ' + t('training.back');
+      refs.topicFeedbackButton.hidden = true;
+      refs.lessonTitle.textContent = group.title;
+      reader.frame.querySelector('.eyebrow').textContent = t('training.groups');
+      reader.frame.querySelector('.lessonToolbar').hidden = true;
       renderSidebar();
       visibilityHandler = () => { flushClock(); if (!document.hidden && current?.phase === 'answer' && !current.submission_id) activeSince = performance.now(); };
       document.addEventListener('visibilitychange', visibilityHandler);
@@ -96,18 +107,32 @@ export function createTrainingView(bridge) {
     } else throw new Error(t('portal.this.page.does.not.exist.24'));
   }
   function renderSidebar() {
-    sidebar.replaceChildren(node('h2', '', t('training.history')));
+    sidebar.replaceChildren();
     group.questions.forEach((q, index) => {
-      const item = button('', 'trainingQuestionLink', () => select(q.id));
+      const section = node('section', 'historyGroup'), header = node('div', 'historyGroupHeader');
+      const title = t('training.exercise', {number: index + 1});
+      header.append(node('span', 'moduleName', title), node('span', `historyStatus${q.completed_count ? ' completed' : ''}`,
+        q.completed_count ? t('training.completed', {count: q.completed_count}) : t('training.unanswered')));
+      const items = node('div', 'historyItems');
+      const item = button(q.title, 'historyItem trainingQuestionLink', () => select(q.id));
       item.dataset.questionId = q.id;
-      item.append(node('strong', '', t('training.exercise', {number: index + 1})), node('span', '', q.title));
-      if (q.completed_count !== null) item.append(node('small', '', q.completed_count ? t('training.completed', {count: q.completed_count}) : t('training.unanswered')));
-      if (current?.question_id === q.id) item.setAttribute('aria-current', 'step');
-      sidebar.append(item);
+      if (current?.question_id === q.id && current.attempt_id === q.latest_attempt_id) item.setAttribute('aria-current', 'step');
+      items.append(item); section.append(header, items); sidebar.append(section);
+      if (current?.question_id === q.id && getAccess()?.features?.includes('review_history'))
+        void loadHistory(items, epoch, selection, q.id);
     });
+    const completed = group.questions.filter(q => q.completed_count).length;
+    const refs = reader.refs;
+    refs.progressCaption.hidden = false;
+    refs.progressCaption.replaceChildren(node('span', '', t('reader.modulesCompleted', {completed, total: group.questions.length})),
+      node('span', '', t(completed === group.questions.length ? 'training.finished' : 'training.inProgress')));
+    refs.lessonProgress.hidden = false;
+    refs.lessonProgress.setAttribute('aria-valuenow', String(Math.round(100 * completed / (group.questions.length || 1))));
+    refs.lessonProgress.replaceChildren(...group.questions.map(q => node('span', `progressSegment ${q.completed_count ? 'completed' : q.latest_attempt_id ? 'in_progress' : 'not_started'}`)));
   }
   async function select(questionId, fresh = false, attemptId = null) {
     flushClock(); clockKey = null; clearTimeout(timer);
+    if (current) reader.closeOnMobile();
     const e = epoch, s = ++selection, q = group.questions.find(q => q.id === questionId);
     main.replaceChildren(node('p', '', t('training.loading')));
     try {
@@ -131,21 +156,21 @@ export function createTrainingView(bridge) {
   function renderQuestion() {
     const state = current, e = epoch, s = selection;
     const index = group.questions.findIndex(q => q.id === state.question_id);
-    const heading = node('h2', '', `${t('training.exercise', {number: index + 1})} · ${state.question.title}`);
+    const heading = node('div', 'stepHeader'), title = node('h2', 'stepTitle', t('training.exercise', {number: index + 1}));
+    title.id = 'trainingStepTitle'; title.tabIndex = -1; main.setAttribute('aria-labelledby', title.id);
+    heading.append(title, node('span', 'stepCounter', t('reader.modulePosition', {current: index + 1, total: group.questions.length})));
     const stem = html(state.question.html); main.replaceChildren(heading, stem);
-    if (state.mode === 'practice' && state.phase !== 'done') main.append(node('p', 'inputHint', t('training.practiceHint')));
+    reader.refs.footerPosition.textContent = t('reader.modulePosition', {current: index + 1, total: group.questions.length});
+    reader.refs.saveStatus.textContent = t(state.submission_status === 'pending' || state.submission_status === 'running' ? '答案已提交，正在判题' : '学习进度已保存');
+    const navigation = node('div', 'stepNavigation'), continueRow = node('div', 'continueRow');
     if (state.phase === 'answer') {
-      const form = node('form', 'trainingAnswerForm'); form.id = 'trainingAnswerForm';
-      const label = node('label', '', t('training.answer')); label.htmlFor = 'trainingAnswer';
-      let input, field;
       let savedPayload = null;
       try { savedPayload = JSON.parse(read('submission', state.attempt_id)); } catch {}
       const draft = savedPayload?.answer ?? (state.answer || read('draft', state.attempt_id) || '');
-      if (state.question.interaction && state.question.interaction.type !== 'text') {
-        const widget = questionInput(state.question.interaction, {id: 'trainingAnswer', value: draft, stem, formId: form.id});
-        input = widget.input; field = widget.element;
-      } else { input = field = node('textarea', 'answerInput'); input.id = 'trainingAnswer'; input.value = draft; input.maxLength = 2000; input.rows = 5; }
-      const submit = node('button', 'primaryButton'); submit.type = 'submit';
+      const {form, input, submit, bottom} = answerEditor(state.question, stem, draft,
+        {formId: 'trainingAnswerForm', inputId: 'trainingAnswer', submitId: 'trainingSubmit'});
+      form.classList.add('trainingAnswerForm');
+      const disable = value => { if (input.questionControl) input.questionControl.setDisabled(value); else input.disabled = value; };
       const pending = ['pending', 'running'].includes(state.submission_status);
       const failed = state.submission_status === 'error';
       const refresh = () => {
@@ -153,16 +178,14 @@ export function createTrainingView(bridge) {
         submit.textContent = pending ? t('training.checking') : failed || savedPayload ? t('training.retry') : t(show ? 'training.show' : 'training.submit');
         submit.disabled = pending || !state.can_submit || (!failed && !savedPayload && !show && !answerReady(input));
       };
-      input.disabled = pending || failed || Boolean(savedPayload) || !state.can_submit;
-      if (input.questionControl && input.disabled)
-        for (const control of field.querySelectorAll('input,select,button,textarea')) control.disabled = true;
-      form.append(label, field, submit); main.append(form);
-      form.addEventListener('input', () => { save('draft', state.attempt_id, input.value); refresh(); });
+      disable(pending || failed || Boolean(savedPayload) || !state.can_submit);
+      form.append(bottom); main.append(form); continueRow.append(submit);
+      input.addEventListener('input', () => { save('draft', state.attempt_id, input.value); refresh(); });
       input.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && !event.isComposing) { event.preventDefault(); form.requestSubmit(); } });
       form.addEventListener('submit', async event => {
         event.preventDefault(); if (submit.disabled) return;
         submit.disabled = true; const duration = flushClock();
-        for (const control of field.matches('textarea') ? [field] : field.querySelectorAll('input,select,button,textarea')) control.disabled = true;
+        disable(true);
         try {
           let next;
           if (state.can_self_rate && !input.value.trim() && !state.submission_id && !savedPayload) next = await post('reveal', {attempt_id: state.attempt_id});
@@ -176,50 +199,66 @@ export function createTrainingView(bridge) {
           current = next; renderQuestion();
         } catch (failure) { if (alive(e, s)) {
           error(main, failure);
-          if (!savedPayload) for (const control of field.matches('textarea') ? [field] : field.querySelectorAll('input,select,button,textarea')) control.disabled = !state.can_submit;
+          if (!savedPayload) disable(!state.can_submit);
           refresh(); if (!document.hidden && !savedPayload) activeSince = performance.now();
         } }
       });
       refresh();
       if (!state.can_submit) main.append(node('p', 'fieldError', t('training.noPermission')));
       if (state.error) main.append(node('p', 'fieldError', translateMessage(state.error)));
-      if (pending) timer = setTimeout(() => poll(e, s, state), 700);
-    }
-    if (state.explanation_html) {
-      if (state.answer_display) main.append(node('h3', '', t('training.answer')), node('pre', 'trainingSavedAnswer', state.answer_display));
-      main.append(node('h3', '', t('training.explanation')), html(state.explanation_html, 'courseContent trainingExplanation'));
-    }
-    if (state.phase === 'shown') {
-      main.append(node('p', '', t('training.ratingHint')));
-      const ratings = node('div', 'trainingRatings');
-      for (let rating = 1; rating <= 4; rating++) {
-        const item = button(t(ratingKeys[rating]), `trainingRating rating${rating}`, async () => {
-          for (const b of ratings.children) b.disabled = true;
-          try {
-            const next = await post('rate', {attempt_id: state.attempt_id, rating, elapsed_ms: flushClock()});
-            if (!alive(e, s)) return;
-            current = next; await refreshGroup(e, s); if (alive(e, s)) renderQuestion();
-          } catch (failure) { if (alive(e, s)) { error(main, failure); for (const b of ratings.children) b.disabled = !state.can_self_rate || !state.can_submit; } }
-        });
-        item.disabled = !state.can_self_rate || !state.can_submit; item.dataset.rating = rating; ratings.append(item);
+      if (pending) {
+        const waiting = node('div', 'waiting'); waiting.setAttribute('role', 'status');
+        waiting.append(node('span', 'spinner'), node('span', '', t('training.checking'))); main.append(waiting);
+        timer = setTimeout(() => poll(e, s, state), 700);
       }
-      main.append(ratings);
+    }
+    if (state.phase !== 'answer' && state.question.interaction && state.question.interaction.type !== 'text') {
+      main.append(questionInput(state.question.interaction, {id: 'trainingSubmittedInteraction', stem, value: state.answer, disabled: true}).element);
+    }
+    if (state.answer_display && state.phase === 'done') {
+      const answer = node('details', 'submittedAnswer');
+      answer.append(node('summary', '', t('查看已提交答案')), node('pre', '', state.answer_display)); main.append(answer);
     }
     if (state.phase === 'done') {
       save('draft', state.attempt_id, null); save('submission', state.attempt_id, null); save('elapsed', state.attempt_id, null); clockKey = null;
       const result = state.result;
-      const label = result.self_rating ? t('training.selfResult', {rating: t(ratingKeys[result.self_rating])}) : t(result.correct ? 'training.correct' : 'training.incorrect');
-      const verdict = node('div', 'trainingVerdict'); verdict.setAttribute('role', 'status');
-      verdict.append(node('strong', '', label)); if (result.reason) verdict.append(node('p', '', result.reason));
-      if (result.practice_only) verdict.append(node('p', '', t('training.practice')));
-      if (state.due_at) verdict.append(node('p', '', t('training.nextDue', {time: formatDate(state.due_at)})));
-      main.append(verdict);
+      const label = result.stop_requested ? t('training.stopped') : result.self_rating ? t('training.selfResult', {rating: t(ratingKeys[result.self_rating])}) : t(result.correct ? 'training.correct' : 'training.incorrect');
+      const correct = result.stop_requested || result.self_rating > 1 || result.correct;
+      const verdict = node('div', `feedback trainingVerdict ${correct ? 'correct' : 'incorrect'}`); verdict.setAttribute('role', 'status');
+      const body = node('div'); body.append(node('span', 'feedbackTitle', label));
+      if (result.reason) body.append(node('div', 'feedbackReason', result.reason));
+      if (state.stopped && !result.stop_requested) body.append(node('div', 'feedbackReason', t('training.stopped')));
+      else if (result.practice_only && !state.stopped) body.append(node('div', 'feedbackReason', t('training.practice')));
+      if (state.due_at) body.append(node('div', 'feedbackReason', t('training.nextDue', {time: formatDate(state.due_at)})));
+      verdict.append(node('span', 'feedbackIcon', correct ? '✓' : '!'), body); main.append(verdict);
     }
-    if (state.can_learn) main.append(button(t('training.redo'), 'secondaryButton trainingRedo', () => select(state.question_id, true)));
-    if (getAccess()?.features?.includes('review_history')) {
-      const box = node('details', 'trainingHistory'); box.append(node('summary', '', t('training.history'))); main.append(box);
-      box.addEventListener('toggle', () => { if (box.open && !box.dataset.loaded) { box.dataset.loaded = 'true'; void loadHistory(box, e, s, state.question_id); } });
+    if (state.explanation_html)
+      main.append(node('h3', 'exampleExplanationHeader', t('Explanation · 解析')), html(state.explanation_html, 'courseContent trainingExplanation'));
+    if (state.phase === 'shown' || state.phase === 'done' && (state.result.self_rating || state.result.stop_requested)) {
+      const ratings = node('div', 'trainingRatings');
+      for (let rating = 1; rating <= 5; rating++) {
+        const item = button('', `trainingRating rating${rating}`, async () => {
+          for (const b of ratings.children) b.disabled = true;
+          try {
+            const next = rating === 5 ? await post('stop', {attempt_id: state.attempt_id})
+              : await post('rate', {attempt_id: state.attempt_id, rating, elapsed_ms: flushClock()});
+            if (!alive(e, s)) return;
+            current = next; await refreshGroup(e, s); if (alive(e, s)) renderQuestion();
+          } catch (failure) { if (alive(e, s)) { error(main, failure); for (const b of ratings.children) b.disabled = !state.can_self_rate || !state.can_submit; } }
+        });
+        item.append(node('span', '', String(rating)), node('small', '', t(ratingKeys[rating])));
+        item.disabled = state.phase === 'done' || !state.can_self_rate || !state.can_submit;
+        item.setAttribute('aria-pressed', String(state.result?.self_rating === rating || rating === 5 && Boolean(state.result?.stop_requested)));
+        item.dataset.rating = rating; ratings.append(item);
+      }
+      main.append(ratings);
     }
+    if (state.can_learn) {
+      const redo = button(t('training.redo'), 'secondaryButton trainingRedo', () => select(state.question_id, true));
+      redo.disabled = ['pending', 'running'].includes(state.submission_status); navigation.append(redo);
+    }
+    if (continueRow.childElementCount) navigation.append(continueRow);
+    main.append(navigation);
   }
   async function refreshGroup(e, s) {
     const updated = await request('training/group?' + query({bank_id: group.bank_id, group_id: group.id}));
@@ -238,10 +277,13 @@ export function createTrainingView(bridge) {
   async function loadHistory(box, e, s, questionId, offset = 0) {
     try {
       const data = await request('training/history?' + query({bank_id: group.bank_id, question_id: questionId, offset}));
-      if (!alive(e, s)) return;
-      for (const item of data.items) box.append(button(`${formatDate(item.created_at)} · ${t(item.phase === 'done' ? 'training.saved' : item.phase === 'shown' ? 'training.finishRating' : 'training.resume')}`,
-        'trainingHistoryItem', () => select(questionId, false, item.id)));
-      if (!data.items.length && !offset) box.append(node('p', '', t('training.historyEmpty')));
+      if (!alive(e, s) || !box.isConnected) return;
+      for (const item of data.items) {
+        if (item.id === group.questions.find(q => q.id === questionId).latest_attempt_id) continue;
+        const entry = button(`${formatDate(item.created_at)} · ${t(item.phase === 'done' ? 'training.saved' : item.phase === 'shown' ? 'training.finishRating' : 'training.resume')}`,
+          'historyItem trainingHistoryItem', () => select(questionId, false, item.id));
+        if (current.attempt_id === item.id) entry.setAttribute('aria-current', 'step'); box.append(entry);
+      }
       if (data.next_offset !== null) { const more = button(t('training.more'), 'textButton', () => { more.remove(); void loadHistory(box, e, s, questionId, data.next_offset); }); box.append(more); }
     } catch (failure) { if (alive(e, s)) error(box, failure, () => loadHistory(box, e, s, questionId, offset)); }
   }

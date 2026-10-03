@@ -1,7 +1,9 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=318501d54750dd15";
-import {questionInput, answerReady} from './question-input.js?v=318501d54750dd15';
-import {reportableContent} from './content-report.js?v=318501d54750dd15';
-import {createLearningCache} from './learning-cache.js?v=318501d54750dd15';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=5c1d9a1a6408ac9a";
+import {questionInput, answerReady} from './question-input.js?v=5c1d9a1a6408ac9a';
+import {reportableContent} from './content-report.js?v=5c1d9a1a6408ac9a';
+import {createLearningCache} from './learning-cache.js?v=5c1d9a1a6408ac9a';
+
+import {answerEditor} from './learning-ui.js?v=5c1d9a1a6408ac9a';
 
 applyStaticTranslations();
 
@@ -1210,23 +1212,8 @@ function renderStepNavigation(target, step, actions) {
 }
 
 function answerForm(step, stem) {
-  const form = el("form", "learningActions answerForm");
-  form.id = "answerForm";
+  const {form, input, submit, bottom} = answerEditor(step, stem, draftValue(step));
   form.addEventListener("submit", submitAnswer);
-  const structured = step.interaction && step.interaction.type !== 'text';
-  const control = structured ? questionInput(step.interaction, {id: 'answerInput', stem,
-    value: draftValue(step), formId: 'answerForm'}) : null;
-  const label = el(structured ? 'p' : 'label', "", t("你的答案"));
-  label.htmlFor = "answerInput";
-  const input = control?.input || el("textarea", "answerInput");
-  input.id = "answerInput";
-  input.name = "answer";
-  input.rows = 3;
-  input.maxLength = 2000;
-  input.spellcheck = false;
-  input.autocomplete = "off";
-  input.setAttribute("aria-describedby", "answerHint answerError");
-  input.value = draftValue(step);
   input.addEventListener("input", () => {
     saveDraft(step, input.value);
     $("answerError").hidden = true;
@@ -1241,22 +1228,7 @@ function answerForm(step, stem) {
       form.requestSubmit();
     }
   });
-  const error = el("p", "inputError", t(step.interaction?.type === 'choice' ? 'question.choiceHint' : structured ? 'question.completeHint' : '请先填写答案。'));
-  error.id = "answerError";
-  error.hidden = true;
-  const bottom = el("div", "answerBottom");
-  const hint = el("p", "inputHint", t(step.interaction?.type === 'choice' ? 'question.choiceHint' : step.interaction?.grading === 'exact' ? 'question.exactHint'
-    : step.interaction?.grading === 'semantic' ? 'question.semanticHint'
-    : structured && step.interaction.type !== 'fill_blank' ? 'question.completeHint'
-    : "只要描述清楚正确答案的形式即可，表达方式不限，夹杂口语也没关系。Ctrl + Enter 提交。"));
-  hint.id = "answerHint";
-  const submit = el("button", "primaryButton", submissionError && input.value.trim() === submissionError.answer ? t("重试判题") : t("Submit"));
-  submit.id = "submitButton";
-  submit.type = "submit";
-  submit.setAttribute("form", "answerForm");
-  submit.disabled = !answerReady(input);
-  bottom.append(hint, submit);
-  form.append(label, control?.element || input, error);
+  submit.textContent = submissionError && input.value.trim() === submissionError.answer ? t("重试判题") : t("Submit");
   if (submissionError && submissionError.step_id === step.id) {
     const failed = el("div", "feedback incorrect");
     failed.setAttribute("role", "alert");
@@ -1482,7 +1454,7 @@ async function openTopic(id, subjectId) {
   await start();
 }
 
-const { initPortal } = await import("./portal.js?v=318501d54750dd15");
+const { initPortal } = await import("./portal.js?v=5c1d9a1a6408ac9a");
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {
     try { return await fetchGuideAsset(url, subjectId); }

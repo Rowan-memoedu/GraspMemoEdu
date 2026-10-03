@@ -1,39 +1,22 @@
+/* The bank tree and reader use the existing course/lesson styles unchanged. */
 .trainingSectionTitle { margin: 28px 0 18px; font-size: 20px; }
-.trainingGroup { margin: 12px 0; border: 1px solid #e0e5e9; border-radius: 8px; padding: 18px; background: #fff; }
-.trainingGroup > :is(h3, summary) { font-size: 17px; font-weight: 600; margin: 0 0 12px; }
-.trainingGroup > summary { cursor: pointer; }
-.trainingGroup > .primaryButton { margin-left: 18px; display: inline-flex; }
-.trainingBranch { border-left: 2px solid var(--muted-accent-border); padding-left: 18px; margin-top: 16px; }
-.trainingLayout { display: grid; grid-template-columns: 235px minmax(0, 1fr); gap: 32px; align-items: start; }
-.trainingSidebar { position: sticky; top: 76px; max-height: calc(100dvh - 100px); overflow: auto; border-right: 1px solid #e4e4e4; padding-right: 18px; }
-.trainingSidebar h2 { font-size: 15px; color: #777; margin: 0 0 14px; }
-.trainingQuestionLink { display: flex; flex-direction: column; gap: 5px; width: 100%; text-align: left; padding: 12px; background: #fff; border: 1px solid transparent; border-radius: 6px; margin: 0 0 8px; color: #515151; }
-.trainingQuestionLink[aria-current] { background: var(--intro-background); border-color: var(--selection-border); }
-.trainingQuestionLink small { color: #767676; }
-.trainingQuestion h2 { font-size: 23px; margin-top: 0; }
-.trainingAnswerForm { display: flex; flex-direction: column; gap: 12px; margin: 24px 0; }
-.trainingAnswerForm > .primaryButton { align-self: flex-start; min-width: 130px; }
-.trainingAnswerForm textarea:not([hidden]) { width: 100%; box-sizing: border-box; min-height: 125px; resize: vertical; padding: 12px; border: 1px solid #bbc9d3; border-radius: 6px; font: inherit; }
-.trainingRatings { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 18px 0 28px; }
-.trainingRating { border: 0; border-radius: 5px; padding: 13px 5px; font-weight: 600; color: #fff; }
-.trainingRating.rating1 { background: #b73a3a; } .trainingRating.rating2 { background: #ad620e; }
-.trainingRating.rating3 { background: #237443; } .trainingRating.rating4 { background: #2267aa; }
-.trainingRating:hover { filter: brightness(.93); } .trainingRating:disabled { opacity: .5; }
-.trainingVerdict { border-left: 4px solid var(--progress-complete); background: var(--answer-help-background); padding: 14px 18px; margin: 20px 0; }
-.trainingSavedAnswer { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
-.trainingHistory { margin-top: 28px; border-top: 1px solid #ddd; padding-top: 18px; }
-.trainingHistory summary { cursor: pointer; } .trainingHistoryItem { display: block; text-align: left; width: 100%; margin-top: 8px; background: #fff; border: 1px solid #e4e4e4; padding: 10px; }
-.trainingRedo { margin-top: 14px; } .trainingError { margin: 12px 0; }
+.trainingRatings { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-top: 22px; }
+.trainingRating { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 5px; border: 1px solid transparent; border-radius: 3px; padding: 10px 5px; color: #fff; }
+.trainingRating > span { font-size: 16px; }
+.trainingRating > small { font-size: 11px; line-height: 1.5; font-weight: 400; }
+.trainingRating.rating1 { background: #b73a3a; }
+.trainingRating.rating2 { background: #ad620e; }
+.trainingRating.rating3 { background: #237443; }
+.trainingRating.rating4 { background: #2267aa; }
+.trainingRating.rating5 { background: #745198; }
+.trainingRating:hover:not(:disabled) { filter: brightness(.93); }
+.trainingRating[aria-pressed="true"] { outline: 2px solid var(--ma-navy); outline-offset: 2px; opacity: 1; }
+.trainingError { margin: 12px 0; }
 .trainingReviewSection { margin-top: 30px; }
 /* Keep six navigation entries evenly spaced without splitting Chinese labels. */
 @media (max-width: 600px) {
   .topBarContainer .mainNavigation { overflow-x: auto; scrollbar-width: none; justify-content: safe flex-end; }
   .topBarContainer .mainNavigation :is(a, .catalogToggle) { white-space: nowrap; flex-shrink: 0; padding-inline: 4px; margin-right: 2px; font-size: 11px; }
-}
-@media (max-width: 720px) {
-  .trainingLayout { grid-template-columns: minmax(0, 1fr); gap: 22px; }
-  .trainingSidebar { position: static; max-height: 220px; border-right: 0; border-bottom: 1px solid #ddd; padding: 0 0 12px; display: flex; flex-wrap: wrap; gap: 8px; }
-  .trainingSidebar h2 { width: 100%; } .trainingQuestionLink { width: calc(50% - 4px); margin: 0; }
-  .trainingBranch { padding-left: 10px; } .trainingGroup { padding: 12px; }
-  .trainingRatings { gap: 7px; }
+  .trainingRatings { gap: 4px; }
+  .trainingRating { padding-inline: 2px; }
 }

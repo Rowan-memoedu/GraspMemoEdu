@@ -2,7 +2,7 @@
 
 本表从当前界面词库自动生成。修改以词库为准，随后重新生成并检查本表。术语约定见 [界面语言规范](ui-language.md)。
 
-共 548 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
+共 551 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
 
 不包括作者课程正文、题目、答案、解析或用户输入。首页的学科双语副标题按约定保留。
 
@@ -492,14 +492,17 @@
 | Submit | Submit |
 | Show Answer | Show Answer |
 | Explanation | Explanation |
-| Again | 重来 |
-| Hard | 困难 |
-| Good | 良好 |
-| Easy | 简单 |
-| Compare your answer and choose a rating. | 对照答案，选择你的熟练度。 |
+| Incorrect | 做错了 |
+| Correct, but very difficult | 勉强做对，但很困难 |
+| Correct | 正常做对 |
+| Easily correct | 轻松做对 |
+| Fully familiar, no more practice | 极度熟悉，不必再练 |
+| Future reviews stopped | 已停止后续推送 |
+| Training | 训练中 |
+| Training complete | 训练完成 |
 | Enable advanced learner answering | 启用高阶学习者作答 |
 | For open questions, leave the answer empty to reveal it and rate yourself, or enter an answer for checking. | 问答题留空时可显示答案，再自行选择熟练度；输入答案仍由系统校对。 |
-| Answer again | 重新作答 |
+| Review early | 提前复习 |
 | Answer history | 作答记录 |
 | No answer history yet. | 暂无作答记录。 |
 | Load earlier records | 加载更早记录 |

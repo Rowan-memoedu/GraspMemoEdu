@@ -12,7 +12,7 @@ from .access import feature_eligible
 
 PUBLIC_PATHS = {'/api/training/' + name for name in (
     'catalog', 'bank', 'group', 'open', 'state', 'submit', 'submission', 'reveal', 'rate',
-    'history', 'reviews', 'preferences')}
+    'history', 'reviews', 'preferences', 'stop')}
 
 
 class OpenQuestion(BaseModel):
@@ -97,11 +97,9 @@ def register_training_routes(app, training, access_store, subjects, service_for,
 
     @app.get('/api/training/bank')
     def bank(request: Request, bank_id: str):
-        access, _ = context(request)
-        content = authorize_bank(request, access, bank_id)
-        return {**{k: content.get(k, '') for k in ('id', 'title', 'subject_id', 'description', 'version')},
-                'groups': [{'id': g['id'], 'title': g['title'], 'parent_id': g.get('parent_id'),
-                            'question_count': len(g.get('questions', []))} for g in content['groups']]}
+        access, backend = context(request)
+        authorize_bank(request, access, bank_id)
+        return backend.bank(bank_id, history='review_history' in access['features'])
 
     @app.get('/api/training/group')
     def group(request: Request, bank_id: str, group_id: str):
@@ -167,6 +165,12 @@ def register_training_routes(app, training, access_store, subjects, service_for,
     def rate(payload: Rating, request: Request):
         access, backend = self_context(request, payload.attempt_id)
         backend.rate(payload.attempt_id, payload.rating, payload.elapsed_ms)
+        return state(request, access, backend, payload.attempt_id)
+
+    @app.post('/api/training/stop')
+    def stop_reviews(payload: AttemptAction, request: Request):
+        access, backend = self_context(request, payload.attempt_id)
+        backend.stop_reviews(payload.attempt_id)
         return state(request, access, backend, payload.attempt_id)
 
     @app.get('/api/training/history')

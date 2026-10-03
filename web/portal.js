@@ -1,12 +1,12 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=318501d54750dd15";
-import { createReviewView } from "./review.js?v=318501d54750dd15";
-import { renderCourseGraph } from "./course-graph.js?v=318501d54750dd15";
-import {questionInput} from './question-input.js?v=318501d54750dd15';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=318501d54750dd15';
-import {createCatalogPicker} from './catalog-picker.js?v=318501d54750dd15';
-import {createAtomicView} from './atomic.js?v=318501d54750dd15';
-import {createTrainingView} from './training.js?v=318501d54750dd15';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=318501d54750dd15";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=5c1d9a1a6408ac9a";
+import { createReviewView } from "./review.js?v=5c1d9a1a6408ac9a";
+import { renderCourseGraph } from "./course-graph.js?v=5c1d9a1a6408ac9a";
+import {questionInput} from './question-input.js?v=5c1d9a1a6408ac9a';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=5c1d9a1a6408ac9a';
+import {createCatalogPicker} from './catalog-picker.js?v=5c1d9a1a6408ac9a';
+import {createAtomicView} from './atomic.js?v=5c1d9a1a6408ac9a';
+import {createTrainingView} from './training.js?v=5c1d9a1a6408ac9a';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=5c1d9a1a6408ac9a";
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -89,7 +89,7 @@ export function initPortal(bridge) {
     reviewHref: () => subjectHref(currentRoute?.subjectId, '/reviews'), formatDate: value => apiDate(value, true),
     progressChanged: () => { dashboards.clear(); answerCache.clear(); }});
   const training = createTrainingView({...bridge, request: call, root, href: localHref,
-    formatDate: value => apiDate(value, true)});
+    formatDate: value => apiDate(value, true), courseSidebar, taskTree});
 
   function navigate(path, replace = false) {
     const hash = localHref(path);
@@ -443,10 +443,16 @@ export function initPortal(bridge) {
     if (!list.childElementCount) list.append(node("p", "", t("portal.course.units.are.not.available.yet.34")));
     return list;
   }
-  function courseSidebar(data) {
+  function courseSidebar(data, view = {}) {
     const side = node("aside", "courseSidebar"), frame = node("section", "courseOverview"), top = node("div", "courseOverviewTop");
-    const name = link(data.course.title, `#/courses/${encode(data.course.id)}/progress`, "courseNameLink");
-    const circle = control(percentLabel(data.course.progress), "coursePercent", () => openGraph(data)); circle.setAttribute("aria-label", t("portal.graphProgress", { progress: percentLabel(data.course.progress) }));
+    const name = link(data.course.title, view.href || `#/courses/${encode(data.course.id)}/progress`, "courseNameLink");
+    const circle = control(percentLabel(data.course.progress), "coursePercent", () => view.onProgress ? view.onProgress() : openGraph(data)); circle.setAttribute("aria-label", view.training ? t('portal.progress.36') : t("portal.graphProgress", { progress: percentLabel(data.course.progress) }));
+    if (view.training) {
+      top.append(name, circle);
+      const count = node('div', 'estimatedCompletion');
+      count.append(node('span', '', t('training.groups')), node('span', '', t('training.count', {count: view.questionCount})));
+      frame.append(top, count); side.append(frame); return side;
+    }
     const unitsPopup = node("div", "coursePopover sequenceUnits"), detailsPopup = node("div", "coursePopover progressDetails");
     unitsPopup.hidden = true; detailsPopup.hidden = true;
     const tabs = node("div", "sequenceTabs"), unitContent = node("div"); unitsPopup.append(tabs, unitContent);
@@ -495,9 +501,9 @@ export function initPortal(bridge) {
     icon.setAttribute("role", "img");
     icon.setAttribute("aria-label", history ? t("portal.finished.42") : task.dependency_ready === false ? t("portal.prerequisitesRequired") : task.maintenance ? t("portal.under.maintenance.43") : t("portal.available.44")); return icon;
   }
-  function taskSummary(task, history = false) {
+  function taskSummary(task, history = false, view = {}) {
     const wrap = node("div", "taskSummaryContent"), heading = node("div", "taskHeading");
-    heading.append(taskIcon(task, history), node("strong", "", `${typeNames[task.type] || t("portal.lesson")}${task.retake ? t("portal.retake") : ""}`));
+    heading.append(taskIcon(task, history), node("strong", "", view.label || `${typeNames[task.type] || t("portal.lesson")}${task.retake ? t("portal.retake") : ""}`));
     if (task.reason === "gravity") {
       const reason = node("span", "taskReason", "●"); reason.title = task.reason_message ? translateMessage(task.reason_message) : t("portal.this.task.was.selected.by.the.course.schedule.45"); reason.setAttribute("aria-label", reason.title); heading.append(reason);
     }
@@ -516,13 +522,16 @@ export function initPortal(bridge) {
     for (const item of root.querySelectorAll(".taskDetails")) item.hidden = true;
     for (const item of root.querySelectorAll(".taskToggle")) item.setAttribute("aria-expanded", "false");
   }
-  function incompleteTask(task, data) {
+  function incompleteTask(task, data, view = {}) {
     const card = node("article", task.dependency_ready === false ? "portalTask taskLocked" : "portalTask taskUnlocked"); card.dataset.taskId = task.id;
     const toggle = control("", "taskToggle", () => { const was = expandedTask === task.id; collapseTasks(); if (!was) { expandedTask = task.id; details.hidden = false; toggle.setAttribute("aria-expanded", "true"); } });
-    toggle.append(taskSummary(task)); toggle.setAttribute("aria-expanded", "false");
+    toggle.append(taskSummary(task, false, view)); toggle.setAttribute("aria-expanded", "false");
     const details = node("div", "taskDetails"); details.hidden = true;
     if (task.status === "paused") details.append(node("p", "taskStatusNote", t("portal.learning.is.paused.you.can.review.previously.studied.content.47")));
-    if (["Quiz", "Exam"].includes(task.type)) {
+    if (view.training) {
+      const info = node('div', 'taskPrerequisites');
+      info.append(infoRow(t('portal.questions.49'), Number(task.question_count).toLocaleString(locale()))); details.append(info);
+    } else if (["Quiz", "Exam"].includes(task.type)) {
       const info = node("div", "taskPrerequisites"); info.append(infoRow(t("portal.time.limit.48"), task.time_limit_minutes != null ? t("portal.minutes", { count: Number(task.time_limit_minutes).toLocaleString(locale()) }) : task.time_limit_seconds != null ? t("portal.minutes", { count: Math.round(task.time_limit_seconds / 60).toLocaleString(locale()) }) : "—"), infoRow(t("portal.questions.49"), task.question_count == null ? "—" : Number(task.question_count).toLocaleString(locale()))); details.append(info);
     } else {
       const requirements = node("div", "taskPrerequisites"); requirements.append(node("h3", "", t("portal.prerequisites.50")));
@@ -538,14 +547,14 @@ export function initPortal(bridge) {
     if (!task.maintenance) {
       const actions = node("div", "taskStartRow");
       const explicit = task.start_href || task.start_url;
-      const target = (task.type === "Lesson" || !task.type) && task.topic_id ? `#/topic/${encode(task.topic_id)}` : typeof explicit === "string" && /^#\/(topic|review|learn|courses)\//.test(explicit) ? explicit : null;
+      const target = view.target ? view.target(task) : (task.type === "Lesson" || !task.type) && task.topic_id ? `#/topic/${encode(task.topic_id)}` : typeof explicit === "string" && /^#\/(topic|review|learn|courses)\//.test(explicit) ? explicit : null;
       if (task.dependency_ready === false) {
         const blocked = roundButton(t("portal.prerequisitesRequired"), () => {}); blocked.disabled = true; blocked.classList.add("prerequisiteBlocked"); actions.append(blocked);
-      } else if (target && allowed("learn")) actions.append(roundButton(percent(task.progress) > 0 || task.started ? t("portal.resume.52") : t("portal.start.53"), () => navigate(target)));
+      } else if (target && allowed("learn")) actions.append(roundButton(view.startLabel || (percent(task.progress) > 0 || task.started ? t("portal.resume.52") : t("portal.start.53")), () => navigate(target)));
       else if (target && task.started && allowed("review_history")) actions.append(roundButton(t("portal.review.54"), () => navigate(target)));
       else if (target) actions.append(node("p", "", t("portal.learning.is.not.enabled.for.your.account.please.contact.your.admi.55")));
       else actions.append(node("p", "", t("portal.this.task.is.not.available.to.start.yet.56")));
-      appendGuestReset(actions, task);
+      if (!view.training) appendGuestReset(actions, task);
       details.append(actions);
     }
     card.append(toggle, details); return card;
@@ -597,6 +606,28 @@ export function initPortal(bridge) {
       target.append(historyCard(task));
     }
   }
+  function taskTree(pending, data, view = {}) {
+    const lessonTasks = new Map(data.tasks.filter(task => task.type === 'Lesson').map(task => [task.topic_id, task]));
+    const containers = new Map(), rendered = new Set();
+    for (const unit of data.pending_hierarchy || []) {
+      const group = node('details', 'courseUnitGroup'), summary = node('summary', 'courseUnitHeading', unit.title);
+      const body = node('div', 'courseUnitBody');
+      const key = `${bridge.getAccess()?.learner_id}:${view.training ? 'training:' : ''}${data.course.id}:${unit.id}`;
+      group.dataset.unitId = unit.id;
+      group.open = expandedUnits.get(key) ?? !unit.parent_id;
+      group.addEventListener('toggle', () => expandedUnits.set(key, group.open));
+      group.append(summary, body); containers.set(unit.id, {group, body});
+      for (const id of unit.topic_ids) {
+        if (lessonTasks.has(id)) { body.append(incompleteTask(lessonTasks.get(id), data, view)); rendered.add(id); }
+      }
+    }
+    for (const unit of data.pending_hierarchy || []) {
+      const parent = containers.get(unit.parent_id)?.body || pending;
+      parent.append(containers.get(unit.id).group);
+    }
+    // A rolling deployment can briefly serve an older dashboard response.
+    for (const [id, task] of lessonTasks) if (!rendered.has(id)) pending.append(incompleteTask(task, data, view));
+  }
   function renderLearn(data, taskId, ticket) {
     historyError = null;
     const layout = node("div", "dashboardLayout"), tasks = node("div", "dashboardTasks"); tasks.id = "dashboardTasks";
@@ -605,26 +636,7 @@ export function initPortal(bridge) {
     const pending = node("section", "incompleteTasks"); pending.setAttribute("aria-label", t("portal.pending.tasks.64"));
     if (data.course_hierarchy_enabled && allowed("course_hierarchy")) {
       for (const task of data.tasks.filter(task => task.type !== "Lesson")) pending.append(incompleteTask(task, data));
-      const lessonTasks = new Map(data.tasks.filter(task => task.type === "Lesson").map(task => [task.topic_id, task]));
-      const containers = new Map(), rendered = new Set();
-      for (const unit of data.pending_hierarchy || []) {
-        const group = node("details", "courseUnitGroup"), summary = node("summary", "courseUnitHeading", unit.title);
-        const body = node("div", "courseUnitBody");
-        const key = `${bridge.getAccess()?.learner_id}:${data.course.id}:${unit.id}`;
-        group.dataset.unitId = unit.id;
-        group.open = expandedUnits.get(key) ?? !unit.parent_id;
-        group.addEventListener("toggle", () => expandedUnits.set(key, group.open));
-        group.append(summary, body); containers.set(unit.id, {group, body});
-        for (const id of unit.topic_ids) {
-          if (lessonTasks.has(id)) { body.append(incompleteTask(lessonTasks.get(id), data)); rendered.add(id); }
-        }
-      }
-      for (const unit of data.pending_hierarchy || []) {
-        const parent = containers.get(unit.parent_id)?.body || pending;
-        parent.append(containers.get(unit.id).group);
-      }
-      // A rolling deployment can briefly serve an older dashboard response.
-      for (const [id, task] of lessonTasks) if (!rendered.has(id)) pending.append(incompleteTask(task, data));
+      taskTree(pending, data);
     } else for (const task of data.tasks) pending.append(incompleteTask(task, data));
     if (!data.tasks.length) {
       const empty = emptyBox(percent(data.course.progress) === 100 ? t("portal.all.current.tasks.in.this.course.are.complete.65") : t("portal.no.tasks.are.available.to.start.we.will.check.again.shortly.66") );

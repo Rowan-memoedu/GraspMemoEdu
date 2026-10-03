@@ -51,11 +51,11 @@ class TrainingAPITests(unittest.TestCase):
     def answer(self, state):
         data = {'attempt_id': state['attempt_id'], 'request_id': str(uuid.uuid4()), 'answer': '2', 'elapsed_ms': 100}
         result = self.call('POST', '/api/training/submit', data)
-        for _ in range(100):
-            if result['submission_status'] not in ('pending', 'running'): break
+        deadline = time.monotonic() + 10
+        while result['submission_status'] in ('pending', 'running') and time.monotonic() < deadline:
             time.sleep(.01)
             result = self.call('GET', '/api/training/submission?submission_id=' + data['request_id'])
-        self.assertEqual(result['phase'], 'done')
+        self.assertEqual(result['phase'], 'done', result)
         return result, data
 
     def account(self, **kwargs):
@@ -108,6 +108,29 @@ class TrainingAPITests(unittest.TestCase):
         self.call('GET', '/api/training/state?attempt_id=' + old['attempt_id'], status=403)
         self.call('GET', '/api/training/history?bank_id=isolated-bank&question_id=essay', status=403)
 
+    def test_stop_review_authorization_idempotence_and_backup_restore(self):
+        state = self.open()
+        self.call('POST', '/api/training/stop', {'attempt_id': state['attempt_id']}, status=403)
+        login = self.account(is_advanced_learner=True)
+        state = self.open(); payload = {'attempt_id': state['attempt_id']}
+        self.call('POST', '/api/training/stop', payload, status=422)
+        self.call('POST', '/api/training/reveal', payload)
+        self.call('POST', '/api/training/rate', {**payload, 'rating': 5}, status=422)
+        self.call('POST', '/api/training/preferences', {'self_rating_enabled': False})
+        self.call('POST', '/api/training/stop', payload, status=403)
+        self.call('POST', '/api/training/preferences', {'self_rating_enabled': True})
+        stopped = self.call('POST', '/api/training/stop', payload)
+        self.assertTrue(stopped['stopped'])
+        self.assertEqual(stopped, self.call('POST', '/api/training/stop', payload))
+        self.assertEqual(self.call('GET', '/api/training/bank?bank_id=isolated-bank')['groups'][1]['completed_count'], 1)
+        backup = self.root / 'stopped.zip'; backup_site(self.settings, backup)
+        destination = self.root / 'stopped-restored'; restore_site(backup, destination)
+        restored = TrainingService(TrainingCatalog(destination), destination, login['access']['learner_id'])
+        self.assertTrue(restored.state(state['attempt_id'])['stopped'])
+        self.assertEqual(restored.reviews([self.bank]), {'items': [], 'next_due_at': None})
+        self.account(is_advanced_learner=True)
+        self.call('POST', '/api/training/stop', payload, status=404)
+
     def test_owner_scope_and_backup_restore(self):
         state, _ = self.answer(self.open())
         backup = self.root / 'training.zip'; backup_site(self.settings, backup)
@@ -150,7 +173,7 @@ class TrainingAPITests(unittest.TestCase):
         state, _ = self.answer(self.open())
         learner = login['access']['learner_id']
         with closing(sqlite3.connect(self.root / 'learning.sqlite3')) as con:
-            for table in ('training_attempts', 'training_memory', 'training_submissions', 'training_ratings'):
+            for table in ('training_attempts', 'training_memory', 'training_submissions', 'training_ratings', 'training_suspensions'):
                 self.assertEqual(con.execute(f'SELECT COUNT(*) FROM {table} WHERE learner=?', (learner,)).fetchone()[0], 0)
         self.call('POST', '/api/access/logout', {})
         self.call('GET', '/api/training/state?attempt_id=' + state['attempt_id'], status=401)

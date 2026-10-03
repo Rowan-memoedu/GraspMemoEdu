@@ -49,6 +49,9 @@ class TrainingService:
                     version TEXT NOT NULL, rating INTEGER, completed_at TEXT NOT NULL, fsrs TEXT);
                 CREATE TABLE IF NOT EXISTS training_preferences (
                     learner TEXT PRIMARY KEY, self_rating_enabled INTEGER NOT NULL);
+                CREATE TABLE IF NOT EXISTS training_suspensions (
+                    learner TEXT NOT NULL, bank TEXT NOT NULL, question TEXT NOT NULL, version TEXT NOT NULL,
+                    stopped_at TEXT NOT NULL, PRIMARY KEY(learner,bank,question,version));
             ''')
 
     def _connect(self):
@@ -97,6 +100,11 @@ class TrainingService:
         return con.execute('SELECT * FROM training_memory WHERE learner=? AND bank=? AND question=? AND version=?',
                            (self.learner_id, bank, question, version)).fetchone()
 
+    def _stopped(self, con, bank, question, version):
+        return con.execute('''SELECT 1 FROM training_suspensions
+            WHERE learner=? AND bank=? AND question=? AND version=?''',
+            (self.learner_id, bank, question, version)).fetchone() is not None
+
     def open(self, bank_id, group_id, question_id, request_id):
         bank, _, question = self.catalog.question(bank_id, group_id, question_id)
         with self.transaction() as con:
@@ -108,7 +116,8 @@ class TrainingService:
                 return request_id
             memory = self._memory(con, bank_id, question_id, bank['version'])
             now = utc_time(self.clock())
-            mode = ('initial' if not memory or not memory['mastered'] else
+            mode = ('practice' if self._stopped(con, bank_id, question_id, bank['version']) else
+                    'initial' if not memory or not memory['mastered'] else
                     'review' if utc_time(memory['due_at']) <= now else 'practice')
             spec = question.get('interaction', {})
             if spec.get('type') == 'choice':
@@ -135,6 +144,7 @@ class TrainingService:
                                      (row['submission_id'],)).fetchone()
             result = json.loads(row['result']) if row['result'] else None
             memory = self._memory(con, row['bank'], row['question'], row['version'])
+            stopped = self._stopped(con, row['bank'], row['question'], row['version'])
         revealed = row['phase'] in ('shown', 'done')
         return {'attempt_id': row['id'], 'bank_id': row['bank'], 'group_id': row['group_id'],
                 'question_id': row['question'], 'version': row['version'], 'phase': row['phase'],
@@ -147,7 +157,7 @@ class TrainingService:
                 'answer': submission['answer'] if submission else '',
                 'answer_display': display_answer(question, submission['answer']) if submission else '',
                 'error': submission['reason'] if submission and submission['status'] == 'error' else None,
-                'result': result, 'due_at': memory['due_at'] if memory else None}
+                'result': result, 'stopped': stopped, 'due_at': memory['due_at'] if memory and not stopped else None}
 
     @staticmethod
     def submission_fingerprint(data):
@@ -187,11 +197,16 @@ class TrainingService:
             raise DomainError('unknown_submission', '未找到此提交记录。', 404)
         return row[0]
 
-    def _complete(self, con, row, *, correct=None, reason='', rating=None, elapsed_ms=None):
+    def _complete(self, con, row, *, correct=None, reason='', rating=None, elapsed_ms=None, stop=False):
         memory = self._memory(con, row['bank'], row['question'], row['version'])
         revision = memory['revision'] if memory else 0
-        eligible = row['mode'] != 'practice' and row['memory_revision'] == revision
         now = utc_time(self.clock())
+        if stop:
+            con.execute('''INSERT INTO training_suspensions VALUES (?,?,?,?,?)
+                ON CONFLICT(learner,bank,question,version) DO NOTHING''',
+                (self.learner_id, row['bank'], row['question'], row['version'], now.isoformat()))
+        stopped = self._stopped(con, row['bank'], row['question'], row['version'])
+        eligible = not stopped and row['mode'] != 'practice' and row['memory_revision'] == revision
         scheduled, fsrs, mastery = False, None, None
         due = memory['due_at'] if memory else None
         if eligible:
@@ -211,7 +226,8 @@ class TrainingService:
                 (self.learner_id, row['bank'], row['question'], row['version'], int(mastered), revision + 1, card_json, due))
             scheduled = True
         result = {'correct': correct, 'reason': reason, 'rating': mastery,
-                  'self_rating': rating, 'scheduled': scheduled, 'due_at': due,
+                  'self_rating': rating, 'scheduled': scheduled, 'due_at': None if stopped else due,
+                  'stopped': stopped, 'stop_requested': stop,
                   'practice_only': not eligible}
         con.execute('''INSERT INTO training_ratings VALUES (?,?,?,?,?,?,?,?)''',
                     (row['id'], self.learner_id, row['bank'], row['question'], row['version'],
@@ -266,6 +282,30 @@ class TrainingService:
                 raise DomainError('invalid_rating', '请先显示答案，再选择熟练度。', 422)
             self._complete(con, row, rating=rating, elapsed_ms=elapsed_ms)
 
+    def stop_reviews(self, attempt_id):
+        with self.transaction() as con:
+            row = self._attempt(con, attempt_id)
+            if row['phase'] == 'done':
+                if not json.loads(row['result']).get('stop_requested'):
+                    raise DomainError('rating_conflict', '本次作答已记录另一项评分。', 409)
+                return
+            if row['phase'] != 'shown':
+                raise DomainError('invalid_rating', '请先显示答案，再选择熟练度。', 422)
+            self._complete(con, row, stop=True)
+
+    def bank(self, bank_id, *, history=True):
+        bank = self.catalog.bank(bank_id)
+        with closing(self._connect()) as con:
+            counts = {row['group_id']: row['count'] for row in con.execute('''
+                SELECT group_id,COUNT(DISTINCT question) AS count FROM training_attempts
+                WHERE learner=? AND bank=? AND version=? AND phase='done' GROUP BY group_id''',
+                (self.learner_id, bank_id, bank['version']))}
+        return {**{k: bank.get(k, '') for k in ('id', 'title', 'subject_id', 'description', 'version')},
+                'groups': [{'id': g['id'], 'title': g['title'], 'parent_id': g.get('parent_id'),
+                            'question_count': len(g.get('questions', [])),
+                            'completed_count': counts.get(g['id'], 0) if history else None}
+                           for g in bank['groups']]}
+
     def group(self, bank_id, group_id, *, history=True):
         bank = self.catalog.bank(bank_id)
         group = next((g for g in bank['groups'] if g['id'] == group_id), None)
@@ -304,7 +344,9 @@ class TrainingService:
                                'due_at': None} for b in banks for g in b['groups'] for q in g.get('questions', [])],
                     'next_due_at': None, 'all_materials': True}
         with closing(self._connect()) as con:
-            rows = con.execute('SELECT * FROM training_memory WHERE learner=? ORDER BY due_at,bank,question',
+            rows = con.execute('''SELECT m.* FROM training_memory m WHERE learner=? AND NOT EXISTS (
+                SELECT 1 FROM training_suspensions s WHERE s.learner=m.learner AND s.bank=m.bank
+                AND s.question=m.question AND s.version=m.version) ORDER BY due_at,bank,question''',
                                (self.learner_id,)).fetchall()
         allowed = {b['id']: b for b in banks}
         for row in rows:
