@@ -310,6 +310,16 @@ body.portalModalOpen { overflow: hidden; }
   .reportSelectionButton { right: 12px; bottom: 12px; max-width: calc(100vw - 24px); }
 }
 /* Containment only: Topic cards retain their existing interaction and style. */
+.choiceList { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 20px 0; }
+.choiceOption, .answerForm .choiceOption { display: flex; align-items: center; gap: 10px; padding: 14px; margin: 0; border: 1px solid #ccd6df; border-radius: 6px; cursor: pointer; min-width: 0; font-weight: 400; }
+.choiceOption:has(input:checked) { border-color: var(--ma-blue); background: var(--subject-tint, #f0f6fc); }
+.choiceOption:has(input:focus-visible) { outline: 2px solid var(--ma-blue); outline-offset: 2px; }
+.choiceOption:has(input:disabled) { cursor: default; }
+.choiceOption input { flex: 0 0 auto; accent-color: var(--ma-blue); }
+.choiceLetter { font-weight: 600; }
+.choiceBody { min-width: 0; overflow-x: auto; }
+.choiceBody p { margin: 0; }
+@media (max-width: 600px) { .choiceList { grid-template-columns: 1fr; } }
 .courseUnitGroup { min-width: 0; margin: 14px 0; border: 1px solid var(--subject-accent, #dce5eb); border-radius: 8px; }
 .courseUnitHeading { padding: 16px; cursor: pointer; font-weight: 600; overflow-wrap: anywhere; }
 .courseUnitHeading:focus-visible { outline: 2px solid var(--ma-blue); outline-offset: -3px; }

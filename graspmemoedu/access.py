@@ -16,7 +16,8 @@ from .service import DomainError
 
 FEATURE_REQUIREMENTS = {'learn': {}, 'submit_answer': {}, 'review_history': {}, 'pause_topic': {},
                         'request_help': {'student': True},
-                        'course_hierarchy': {'advanced_learner': True}}
+                        'course_hierarchy': {'advanced_learner': True},
+                        'training_self_rating': {'advanced_learner': True}}
 FEATURES = tuple(FEATURE_REQUIREMENTS)
 STANDARD_FEATURES = tuple(feature for feature, requirements in FEATURE_REQUIREMENTS.items() if not requirements)
 GUEST_FEATURES = FEATURES[:3]

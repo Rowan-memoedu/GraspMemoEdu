@@ -57,7 +57,7 @@ try {
   await screenshot('00-subjects');
   await page.locator('.subjectCard[data-subject-id="math"]').click();
   await page.locator('.courseChoice').filter({hasText:'再探小学算术'}).waitFor();
-  assert.equal(await page.locator('.mainNavigation a:visible').count(), 3);
+  assert.equal(await page.locator('.mainNavigation a:visible').count(), 5);
   await screenshot('00-courses');
   await page.locator('.courseChoice').filter({hasText:'再探小学算术'}).getByRole('button',{name:/^(学习|Learn)$/}).click();
   await page.locator('.taskToggle').filter({hasText:course.title}).click();

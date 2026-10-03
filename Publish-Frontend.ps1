@@ -9,6 +9,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Static asset version check failed. Refresh ass
 if ($Repository -notmatch '^[A-Za-z0-9-]+/[A-Za-z0-9_.-]+$') { throw 'Invalid repository name.' }
 $expected = @('.nojekyll','app.js','deployment.json','favicon.svg','index.html','portal.js','review.js','atomic.js','learning-cache.js','question-input.js','content-report.js','catalog-picker.js','portal.css','subjects.js','subjects.css','styles.css','i18n.js','reader-messages.js','portal-messages.js','static-messages.js','course-graph.js','course-graph.css')
 $files = @(Get-ChildItem -LiteralPath $ExportDirectory -File -Force)
+$expected += @('training.js','training.css','training-messages.js')
 if (@(Compare-Object ($expected | Sort-Object) ($files.Name | Sort-Object)).Count -ne 0) { throw 'Unexpected files in static publication directory.' }
 foreach ($name in $expected | Where-Object { $_ -notin @('.nojekyll', 'deployment.json') }) {
     $sourceHash = (Get-FileHash -LiteralPath (Join-Path $PSScriptRoot ('web\' + $name)) -Algorithm SHA256).Hash

@@ -1,0 +1,177 @@
+from contextlib import closing
+from copy import deepcopy
+from datetime import datetime, timedelta, timezone
+import json
+from pathlib import Path
+import sqlite3
+import tempfile
+import unittest
+import uuid
+
+from graspmemoedu.training import TrainingService
+from graspmemoedu.training_content import TrainingCatalog, fingerprint, validate, install, validate_saved
+from graspmemoedu.service import DomainError
+from graspmemoedu.learning_storage import MemoryLearningStore
+from training_fixtures import training_bank
+from tests.fixtures import temporary_test_directory
+
+
+class TrainingTests(unittest.TestCase):
+    def setUp(self):
+        temporary = temporary_test_directory(); self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name); (self.root / 'training-banks').mkdir()
+        self.bank = training_bank()
+        (self.root / 'training-banks/isolated-bank.json').write_text(json.dumps(self.bank), encoding='utf-8')
+        self.catalog = TrainingCatalog(self.root)
+        self.now = datetime(2026, 10, 3, 10, tzinfo=timezone.utc)
+        self.calls = []
+        def judge(stem, reference, answer):
+            self.calls.append(answer)
+            return {'status': 'judged', 'correct': answer == '2', 'reason': '隔离判题'}
+        self.service = TrainingService(self.catalog, self.root, 'learner', judge, clock=lambda: self.now)
+
+    def open(self, qid='essay', service=None):
+        service = service or self.service
+        return service.open(self.bank['id'], 'group-b' if qid == 'essay-b' else 'group-a', qid, str(uuid.uuid4()))
+
+    def answer(self, attempt, answer='2', service=None, request=None):
+        service = service or self.service
+        payload = {'request_id': request or str(uuid.uuid4()), 'attempt_id': attempt, 'answer': answer, 'elapsed_ms': 850}
+        submission = service.submit(payload); service.process_submission(submission)
+        return service.state(attempt), payload
+
+    def memory(self, qid='essay'):
+        with closing(self.service._connect()) as con:
+            row = self.service._memory(con, self.bank['id'], qid, self.bank['version'])
+            return dict(row) if row else None
+
+    def test_initial_correct_six_hours_and_early_repeat_preserves_schedule(self):
+        state, _ = self.answer(self.open())
+        self.assertIsNone(state['result']['rating'])
+        self.assertEqual(state['due_at'], (self.now + timedelta(hours=6)).isoformat())
+        saved = self.memory(); self.assertIsNone(saved['card_json'])
+        for answer in ('wrong', '2', 'wrong'):
+            state, _ = self.answer(self.open(), answer)
+            self.assertEqual(state['mode'], 'practice'); self.assertTrue(state['result']['practice_only'])
+            self.assertEqual(saved, self.memory())
+        self.assertEqual(len(self.service.history(self.bank['id'], 'essay')['items']), 4)
+
+    def test_wrong_then_correct_preserves_fsrs_and_due_review_binary_rating(self):
+        state, _ = self.answer(self.open(), 'wrong')
+        self.assertEqual(state['result']['rating'], 1)
+        card = self.memory()['card_json']; self.assertIsNotNone(card)
+        state, _ = self.answer(self.open())
+        self.assertIsNone(state['result']['rating']); self.assertEqual(self.memory()['card_json'], card)
+        self.now += timedelta(hours=6, seconds=1)
+        self.assertEqual(len(self.service.reviews([self.bank])['items']), 1)
+        state, _ = self.answer(self.open())
+        self.assertEqual(state['mode'], 'review'); self.assertEqual(state['result']['rating'], 3)
+        self.now = datetime.fromisoformat(state['due_at']) + timedelta(seconds=1)
+        state, _ = self.answer(self.open(), 'wrong')
+        self.assertEqual(state['result']['rating'], 1)
+
+    def test_reveal_and_self_ratings_idempotence(self):
+        for rating in (1, 2, 3, 4):
+            other = TrainingService(self.catalog, self.root, 'self-' + str(rating), clock=lambda: self.now)
+            attempt = self.open(service=other)
+            self.assertIsNone(other.state(attempt)['explanation_html'])
+            other.reveal(attempt)
+            self.assertTrue(other.state(attempt)['explanation_html'])
+            with closing(other._connect()) as con:
+                self.assertIsNone(other._memory(con, self.bank['id'], 'essay', self.bank['version']))
+            other.rate(attempt, rating, 300)
+            other.rate(attempt, rating, 300)
+            self.assertEqual(other.state(attempt)['result']['rating'], rating)
+            with self.assertRaises(DomainError): other.rate(attempt, 2 if rating == 1 else 1)
+        self.assertEqual(self.calls, [])
+
+    def test_early_self_rating_also_leaves_schedule_unchanged(self):
+        self.answer(self.open()); memory = self.memory()
+        attempt = self.open(); self.service.reveal(attempt); self.service.rate(attempt, 1)
+        self.assertEqual(memory, self.memory()); self.assertTrue(self.service.state(attempt)['result']['practice_only'])
+
+    def test_review_again_does_not_return_card_to_initial_learning(self):
+        self.answer(self.open())
+        self.now += timedelta(hours=6, seconds=1)
+        attempt = self.open(); self.service.reveal(attempt); self.service.rate(attempt, 1)
+        self.now = datetime.fromisoformat(self.memory()['due_at']) + timedelta(seconds=1)
+        state, _ = self.answer(self.open())
+        self.assertEqual(state['mode'], 'review'); self.assertEqual(state['result']['rating'], 3)
+
+    def test_permission_namespace_cannot_alias_an_existing_course_topic(self):
+        with self.assertRaises(ValueError): self.catalog.permissions(['training.isolated-bank'])
+
+    def test_fixed_interactions_no_self_rating_or_llm(self):
+        for qid, answer in [('boolean', '{"a":true}'), ('choice', '{"selected":"a"}'), ('blank', '{"a":"2"}')]:
+            attempt = self.open(qid)
+            with self.assertRaises(DomainError): self.service.reveal(attempt)
+            state, _ = self.answer(attempt, answer)
+            self.assertTrue(state['result']['correct'])
+        self.assertEqual(self.calls, [])
+
+    def test_question_keys_do_not_leak_before_answer(self):
+        for qid in ('essay', 'choice', 'boolean', 'blank'):
+            state = self.service.state(self.open(qid), self_rating=True)
+            public = json.dumps(state)
+            for key in ('correct_id', 'reference_answer', 'answers', 'constraints'):
+                self.assertNotIn('"' + key + '"', public)
+            self.assertIsNone(state['explanation_html'])
+
+    def test_submission_replay_and_concurrent_attempt_cannot_reschedule_twice(self):
+        first, second = self.open(), self.open()
+        state, payload = self.answer(first)
+        self.answer(first, request=payload['request_id'])
+        memory = self.memory(); self.answer(second, 'wrong')
+        self.assertEqual(self.memory(), memory); self.assertEqual(len(self.calls), 2)
+        with self.assertRaises(DomainError): self.answer(first, 'changed', request=payload['request_id'])
+
+    def test_judge_error_retry_and_recovery_never_counts_wrong(self):
+        self.service.judge = lambda *args: None
+        attempt = self.open(); state, payload = self.answer(attempt)
+        self.assertEqual(state['submission_status'], 'error'); self.assertIsNone(self.memory())
+        self.service.judge = lambda *args: {'status': 'judged', 'correct': True, 'reason': 'ok'}
+        self.service.submit(payload); self.service.recover_interrupted()
+        self.assertEqual(self.service.state(attempt)['submission_status'], 'error')
+        self.service.submit(payload); self.service.process_submission(payload['request_id'])
+        self.assertEqual(self.service.state(attempt)['phase'], 'done')
+
+    def test_order_history_pagination_and_cross_identity(self):
+        self.answer(self.open('essay-b'))
+        for _ in range(52): self.open('essay')
+        page = self.service.history(self.bank['id'], 'essay')
+        self.assertEqual(page['next_offset'], 50)
+        self.assertEqual(len(self.service.history(self.bank['id'], 'essay', 50)['items']), 2)
+        latest = page['items'][0]['id']; older = page['items'][1]['id']
+        self.service.state(latest, history=False)
+        with self.assertRaises(DomainError): self.service.state(older, history=False)
+        other = TrainingService(self.catalog, self.root, 'other')
+        with self.assertRaises(DomainError): other.state(latest)
+
+    def test_admin_memory_does_not_enter_database(self):
+        runtime = MemoryLearningStore(); self.addCleanup(runtime.close)
+        preview = TrainingService(self.catalog, self.root, 'admin', self.service.judge, runtime=runtime, clock=lambda: self.now)
+        state, _ = self.answer(self.open(service=preview), service=preview)
+        self.assertEqual(state['phase'], 'done')
+        with closing(sqlite3.connect(self.root / 'learning.sqlite3')) as con:
+            for table in ('training_attempts', 'training_memory', 'training_submissions', 'training_ratings'):
+                self.assertEqual(con.execute(f'SELECT COUNT(*) FROM {table} WHERE learner=?', ('admin',)).fetchone()[0], 0)
+
+    def test_content_tree_identity_immutability_and_backup_version_validation(self):
+        validate(self.bank)
+        for change in ('cycle', 'duplicate', 'subject', 'hash'):
+            bank = deepcopy(self.bank)
+            if change == 'cycle': bank['groups'][0]['parent_id'] = 'group-a'
+            if change == 'duplicate': bank['groups'][2]['questions'][0]['id'] = 'essay'
+            if change == 'subject': bank['subject_id'] = 'unknown'
+            if change != 'hash': bank['version'] = fingerprint(bank)
+            else: bank['title'] = 'changed'
+            with self.assertRaises(ValueError): validate(bank)
+        with self.assertRaises(FileExistsError): install(self.root / 'training-banks/isolated-bank.json', self.root)
+        self.answer(self.open())
+        with closing(self.service._connect()) as con:
+            validate_saved(con, self.catalog)
+            self.catalog.banks.clear()
+            with self.assertRaises(ValueError): validate_saved(con, self.catalog)
+
+
+if __name__ == '__main__': unittest.main()

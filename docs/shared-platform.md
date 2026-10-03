@@ -9,6 +9,7 @@
 | Lesson | `service.py`、`web/app.js` | 掌握选择、指导、练习、暂停、幂等提交、历史与草稿 |
 | 复习 | `review.py`、`review_api.py`、`web/review.js` | FSRS、到期任务、持久练习队列；沿用原评分政策 |
 | 原子训练 | `atomic.py`、`atomic_content.py`、`atomic_api.py`、`web/atomic.js` | 记忆组块与点级状态、交错、可变设问、打包复习 |
+| 独立题库 | `training_content.py`、`training.py`、`training_api.py`、`web/training.js` | 独立内容树、自由选题、单题卡片、自评与统一复习入口，见 [题库架构](training-banks.md) |
 | 题型 | `question_types.py`、`judging.py`、`web/question-input.js` | 统一 schema、公共字段投影、作答控件、确定性/语义判题 |
 | 导航与反馈 | `web/portal.js`、`web/catalog-picker.js`、`web/content-report.js`、`dashboard.py` | 顶部学科/课程切换、普通反馈、精确文字纠错 |
 | 鉴权与运行 | `api.py`、`access.py`、`public_limits.py` | 学习者隔离、动态默认权限和显式覆盖、并发、公开接口限制 |

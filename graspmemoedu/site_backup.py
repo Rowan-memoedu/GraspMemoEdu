@@ -148,6 +148,8 @@ def _validate_payload(manifest, blobs):
     if not topics or set(versions) != set(topics) or set(sources) != set(topics) or default_id not in topics:
         raise ValueError('Topic manifest membership differs from catalog')
     _retired_versions(manifest, topics)
+    from .training_content import validate_archive as validate_training_archive
+    expected_files.update(validate_training_archive(blobs))
     for topic_id, entry in sources.items():
         if not isinstance(entry, dict):
             raise ValueError('Invalid sources entry')
@@ -204,6 +206,8 @@ def _validate_payload(manifest, blobs):
 
 def backup_site(settings, destination=None):
     catalog = Catalog.load(settings)
+    from .training_content import TrainingCatalog, validate_saved as validate_training_saved
+    training_catalog = TrainingCatalog(settings.data_dir)
     subjects = Subjects(settings, catalog)
     subject_file = settings.data_dir / 'subjects.json'
     subject_bytes = subject_file.read_bytes() if subject_file.is_file() else None
@@ -223,6 +227,7 @@ def backup_site(settings, destination=None):
                 if snapshot.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
                     raise DomainError('backup_failed', '备份数据库完整性校验失败。', 500)
                 saved_versions = snapshot.execute('SELECT DISTINCT topic,version FROM topics').fetchall()
+                validate_training_saved(snapshot, training_catalog)
         if any(topic_id in catalog.topics and catalog.topics[topic_id]['version'] != version for topic_id, version in saved_versions):
             raise DomainError('backup_version_changed', '部分进度的课程来源缺失或版本不同，请先处理课程目录。', 409)
         retired_versions = {}
@@ -241,6 +246,7 @@ def backup_site(settings, destination=None):
                             or snapshot.execute('SELECT 1 FROM usage WHERE count < 0 LIMIT 1').fetchone()):
                         raise DomainError('backup_failed', '判题用量数据库校验失败，未创建备份。', 500)
             blobs['judge-daily-quota.sqlite3'] = quota_snapshot.read_bytes()
+    blobs.update(training_catalog.archive_blobs())
     sources_index = {}
     for topic_id, topic in catalog.topics.items():
         path = catalog.topic_paths[topic_id]
@@ -379,6 +385,9 @@ def restore_site(backup, destination):
                 if con.execute('PRAGMA integrity_check').fetchone()[0] != 'ok' or con.execute('PRAGMA foreign_key_check').fetchone():
                     raise ValueError('Invalid database integrity')
                 rows = con.execute('SELECT learner,topic,version FROM topics').fetchall()
+                from .training_content import TrainingCatalog, validate_saved as validate_training_saved
+                training_catalog = TrainingCatalog(staged)
+                validate_training_saved(con, training_catalog)
                 retired = _retired_versions(manifest, topics)
                 archived_rows = {(topic_id, version) for _, topic_id, version in rows if topic_id not in topics}
                 declared_rows = {(topic_id, version) for topic_id, versions in retired.items() for version in versions}
@@ -394,6 +403,8 @@ def restore_site(backup, destination):
                         raise ValueError('Invalid judge usage database')
             for learner_id, topic_id in learners:
                 create_learning_service(catalog.topic(topic_id), staged, learner_id=learner_id).recover_interrupted()
+            from .training import TrainingService
+            TrainingService(training_catalog, staged, 'recovery').recover_interrupted()
             for topic_id, sources in manifest['sources'].items():
                 if not sources:
                     continue

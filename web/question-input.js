@@ -1,4 +1,4 @@
-import {t} from './i18n.js?v=d5f3a1d1b1afc7d5';
+import {t} from './i18n.js?v=e510364d1ede8b9a';
 
 const node = (tag, cls, text) => {
   const element = document.createElement(tag); element.className = cls;
@@ -17,6 +17,11 @@ export function questionInput(spec, {id, value = '', stem, disabled = false, for
   const input = node('textarea', 'structuredAnswer'); input.id = id;
   input.name = 'answer'; input.hidden = true; input.disabled = disabled;
   input.value = value; root.append(input);
+  root.addEventListener('keydown', event => {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && !event.isComposing) {
+      event.preventDefault(); document.getElementById(formId)?.requestSubmit();
+    }
+  });
   let values = parse(value), emitting = false, selected = null;
   const options = side => new Map(spec[side].map(item => [item.id, item.text]));
   const optionContent = (element, item) => {
@@ -32,6 +37,8 @@ export function questionInput(spec, {id, value = '', stem, disabled = false, for
         if (valid) used[side].add(candidate);
         return [side, valid ? candidate : null];
       })));
+    } else if (spec.type === 'choice') {
+      values = {selected: spec.options.some(item => item.id === values?.selected) ? values.selected : null};
     } else {
       const previous = values && !Array.isArray(values) && typeof values === 'object' ? values : {};
       const rows = spec.type === 'true_false' ? spec.statements : spec.blanks;
@@ -42,6 +49,7 @@ export function questionInput(spec, {id, value = '', stem, disabled = false, for
   };
   const complete = () => input.value.length <= 2000 && (spec.type === 'matching'
     ? values.every(pair => pair.left && pair.right)
+    : spec.type === 'choice' ? spec.options.some(item => item.id === values.selected)
     : Object.values(values).every(v => spec.type === 'true_false' ? typeof v === 'boolean' : Boolean(v.trim())));
   function emit() {
     input.value = JSON.stringify(values); emitting = true;
@@ -141,6 +149,21 @@ export function questionInput(spec, {id, value = '', stem, disabled = false, for
     const status = node('span', 'matchingStatus srOnly'); status.setAttribute('role', 'status');
     board.append(banks, status); root.append(board);
   }
+  function renderChoices() {
+    root.querySelector('.choiceList')?.remove();
+    const list = node('div', 'choiceList'); list.setAttribute('role', 'radiogroup');
+    spec.options.forEach((option, index) => {
+      const label = node('label', 'choiceOption'), radio = node('input', '');
+      radio.type = 'radio'; radio.name = `${id}-choice`; radio.value = option.id;
+      radio.disabled = disabled; radio.checked = values.selected === option.id;
+      if (formId) radio.setAttribute('form', formId);
+      const body = node('span', 'choiceBody'); optionContent(body, option);
+      radio.addEventListener('change', () => { values.selected = option.id; emit(); });
+      label.append(radio, node('span', 'choiceLetter', String.fromCharCode(65 + index)), body);
+      list.append(label);
+    });
+    root.append(list);
+  }
   function renderBooleans() {
     root.querySelector('.judgmentList')?.remove();
     const list = node('div', 'judgmentList');
@@ -193,11 +216,12 @@ export function questionInput(spec, {id, value = '', stem, disabled = false, for
       if (disabled === value) return;
       disabled = value; input.disabled = value;
       if (spec.type === 'matching') renderMatching();
-      if (spec.type === 'true_false') for (const field of root.querySelectorAll('input')) field.disabled = value;
+      if (['true_false', 'choice'].includes(spec.type)) for (const field of root.querySelectorAll('input')) field.disabled = value;
       if (spec.type === 'fill_blank') for (const field of stem.querySelectorAll('[data-blank-id]')) field.disabled = value;
     },
   };
   if (spec.type === 'true_false') renderBooleans();
+  if (spec.type === 'choice') renderChoices();
   if (spec.type === 'matching') renderMatching();
   if (spec.type === 'fill_blank') mountBlanks();
   input.addEventListener('input', () => {
@@ -205,6 +229,7 @@ export function questionInput(spec, {id, value = '', stem, disabled = false, for
     values = parse(input.value); normalize();
     if (spec.type === 'matching') renderMatching();
     if (spec.type === 'true_false') renderBooleans();
+    if (spec.type === 'choice') renderChoices();
     if (spec.type === 'fill_blank') for (const field of stem.querySelectorAll('[data-blank-id]')) field.value = values[field.dataset.blankId] || '';
   });
   return {element:root, input};

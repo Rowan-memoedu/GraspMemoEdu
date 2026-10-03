@@ -1,7 +1,7 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=d5f3a1d1b1afc7d5";
-import {questionInput, answerReady} from './question-input.js?v=d5f3a1d1b1afc7d5';
-import {reportableContent} from './content-report.js?v=d5f3a1d1b1afc7d5';
-import {createLearningCache} from './learning-cache.js?v=d5f3a1d1b1afc7d5';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=e510364d1ede8b9a";
+import {questionInput, answerReady} from './question-input.js?v=e510364d1ede8b9a';
+import {reportableContent} from './content-report.js?v=e510364d1ede8b9a';
+import {createLearningCache} from './learning-cache.js?v=e510364d1ede8b9a';
 
 applyStaticTranslations();
 
@@ -1482,7 +1482,7 @@ async function openTopic(id, subjectId) {
   await start();
 }
 
-const { initPortal } = await import("./portal.js?v=d5f3a1d1b1afc7d5");
+const { initPortal } = await import("./portal.js?v=e510364d1ede8b9a");
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {
     try { return await fetchGuideAsset(url, subjectId); }

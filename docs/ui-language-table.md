@@ -2,7 +2,7 @@
 
 本表从当前界面词库自动生成。修改以词库为准，随后重新生成并检查本表。术语约定见 [界面语言规范](ui-language.md)。
 
-共 505 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
+共 548 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
 
 不包括作者课程正文、题目、答案、解析或用户输入。首页的学科双语副标题按约定保留。
 
@@ -100,6 +100,7 @@
 | Exact recall: enter the exact answer. Only whitespace and permitted formatting differences are ignored. | 复刻：请填写准确答案，仅忽略空白和允许的格式差异。 |
 | Semantic recall: express the meaning in your own words. Ctrl + Enter to submit. | 复现：按含义判断，可用自己的话表述。Ctrl + Enter 提交。 |
 | Complete every item before submitting. The question is correct only when every item is correct. | 完成所有小项后提交；整题全部正确才计为正确。 |
+| Select one answer. Use arrow keys to change your selection; Ctrl + Enter to submit. | 选择一个答案后提交。方向键切换选项，Ctrl + Enter 提交。 |
 | Move {side} item {number} up | 将{side}第 {number} 项上移 |
 | Move {side} item {number} down | 将{side}第 {number} 项下移 |
 | Moved to slot {number} | 已移动到位置 {number} |
@@ -472,6 +473,53 @@
 | Choose Topic… | 选择 主题… |
 | Fit width | 适应宽度 |
 | Clear selection | 清除选择 |
+
+## 题库训练
+
+| English | 中文 |
+|---|---|
+| Question banks | 题库 |
+| Train | 训练 |
+| Start training | 开始训练 |
+| Question groups | 题组 |
+| No question banks have been added to this subject yet. | 此学科暂未导入题库。 |
+| Back to question banks | 返回题库 |
+| {count} questions | {count} 道题 |
+| Exercise {number} | 习题 {number} |
+| Answered {count} times | 已作答 {count} 次 |
+| Not answered | 未作答 |
+| Your answer | 你的答案 |
+| Submit | Submit |
+| Show Answer | Show Answer |
+| Explanation | Explanation |
+| Again | 重来 |
+| Hard | 困难 |
+| Good | 良好 |
+| Easy | 简单 |
+| Compare your answer and choose a rating. | 对照答案，选择你的熟练度。 |
+| Enable advanced learner answering | 启用高阶学习者作答 |
+| For open questions, leave the answer empty to reveal it and rate yourself, or enter an answer for checking. | 问答题留空时可显示答案，再自行选择熟练度；输入答案仍由系统校对。 |
+| Answer again | 重新作答 |
+| Answer history | 作答记录 |
+| No answer history yet. | 暂无作答记录。 |
+| Load earlier records | 加载更早记录 |
+| Correct | 回答正确 |
+| Incorrect | 回答有误 |
+| Self rating: {rating} | 自评：{rating} |
+| Next review: {time} | 下次复习：{time} |
+| This is extra practice. Your answer is saved without changing the review schedule. | 本次是自由训练，只保存作答记录，不改变复习排期。 |
+| This question is not due yet. This attempt will not change its review time. | 此题尚未到期；本次作答不会改变复习时间。 |
+| Checking… | 正在校对… |
+| Loading question bank… | 正在读取题库… |
+| Retry | 重试 |
+| Answer saved | 已保存作答 |
+| Question bank cards | 题库卡片 |
+| No question bank cards are due. | 暂无到期的题库卡片。 |
+| Review question | 复习此题 |
+| Answer revealed; awaiting rating | 已显示答案，等待选择熟练度 |
+| Resume answering | 继续作答 |
+| This account cannot submit answers. | 当前账号没有提交答案的权限。 |
+| Atomic cards | 原子化卡片 |
 
 ## 操作与服务提示
 

@@ -11,6 +11,7 @@ export const readerMessages = {
   "question.exactHint": ["复刻：请填写准确答案，仅忽略空白和允许的格式差异。", "Exact recall: enter the exact answer. Only whitespace and permitted formatting differences are ignored."],
   "question.semanticHint": ["复现：按含义判断，可用自己的话表述。Ctrl + Enter 提交。", "Semantic recall: express the meaning in your own words. Ctrl + Enter to submit."],
   "question.completeHint": ["完成所有小项后提交；整题全部正确才计为正确。", "Complete every item before submitting. The question is correct only when every item is correct."],
+  "question.choiceHint": ["选择一个答案后提交。方向键切换选项，Ctrl + Enter 提交。", "Select one answer. Use arrow keys to change your selection; Ctrl + Enter to submit."],
   "question.moveUp": ["将{side}第 {number} 项上移", "Move {side} item {number} up"],
   "question.moveDown": ["将{side}第 {number} 项下移", "Move {side} item {number} down"],
   "question.moved": ["已移动到位置 {number}", "Moved to slot {number}"],

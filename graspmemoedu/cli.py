@@ -82,7 +82,9 @@ def review_status(settings, learner, topic_id):
 
 def make_access_store(settings):
     catalog = Catalog.load(settings)
-    return AccessStore(settings.data_dir, [{'id': topic['id'], 'title': topic['title']} for topic in catalog.topics.values()])
+    from .training_content import TrainingCatalog
+    return AccessStore(settings.data_dir, [{'id': topic['id'], 'title': topic['title']} for topic in catalog.topics.values()]
+                       + TrainingCatalog(settings.data_dir).permissions(catalog.topics))
 
 
 def split_permissions(value):

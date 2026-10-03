@@ -34,6 +34,9 @@ from .review import ReviewBackend
 from .question_types import demo_answer as interaction_demo_answer
 from .review_api import register_review_routes, review_route_feature
 from .public_limits import BodyLimitMiddleware, PublicLimits, PublicLimitError
+from .training_content import TrainingCatalog
+from .training_api import register_training_routes, PUBLIC_PATHS as TRAINING_PATHS
+from .training import TrainingService
 
 
 class Action(BaseModel):
@@ -132,7 +135,8 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     pairing_file = settings.data_dir / 'pairing.json'
     executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='answer-judge')
     subjects = Subjects(settings, catalog)
-    access_store = AccessStore(settings.data_dir, [{'id': topic['id'], 'title': topic['title']} for topic in catalog.topics.values()])
+    training = TrainingCatalog(settings.data_dir)
+    access_store = AccessStore(settings.data_dir, [{'id': topic['id'], 'title': topic['title']} for topic in catalog.topics.values()] + training.permissions(catalog.topics))
     dashboard_store = DashboardStore(catalog, access_store, subjects, atomic_clock=atomic_clock)
     from .help_requests import register_help_routes
     dependency_policy = dashboard_store.dependency_policy
@@ -247,18 +251,18 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     def outstanding_count(con):
         tables = {row[0] for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         return max(len(scheduled_submissions), sum(con.execute(f"SELECT COUNT(*) FROM {table} WHERE status IN ('pending','running')").fetchone()[0]
-                   for table in ('submissions', 'review_submissions') if table in tables))
+                   for table in ('submissions', 'review_submissions', 'training_submissions') if table in tables))
 
     def schedule(learner, submission_id, review=False):
         # Called under admission_lock. A transport retry never adds another queue item.
-        key = (id(learner.runtime) if learner.runtime is not None else None, review, submission_id)
+        table = 'review_submissions' if review else getattr(learner, 'submission_table', 'submissions')
+        key = (id(learner.runtime) if learner.runtime is not None else None, table, submission_id)
         if key in scheduled_submissions:
             # A service-error retry may have become pending while its previous
             # worker is still flushing logs. That accepted work must survive.
             reschedule_submissions.add(key)
             return
         with closing(learner._connect()) as con:
-            table = 'review_submissions' if review else 'submissions'
             row = con.execute(f'SELECT status FROM {table} WHERE id=?', (submission_id,)).fetchone()
         if not row or row['status'] != 'pending':
             return
@@ -294,6 +298,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
 
     @asynccontextmanager
     async def lifespan(app):
+        TrainingService(training, settings.data_dir, 'recovery').recover_interrupted()
         with closing(sqlite3.connect(service.db_path)) as con:
             pairs = con.execute('SELECT learner,topic FROM topics').fetchall()
         for learner, topic_id in pairs:
@@ -383,6 +388,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                         '/api/materials', '/api/materials/open',
                         '/api/state', '/api/demo-answer', '/api/guest/reset', '/api/choose', '/api/continue', '/api/select', '/api/pause', '/api/submit',
                         '/api/subjects', '/api/catalog', '/api/catalog/select', '/api/dashboard', '/api/profile', '/api/feedback', '/api/help-requests', '/api/guide', '/api/atomic/reviews'}
+        public_paths.update(TRAINING_PATHS)
         task_answers_path = path.startswith('/api/tasks/') and path.endswith('/answers') and path.count('/') == 4
         review_feature = review_route_feature(path, request.method)
         review_path = review_feature is not None
@@ -671,6 +677,8 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     register_help_routes(app, catalog, access_store, subjects)
     register_material_routes(app, catalog, access_store, subjects, identity, public_state)
     register_atomic_routes(app, catalog, access_store, subjects, dependency_policy, clock=atomic_clock)
+    register_training_routes(app, training, access_store, subjects, service_for,
+                             admission_lock, public_limits, schedule, outstanding_count, clock=atomic_clock)
     register_guide_routes(app, settings, access_store, subjects)
     register_guest_reset_routes(app, identity, public_state, Action)
     register_review_routes(app, identity, admission_lock, public_limits, schedule, outstanding_count, dependency_policy)

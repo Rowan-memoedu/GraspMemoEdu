@@ -1,11 +1,12 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=d5f3a1d1b1afc7d5";
-import { createReviewView } from "./review.js?v=d5f3a1d1b1afc7d5";
-import { renderCourseGraph } from "./course-graph.js?v=d5f3a1d1b1afc7d5";
-import {questionInput} from './question-input.js?v=d5f3a1d1b1afc7d5';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=d5f3a1d1b1afc7d5';
-import {createCatalogPicker} from './catalog-picker.js?v=d5f3a1d1b1afc7d5';
-import {createAtomicView} from './atomic.js?v=d5f3a1d1b1afc7d5';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=d5f3a1d1b1afc7d5";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=e510364d1ede8b9a";
+import { createReviewView } from "./review.js?v=e510364d1ede8b9a";
+import { renderCourseGraph } from "./course-graph.js?v=e510364d1ede8b9a";
+import {questionInput} from './question-input.js?v=e510364d1ede8b9a';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=e510364d1ede8b9a';
+import {createCatalogPicker} from './catalog-picker.js?v=e510364d1ede8b9a';
+import {createAtomicView} from './atomic.js?v=e510364d1ede8b9a';
+import {createTrainingView} from './training.js?v=e510364d1ede8b9a';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=e510364d1ede8b9a";
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -65,7 +66,7 @@ export function initPortal(bridge) {
   const learnHref = () => subjectHref(currentRoute?.subjectId || "math", "/learn");
   const localHref = (path) => {
     const raw = path.replace(/^#/, "");
-    return /^\/(learn|courses|guide|topic|review)(\/|\?|$)/.test(raw)
+    return /^\/(learn|courses|banks|guide|topic|review)(\/|\?|$)/.test(raw)
       ? subjectHref(currentRoute?.subjectId || "math", raw) : `#${raw}`;
   };
   const link = (text, href, className = "") => { const item = node("a", className, text); item.href = localHref(href); return item; };
@@ -87,6 +88,8 @@ export function initPortal(bridge) {
   const atomic = createAtomicView({...bridge, request: call, root, homeHref: learnHref,
     reviewHref: () => subjectHref(currentRoute?.subjectId, '/reviews'), formatDate: value => apiDate(value, true),
     progressChanged: () => { dashboards.clear(); answerCache.clear(); }});
+  const training = createTrainingView({...bridge, request: call, root, href: localHref,
+    formatDate: value => apiDate(value, true)});
 
   function navigate(path, replace = false) {
     const hash = localHref(path);
@@ -137,7 +140,6 @@ export function initPortal(bridge) {
     for (const item of document.querySelectorAll(".mainNavigation [data-navigation]")) {
       const section = item.dataset.navigation;
       item.hidden = !subject;
-      if (section === 'reviews') item.hidden = !['english', 'chinese', 'biology', 'chemistry'].includes(subject?.id);
       item.href = subjectHref(subject?.id || "math", `/${section}`);
     }
     $("topicHomeLink").href = learnHref();
@@ -229,7 +231,7 @@ export function initPortal(bridge) {
     dashboards.set(id, merged); return merged;
   }
   function releaseGuideAssets() { for (const url of guideObjectUrls) URL.revokeObjectURL(url); guideObjectUrls = []; }
-  function stopPageWork() { clearTimeout(refreshTimer); clearTimeout(pageTimer); releaseGuideAssets(); review.stop(); atomic.stop(); hidePopovers(); }
+  function stopPageWork() { clearTimeout(refreshTimer); clearTimeout(pageTimer); releaseGuideAssets(); review.stop(); atomic.stop(); training.stop(); hidePopovers(); }
   async function route() {
     if (currentHash) scrolls.set(currentHash, window.scrollY);
     currentRoute = parseRoute();
@@ -242,7 +244,7 @@ export function initPortal(bridge) {
     root.classList.toggle("reviewShell", currentRoute.path.startsWith("/review/"));
     if (bridge.getIdentityProblem()) { root.hidden = true; root.replaceChildren(); return; }
     updateSubjectContext(subjects?.find(subject => subject.id === currentRoute.subjectId) || null);
-    setNavigation(!currentRoute.subjectId ? "subjects" : currentRoute.path.startsWith("/courses") ? "courses" : currentRoute.path === "/guide" ? "guide" : currentRoute.path === '/reviews' ? 'reviews' : "learn");
+    setNavigation(!currentRoute.subjectId ? "subjects" : currentRoute.path.startsWith('/banks') ? 'banks' : currentRoute.path.startsWith("/courses") ? "courses" : currentRoute.path === "/guide" ? "guide" : currentRoute.path === '/reviews' ? 'reviews' : "learn");
     root.replaceChildren(loading()); window.scrollTo(0, 0);
     try {
       if (profile) await bridge.refreshAccess();
@@ -271,12 +273,16 @@ export function initPortal(bridge) {
         renderLearn(data, params.get("taskId"), ticket);
       } else if (path === "/courses") {
         document.title = pageTitle(t("nav.courses")); await renderCourses();
+      } else if (path === '/banks' || path.startsWith('/banks/')) {
+        document.title = pageTitle(t('training.banks')); await training.open(path, params);
       } else if (path === '/reviews') {
-        const data = await call('atomic/reviews');
+        const [data, bankReviews] = await Promise.all([call('atomic/reviews'), call('training/reviews')]);
         if (ticket !== sequence) return;
         document.title = pageTitle(t('atomic.reviewTitle'));
         const list = node('section', 'atomicReviewList');
         root.replaceChildren(node('h1', 'portalPageTitle', t('atomic.reviewTitle')), list);
+        if (['english', 'chinese', 'biology', 'chemistry'].includes(subjectId))
+          list.before(node('h2', 'trainingSectionTitle', t('training.atomCards')));
         if (data.all_materials) list.append(node('p', 'inputHint', t('admin.allCards')));
         for (const item of data.items) {
           const card = node('article', 'courseChoice');
@@ -291,8 +297,9 @@ export function initPortal(bridge) {
           else card.append(link(t(item.active ? 'atomic.resumeReview' : 'atomic.startReview'), subjectHref(currentRoute?.subjectId, `/review/${encode(item.topic_id)}/atomic`), 'primaryButton'));
           list.append(card);
         }
-        if (!data.items.length) list.append(emptyBox(t('atomic.noDue')));
+        if (!data.items.length && ['english', 'chinese', 'biology', 'chemistry'].includes(subjectId)) list.append(emptyBox(t('atomic.noDue')));
         if (data.next_due_at) list.append(node('p', '', t('atomic.availableAt', {time: apiDate(data.next_due_at, true)})));
+        root.append(training.renderReviews(bankReviews));
         refreshTimer = setTimeout(() => { if (ticket === sequence && !document.hidden) void route(); }, 15000);
       } else if (path === "/guide") {
         document.title = pageTitle(t("nav.guide")); await renderGuide(ticket);
@@ -302,7 +309,7 @@ export function initPortal(bridge) {
         document.title = pageTitle(t('help.inbox'));
         await renderHelpInbox(ticket);
       } else if (path === "/settings") {
-        document.title = pageTitle(t("nav.settings")); renderSettings();
+        document.title = pageTitle(t("nav.settings")); await renderSettings();
       } else if (/^\/courses\/[^/]+\/progress$/.test(path)) {
         const id = decodeURIComponent(path.split("/")[2]);
         const data = await dashboard(id);
@@ -851,7 +858,10 @@ export function initPortal(bridge) {
   }
   function updateGuideLater(ticket) { if (ticket === sequence) refreshTimer = setTimeout(() => updateGuide(ticket), 5000); }
 
-  function renderSettings() {
+  async function renderSettings() {
+    const ticket = sequence;
+    const trainingPreferences = allowed('training_self_rating') ? await call('training/preferences') : null;
+    if (ticket !== sequence) return;
     const page = node("section", "settingsPage"), form = node("form", "profileForm");
     page.append(node("h1", "portalPageTitle", t("portal.settings.115")));
     const displayLabel = node("label", "", t("portal.display.name.116")), display = node("input"); display.id = "profileDisplayName"; displayLabel.htmlFor = display.id; const defaultGuestName = bridge.getAccess()?.role === "guest" && (!profile.display_name || profile.display_name === "游客"); display.value = defaultGuestName ? t("portal.guest.12") : profile.display_name || ""; display.maxLength = 100; display.required = true;
@@ -877,9 +887,20 @@ export function initPortal(bridge) {
       form.insertBefore(label, status);
       form.insertBefore(node("p", "fieldHint", t("portal.courseHierarchyHint")), status);
     }
+    const selfRating = node('input'); selfRating.type = 'checkbox'; selfRating.id = 'trainingSelfRating';
+    if (trainingPreferences?.eligible) {
+      selfRating.checked = trainingPreferences.self_rating_enabled;
+      const label = node('label', 'courseHierarchySetting'); label.htmlFor = selfRating.id;
+      label.append(selfRating, document.createTextNode(t('training.selfSetting')));
+      form.insertBefore(label, status); form.insertBefore(node('p', 'fieldHint', t('training.selfHint')), status);
+    }
     form.addEventListener("submit", async (event) => {
       event.preventDefault(); if (submit.disabled) return; submit.disabled = true; status.textContent = t("portal.saving.120");
-      try { profile = await call("profile", { method: "POST", body: { display_name: defaultGuestName && display.value.trim() === t("portal.guest.12") ? profile.display_name || "游客" : display.value.trim(), timezone: zone.value.trim(), ...(allowed("course_hierarchy") ? {course_hierarchy_enabled: hierarchy.checked} : {}) } }); dashboards.clear(); updateUser(); status.textContent = t("portal.settings.saved.121"); }
+      try {
+        profile = await call("profile", { method: "POST", body: { display_name: defaultGuestName && display.value.trim() === t("portal.guest.12") ? profile.display_name || "游客" : display.value.trim(), timezone: zone.value.trim(), ...(allowed("course_hierarchy") ? {course_hierarchy_enabled: hierarchy.checked} : {}) } });
+        if (trainingPreferences?.eligible) await call('training/preferences', {method: 'POST', body: {self_rating_enabled: selfRating.checked}});
+        dashboards.clear(); updateUser(); status.textContent = t("portal.settings.saved.121");
+      }
       catch (error) { status.textContent = translateMessage(error.message); }
       finally { submit.disabled = false; }
     });

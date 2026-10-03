@@ -1,7 +1,8 @@
 // UI strings only. Course HTML, names, answers and explanations never enter this module.
-import {readerMessages} from './reader-messages.js?v=d5f3a1d1b1afc7d5';
-import {portalMessages} from './portal-messages.js?v=d5f3a1d1b1afc7d5';
-import {staticMessages} from './static-messages.js?v=d5f3a1d1b1afc7d5';
+import {trainingMessages} from './training-messages.js?v=e510364d1ede8b9a';
+import {readerMessages} from './reader-messages.js?v=e510364d1ede8b9a';
+import {portalMessages} from './portal-messages.js?v=e510364d1ede8b9a';
+import {staticMessages} from './static-messages.js?v=e510364d1ede8b9a';
 
 export const LANGUAGE_KEY = 'graspmemoedu:ui-language';
 // Read the previous namespace once on the same origin. Renaming the public
@@ -26,7 +27,7 @@ export function migrateLegacyStorage(storage) {
 for (const name of ['localStorage', 'sessionStorage']) {
   try { migrateLegacyStorage(globalThis[name]); } catch { /* Storage may be disabled. */ }
 }
-export const messages = {...staticMessages, ...readerMessages, ...portalMessages};
+export const messages = {...staticMessages, ...readerMessages, ...portalMessages, ...trainingMessages};
 const translatedMessages = new Map(Object.values(messages).flatMap(pair => pair.map(value => [value, pair])));
 const validLanguage = value => value === 'en' ? 'en' : 'zh-CN';
 let language = 'zh-CN';
