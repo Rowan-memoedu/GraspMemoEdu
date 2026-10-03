@@ -19,6 +19,7 @@ Topic 支持既有综合范式训练，以及面向英语、语文、生物、�
 每个学科的顶部提供学习、课程、指南入口，并可返回所有学科。数学当前课程为「再探小学算术」，包含 Topic「数字化为字母」：6 个 Example、每模块 15 道 Practice，合计 96 道题。原有逐块学习、真实 MathAnswerJudge 判题、练习补题、模块评分、暂停与恢复继续使用同一份进度。
 
 界面默认中文，可在设置切换英文。统一译法与内容边界见 [界面语言规范](docs/ui-language.md)，完整文案见 [中英对照表](docs/ui-language-table.md)。
+课程支持不等深的多级归属，高阶学习者可在学习页展开待学习分组，默认开启并可在设置关闭；目录格式与权限规则见 [课程层级](docs/course-hierarchy.md)。
 
 公开入口：[GraspMemoEdu](https://rowan-memoedu.github.io/GraspMemoEdu-Pages/)。其他电脑、手机可直接打开，自动进入游客模式，无需填写服务地址、配对码或授予本地网络权限。后端、课程和学习记录运行并保存在腾讯云；原始邀请码管理文件仍留在本机私密目录，服务器保存认证所需哈希。源码仓库为私有 `Rowan-memoedu/GraspMemoEdu`，本机源码目录为 `D:/Projects/GraspMemoEdu`，Python 命令入口为 `python -m graspmemoedu`。
 

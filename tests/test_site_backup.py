@@ -193,7 +193,8 @@ class SiteBackupAcceptanceTests(unittest.TestCase):
         store = AccessStore(destination, [{'id': item['id'], 'title': item['title']} for item in catalog.topics.values()])
         access = store.resolve(self.guest['identity_token'])
         dashboard = DashboardStore(catalog, store)
-        self.assertEqual(dashboard.profile(access), {'display_name': 'Portable guest', 'timezone': 'Asia/Shanghai', 'selected_course_id': 'course-b'})
+        self.assertEqual(dashboard.profile(access), {'display_name': 'Portable guest', 'timezone': 'Asia/Shanghai',
+                                                    'selected_course_id': 'course-b', 'course_hierarchy_enabled': False})
         history = dashboard.dashboard(access, 'course-a')['history']
         self.assertEqual([item['id'] for item in history], ['lesson:portable-a'])
         answer = dashboard.answers(access, 'lesson:portable-a')['groups'][0]['answers'][0]

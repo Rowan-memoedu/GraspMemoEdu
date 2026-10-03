@@ -77,7 +77,8 @@ class Catalog:
                     raise ValueError('Units must be a list')
                 covered, unit_ids, validated_units = set(), set(), []
                 for unit in units:
-                    if not isinstance(unit, dict) or set(unit) != {'id', 'title', 'topic_ids'}:
+                    if (not isinstance(unit, dict) or set(unit) - {'id', 'title', 'topic_ids', 'parent_id'}
+                            or not {'id', 'title', 'topic_ids'} <= set(unit)):
                         raise ValueError('Invalid unit')
                     unit_id = cls._identifier(unit['id'])
                     members = unit['topic_ids']
@@ -87,8 +88,11 @@ class Catalog:
                     unit_ids.add(unit_id)
                     covered.update(members)
                     validated_units.append({'id': unit_id, 'title': cls._text(unit['title'], 200), 'topic_ids': members})
+                    if 'parent_id' in unit:
+                        validated_units[-1]['parent_id'] = cls._identifier(unit['parent_id']) if unit['parent_id'] is not None else None
                 if covered != ids:
                     raise ValueError('Units must cover each course topic exactly once')
+                cls._validate_unit_tree(validated_units)
                 courses.append({'id': course_id, 'title': title, 'description': description,
                                 'topics': metadata, 'units': validated_units})
             if not topics:
@@ -115,6 +119,22 @@ class Catalog:
             return cls(courses, topics, preferred if preferred in topics else next(iter(topics)), topic_paths)
         except (OSError, ValueError, TypeError, KeyError) as exc:
             raise DomainError('invalid_catalog', '课程目录格式或来源无效，请由管理者检查本地目录配置。', 422) from exc
+
+    @staticmethod
+    def _validate_unit_tree(units):
+        parents = {unit['id']: unit.get('parent_id') for unit in units}
+        visited = set()
+        for unit_id in parents:
+            path = set()
+            current = unit_id
+            while current is not None and current not in visited:
+                if current not in parents:
+                    raise ValueError('Unknown unit parent')
+                if current in path:
+                    raise ValueError('Unit hierarchy cycle')
+                path.add(current)
+                current = parents[current]
+            visited.update(path)
 
     @staticmethod
     def _validate_topic(topic):

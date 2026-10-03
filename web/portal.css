@@ -309,3 +309,13 @@ body.portalModalOpen { overflow: hidden; }
   .catalogCourseGrid { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .reportSelectionButton { right: 12px; bottom: 12px; max-width: calc(100vw - 24px); }
 }
+/* Containment only: Topic cards retain their existing interaction and style. */
+.courseUnitGroup { min-width: 0; margin: 14px 0; border: 1px solid var(--subject-accent, #dce5eb); border-radius: 8px; }
+.courseUnitHeading { padding: 16px; cursor: pointer; font-weight: 600; overflow-wrap: anywhere; }
+.courseUnitHeading:focus-visible { outline: 2px solid var(--ma-blue); outline-offset: -3px; }
+.courseUnitBody { padding: 0 12px 8px; }
+.courseUnitBody .courseUnitGroup { margin-top: 8px; }
+.taskIcon.reviewMastery { width: 29px; flex: 0 0 29px; margin-left: 0; align-items: flex-end; justify-content: flex-start; }
+.courseHierarchySetting { display: flex; align-items: center; gap: 10px; }
+.profileForm .courseHierarchySetting input { width: auto; }
+@media (max-width: 600px) { .courseUnitBody { padding-right: 4px; padding-left: 4px; } .courseUnitHeading { padding: 12px 8px; } }

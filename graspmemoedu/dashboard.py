@@ -17,6 +17,7 @@ from .service import DomainError, now
 from .dependencies import DependencyPolicy
 from .question_types import public_interaction, display_answer
 from .content_reports import validate_correction
+from .course_hierarchy import pending_hierarchy
 
 
 class DashboardStore:
@@ -46,6 +47,9 @@ class DashboardStore:
                     subject_id TEXT NOT NULL, selected_course_id TEXT NOT NULL, updated_at TEXT NOT NULL,
                     PRIMARY KEY(learner_id,subject_id));
             ''')
+            if 'course_hierarchy_enabled' not in {row['name'] for row in con.execute('PRAGMA table_info(learner_preferences)')}:
+                con.execute('ALTER TABLE learner_preferences ADD COLUMN course_hierarchy_enabled INTEGER NOT NULL DEFAULT 1 CHECK(course_hierarchy_enabled IN (0,1))')
+            con.commit()
 
     def _allowed_topics(self, access):
         return {topic['id'] for topic in access['topics']}
@@ -73,9 +77,14 @@ class DashboardStore:
                 topic['id'] for topic in self.catalog.courses[selected]['topics']):
             selected = None
         return {'display_name': access['display_name'], 'timezone': row['timezone'] if row else None,
-                'selected_course_id': selected}
+                'selected_course_id': selected,
+                'course_hierarchy_enabled': 'course_hierarchy' in access['features'] and (not row or bool(row['course_hierarchy_enabled']))}
 
     def update_profile(self, access, values):
+        if 'course_hierarchy_enabled' in values:
+            self._feature(access, 'course_hierarchy')
+            if type(values['course_hierarchy_enabled']) is not bool:
+                raise DomainError('invalid_profile', '课程层级设置需要布尔值。', 422)
         if 'display_name' in values:
             name = values['display_name']
             if (not isinstance(name, str) or not 1 <= len(name.strip()) <= 100
@@ -99,6 +108,9 @@ class DashboardStore:
                         timezone=CASE WHEN ? THEN excluded.timezone ELSE learner_preferences.timezone END,
                         updated_at=excluded.updated_at''',
                         (access['learner_id'], values.get('timezone'), now(), 'timezone' in values))
+            if 'course_hierarchy_enabled' in values:
+                con.execute('UPDATE learner_preferences SET course_hierarchy_enabled=? WHERE learner_id=?',
+                            (int(values['course_hierarchy_enabled']), access['learner_id']))
         return self.profile({**access, 'display_name': values.get('display_name', access['display_name'])})
 
     def _selection(self, access, subject_id=None):
@@ -369,7 +381,10 @@ class DashboardStore:
         if has_more and page:
             next_cursor = base64.urlsafe_b64encode(json.dumps(
                 [course_id, access['learner_id'], page[-1]['completed_at'] or '', page[-1]['id']]).encode()).decode().rstrip('=')
+        hierarchy_enabled = self.profile(access)['course_hierarchy_enabled']
         return {'course': overview, 'units': units, 'topics': topics, 'tasks': tasks, 'history': page,
+                'course_hierarchy_enabled': hierarchy_enabled,
+                'pending_hierarchy': pending_hierarchy(course['units'], tasks) if hierarchy_enabled else [],
                 'history_cursor': next_cursor, 'has_more': has_more, 'history_revision': history_revision,
                 'next_review_due_at': next_review_due_at}
 

@@ -1,4 +1,7 @@
 export const portalMessages = {
+  'review.lowMasteryIcon': ['低熟练度复习标记', 'Low mastery review marker'],
+  'portal.courseHierarchySetting': ['按课程层级展开待学习内容', 'Group pending lessons by course hierarchy'],
+  'portal.courseHierarchyHint': ['复习任务保留在前列；层级中显示所有未完成的 Topic，包括暂停和前置受阻的内容。', 'Reviews stay first. Groups include every unfinished Topic, including paused and prerequisite-blocked lessons.'],
   'admin.identity': ['管理员', 'Administrator'],
   'account.advancedLearner': ['高阶学习者', 'Advanced learner'],
   'account.standardLearner': ['普通学习者', 'Standard learner'],

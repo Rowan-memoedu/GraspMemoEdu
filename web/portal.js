@@ -1,11 +1,11 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=e46cb838a8177c78";
-import { createReviewView } from "./review.js?v=e46cb838a8177c78";
-import { renderCourseGraph } from "./course-graph.js?v=e46cb838a8177c78";
-import {questionInput} from './question-input.js?v=e46cb838a8177c78';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=e46cb838a8177c78';
-import {createCatalogPicker} from './catalog-picker.js?v=e46cb838a8177c78';
-import {createAtomicView} from './atomic.js?v=e46cb838a8177c78';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=e46cb838a8177c78";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=d5f3a1d1b1afc7d5";
+import { createReviewView } from "./review.js?v=d5f3a1d1b1afc7d5";
+import { renderCourseGraph } from "./course-graph.js?v=d5f3a1d1b1afc7d5";
+import {questionInput} from './question-input.js?v=d5f3a1d1b1afc7d5';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=d5f3a1d1b1afc7d5';
+import {createCatalogPicker} from './catalog-picker.js?v=d5f3a1d1b1afc7d5';
+import {createAtomicView} from './atomic.js?v=d5f3a1d1b1afc7d5';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=d5f3a1d1b1afc7d5";
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -28,6 +28,7 @@ export function initPortal(bridge) {
   let subjects = null, catalogSubject = null, activeSubject = null;
   let sequence = 0, currentHash = "", currentRoute = null, busyCourse = false;
   let expandedTask = null, paging = false, historyError = null, guideVersion = null, guideLoaded = false;
+  const expandedUnits = new Map();
   let refreshTimer = null, menuTimer = null, popoverTimer = null, pageTimer = null;
   let guideObjectUrls = [];
   let graphScroll = 0, feedbackContext = {}, feedbackBusy = false, renderedDay = null;
@@ -472,6 +473,12 @@ export function initPortal(bridge) {
   }
 
   function taskIcon(task, history = false) {
+    if (task.type === "Review") {
+      const icon = node("span", "taskIcon reviewMastery masteryBars");
+      icon.setAttribute("role", "img"); icon.setAttribute("aria-label", t("review.lowMasteryIcon"));
+      for (let i = 1; i <= 4; i++) icon.append(node("i", i === 1 ? "filled" : ""));
+      return icon;
+    }
     const successful = ["correct", "passed", "full", "full_credit"].includes(task.result);
     const locked = task.maintenance || task.dependency_ready === false;
     const icon = node("span", `taskIcon ${history ? successful ? "passed" : "ended" : locked ? "locked" : "unlocked"}`);
@@ -589,7 +596,29 @@ export function initPortal(bridge) {
     layout.append(courseSidebar(data), tasks); root.replaceChildren(layout);
     if (taskId) { renderAnswers(tasks, taskId, ticket); return; }
     const pending = node("section", "incompleteTasks"); pending.setAttribute("aria-label", t("portal.pending.tasks.64"));
-    for (const task of data.tasks) pending.append(incompleteTask(task, data));
+    if (data.course_hierarchy_enabled && allowed("course_hierarchy")) {
+      for (const task of data.tasks.filter(task => task.type !== "Lesson")) pending.append(incompleteTask(task, data));
+      const lessonTasks = new Map(data.tasks.filter(task => task.type === "Lesson").map(task => [task.topic_id, task]));
+      const containers = new Map(), rendered = new Set();
+      for (const unit of data.pending_hierarchy || []) {
+        const group = node("details", "courseUnitGroup"), summary = node("summary", "courseUnitHeading", unit.title);
+        const body = node("div", "courseUnitBody");
+        const key = `${bridge.getAccess()?.learner_id}:${data.course.id}:${unit.id}`;
+        group.dataset.unitId = unit.id;
+        group.open = expandedUnits.get(key) ?? !unit.parent_id;
+        group.addEventListener("toggle", () => expandedUnits.set(key, group.open));
+        group.append(summary, body); containers.set(unit.id, {group, body});
+        for (const id of unit.topic_ids) {
+          if (lessonTasks.has(id)) { body.append(incompleteTask(lessonTasks.get(id), data)); rendered.add(id); }
+        }
+      }
+      for (const unit of data.pending_hierarchy || []) {
+        const parent = containers.get(unit.parent_id)?.body || pending;
+        parent.append(containers.get(unit.id).group);
+      }
+      // A rolling deployment can briefly serve an older dashboard response.
+      for (const [id, task] of lessonTasks) if (!rendered.has(id)) pending.append(incompleteTask(task, data));
+    } else for (const task of data.tasks) pending.append(incompleteTask(task, data));
     if (!data.tasks.length) {
       const empty = emptyBox(percent(data.course.progress) === 100 ? t("portal.all.current.tasks.in.this.course.are.complete.65") : t("portal.no.tasks.are.available.to.start.we.will.check.again.shortly.66") );
       empty.append(control(t("portal.check.again.67"), "textButton", () => route())); pending.append(empty);
@@ -637,7 +666,7 @@ export function initPortal(bridge) {
         const fresh = await dashboard(selectedCourse);
         if (ticket !== sequence) return;
         const data = mergeDashboard(selectedCourse, fresh);
-        if (root.querySelector(".taskRefreshError") || JSON.stringify([previous?.tasks, previous?.history, previous?.course]) !== JSON.stringify([data.tasks, data.history, data.course])) {
+        if (root.querySelector(".taskRefreshError") || JSON.stringify([previous?.tasks, previous?.history, previous?.course, previous?.pending_hierarchy, previous?.course_hierarchy_enabled]) !== JSON.stringify([data.tasks, data.history, data.course, data.pending_hierarchy, data.course_hierarchy_enabled])) {
           const y = window.scrollY, expanded = expandedTask;
           renderLearn(data, null, ticket);
           if (expanded) root.querySelector(`[data-task-id="${CSS.escape(expanded)}"] .taskToggle`)?.click();
@@ -840,9 +869,17 @@ export function initPortal(bridge) {
     language.addEventListener("change", () => { setLanguage(language.value); location.reload(); });
     const languageHint = node("p", "fieldHint", t("portal.languageHint"));
     form.append(languageLabel, language, languageHint, displayLabel, display, zoneLabel, zone, zones, hint, status, submit);
+    const hierarchy = node("input"); hierarchy.type = "checkbox"; hierarchy.id = "courseHierarchyEnabled";
+    hierarchy.checked = profile.course_hierarchy_enabled !== false;
+    if (allowed("course_hierarchy")) {
+      const label = node("label", "courseHierarchySetting"); label.htmlFor = hierarchy.id;
+      label.append(hierarchy, document.createTextNode(t("portal.courseHierarchySetting")));
+      form.insertBefore(label, status);
+      form.insertBefore(node("p", "fieldHint", t("portal.courseHierarchyHint")), status);
+    }
     form.addEventListener("submit", async (event) => {
       event.preventDefault(); if (submit.disabled) return; submit.disabled = true; status.textContent = t("portal.saving.120");
-      try { profile = await call("profile", { method: "POST", body: { display_name: defaultGuestName && display.value.trim() === t("portal.guest.12") ? profile.display_name || "游客" : display.value.trim(), timezone: zone.value.trim() } }); updateUser(); status.textContent = t("portal.settings.saved.121"); }
+      try { profile = await call("profile", { method: "POST", body: { display_name: defaultGuestName && display.value.trim() === t("portal.guest.12") ? profile.display_name || "游客" : display.value.trim(), timezone: zone.value.trim(), ...(allowed("course_hierarchy") ? {course_hierarchy_enabled: hierarchy.checked} : {}) } }); dashboards.clear(); updateUser(); status.textContent = t("portal.settings.saved.121"); }
       catch (error) { status.textContent = translateMessage(error.message); }
       finally { submit.disabled = false; }
     });

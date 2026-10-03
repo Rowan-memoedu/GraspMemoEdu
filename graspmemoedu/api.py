@@ -76,6 +76,7 @@ class ProfileUpdate(BaseModel):
     model_config = ConfigDict(extra='forbid')
     display_name: str | None = Field(default=None, min_length=1, max_length=100)
     timezone: str | None = Field(default=None, min_length=1, max_length=100)
+    course_hierarchy_enabled: bool = Field(default=True, strict=True)
 
 
 class CorrectionQuote(BaseModel):
