@@ -1,4 +1,4 @@
-/** Actual Topic/bank in a loopback fixture; isolated identity, real grading. */
+/** Actual Topic/bank in a loopback fixture; isolated identity, explicit judge mode. */
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -32,6 +32,13 @@ const active = value => value.steps.find(step => step.id === value.active_step_i
 const go = route => page.goto(base + '#' + route, {waitUntil: 'networkidle'});
 const shot = name => page.screenshot({path: path.join(out, name + '.png'), fullPage: true});
 const pass = text => { report.checks.push(text); console.log('PASS ' + text); };
+async function waitForTransition(previous) {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    if ((await state()).revision !== previous.revision) return;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  throw new Error('Learning action did not persist a new revision');
+}
 async function answer(question, spec, container, submit, expected) {
   if (spec.type === 'choice') {
     assert.equal(await container.locator('.choiceOption').count(), 6);
@@ -56,6 +63,7 @@ try {
     const step = active(saved);
     if (step.phase === 'choice') {
       await page.locator('#stepCard').getByRole('button', {name: '已掌握，试着作答', exact: true}).click();
+      await waitForTransition(saved);
     } else if (step.phase === 'answer') {
       const question = course.modules.flatMap(module => [module.example, ...module.practices]).find(q => q.id === step.question_id);
       const spec = bank.questions[question.id].interaction;
@@ -75,6 +83,7 @@ try {
       first = false;
     } else {
       await page.locator('#stepCard .continueRow .primaryButton').click();
+      await waitForTransition(saved);
     }
   }
   const completed = await state();

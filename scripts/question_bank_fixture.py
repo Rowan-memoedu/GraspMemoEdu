@@ -19,6 +19,23 @@ from graspmemoedu.question_conversion import build_variant
 from graspmemoedu.service import LearningService
 from tests.fixtures import synthetic_course
 from tests.test_question_bank import bank_fixture
+from scripts.verify_content import ExactTex
+
+
+class OfflineNumericJudge:
+    """Fixture-only exact arithmetic; no provider credentials or HTTP calls."""
+    def __call__(self, question, reference, answer):
+        try:
+            if reference.lstrip().startswith('{'):
+                references, values = json.loads(reference), json.loads(answer)
+                correct = (set(references) == set(values) and all(
+                    any(ExactTex(value).evaluate() == ExactTex(values[key]).evaluate() for value in allowed)
+                    for key, allowed in references.items()))
+            else:
+                correct = ExactTex(reference).evaluate() == ExactTex(answer).evaluate()
+            return {'status': 'judged', 'correct': correct, 'reason': 'Offline numeric fixture judgement'}
+        except (ValueError, ArithmeticError, TypeError, KeyError):
+            return {'status': 'judged', 'correct': False, 'reason': 'Not an exact numeric fixture expression'}
 
 
 def main():
@@ -62,7 +79,7 @@ def main():
         'topics': [{'id': course['id'], 'path': 'topic.json'}]}]}), encoding='utf-8')
     (data / 'subjects.json').write_text(json.dumps({'subjects': [{'id': 'math', 'course_ids': ['bank-course']}]}), encoding='utf-8')
     install_bank(bank, course, data)
-    judge = ExistingJudge(Path('D:/Projects/MathAnswerJudge')) if args.real_judge else None
+    judge = ExistingJudge(Path('D:/Projects/MathAnswerJudge')) if args.real_judge else OfflineNumericJudge()
     app = create_app(Settings(data_dir=data, course_path=path, port=args.port), LearningService(course, data, judge))
 
     @asynccontextmanager

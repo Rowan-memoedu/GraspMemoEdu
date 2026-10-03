@@ -85,12 +85,19 @@ class CompatibleClient:
     def review_complete(self, messages):
         return self._complete(messages, thinking=True)
 
-    def _complete(self, messages, *, thinking):
+    def complete_limited(self, messages, *, max_tokens, thinking):
+        if type(max_tokens) is not int or not 1 <= max_tokens <= 8192:
+            raise ValueError('Question conversion output limit must be 1–8192 tokens')
+        return self._complete(messages, thinking=thinking, max_tokens=max_tokens)
+
+    def _complete(self, messages, *, thinking, max_tokens=None):
         if any(isinstance(m.get('content'), list) and any(p.get('type') == 'image_url' for p in m['content']) for m in messages):
             if self.model != 'deepseek-flash':
                 raise ValueError('Image import requires the verified deepseek-flash vision model')
         payload = {'model': self.model, 'messages': messages,
                    'response_format': {'type': 'json_object'}}
+        if max_tokens is not None:
+            payload['max_tokens'] = max_tokens
         if not thinking:
             payload['temperature'] = 0
         if urlsplit(self.base_url).hostname == 'api.deepseek.com':

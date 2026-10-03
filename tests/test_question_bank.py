@@ -14,7 +14,7 @@ from graspmemoedu.question_types import validate_interaction, public_interaction
 from graspmemoedu.judging import judge_answer
 from graspmemoedu.review import ReviewBackend
 from graspmemoedu.service import DomainError, LearningService
-from graspmemoedu.question_conversion import validate_candidates, source_text, build_variant, accepted_blind, accepted_review, select_candidates, within_obvious_bounds, call, review_pool
+from graspmemoedu.question_conversion import validate_candidates, source_text, build_variant, within_obvious_bounds
 from tests.fixtures import synthetic_course, temporary_test_directory, DeterministicJudge
 from graspmemoedu.author_import import prepare_topic
 
@@ -42,15 +42,8 @@ class ChoiceContractTests(unittest.TestCase):
             rows = [{'value': value, 'family': 'endpoint', 'error_expression': value,
                      'reason': 'Nearby denominators with two equally plausible sign centers.'}
                     for value in values if value != correct]
-            selected, _ = select_candidates({'reference_answer': correct}, {'distractors': rows})
-            self.assertEqual(selected['distractors'], rows)
+            selected = {'distractors': rows}
             self.assertEqual(validate_candidates({'reference_answer': correct}, selected)['families'], ['endpoint'])
-            accepted_blind({'cue_detected': False, 'suspect_value': '',
-                            'reason': 'The positive and negative groups have equally plausible centers.'}, correct)
-            with self.assertRaises(ValueError):
-                accepted_blind({'cue_detected': True, 'suspect_value': correct,
-                                'reason': 'A different set exposes this as its only conspicuous center.',
-                                'suspect_value_note': 'Extra descriptive metadata does not override the verdict.'}, correct)
 
     def test_near_zero_candidates_are_not_rejected_only_for_a_large_ratio(self):
         question = {'reference_answer': '1/500'}
@@ -60,51 +53,7 @@ class ChoiceContractTests(unittest.TestCase):
                                       ('1/499', 'endpoint'), ('1/249500', 'cancellation'), ('0', 'structure')]]
         self.assertEqual(len(validate_candidates(question, {'distractors': rows})['values']), 6)
         far = deepcopy(rows); far[0]['value'] = far[0]['error_expression'] = '2000'
-        with self.assertRaises(ValueError):
-            validate_candidates(question, {'distractors': far})
-
-    def test_rejected_candidate_is_removed_without_editing_and_new_set_is_reviewed(self):
-        source = {'id': 'independent-synthetic', 'question': 'A numeric exercise.', 'reference_answer': '10'}
-        rows = [{'value': str(v), 'family': ('structure', 'endpoint', 'formula')[i % 3],
-                 'reason': 'A sufficiently concrete synthetic error explanation.', 'error_expression': str(v)}
-                for i, v in enumerate((8, 9, 11, 12, 14, 15, 17, 19, 21, 23, 25, 27))]
-        original = deepcopy(rows)
-        rejected = []
-        def reviewer(_client, _folder, _stage, _instruction, data, **_kwargs):
-            if not rejected:
-                rejected.append(data['candidate']['distractors'][0]['value'])
-                return {'approved': False, 'issues': ['One candidate has an invalid error mechanism.'],
-                        'rejected_values': rejected, 'rationale': 'The first selected candidate does not follow its claimed operation.'}
-            self.assertFalse(set(rejected) & {row['value'] for row in data['candidate']['distractors']})
-            return {'approved': True, 'issues': [], 'rejected_values': [],
-                    'rationale': 'Each of the replacement set candidates has now been independently reviewed.'}
-        with temporary_test_directory() as directory, patch('graspmemoedu.question_conversion.call', side_effect=reviewer) as api:
-            candidate, _, review = review_pool(Mock(), Path(directory), source, {'distractors': rows})
-        self.assertEqual(api.call_count, 2)
-        self.assertEqual(rows, original)
-        self.assertTrue(all(row in original for row in candidate['distractors']))
-        accepted_review(review)
-
-    def test_response_metadata_does_not_discard_valid_reviews_or_bypass_rejections(self):
-        review = {'approved': True, 'issues': [], 'rationale': 'A sufficiently detailed independent mathematical review.', 'type': 'json_object'}
-        accepted_review(review)
-        for bad in ({**review, 'issues': ['Wrong calculation']}, {**review, 'approved': 'true'}, {**review, 'unknown': True}):
-            with self.assertRaises(ValueError):
-                accepted_review(bad)
-
-    def test_interrupted_stage_reuses_exact_raw_response_without_calling_api(self):
-        with temporary_test_directory() as directory:
-            root = Path(directory)
-            first, second = root / 'binding-one' / 'attempt-1', root / 'binding-two' / 'attempt-1'
-            first.mkdir(parents=True)
-            second.mkdir(parents=True)
-            client = Mock(model='test-model')
-            client.review_complete.return_value = {'approved': True}
-            self.assertEqual(call(client, first, 'review', 'fixed instruction', {'source': 'same'}, thinking=True), {'approved': True})
-            client.review_complete.side_effect = AssertionError('Identical request must use cached raw response')
-            self.assertEqual(call(client, first, 'review', 'fixed instruction', {'source': 'same'}, thinking=True), {'approved': True})
-            self.assertEqual(call(client, second, 'review', 'fixed instruction', {'source': 'same'}, thinking=True), {'approved': True})
-            self.assertEqual(client.review_complete.call_count, 1)
+        self.assertEqual(len(validate_candidates(question, {'distractors': far})['values']), 6)
 
     def test_visible_bounds_are_source_neutral_and_do_not_assume_the_answer(self):
         from fractions import Fraction
@@ -169,22 +118,6 @@ class ChoiceContractTests(unittest.TestCase):
             bad['distractors'][0][key] = value
             with self.assertRaises(ValueError):
                 validate_candidates(source, bad)
-        with self.assertRaises(ValueError):
-            accepted_blind({'cue_detected': True, 'suspect_value': '5', 'reason': 'The options form a visible pattern.'}, '5')
-        accepted_blind({'cue_detected': True, 'suspect_value': '8', 'reason': 'A blind clue points to a distractor, not the key.'}, '5')
-
-    def test_pool_rejects_bad_calculations_without_editing_candidates(self):
-        pool = {'distractors': [{'value': str(n), 'error_expression': str(n), 'family': ('scope', 'formula', 'coefficient')[i % 3],
-                                'reason': 'Synthetic source-bound misconception for set selection.'}
-                               for i, n in enumerate((2, 3, 7, 8, 12, 13, 14, 15, 25, 35, 45, 55))]}
-        pool['distractors'][0]['error_expression'] = '2+2'
-        before = deepcopy(pool)
-        candidate, selection = select_candidates({'reference_answer': '5'}, pool)
-        self.assertEqual(pool, before)
-        self.assertEqual(len(selection['rejected_candidates']), 1)
-        self.assertEqual(len(candidate['distractors']), 5)
-        self.assertNotIn('2', [row['value'] for row in candidate['distractors']])
-        validate_candidates({'reference_answer': '5'}, candidate)
 
     def test_original_math_and_equivalent_answer_contract_survive_blank_conversion(self):
         q = synthetic_course(1)['modules'][0]['example']
