@@ -258,7 +258,7 @@ def main():
     graph.add_argument('--expected-revision', help='可选并发检查：上次预览的 previous_revision，首次为 none')
     graph.add_argument('--preview-html', type=Path, help='生成可离线打开的交互式图谱')
     for command in ('author-prepare', 'author-import', 'author-install'):
-        author = sub.add_parser(command, help='本机作者 Markdown 导入：准备审核包、入库或一键执行')
+        author = sub.add_parser(command, help='本机作者 Markdown / Topic v2 JSON 导入：准备来源包、入库或一键执行')
         if command != 'author-install':
             author.add_argument('--source', type=Path, required=True)
             author.add_argument('--topic-id', required=True)
@@ -267,7 +267,7 @@ def main():
             author.add_argument('--package', type=Path, required=True)
         if command != 'author-prepare':
             author.add_argument('--subject', required=True)
-            author.add_argument('--course', required=True, help='已有 Course ID，不会覆盖其原有 Topic')
+            author.add_argument('--course', required=True, help='已有 Course ID；普通 Topic 不覆盖，v2 纯引论可更新')
             author.add_argument('--unit', help='已有章节 ID；多章节课程必须指定')
     serve = sub.add_parser('serve')
     serve.add_argument('--port', type=int)
@@ -387,7 +387,9 @@ def main():
                     catalog = Catalog.load(settings)
                     Subjects(settings, catalog).authorize_course(args.subject, args.course)
                     if args.topic_id in catalog.topics:
-                        raise ValueError('Topic ID already exists; use author-install with the approved package to check idempotency')
+                        from .topic_runtime import is_introduction
+                        if not (is_introduction(catalog.topics[args.topic_id]) and catalog.topic_courses[args.topic_id] == args.course):
+                            raise ValueError('Topic ID already exists; use author-install with the approved package to check idempotency')
                 stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')
                 folder = args.run_dir or Path('D:/Artifacts/GraspMemoEdu/author-import/runs') / (args.topic_id + '-' + stamp)
                 manifest = prepare_topic(args.source, args.topic_id, folder)

@@ -43,7 +43,7 @@ class ReviewAnswer(ReviewAction):
     elapsed_ms: int | None = Field(default=None, strict=True, ge=0, le=86400000)
 
 
-def register_review_routes(app, identity, admission_lock, limits, schedule, outstanding_count, dependency_policy=None):
+def register_review_routes(app, identity, admission_lock, limits, schedule, outstanding_count, dependency_policy=None, references_for=None):
     def public_state(state, access, learner):
         if 'review_history' not in access['features']:
             with closing(learner._connect()) as con:
@@ -72,6 +72,8 @@ def register_review_routes(app, identity, admission_lock, limits, schedule, outs
         action_features = {'submit': 'submit_answer', 'continue': 'learn'}
         state['dependency_ready'] = dependency_policy is None or dependency_policy.is_ready(access, learner.topic_id)
         state['actions'] = [a for a in state['actions'] if state['dependency_ready'] and action_features.get(a) in access['features']]
+        if references_for and learner.course.get('topic_format_version') == 2:
+            state['content_references'] = references_for(access, learner)
         return state
 
     def public_submission(result, access, learner):

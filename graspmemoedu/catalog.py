@@ -101,6 +101,11 @@ class Catalog:
                 ids = {topic['id'] for topic in course['topics']}
                 if any(set(topic['prerequisites']) - ids for topic in course['topics']):
                     raise ValueError('Prerequisites must reference topics in the same course')
+                from .topic_runtime import is_introduction
+                reading_ids = {tid for tid in ids if is_introduction(topics[tid])}
+                if any((topic['id'] in reading_ids and topic['prerequisites'])
+                       or reading_ids.intersection(topic['prerequisites']) for topic in course['topics']):
+                    raise ValueError('Introduction Topics cannot participate in prerequisite relationships')
                 graph = {topic['id']: topic['prerequisites'] for topic in course['topics']}
                 visited, pending = set(), set()
                 def visit(topic_id):

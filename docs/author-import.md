@@ -1,10 +1,10 @@
-# 作者导入：Markdown → Topic
+# 作者导入：Markdown / JSON → Topic
 
 正式后端已迁至腾讯云。本文本机命令用于准备来源包与隔离验收；正式安装必须将已验收包传到服务器，并在 `/opt/graspmemoedu/app` 使用 CLI 指定 `/var/lib/graspmemoedu`。本机原数据目录已是回滚快照，修改它不会更新正式网站。见 [腾讯云运维](tencent-deployment.md)。
 
 Topic 内容与课程图谱独立导入。此入口不创建或覆盖图谱关系；图谱使用 `Import-Graph.ps1` / `graph-import`，可反复整体更新，详见 [图谱格式与工作流](course-graph.md)。两者通过稳定的 `topic_id` 关联，图谱可先于正文导入。
 
-在后端电脑调用，网页不提供配置或上传入口。默认只机械导入已校准的 Markdown：解析结构、按字段注入并搬运附件，不逐题检查数学、答案、图注或配图细节，不调用 API 改写内容。API 仅用于极少量抽样检查整体性损坏。单篇入口加入已有学科、Course；整门新课程使用后文的课程安装入口。不覆盖既有 Topic，不写账号权限或学习记录。
+在后端电脑调用，网页不提供配置或上传入口。默认只机械导入已校准的 Markdown 或显式 v2 JSON：解析结构、按字段注入并搬运附件，不逐题检查数学、答案、图注或配图细节，不调用 API 改写内容。API 仅用于显式选择的极少量抽样检查整体性损坏。单篇入口加入已有学科、Course；整门新课程使用后文的课程安装入口。普通 Topic 不覆盖；v2 纯引论支持同 ID 更新，安装不写账号权限或学习数据库。
 
 ## 一条命令
 
@@ -14,7 +14,7 @@ pwsh -NoProfile -File 'D:/Projects/GraspMemoEdu/Import-Topic.ps1' `
   -TopicId 'physics-my-topic' -Subject physics -CourseId test-physics-course
 ```
 
-成功返回 `status: installed`、Topic 路径和审核包路径。随后加载新目录：
+成功返回 `status: installed`（新增）或 `updated`（纯引论更新）、Topic 路径和审核包路径。随后按实际部署位置重载服务；以下脚本仅适用于本机隔离实例：
 
 ```powershell
 pwsh -NoProfile -File 'D:/Projects/GraspMemoEdu/Start-PublicLearning.ps1' -RestartBackend
@@ -24,7 +24,11 @@ pwsh -NoProfile -File 'D:/Projects/GraspMemoEdu/Start-PublicLearning.ps1' -Resta
 
 ## 输入格式
 
-沿用已有导入格式：两空格缩进的 Markdown 列表，一份文件恰好一个根 Topic、一个 Introduction、连续编号的 Example；每个 Example 与 Practice 各有一个非空 Explanation。每个 Example 至少 7 道 Practice，以满足现行练习补题机制。题量可因模块而异。
+新格式见 [Topic v2 共享规范](topic-format-v2.md) 和 [JSON Schema](topic-format-v2.schema.json)。文件可以为 `.md` 或 `.json`，两个入口经过同一个纯 Python 归一器，再进入既有题目、图片和渲染流程；传入的 `TopicId` 必须与 v2 源文件的 `id` 相同。v2 只允许机械导入。
+
+v2 支持多段 Introduction、与 Example 穿插的原稿顺序及纯引论 Topic；`content_order` 是展示顺序，Example 和 Practice 的既有 ID、题型、练习分组均保留。Callout、实际 RemNote 标签、题源字段、Mermaid 和精确 Rem ID 引用按共享规范保存。题源缺失字段省略，不输出占位语；难度仅留元数据。独立外链排除，混有正文的链接节点拒绝自动导入，待讨论后重新提供原稿。
+
+未标记 v2 的旧 Markdown 沿用原有格式：两空格缩进的列表，一份文件恰好一个根 Topic、一个 Introduction、连续编号的 Example；每个 Example 与 Practice 各有一个非空 Explanation。每个 Example 至少 7 道 Practice，以满足现行练习补题机制。题量可因模块而异。
 
 ```markdown
 - Topic 标题
@@ -102,7 +106,13 @@ $python = 'D:/AppData/GraspMemoEdu/venv/Scripts/python.exe'
 
 有正文或附件修复时加 `--source '<更正后的MD>'`，按当前机械规则更新字段、引用和哈希，保留旧包，不重跑逐题 API。历史语义拒绝不作为机械导入门禁，也不被改写成模型批准。
 
-默认运行材料位于 `D:/Artifacts/GraspMemoEdu/author-import/runs`；已入库内容位于数据目录的 `imported-topics/<TopicId>`。API 请求、响应、逐题理由和 `manifest.json` 留在本机，不能加入源码仓库。返回失败状态时进程退出码非零。未激活的残留目录或锁须核对原运行进程后处理，不自动删除。
+默认运行材料位于 `D:/Artifacts/GraspMemoEdu/author-import/runs`；普通内容位于数据目录的 `imported-topics/<TopicId>`，纯引论版本位于 `imported-topics/<TopicId>--<version>`。原稿快照保留对应的 `source.md` 或 `source.json` 与原始字节。API 请求、响应、逐题理由和 `manifest.json` 留在本机，不能加入源码仓库。返回失败状态时进程退出码非零。未激活的残留目录或锁须核对原运行进程后处理，不自动删除。
+
+## 纯引论的同 ID 更新
+
+仅当现有与新内容都明确为 v2 `topic_kind: introduction`，且 Course、Unit 归属相同，才允许更新。每次独立重编译后保留不可变版本包与 `catalog-before.json`，只原子切换目录路径；安装不改学习数据库。相同包重复安装仍返回 `already_installed`，普通 Topic 同 ID 覆盖仍拒绝。
+
+`version` 标识完整渲染产物；`content_version` 标识教学正文、树、顺序、引用和图片内容，排除行号、渲染器、难度及来源 URL 等元数据。网站负责据此安排重读和保留完成历史。安装后未打开过的新版本允许在整站备份中携带旧引论进度版本，恢复时严格核对版本清单；普通 Topic 的版本一致要求不变。纯引论不进入知识图谱，已预声明为图谱节点的同 ID 会拒绝安装，导入器不会删除或改写图谱。
 
 ## API 与扩展边界
 
@@ -114,7 +124,7 @@ $python = 'D:/AppData/GraspMemoEdu/venv/Scripts/python.exe'
 
 `--package` 一次传入整批包，整批合计最多两题。该入口需显式调用，普通导入和安装不会触发。2026-09-21 已将 22 篇 Topic 安装到物理课程“运动学进阶”（`rigid-constraints`）；原数学课程、图谱及学习记录保留。
 
-准备包逻辑在 `graspmemoedu/author_import.py`，安装在 `graspmemoedu/topic_install.py`，渲染沿用 `scripts/import_course.mjs`，共享图片校验在 `graspmemoedu/topic_assets.py`。后续新增输入格式或内容类型时在这些边界扩展，不改变既有学习/复习状态机。当前不支持自动更新已有 Topic 或任意 Markdown 排版。
+准备包逻辑在 `graspmemoedu/author_import.py`，安装在 `graspmemoedu/topic_install.py`，归一器在 `graspmemoedu/topic_format.py`，渲染沿用 `scripts/import_course.mjs`，共享图片校验在 `graspmemoedu/topic_assets.py`。后续新增输入格式或内容类型时在这些边界扩展。当前不支持覆盖普通 Topic 或任意 Markdown 排版。
 ## 通用题型扩展
 
 判断题、多空填空、带干扰项配对及复刻/复现判题，使用每题的显式 `Interaction` 节点；字段、例子和边界见 [题型与判题](question-types.md)。不写此节点的原课程保持现有行为。

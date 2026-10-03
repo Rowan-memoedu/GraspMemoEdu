@@ -1,5 +1,7 @@
 # Reused components and references
 
+- Topic v2 directly reuses the user's Blog Callout, Mermaid and document-backlink modules. Original sources, licenses and upstream Callout hashes live in [vendor/personalwebsite](vendor/personalwebsite/README.md). The build emits local browser chunks, an import helper and the exact publication allowlist in `scripts/topic-presentation-assets.json`; no CDN or Blog service is required at runtime.
+
 - [py-fsrs](https://github.com/open-spaced-repetition/py-fsrs), MIT, pinned as `fsrs==6.3.2`: Example review scheduling, serialization and optional parameter optimization. The upstream formulas are used unchanged; local code adapts Example identity, grading, due queues and transactional persistence. Its optional local training runtime is pinned in `requirements-optimizer.txt`. No learner history is sent to an external optimization service. See [review backend](docs/review-backend.md) for the Anki compatibility boundary.
 
 - FastAPI (MIT), Starlette (BSD-3-Clause), Uvicorn (BSD-3-Clause), Pydantic (MIT), HTTPX (BSD-3-Clause); exact dependency versions in requirements.txt. Dependencies are installed outside this repository.

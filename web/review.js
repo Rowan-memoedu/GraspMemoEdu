@@ -1,7 +1,8 @@
-import { t, translateMessage, learningTitle } from './i18n.js?v=e2e83f84174c2962';
-import {questionInput, answerReady} from './question-input.js?v=e2e83f84174c2962';
-import {reportableContent} from './content-report.js?v=e2e83f84174c2962';
-import {createLearningCache} from './learning-cache.js?v=e2e83f84174c2962';
+import { t, translateMessage, learningTitle } from './i18n.js?v=9bb0c0fa655f896d';
+import {questionInput, answerReady} from './question-input.js?v=9bb0c0fa655f896d';
+import {reportableContent} from './content-report.js?v=9bb0c0fa655f896d';
+import {createLearningCache} from './learning-cache.js?v=9bb0c0fa655f896d';
+import {enhanceTopicContent} from './topic-content.js?v=9bb0c0fa655f896d';
 
 const node = (tag, cls = '', text) => {
   const item = document.createElement(tag); item.className = cls;
@@ -13,7 +14,7 @@ const button = (text, cls, action, id) => {
   if (id) item.id = id;
   item.addEventListener('click', action); return item;
 };
-const content = html => { const item = node('div', 'courseContent'); item.innerHTML = html || ''; return item; };
+const content = (html, references) => { const item = node('div', 'courseContent'); item.innerHTML = html || ''; enhanceTopicContent(item, references); return item; };
 
 // The backend owns queue growth, mastery and FSRS. This view only submits the
 // current Practice and renders saved responses, using the Lesson transport/UI.
@@ -206,7 +207,7 @@ export function createReviewView(bridge) {
     const question = isCurrent ? state.practice : answer;
     if (!question) { selected = null; return render(); }
     const pageIds = pages(); const index = pageIds.indexOf(selected || state.practice.id);
-    const stem = content(question.html);
+    const stem = content(question.html, state.content_references);
     const questionId = isCurrent ? state.practice.id : answer.question_id;
     const reportContext = {topic_id: topic, question_id: questionId, task_id: `review:${state.session_id}`};
     reportableContent(stem, reportContext, `question:${questionId}`, question.content_version || state.course_version);
@@ -225,7 +226,7 @@ export function createReviewView(bridge) {
       if (feedback.reason) detail.append(node('p', 'feedbackReason', feedback.reason));
       box.append(node('span', 'feedbackIcon', feedback.correct ? '✓' : '!'), detail); card.append(box);
       if (question.explanation_html) card.append(node('h3', 'exampleExplanationHeader', t('Explanation · 解析')),
-        reportableContent(content(question.explanation_html), reportContext, `explanation:${questionId}`, question.content_version || state.course_version));
+        reportableContent(content(question.explanation_html, state.content_references), reportContext, `explanation:${questionId}`, question.content_version || state.course_version));
     }
     if (editable) {
       const form = node('form', 'learningActions answerForm'); form.id = 'reviewAnswerForm'; form.addEventListener('submit', submit);

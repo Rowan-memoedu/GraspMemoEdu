@@ -1,5 +1,13 @@
 // Explicit reader UI catalog. Course text, question titles, answers, and judge feedback are excluded.
 export const readerMessages = {
+  'reader.introductionTask': ['引论', 'Introduction'],
+  'reader.introductionUpdate': ['引论更新', 'Updated introduction'],
+  'reader.updatedNotice': ['引论内容已更新，请阅读本次内容。原完成记录和课程进度已保留。', 'This introduction has changed. Read the updated content; your original completion and course progress are preserved.'],
+  'reader.readingProgress': ['已阅读 {progress}%', '{progress}% read'],
+  'reader.readingComplete': ['阅读记录已保存，可通过学习记录回看引论。', 'Your reading is saved. Use the learning history to revisit this introduction.'],
+  'reader.referenceUnavailable': ['目标尚未导入或当前不可访问', 'The target is not yet imported or is currently unavailable'],
+  'reader.backlinks': ['反向链接', 'Backlinks'],
+  'reader.noBacklinks': ['暂无反向链接', 'No backlinks yet'],
   "question.true": ["正确", "True"],
   "question.false": ["错误", "False"],
   "question.left": ["左侧选项", "Left options"],

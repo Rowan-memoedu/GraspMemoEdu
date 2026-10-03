@@ -1,0 +1,4 @@
+	/* Full-width quote blocks on mobile */
+	div[style*="border-inline-start"] {
+		width: 100% !important;
+	}

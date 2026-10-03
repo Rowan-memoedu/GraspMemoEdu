@@ -149,6 +149,9 @@ class GraphStore:
             owner = self.catalog.topic_courses.get(node['topic_id'])
             if owner is not None and owner != course_id:
                 raise ValueError('Graph Topic belongs to a different course: ' + node['topic_id'])
+            from .topic_runtime import is_introduction
+            if node['topic_id'] in self.catalog.topics and is_introduction(self.catalog.topic(node['topic_id'])):
+                raise ValueError('Introduction Topics do not belong in the knowledge graph')
 
     def load(self, course_id):
         Catalog._identifier(course_id)
@@ -182,22 +185,26 @@ class GraphStore:
                     raise ValueError('Topic destination conflicts with its existing graph binding')
 
     def dependencies(self, course_id):
+        from .topic_runtime import is_introduction
         graph = self.load(course_id)
         if graph is None:
-            return {node['id']: node['prerequisites'] for node in self.catalog.course(course_id)['topics']}
+            return {node['id']: node['prerequisites'] for node in self.catalog.course(course_id)['topics']
+                    if not is_introduction(self.catalog.topic(node['id']))}
         result = {node['topic_id']: [] for node in graph['nodes']}
         for edge in graph['edges']:
             result[edge['to']].append(edge['from'])
         return result
 
     def public(self, graph, access):
+        from .topic_runtime import is_introduction
         self.subjects.authorize_subject(access, graph['subject_id'])
         allowed = {topic['id'] for topic in access['topics']}
         inherit = access['role'] == 'account' and access.get('permission_defaults', {}).get('topics', False)
         # Pending Topics are visible only to accounts that inherit future Topics.
         nodes = [{'topic_id': node['topic_id'], 'title': node['title'],
                   'content_status': 'available' if node['topic_id'] in self.catalog.topics else 'not_imported'}
-                 for node in graph['nodes'] if inherit or node['topic_id'] in allowed]
+                 for node in graph['nodes'] if (inherit or node['topic_id'] in allowed)
+                 and not (node['topic_id'] in self.catalog.topics and is_introduction(self.catalog.topic(node['topic_id'])))]
         visible = {node['topic_id'] for node in nodes}
         return {'schema_version': 1, 'course_id': graph['course_id'], 'subject_id': graph['subject_id'],
                 'title': graph['title'], 'nodes': nodes,

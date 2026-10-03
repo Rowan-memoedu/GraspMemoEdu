@@ -1,0 +1,70 @@
+{
+  "schema": "personal-website-upstream-callout-v2",
+  "components": [
+    {
+      "name": "al-folio colored blockquote / block-tip",
+      "repository": "https://github.com/al-org-dev/al-folio-core",
+      "commit": "fa58be03acad50a4a1ec566dc88280e73ab75d18",
+      "source": "al-folio-typography.scss",
+      "renderedSourceRanges": [[60, 92]],
+      "license": "al-folio-LICENSE"
+    },
+    {
+      "name": "Tufted quote layout, text and narrow-screen rule",
+      "repository": "https://github.com/Yousa-Mirage/Tufted-Blog-Template",
+      "commit": "9688c47b951c390d25a809dc86bd9748c93282d9",
+      "source": ["tufted-quote-layout.css", "tufted-quote-text.css", "tufted-quote-mobile.css"],
+      "license": "tufted-LICENSE"
+    }
+  ],
+  "files": [
+    {
+      "name": "al-folio-typography.scss",
+      "url": "https://raw.githubusercontent.com/al-org-dev/al-folio-core/fa58be03acad50a4a1ec566dc88280e73ab75d18/_sass/_typography.scss",
+      "kind": "complete-original",
+      "sha256": "60a42f389e7b7f4166a5e10d326458a7d896a8a94d1b2f27f50cd5f1f5131cc5"
+    },
+    {
+      "name": "al-folio-LICENSE",
+      "url": "https://raw.githubusercontent.com/al-org-dev/al-folio-core/fa58be03acad50a4a1ec566dc88280e73ab75d18/LICENSE",
+      "kind": "complete-original",
+      "sha256": "24a7406c4f73258556a4ab05a631b089bf646cd0b64cf853de112f7c79e74281"
+    },
+    {
+      "name": "tufted-quote-layout.css",
+      "url": "https://raw.githubusercontent.com/Yousa-Mirage/Tufted-Blog-Template/9688c47b951c390d25a809dc86bd9748c93282d9/assets/tufted.css",
+      "kind": "original-excerpt",
+      "ranges": [[416, 425]],
+      "sourceSha256": "24a257da18bc50a45d05e54e864a8b14ab1a34d0bf204cf597d7778bde52d2a1",
+      "sha256": "5174a5b37260e4ddfb0b2ebc176c5326e03beca604fe3f6686b6e1457f1903cd"
+    },
+    {
+      "name": "tufted-quote-text.css",
+      "url": "https://raw.githubusercontent.com/Yousa-Mirage/Tufted-Blog-Template/9688c47b951c390d25a809dc86bd9748c93282d9/assets/tufted.css",
+      "kind": "original-excerpt",
+      "ranges": [[433, 444]],
+      "sourceSha256": "24a257da18bc50a45d05e54e864a8b14ab1a34d0bf204cf597d7778bde52d2a1",
+      "sha256": "f0359d3b5a1e41f1e292b0700a28765326c95d20005384d2957a34a286a6baa0"
+    },
+    {
+      "name": "tufted-quote-mobile.css",
+      "url": "https://raw.githubusercontent.com/Yousa-Mirage/Tufted-Blog-Template/9688c47b951c390d25a809dc86bd9748c93282d9/assets/tufted.css",
+      "kind": "original-excerpt",
+      "ranges": [[596, 599]],
+      "sourceSha256": "24a257da18bc50a45d05e54e864a8b14ab1a34d0bf204cf597d7778bde52d2a1",
+      "sha256": "23aa385bbc3e07e86c0d8a5d0efabceee70a4f87fd26afcaaaf4e9e227bc6731"
+    },
+    {
+      "name": "tufted-LICENSE",
+      "url": "https://raw.githubusercontent.com/Yousa-Mirage/Tufted-Blog-Template/9688c47b951c390d25a809dc86bd9748c93282d9/LICENSE",
+      "kind": "complete-original",
+      "sha256": "d016ab0fdeea3f76efb87c6a8aab28378ac65e15c877a9a9f27af1a094a04467"
+    }
+  ],
+  "retired": {
+    "component": "Quartz note/default callout",
+    "commit": "86a30ad150c6cca4b3c039f1521b159c32e7d3e0",
+    "files": ["quartz-callouts.scss", "quartz-LICENSE.txt"],
+    "usedByBuild": false
+  }
+}

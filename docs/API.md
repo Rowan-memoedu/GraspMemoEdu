@@ -49,6 +49,39 @@ No answer box before mastered; feedback never auto-advances. Unmastered requires
 
 ## Homepage, profile, feedback and Guide
 
+### Ordered Topic v2
+
+The author/runtime format is defined in [Topic v2](topic-format-v2.md). Use
+`create_learning_service` to dispatch to the ordered reader. Legacy Topics retain
+their existing behavior. v2 returns `topic_format_version`, `topic_kind`,
+`content_version`, `reading_status`, `reread_pending` and `completed_at`.
+Introduction steps carry `introduction_id`; visited steps retain source order.
+An Introduction is completed with the existing `continue` action and never
+creates a review card. Pure Introduction Topics have no module or answer input.
+
+For a completed pure Introduction, a teaching-content update preserves `status:
+completed`, the original `completed_at` and course progress; `reading_status`
+and `reread_pending` track the new reading independently. The dashboard adds one
+`Lesson` task with `topic_kind: introduction`, `content_update: true` and ID
+`introduction-update:<topic_id>`. Completing the new reading removes this task.
+An unfinished Introduction keeps one initial task. CSS/rendering and reference
+resolution changes do not trigger rereading. Previous reading state remains in
+the private `content_history`; ordinary Topic version protection is unchanged.
+Pure Introductions remain in course containment but cannot be graph nodes or
+prerequisites. Their review endpoints return `422 no_scheduled_review`.
+
+v2 state adds `content_references: {outgoing,backlinks,locations}`. Resolved links
+contain a permitted `{subject_id,topic_id,node_id,step_id,field}` destination;
+root links omit the step and field. Missing, ambiguous and inaccessible targets
+remain `unresolved` without target metadata. Visibility follows each content
+node's owner and the learner's visited steps, revealed explanations and history
+permission. Backlinks contain only accessible authored body references, exclude
+self links and never imply prerequisites. This index is rebuilt from the active
+catalog; no mutable second reference store or learning write is needed. A
+`?node=<node_id>` route selects only an already accessible step, then focuses
+its `node-<node_id>` anchor. Introduction correction blocks use
+`introduction:<introduction_id>`; legacy blocks remain `introduction`.
+
 All `/api` endpoints below require the same identity and transport validation as learning requests.
 
 | Endpoint | Contract |

@@ -19,6 +19,7 @@ from .question_types import public_interaction, display_answer
 from .content_reports import validate_correction
 from .question_bank import QuestionBank
 from .course_hierarchy import pending_hierarchy
+from .topic_runtime import is_introduction, learning_units, reread_pending
 
 
 class DashboardStore:
@@ -155,8 +156,21 @@ class DashboardStore:
         topic = self.catalog.topic(topic_id)
         row = con.execute('SELECT body,version FROM topics WHERE learner=? AND topic=?', (learner_id, topic_id)).fetchone()
         state = json.loads(row['body']) if row else None
-        if row and row['version'] != topic['version']:
+        if row and row['version'] != topic['version'] and not is_introduction(topic):
             raise DomainError('course_version_mismatch', '课程版本已变化，原进度已保留。请先由管理者处理版本迁移。')
+        if is_introduction(topic):
+            if state and state.get('topic_kind') != 'introduction':
+                raise DomainError('course_version_mismatch', 'Topic 类型已变化，原进度已保留。')
+            done = bool(state and state.get('completed_at'))
+            status = 'completed' if done else ('paused' if state and state.get('pause') else
+                     'in_progress' if state and state.get('started_at') else 'not_started')
+            current = bool(state and state.get('content_version') == topic['content_version'])
+            read = len(state.get('read_introductions', [])) if current else 0
+            return {'state': state, 'status': status, 'started_at': (state or {}).get('started_at'),
+                    'completed_at': (state or {}).get('completed_at'), 'mastery': None,
+                    'completed_modules': int(done), 'module_count': 1, 'progress': 100 if done else 0,
+                    'reread_pending': reread_pending(topic, state),
+                    'reading_progress': round(100 * read / len(topic['introductions']), 2)}
         if topic.get('training_mode') == 'atomic_retrieval':
             count = sum(len(c['points']) for c in topic['memory_chunks'])
             completed = sum(p['mastered'] for p in state['points'].values()) if state else 0
@@ -166,7 +180,8 @@ class DashboardStore:
                     'mastery': self.dependency_policy.mastery(con, learner_id, topic_id, state),
                     'completed_modules': completed, 'module_count': count, 'progress': round(100 * completed / count, 2)}
         attempts = state['attempts'] if state else []
-        completed = {attempt['module_id'] for attempt in attempts if attempt['status'] == 'completed'}
+        module_ids = {module['id'] for module in topic['modules']}
+        completed = {attempt['module_id'] for attempt in attempts if attempt['status'] == 'completed' and attempt['module_id'] in module_ids}
         started_at = state.get('started_at') if state else None
         if state and not state.get('reset_at'):
             # Reading an initial example is not a start. Old records have the
@@ -197,6 +212,8 @@ class DashboardStore:
                 'maintenance': False}
         if snapshot['status'] == 'completed':
             task.update(completed_at=snapshot['completed_at'], result='completed')
+        if is_introduction(self.catalog.topic(topic_id)):
+            task.update(topic_kind='introduction', reread_pending=snapshot.get('reread_pending', False))
         return task
 
     def _dependencies(self, course_id):
@@ -323,11 +340,10 @@ class DashboardStore:
             task['prerequisite_details'] = details(task['topic_id'])
             task['dependency_ready'] = eligibility[task['topic_id']]
             task['missing_prerequisite_count'] = missing[task['topic_id']]
-        def learning_units(topic_id):
+        def topic_units(topic_id):
             topic = self.catalog.topic(topic_id)
-            return (sum(len(c['points']) for c in topic['memory_chunks']) if topic.get('training_mode') == 'atomic_retrieval'
-                    else len(topic['modules']))
-        total = sum(learning_units(topic['id']) for topic in course['topics'])
+            return learning_units(topic)
+        total = sum(topic_units(topic['id']) for topic in course['topics'])
         completed = sum(item['completed_modules'] for item in snapshots.values())
         progress = round(100 * completed / total, 2) if total else 0
         started = [item['started_at'] for item in snapshots.values() if item['started_at']]
@@ -356,6 +372,13 @@ class DashboardStore:
                 task['status'] = 'paused'
             if snapshot['status'] == 'completed':
                 history.append(task)
+                if snapshot.get('reread_pending'):
+                    paused = bool((snapshot['state'] or {}).get('pause'))
+                    tasks.append({**task, 'id': 'introduction-update:' + topic_id,
+                                  'status': 'paused' if paused else 'in_progress' if snapshot['reading_progress'] else 'not_started',
+                                  'progress': snapshot['reading_progress'], 'content_update': True,
+                                  'completed_at': None, 'result': None,
+                                  'started': snapshot['reading_progress'] > 0})
             else:
                 tasks.append(task)
             topics.append({'id': topic_id, 'title': task['title'], 'status': snapshot['status'], 'progress': snapshot['progress'],

@@ -2,7 +2,7 @@
 
 本表从当前界面词库自动生成。修改以词库为准，随后重新生成并检查本表。术语约定见 [界面语言规范](ui-language.md)。
 
-共 554 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
+共 562 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
 
 不包括作者课程正文、题目、答案、解析或用户输入。首页的学科双语副标题按约定保留。
 
@@ -89,6 +89,14 @@
 
 | English | 中文 |
 |---|---|
+| Introduction | 引论 |
+| Updated introduction | 引论更新 |
+| This introduction has changed. Read the updated content; your original completion and course progress are preserved. | 引论内容已更新，请阅读本次内容。原完成记录和课程进度已保留。 |
+| {progress}% read | 已阅读 {progress}% |
+| Your reading is saved. Use the learning history to revisit this introduction. | 阅读记录已保存，可通过学习记录回看引论。 |
+| The target is not yet imported or is currently unavailable | 目标尚未导入或当前不可访问 |
+| Backlinks | 反向链接 |
+| No backlinks yet | 暂无反向链接 |
 | True | 正确 |
 | False | 错误 |
 | Left options | 左侧选项 |

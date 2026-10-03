@@ -86,9 +86,9 @@ class LearningService:
             columns = {item['name'] for item in con.execute('PRAGMA table_info(submissions)')}
             if 'elapsed_ms' not in columns:
                 con.execute('ALTER TABLE submissions ADD COLUMN elapsed_ms INTEGER')
-            row = con.execute('SELECT version FROM topics WHERE learner=? AND topic=?', self.key).fetchone()
+            row = con.execute('SELECT version,body FROM topics WHERE learner=? AND topic=?', self.key).fetchone()
             if row and row['version'] != course['version']:
-                raise DomainError('course_version_mismatch', '课程版本已变化，原进度已保留。请先由管理者处理版本迁移。')
+                self._reconcile_version(con, row)
             if not row:
                 state = {'revision': 0, 'status': 'in_progress', 'introduction_read': False,
                          'attempts': [], 'steps': [], 'module_index': 0, 'pause': None,
@@ -102,6 +102,11 @@ class LearningService:
         return self.learner_id, self.topic_id
 
     def _validate_course(self):
+        from .topic_runtime import validate_runtime, is_v2, is_introduction
+        try:
+            validate_runtime(self.course)
+        except (ValueError, TypeError, KeyError, AttributeError) as exc:
+            raise DomainError('invalid_course', 'Topic 章节、正文身份或引用结构无效。', 422) from exc
         if self.course.get('training_mode') == 'atomic_retrieval':
             from .atomic_content import validate_atomic
             try:
@@ -111,8 +116,10 @@ class LearningService:
             return
         if self.course.get('training_mode', 'paradigm') != 'paradigm':
             raise DomainError('invalid_course', '未知的 Topic 训练模式。', 422)
-        if not self.course.get('version') or not self.course.get('introduction', {}).get('html'):
+        if not self.course.get('version') or not (is_v2(self.course) or self.course.get('introduction', {}).get('html')):
             raise DomainError('invalid_course', '课程缺少版本或 Introduction。', 422)
+        if is_introduction(self.course):
+            return
         modules = self.course.get('modules', [])
         if not modules:
             raise DomainError('invalid_course', '课程没有 Example 模块。', 422)
@@ -131,6 +138,9 @@ class LearningService:
                     validate_interaction(question.get('interaction'), question['question'])
                 except (ValueError, TypeError, KeyError, TimeoutError) as exc:
                     raise DomainError('invalid_course', '题型配置或标准答案无效。', 422) from exc
+
+    def _reconcile_version(self, con, row):
+        raise DomainError('course_version_mismatch', '课程版本已变化，原进度已保留。请先由管理者处理版本迁移。')
 
     def _connect(self):
         if self.runtime is not None:
@@ -283,7 +293,9 @@ class LearningService:
                 if saved['phase'] == 'reading' or (saved['kind'] == 'practice' and saved['phase'] == 'feedback'):
                     step['explanation_html'] = question['explanation_html']
             elif saved['kind'] == 'introduction':
-                step.update(title='Introduction', html=self.course['introduction']['html'], explanation_html=None)
+                intro = (next(i for i in self.course['introductions'] if i['id'] == saved['introduction_id'])
+                         if saved.get('introduction_id') else self.course['introduction'])
+                step.update(title=intro.get('title', 'Introduction'), html=intro['html'], explanation_html=None)
             else:
                 step.update(title='Topic 完成', html='<p>本 Topic 的所有模块已完成。</p>', explanation_html=None)
             is_active = saved['id'] == state['active_step_id']
@@ -704,4 +716,7 @@ def create_learning_service(course, data_dir, judge=None, learner_id='local', **
     if course.get('training_mode') == 'atomic_retrieval':
         from .atomic import AtomicLearningService
         return AtomicLearningService(course, data_dir, judge, learner_id, **options)
+    if course.get('topic_format_version') == 2:
+        from .ordered_learning import OrderedLearningService
+        return OrderedLearningService(course, data_dir, judge, learner_id, **options)
     return LearningService(course, data_dir, judge, learner_id, **options)

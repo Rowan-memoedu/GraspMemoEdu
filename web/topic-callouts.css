@@ -1,0 +1,617 @@
+/*! al-folio colored blockquote / block-tip, commit fa58be03acad50a4a1ec566dc88280e73ab75d18.
+The MIT License (MIT)
+
+Copyright (c) 2025 Maruan Al-Shedivat.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
+/*! Tufted quote layout, text and narrow-screen rule, commit 9688c47b951c390d25a809dc86bd9748c93282d9.
+MIT License
+
+Copyright (c) 2025 Yousa-Mirage
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+.reading-outline .document-annotations.callout {
+  background: var(--document-callout-background);
+  border-left: 5px solid var(--document-callout-accent);
+  font-size: inherit;
+  margin: 1.5em 0;
+  padding: 1em;
+}
+
+.reading-outline .document-annotations.callout p {
+  margin-bottom: 0;
+}
+
+.reading-outline .document-annotations.callout[data-callout="note"] {
+  border-color: var(--document-callout-accent);
+  background-color: var(--document-callout-background);
+}
+
+.reading-outline .document-annotations.callout[data-callout="note"] em, .reading-outline .document-annotations.callout[data-callout="note"] li, .reading-outline .document-annotations.callout[data-callout="note"] p, .reading-outline .document-annotations.callout[data-callout="note"] strong {
+  color: var(--document-callout-text);
+}
+
+.reading-outline .document-annotations.callout[data-callout="note"] a, .reading-outline .document-annotations.callout[data-callout="note"] h1, .reading-outline .document-annotations.callout[data-callout="note"] h2, .reading-outline .document-annotations.callout[data-callout="note"] h3, .reading-outline .document-annotations.callout[data-callout="note"] h4, .reading-outline .document-annotations.callout[data-callout="note"] h5, .reading-outline .document-annotations.callout[data-callout="note"] h6 {
+  color: var(--document-callout-link);
+}
+
+.reading-outline .document-annotations.callout {
+  width: 90%;
+  font-size: inherit;
+  line-height: inherit;
+  clear: none;
+  box-sizing: border-box;
+  margin: 1.5em auto;
+  padding-right: 1em;
+}
+
+.reading-outline .document-annotations.callout p {
+  font-size: inherit;
+  width: 100%;
+  margin: .5em 0;
+}
+
+.reading-outline .document-annotations.callout .math-block, .reading-outline .document-annotations.callout math[display="block"] {
+  width: 100%;
+  max-width: 100%;
+  font-size: 1em;
+}
+
+.reading-outline .document-annotations.callout {
+  --document-callout-background: #eaffd8;
+  --document-callout-accent: #2d6636;
+  --document-callout-text: #243c2a;
+  --document-callout-link: #14552a;
+  --document-callout-margin: 1.5em;
+  --document-callout-padding: 1em;
+  color: var(--document-callout-text);
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable both-edges;
+  min-width: 0;
+  max-width: 100%;
+  max-height: 336px;
+  box-shadow: none;
+  border-top: 0;
+  border-bottom: 0;
+  border-right: 0;
+  border-radius: 0;
+  display: block;
+  overflow: auto;
+}
+
+.reading-outline .document-annotations.callout > .callout-content {
+  min-width: 0;
+  max-width: 100%;
+  transition: none;
+  display: block;
+  overflow: visible;
+}
+
+.reading-outline .document-annotations.callout:focus-visible {
+  outline: 2px solid var(--document-callout-accent);
+  outline-offset: 3px;
+}
+
+@media (width <= 760px) {
+  .reading-outline .document-annotations.callout {
+    width: 90%;
+  }
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="hint"] {
+  background: var(--document-callout-background);
+  border-left: 5px solid var(--document-callout-accent);
+  font-size: inherit;
+  margin: 1.5em 0;
+  padding: 1em;
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="hint"] p {
+  margin-bottom: 0;
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="hint"][data-callout="hint"] {
+  border-color: var(--document-callout-accent);
+  background-color: var(--document-callout-background);
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="hint"][data-callout="hint"] em, .reading-outline .inline-document-callout.callout[data-callout="hint"][data-callout="hint"] li, .reading-outline .inline-document-callout.callout[data-callout="hint"][data-callout="hint"] p, .reading-outline .inline-document-callout.callout[data-callout="hint"][data-callout="hint"] strong {
+  color: var(--document-callout-text);
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="hint"][data-callout="hint"] a, .reading-outline .inline-document-callout.callout[data-callout="hint"][data-callout="hint"] h1, .reading-outline .inline-document-callout.callout[data-callout="hint"][data-callout="hint"] h2, .reading-outline .inline-document-callout.callout[data-callout="hint"][data-callout="hint"] h3, .reading-outline .inline-document-callout.callout[data-callout="hint"][data-callout="hint"] h4, .reading-outline .inline-document-callout.callout[data-callout="hint"][data-callout="hint"] h5, .reading-outline .inline-document-callout.callout[data-callout="hint"][data-callout="hint"] h6 {
+  color: var(--document-callout-link);
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="hint"] {
+  width: 90%;
+  font-size: inherit;
+  line-height: inherit;
+  clear: none;
+  box-sizing: border-box;
+  margin: 1.5em auto;
+  padding-right: 1em;
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="hint"] p {
+  font-size: inherit;
+  width: 100%;
+  margin: .5em 0;
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="hint"] .math-block, .reading-outline .inline-document-callout.callout[data-callout="hint"] math[display="block"] {
+  width: 100%;
+  max-width: 100%;
+  font-size: 1em;
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="hint"] {
+  --document-callout-background: #eaffd8;
+  --document-callout-accent: #2d6636;
+  --document-callout-text: #243c2a;
+  --document-callout-link: #14552a;
+  --document-callout-margin: 1.5em;
+  --document-callout-padding: 1em;
+  color: var(--document-callout-text);
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable both-edges;
+  min-width: 0;
+  max-width: 100%;
+  max-height: 336px;
+  box-shadow: none;
+  border-top: 0;
+  border-bottom: 0;
+  border-right: 0;
+  border-radius: 0;
+  display: block;
+  overflow: auto;
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="hint"] > .callout-content {
+  min-width: 0;
+  max-width: 100%;
+  transition: none;
+  display: block;
+  overflow: visible;
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="hint"]:focus-visible {
+  outline: 2px solid var(--document-callout-accent);
+  outline-offset: 3px;
+}
+
+@media (width <= 760px) {
+  .reading-outline .inline-document-callout.callout[data-callout="hint"] {
+    width: 90%;
+  }
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="hint"] {
+  --document-callout-background: #ffffd6;
+  --document-callout-accent: #876300;
+  --document-callout-text: #443600;
+  --document-callout-link: #604000;
+}
+.reading-outline .inline-document-callout.callout[data-callout="aside"] {
+  background: var(--document-callout-background);
+  border-left: 5px solid var(--document-callout-accent);
+  font-size: inherit;
+  margin: 1.5em 0;
+  padding: 1em;
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="aside"] p {
+  margin-bottom: 0;
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="aside"][data-callout="aside"] {
+  border-color: var(--document-callout-accent);
+  background-color: var(--document-callout-background);
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="aside"][data-callout="aside"] em, .reading-outline .inline-document-callout.callout[data-callout="aside"][data-callout="aside"] li, .reading-outline .inline-document-callout.callout[data-callout="aside"][data-callout="aside"] p, .reading-outline .inline-document-callout.callout[data-callout="aside"][data-callout="aside"] strong {
+  color: var(--document-callout-text);
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="aside"][data-callout="aside"] a, .reading-outline .inline-document-callout.callout[data-callout="aside"][data-callout="aside"] h1, .reading-outline .inline-document-callout.callout[data-callout="aside"][data-callout="aside"] h2, .reading-outline .inline-document-callout.callout[data-callout="aside"][data-callout="aside"] h3, .reading-outline .inline-document-callout.callout[data-callout="aside"][data-callout="aside"] h4, .reading-outline .inline-document-callout.callout[data-callout="aside"][data-callout="aside"] h5, .reading-outline .inline-document-callout.callout[data-callout="aside"][data-callout="aside"] h6 {
+  color: var(--document-callout-link);
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="aside"] {
+  width: 90%;
+  font-size: inherit;
+  line-height: inherit;
+  clear: none;
+  box-sizing: border-box;
+  margin: 1.5em auto;
+  padding-right: 1em;
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="aside"] p {
+  font-size: inherit;
+  width: 100%;
+  margin: .5em 0;
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="aside"] .math-block, .reading-outline .inline-document-callout.callout[data-callout="aside"] math[display="block"] {
+  width: 100%;
+  max-width: 100%;
+  font-size: 1em;
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="aside"] {
+  --document-callout-background: #eaffd8;
+  --document-callout-accent: #2d6636;
+  --document-callout-text: #243c2a;
+  --document-callout-link: #14552a;
+  --document-callout-margin: 1.5em;
+  --document-callout-padding: 1em;
+  color: var(--document-callout-text);
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable both-edges;
+  min-width: 0;
+  max-width: 100%;
+  max-height: 336px;
+  box-shadow: none;
+  border-top: 0;
+  border-bottom: 0;
+  border-right: 0;
+  border-radius: 0;
+  display: block;
+  overflow: auto;
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="aside"] > .callout-content {
+  min-width: 0;
+  max-width: 100%;
+  transition: none;
+  display: block;
+  overflow: visible;
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="aside"]:focus-visible {
+  outline: 2px solid var(--document-callout-accent);
+  outline-offset: 3px;
+}
+
+@media (width <= 760px) {
+  .reading-outline .inline-document-callout.callout[data-callout="aside"] {
+    width: 90%;
+  }
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="aside"] {
+  --document-callout-background: #f3e8ff;
+  --document-callout-accent: #7e22ce;
+  --document-callout-text: #3b0764;
+  --document-callout-link: #6b21a8;
+}
+.reading-outline .inline-document-callout.callout[data-callout="requirement"] {
+  background: var(--document-callout-background);
+  border-left: 5px solid var(--document-callout-accent);
+  font-size: inherit;
+  margin: 1.5em 0;
+  padding: 1em;
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="requirement"] p {
+  margin-bottom: 0;
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="requirement"][data-callout="requirement"] {
+  border-color: var(--document-callout-accent);
+  background-color: var(--document-callout-background);
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="requirement"][data-callout="requirement"] em, .reading-outline .inline-document-callout.callout[data-callout="requirement"][data-callout="requirement"] li, .reading-outline .inline-document-callout.callout[data-callout="requirement"][data-callout="requirement"] p, .reading-outline .inline-document-callout.callout[data-callout="requirement"][data-callout="requirement"] strong {
+  color: var(--document-callout-text);
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="requirement"][data-callout="requirement"] a, .reading-outline .inline-document-callout.callout[data-callout="requirement"][data-callout="requirement"] h1, .reading-outline .inline-document-callout.callout[data-callout="requirement"][data-callout="requirement"] h2, .reading-outline .inline-document-callout.callout[data-callout="requirement"][data-callout="requirement"] h3, .reading-outline .inline-document-callout.callout[data-callout="requirement"][data-callout="requirement"] h4, .reading-outline .inline-document-callout.callout[data-callout="requirement"][data-callout="requirement"] h5, .reading-outline .inline-document-callout.callout[data-callout="requirement"][data-callout="requirement"] h6 {
+  color: var(--document-callout-link);
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="requirement"] {
+  width: 90%;
+  font-size: inherit;
+  line-height: inherit;
+  clear: none;
+  box-sizing: border-box;
+  margin: 1.5em auto;
+  padding-right: 1em;
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="requirement"] p {
+  font-size: inherit;
+  width: 100%;
+  margin: .5em 0;
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="requirement"] .math-block, .reading-outline .inline-document-callout.callout[data-callout="requirement"] math[display="block"] {
+  width: 100%;
+  max-width: 100%;
+  font-size: 1em;
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="requirement"] {
+  --document-callout-background: #eaffd8;
+  --document-callout-accent: #2d6636;
+  --document-callout-text: #243c2a;
+  --document-callout-link: #14552a;
+  --document-callout-margin: 1.5em;
+  --document-callout-padding: 1em;
+  color: var(--document-callout-text);
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable both-edges;
+  min-width: 0;
+  max-width: 100%;
+  max-height: 336px;
+  box-shadow: none;
+  border-top: 0;
+  border-bottom: 0;
+  border-right: 0;
+  border-radius: 0;
+  display: block;
+  overflow: auto;
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="requirement"] > .callout-content {
+  min-width: 0;
+  max-width: 100%;
+  transition: none;
+  display: block;
+  overflow: visible;
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="requirement"]:focus-visible {
+  outline: 2px solid var(--document-callout-accent);
+  outline-offset: 3px;
+}
+
+@media (width <= 760px) {
+  .reading-outline .inline-document-callout.callout[data-callout="requirement"] {
+    width: 90%;
+  }
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="requirement"] {
+  --document-callout-background: #e5f1ff;
+  --document-callout-accent: #285b94;
+  --document-callout-text: #183b63;
+  --document-callout-link: #174d8b;
+}
+.reading-outline .inline-document-callout.callout[data-callout="source"] {
+  background: var(--document-callout-background);
+  border-left: 5px solid var(--document-callout-accent);
+  font-size: inherit;
+  margin: 1.5em 0;
+  padding: 1em;
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="source"] p {
+  margin-bottom: 0;
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="source"][data-callout="source"] {
+  border-color: var(--document-callout-accent);
+  background-color: var(--document-callout-background);
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="source"][data-callout="source"] em, .reading-outline .inline-document-callout.callout[data-callout="source"][data-callout="source"] li, .reading-outline .inline-document-callout.callout[data-callout="source"][data-callout="source"] p, .reading-outline .inline-document-callout.callout[data-callout="source"][data-callout="source"] strong {
+  color: var(--document-callout-text);
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="source"][data-callout="source"] a, .reading-outline .inline-document-callout.callout[data-callout="source"][data-callout="source"] h1, .reading-outline .inline-document-callout.callout[data-callout="source"][data-callout="source"] h2, .reading-outline .inline-document-callout.callout[data-callout="source"][data-callout="source"] h3, .reading-outline .inline-document-callout.callout[data-callout="source"][data-callout="source"] h4, .reading-outline .inline-document-callout.callout[data-callout="source"][data-callout="source"] h5, .reading-outline .inline-document-callout.callout[data-callout="source"][data-callout="source"] h6 {
+  color: var(--document-callout-link);
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="source"] {
+  width: 90%;
+  font-size: inherit;
+  line-height: inherit;
+  clear: none;
+  box-sizing: border-box;
+  margin: 1.5em auto;
+  padding-right: 1em;
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="source"] p {
+  font-size: inherit;
+  width: 100%;
+  margin: .5em 0;
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="source"] .math-block, .reading-outline .inline-document-callout.callout[data-callout="source"] math[display="block"] {
+  width: 100%;
+  max-width: 100%;
+  font-size: 1em;
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="source"] {
+  --document-callout-background: #eaffd8;
+  --document-callout-accent: #2d6636;
+  --document-callout-text: #243c2a;
+  --document-callout-link: #14552a;
+  --document-callout-margin: 1.5em;
+  --document-callout-padding: 1em;
+  color: var(--document-callout-text);
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable both-edges;
+  min-width: 0;
+  max-width: 100%;
+  max-height: 336px;
+  box-shadow: none;
+  border-top: 0;
+  border-bottom: 0;
+  border-right: 0;
+  border-radius: 0;
+  display: block;
+  overflow: auto;
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="source"] > .callout-content {
+  min-width: 0;
+  max-width: 100%;
+  transition: none;
+  display: block;
+  overflow: visible;
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="source"]:focus-visible {
+  outline: 2px solid var(--document-callout-accent);
+  outline-offset: 3px;
+}
+
+@media (width <= 760px) {
+  .reading-outline .inline-document-callout.callout[data-callout="source"] {
+    width: 90%;
+  }
+}
+
+.reading-outline .inline-document-callout.callout[data-callout="source"] {
+  --document-callout-background: #f0f1f3;
+  --document-callout-accent: #63666c;
+  --document-callout-text: #34363b;
+  --document-callout-link: #424f69;
+}
+.reading-outline .document-draft.callout {
+  background: var(--document-callout-background);
+  border-left: 5px solid var(--document-callout-accent);
+  font-size: inherit;
+  margin: 1.5em 0;
+  padding: 1em;
+}
+
+.reading-outline .document-draft.callout p {
+  margin-bottom: 0;
+}
+
+.reading-outline .document-draft.callout[data-callout="danger"] {
+  border-color: var(--document-callout-accent);
+  background-color: var(--document-callout-background);
+}
+
+.reading-outline .document-draft.callout[data-callout="danger"] em, .reading-outline .document-draft.callout[data-callout="danger"] li, .reading-outline .document-draft.callout[data-callout="danger"] p, .reading-outline .document-draft.callout[data-callout="danger"] strong {
+  color: var(--document-callout-text);
+}
+
+.reading-outline .document-draft.callout[data-callout="danger"] a, .reading-outline .document-draft.callout[data-callout="danger"] h1, .reading-outline .document-draft.callout[data-callout="danger"] h2, .reading-outline .document-draft.callout[data-callout="danger"] h3, .reading-outline .document-draft.callout[data-callout="danger"] h4, .reading-outline .document-draft.callout[data-callout="danger"] h5, .reading-outline .document-draft.callout[data-callout="danger"] h6 {
+  color: var(--document-callout-link);
+}
+
+.reading-outline .document-draft.callout {
+  width: 90%;
+  font-size: inherit;
+  line-height: inherit;
+  clear: none;
+  box-sizing: border-box;
+  margin: 1.5em auto;
+  padding-right: 1em;
+}
+
+.reading-outline .document-draft.callout p {
+  font-size: inherit;
+  width: 100%;
+  margin: .5em 0;
+}
+
+.reading-outline .document-draft.callout .math-block, .reading-outline .document-draft.callout math[display="block"] {
+  width: 100%;
+  max-width: 100%;
+  font-size: 1em;
+}
+
+.reading-outline .document-draft.callout {
+  --document-callout-background: #eaffd8;
+  --document-callout-accent: #2d6636;
+  --document-callout-text: #243c2a;
+  --document-callout-link: #14552a;
+  --document-callout-margin: 1.5em;
+  --document-callout-padding: 1em;
+  color: var(--document-callout-text);
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable both-edges;
+  min-width: 0;
+  max-width: 100%;
+  max-height: 336px;
+  box-shadow: none;
+  border-top: 0;
+  border-bottom: 0;
+  border-right: 0;
+  border-radius: 0;
+  display: block;
+  overflow: auto;
+}
+
+.reading-outline .document-draft.callout > .callout-content {
+  min-width: 0;
+  max-width: 100%;
+  transition: none;
+  display: block;
+  overflow: visible;
+}
+
+.reading-outline .document-draft.callout:focus-visible {
+  outline: 2px solid var(--document-callout-accent);
+  outline-offset: 3px;
+}
+
+@media (width <= 760px) {
+  .reading-outline .document-draft.callout {
+    width: 90%;
+  }
+}
+
+.reading-outline .document-draft.callout {
+  --document-callout-background: #ffe0de;
+  --document-callout-accent: #b42318;
+  --document-callout-text: #7a1812;
+  --document-callout-link: #941c12;
+}
+.reading-outline .outline-node:not(.document-current) > .document-body > .document-annotations.callout,
+.reading-outline .outline-node:not(.document-current) > .document-body > .document-draft.callout,
+.reading-outline .outline-node.inline-document-callout.callout:not(.is-focused):not(.document-current) {
+  width: 75%;
+  margin-left: auto;
+  margin-right: auto;
+}
+.reading-outline .outline-node[data-leading-annotation="true"].inline-document-callout.callout[data-callout="inline"],
+.reading-outline .outline-node[data-leading-annotation="true"] > .inline-document-callout.callout[data-callout="inline"] {
+  --document-callout-background: #eaffd8;
+  --document-callout-accent: #2d6636;
+  --document-callout-text: #243c2a;
+  --document-callout-link: #14552a;
+}

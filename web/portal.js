@@ -1,12 +1,13 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=e2e83f84174c2962";
-import { createReviewView } from "./review.js?v=e2e83f84174c2962";
-import { renderCourseGraph } from "./course-graph.js?v=e2e83f84174c2962";
-import {questionInput} from './question-input.js?v=e2e83f84174c2962';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=e2e83f84174c2962';
-import {createCatalogPicker} from './catalog-picker.js?v=e2e83f84174c2962';
-import {createAtomicView} from './atomic.js?v=e2e83f84174c2962';
-import {createTrainingView} from './training.js?v=e2e83f84174c2962';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=e2e83f84174c2962";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=9bb0c0fa655f896d";
+import { createReviewView } from "./review.js?v=9bb0c0fa655f896d";
+import { renderCourseGraph } from "./course-graph.js?v=9bb0c0fa655f896d";
+import {questionInput} from './question-input.js?v=9bb0c0fa655f896d';
+import {enhanceTopicContent} from './topic-content.js?v=9bb0c0fa655f896d';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=9bb0c0fa655f896d';
+import {createCatalogPicker} from './catalog-picker.js?v=9bb0c0fa655f896d';
+import {createAtomicView} from './atomic.js?v=9bb0c0fa655f896d';
+import {createTrainingView} from './training.js?v=9bb0c0fa655f896d';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=9bb0c0fa655f896d";
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -115,7 +116,7 @@ export function initPortal(bridge) {
     let style = $(id); if (!style) { style = node("style"); style.id = id; document.head.append(style); }
     style.textContent = css || "";
   }
-  function trustedContent(html, className = "courseContent") { const item = node("div", className); item.innerHTML = html || ""; return item; }
+  function trustedContent(html, references) { const item = node("div", "courseContent"); item.innerHTML = html || ""; enhanceTopicContent(item, references); return item; }
   function setNavigation(section) {
     for (const item of document.querySelectorAll("[data-navigation]")) {
       const active = item.dataset.navigation === section;
@@ -503,7 +504,7 @@ export function initPortal(bridge) {
   }
   function taskSummary(task, history = false, view = {}) {
     const wrap = node("div", "taskSummaryContent"), heading = node("div", "taskHeading");
-    heading.append(taskIcon(task, history), node("strong", "", view.label || `${typeNames[task.type] || t("portal.lesson")}${task.retake ? t("portal.retake") : ""}`));
+    heading.append(taskIcon(task, history), node("strong", "", task.topic_kind === 'introduction' ? t(task.content_update ? 'reader.introductionUpdate' : 'reader.introductionTask') : view.label || `${typeNames[task.type] || t("portal.lesson")}${task.retake ? t("portal.retake") : ""}`));
     if (task.reason === "gravity") {
       const reason = node("span", "taskReason", "●"); reason.title = task.reason_message ? translateMessage(task.reason_message) : t("portal.this.task.was.selected.by.the.course.schedule.45"); reason.setAttribute("aria-label", reason.title); heading.append(reason);
     }
@@ -561,10 +562,11 @@ export function initPortal(bridge) {
   }
   function historyCard(task) {
     const card = node("article", "portalTask taskCompleted"); card.dataset.taskId = task.id;
-    const summary = control("", "taskToggle", () => navigate(`/learn?taskId=${encode(task.id)}`)); summary.append(taskSummary(task, true)); card.append(summary);
+    const href = task.topic_kind === 'introduction' ? `/topic/${encode(task.topic_id)}` : `/learn?taskId=${encode(task.id)}`;
+    const summary = control("", "taskToggle", () => navigate(href)); summary.append(taskSummary(task, true)); card.append(summary);
     if (bridge.getAccess()?.role === "guest") {
       const actions = node("div", "taskStartRow completedTaskActions");
-      actions.append(roundButton(t("portal.review.54"), () => navigate(`/learn?taskId=${encode(task.id)}`)));
+      actions.append(roundButton(t("portal.review.54"), () => navigate(href)));
       appendGuestReset(actions, task); card.append(actions);
     }
     return card;
@@ -627,6 +629,13 @@ export function initPortal(bridge) {
     }
     // A rolling deployment can briefly serve an older dashboard response.
     for (const [id, task] of lessonTasks) if (!rendered.has(id)) pending.append(incompleteTask(task, data, view));
+    const sourceOrder = new Map((view.sourceOrder || []).map((id, index) => [id, index]));
+    if (sourceOrder.size) {
+      const position = element => sourceOrder.get(element.dataset.unitId || element.dataset.taskId) ?? Number.MAX_SAFE_INTEGER;
+      for (const body of [pending, ...[...containers.values()].map(item => item.body)]) {
+        body.append(...[...body.children].sort((a, b) => position(a) - position(b)));
+      }
+    }
   }
   function renderLearn(data, taskId, ticket) {
     historyError = null;
@@ -715,12 +724,12 @@ export function initPortal(bridge) {
       if (!result.groups?.some((group) => group.answers?.length)) target.append(emptyBox(t("portal.no.answer.records.are.available.76")));
       for (const group of result.groups || []) {
         const section = node("section", "answerGroup"); section.append(node("h2", "answerGroupTitle", learningTitle(group.title)));
-        for (const [index, answer] of (group.answers || []).entries()) section.append(answerCard(answer, index, result.task));
+        for (const [index, answer] of (group.answers || []).entries()) section.append(answerCard(answer, index, result.task, result.content_references));
         target.append(section);
       }
     } catch (error) { if (ticket === sequence) target.replaceChildren(back, errorBox(translateMessage(error.message), () => renderAnswers(target, taskId, ticket), t("portal.unable.to.load.answers.77"))); }
   }
-  function answerCard(answer, index, task) {
+  function answerCard(answer, index, task, references) {
     const wrapper = node("article", "answerRecord"), head = node("div", "answerRecordHeader"), question = node("div", "answerQuestion");
     head.append(node("span", "", t("portal.questionIndex", { index: (index + 1).toLocaleString(locale()) })));
     const helpHost = node("div", "answerHelpHost"), helpMenu = node("div", "answerHelpMenu"); helpMenu.hidden = true;
@@ -730,7 +739,7 @@ export function initPortal(bridge) {
     helpHost.addEventListener("mouseenter", () => { helpMenu.hidden = false; });
     helpHost.addEventListener("mouseleave", () => { helpMenu.hidden = true; });
     helpHost.append(help, helpMenu); head.append(helpHost);
-    const stem = trustedContent(answer.html);
+    const stem = trustedContent(answer.html, references);
     const reportContext = {course_id: task.course_id, topic_id: task.topic_id, task_id: task.id, question_id: answer.question_id};
     reportableContent(stem, reportContext, `question:${answer.question_id}`, answer.content_version);
     question.append(stem);
@@ -744,7 +753,7 @@ export function initPortal(bridge) {
     const result = outcomes[answer.result] || (answer.correct === true ? t("portal.correct.80") : answer.correct === false ? t("portal.incorrect.81") : "—");
     const outcome = node("span", `answerOutcome ${answer.correct === true ? "correct" : answer.correct === false ? "incorrect" : ""}`, result); meta.append(outcome);
     const explanation = node("div", "answerExplanation"); explanation.hidden = true;
-    if (answer.explanation_html) explanation.append(reportableContent(trustedContent(answer.explanation_html), reportContext,
+    if (answer.explanation_html) explanation.append(reportableContent(trustedContent(answer.explanation_html, references), reportContext,
       `explanation:${answer.question_id}`, answer.content_version)); else explanation.append(node("p", "", t("portal.no.explanation.is.available.for.this.question.86")));
     if (answer.reason) explanation.append(node('p', 'feedbackReason', answer.reason));
     if (answer.correct !== true) { explanation.append(node("h3", "", t("portal.your.answer.87")), node("pre", "historyYourAnswer", answer.answer == null || answer.answer === "" ? t("portal.unanswered.85") : answer.answer_display ?? answer.answer)); }

@@ -37,6 +37,7 @@ from .public_limits import BodyLimitMiddleware, PublicLimits, PublicLimitError
 from .training_content import TrainingCatalog
 from .training_api import register_training_routes, PUBLIC_PATHS as TRAINING_PATHS
 from .training import TrainingService
+from .content_references import ContentReferenceIndex
 
 
 class Action(BaseModel):
@@ -138,11 +139,13 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     training = TrainingCatalog(settings.data_dir)
     access_store = AccessStore(settings.data_dir, [{'id': topic['id'], 'title': topic['title']} for topic in catalog.topics.values()] + training.permissions(catalog.topics))
     dashboard_store = DashboardStore(catalog, access_store, subjects, atomic_clock=atomic_clock)
+    content_references = ContentReferenceIndex(catalog.topics)
     from .help_requests import register_help_routes
     dependency_policy = dashboard_store.dependency_policy
     learning_services = ServiceCache(catalog.default_topic_id)
     learning_services[(service.learner_id, service.topic_id)] = service
-    if service.review_backend is None and not is_atomic(service.course):
+    from .topic_runtime import is_introduction
+    if service.review_backend is None and not is_atomic(service.course) and not is_introduction(service.course):
         ReviewBackend(service)
     services_lock = threading.Lock()
     public_limits = PublicLimits(data_dir=settings.data_dir)
@@ -179,7 +182,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                     catalog.topic(topic_id), settings.data_dir, service.judge, learner_id=learner_id,
                     **({'runtime': runtime} if runtime else {}),
                     **({'clock': atomic_clock} if is_atomic(catalog.topic(topic_id)) and atomic_clock else {}))
-                if not is_atomic(learning_services[key].course):
+                if not is_atomic(learning_services[key].course) and not is_introduction(learning_services[key].course):
                     ReviewBackend(learning_services[key])
             return learning_services[key]
 
@@ -206,11 +209,24 @@ def create_app(settings: Settings | None = None, service: LearningService | None
             if not previous:
                 dependency_policy.require(access, topic_id)
         learner = service_for(access['learner_id'], topic_id, request.headers.get('x-learning-identity'))
+        if is_introduction(learner.course) and path.startswith('/api/review/'):
+            raise DomainError('no_scheduled_review', '引论不安排定时复习。', 422)
         if is_atomic(learner.course) and path.startswith('/api/review/'):
             raise DomainError('wrong_training_mode', '原子训练请使用记忆点复习页面。', 422)
         return access, learner
 
-    def public_state(state, access):
+    def references_for(access, learner):
+        # Follow the learner's storage scope, including temporary admin preview.
+        with closing(learner._connect()) as con:
+            snapshots = {row['topic']: {**json.loads(row['body']), '_course_version': row['version']}
+                         for row in con.execute('SELECT topic,version,body FROM topics WHERE learner=?',
+                                                (access['learner_id'],))}
+        return content_references.view(
+            access, learner.topic_id, snapshots,
+            lambda tid: subjects.course_subjects[catalog.topic_courses[tid]],
+            lambda tid: dependency_policy.is_ready(access, tid))
+
+    def public_state(state, access, learner):
         state['access'] = access
         features = set(access['features'])
         state['dependency_ready'] = dependency_policy.is_ready(access, state['topic_id'])
@@ -234,6 +250,8 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         for step in state['steps']:
             step['actions'] = [action for action in step['actions']
                                if state['dependency_ready'] and action_feature.get(action) in features]
+        if state.get('topic_format_version') == 2:
+            state['content_references'] = references_for(access, learner)
         return state
 
     def public_submission(result, access, learner):
@@ -245,7 +263,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                                   (result['submission_id'], learner.learner_id, learner.topic_id)).fetchone()
             if not row or row['step'] != result['state']['active_step_id']:
                 raise DomainError('feature_forbidden', '当前账号没有使用此功能的权限。', 403)
-        result['state'] = public_state(result['state'], access)
+        result['state'] = public_state(result['state'], access, learner)
         return result
 
     def outstanding_count(con):
@@ -580,7 +598,11 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     @app.get('/api/tasks/{task_id}/answers')
     def task_answers(task_id: str, request: Request):
         access = access_store.resolve(request.headers.get('x-learning-identity'))
-        return dashboard_store.answers(access, task_id, request.query_params.get('subject_id'))
+        result = dashboard_store.answers(access, task_id, request.query_params.get('subject_id'))
+        topic_id = result['task']['topic_id']
+        if catalog.topic(topic_id).get('topic_format_version') == 2:
+            result['content_references'] = references_for(access, service_for(access['learner_id'], topic_id, request.headers.get('x-learning-identity')))
+        return result
 
     @app.get('/api/profile')
     def profile(request: Request):
@@ -619,27 +641,27 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     @app.get('/api/state')
     def state(request: Request):
         access, learner = identity(request)
-        return public_state(learner.state(), access)
+        return public_state(learner.state(), access, learner)
 
     @app.post('/api/choose')
     def choose(payload: Choice, request: Request):
         access, learner = identity(request, 'learn')
-        return public_state(learner.choose(payload.model_dump()), access)
+        return public_state(learner.choose(payload.model_dump()), access, learner)
 
     @app.post('/api/continue')
     def advance(payload: Action, request: Request):
         access, learner = identity(request, 'learn')
-        return public_state(learner.advance(payload.model_dump()), access)
+        return public_state(learner.advance(payload.model_dump()), access, learner)
 
     @app.post('/api/select')
     def select(payload: Action, request: Request):
         access, learner = identity(request, 'review_history')
-        return public_state(learner.select(payload.model_dump()), access)
+        return public_state(learner.select(payload.model_dump()), access, learner)
 
     @app.post('/api/pause')
     def pause(payload: Pause, request: Request):
         access, learner = identity(request, 'pause_topic')
-        return public_state(learner.pause(payload.model_dump()), access)
+        return public_state(learner.pause(payload.model_dump()), access, learner)
 
     @app.post('/api/submit')
     def submit(payload: Answer, request: Request):
@@ -681,6 +703,6 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                              admission_lock, public_limits, schedule, outstanding_count, clock=atomic_clock)
     register_guide_routes(app, settings, access_store, subjects)
     register_guest_reset_routes(app, identity, public_state, Action)
-    register_review_routes(app, identity, admission_lock, public_limits, schedule, outstanding_count, dependency_policy)
+    register_review_routes(app, identity, admission_lock, public_limits, schedule, outstanding_count, dependency_policy, references_for)
     app.mount('/', StaticFiles(directory=Path(__file__).resolve().parent.parent / 'web', html=True), name='web')
     return app

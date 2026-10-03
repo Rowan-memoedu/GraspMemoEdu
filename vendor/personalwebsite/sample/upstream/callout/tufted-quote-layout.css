@@ -1,0 +1,10 @@
+/* Quote blocks with left border */
+div[style*="border-inline-start"] {
+	width: 55% !important;
+	font-size: 1.4rem;
+	line-height: 2.2rem;
+	clear: none;
+	margin: 1.5em 0;
+	padding-right: 0;
+	box-sizing: border-box;
+}

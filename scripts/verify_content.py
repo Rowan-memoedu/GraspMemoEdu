@@ -17,6 +17,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from graspmemoedu.question_types import validate_interaction
+from graspmemoedu.topic_format import is_v2_source, parse_source, to_outline
 
 
 def sha256(value: str | bytes) -> str:
@@ -30,9 +31,15 @@ class Node:
     line: int
     lines: list[str] = field(default_factory=list)
     children: list["Node"] = field(default_factory=list)
+    meta: dict = field(default_factory=dict)
 
 
 def parse_outline(source: str) -> Node:
+    if is_v2_source(source):
+        def convert(value):
+            return Node(value['head'], value['indent'], value['line'], value['lines'],
+                        [convert(child) for child in value['children']], value['meta'])
+        return convert(to_outline(parse_source(source)[0]))
     root = Node("", -2, 0)
     stack = [root]
     for number, line in enumerate(source.lstrip("\ufeff").splitlines(), 1):
@@ -82,7 +89,7 @@ def practice_nodes(module: Node) -> list[Node]:
 def collect_questions(topic: Node) -> list[dict]:
     result = []
     intro = [n for n in topic.children if n.head.lower() == "introduction"]
-    if len(intro) != 1:
+    if not intro or (topic.meta.get('topic_format_version') != 2 and len(intro) != 1):
         raise ValueError("Expected exactly one Introduction")
     module_numbers = []
     for module in topic.children:
@@ -280,7 +287,8 @@ def verify(source_path: Path, sidecar_path: Path, review_path: Path | None = Non
     sidecar = json.loads(sidecar_path.read_text(encoding="utf-8-sig"))
     if sha256(raw) != sidecar["source_sha256"]:
         raise ValueError("Source hash changed; sidecar must be reviewed again")
-    questions = collect_questions(parse_outline(source))
+    topic = parse_outline(source)
+    questions = collect_questions(topic)
     by_id = {q["id"]: q for q in questions}
     mechanical = False
     if set(by_id) != set(sidecar["answers"]):
@@ -289,9 +297,11 @@ def verify(source_path: Path, sidecar_path: Path, review_path: Path | None = Non
         raise ValueError("Question count changed")
     if review_path is not None:
         module_ids = {q["module_id"] for q in questions}
-        if not module_ids or len(module_ids) != sidecar.get("expected_module_count"):
+        intro_only = topic.meta.get('topic_format_version') == 2 and topic.meta.get('topic_kind') == 'introduction'
+        if (not module_ids and not intro_only) or len(module_ids) != sidecar.get("expected_module_count"):
             raise ValueError("Module count changed")
-        if not isinstance(sidecar.get("course_id"), str) or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", sidecar["course_id"]):
+        id_pattern = r'[A-Za-z0-9][A-Za-z0-9_.-]{0,127}' if topic.meta.get('topic_format_version') == 2 else r'[a-z0-9]+(?:-[a-z0-9]+)*'
+        if not isinstance(sidecar.get("course_id"), str) or not re.fullmatch(id_pattern, sidecar["course_id"]):
             raise ValueError("Invalid course_id")
         expected = sidecar.get("expected_practices_per_module")
         for module_id in module_ids:

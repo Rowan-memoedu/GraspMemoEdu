@@ -6,7 +6,7 @@ import hashlib
 import re
 
 WEB = Path(__file__).resolve().parents[1] / 'web'
-URL = re.compile(r'''(\./[A-Za-z0-9_-]+\.(?:js|css|svg))(?:\?v=[a-f0-9]+)?(?=["'])''')
+URL = re.compile(r'''(\./(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_-]+\.(?:m?js|css|svg))(?:\?v=[a-f0-9]+)?(?=["'])''')
 
 
 def main():
@@ -19,6 +19,11 @@ def main():
     digest = hashlib.sha256()
     for p, text in canonical.items():
         digest.update(p.name.encode() + b'\0' + text.encode() + b'\0')
+    # Vendor chunks carry content hashes in their names; version the stable
+    # entrypoint URLs when the pinned dependency build changes as well.
+    for p in sorted((WEB / 'vendor').rglob('*')):
+        if p.is_file():
+            digest.update(p.relative_to(WEB).as_posix().encode() + b'\0' + p.read_bytes() + b'\0')
     version = digest.hexdigest()[:16]
     changed = {p: URL.sub(lambda m: m[1] + '?v=' + version, text)
                for p, text in canonical.items()}

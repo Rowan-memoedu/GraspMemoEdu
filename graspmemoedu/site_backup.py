@@ -22,6 +22,10 @@ def _json(value):
     return json.dumps(value, ensure_ascii=False, indent=2).encode('utf-8')
 
 
+def _source_suffix(raw):
+    return '.json' if raw.decode('utf-8-sig').lstrip().startswith('{') else '.md'
+
+
 def _retired_versions(manifest, active_topics):
     retired = manifest.get('retired_topic_versions', {})
     if not isinstance(retired, dict):
@@ -33,6 +37,21 @@ def _retired_versions(manifest, active_topics):
                 or len(versions) != len(set(versions))):
             raise ValueError('Invalid retired topic versions')
     return retired
+
+
+def _introduction_versions(manifest, active_topics):
+    """An installed introduction may still have its previous, unopened DB row."""
+    from .topic_runtime import is_introduction
+    historical = manifest.get('introduction_previous_versions', {})
+    if not isinstance(historical, dict):
+        raise ValueError('Invalid previous introduction versions')
+    for topic_id, versions in historical.items():
+        if (topic_id not in active_topics or not is_introduction(active_topics[topic_id])
+                or not isinstance(versions, list) or not versions
+                or any(not isinstance(v, str) or not v or v == active_topics[topic_id]['version'] for v in versions)
+                or len(versions) != len(set(versions))):
+            raise ValueError('Invalid previous introduction versions')
+    return historical
 
 
 def _validate_answers(topic, data, *, code='invalid_backup', status=422):
@@ -77,6 +96,13 @@ def _validate_review(topic, source, answers, data, assets=None):
             or review.get('sidecar_sha256') != sha256(answers)):
         raise ValueError('Review evidence is unapproved or differs from its inputs')
     questions = collect_questions(parse_outline(source.decode('utf-8-sig')))
+    if topic.get('topic_format_version') == 2:
+        from .topic_format import parse_source, content_metadata, content_version
+        document, _ = parse_source(source.decode('utf-8-sig'))
+        if (any(topic.get(key) != document.get(key) for key in ('id', 'title', 'topic_kind', 'source_rem_id'))
+                or topic.get('content_version') != content_version(document, assets or [])
+                or any(topic.get(key) != value for key, value in content_metadata(document).items())):
+            raise ValueError('Topic v2 content identity or references differ from its source')
     by_id = {question['id']: question for question in questions}
     topic_questions = {q['id']: q for m in topic['modules'] for q in [m['example'], *m['practices']]}
     answer_rows = json.loads(answers)['answers']
@@ -148,6 +174,7 @@ def _validate_payload(manifest, blobs):
     if not topics or set(versions) != set(topics) or set(sources) != set(topics) or default_id not in topics:
         raise ValueError('Topic manifest membership differs from catalog')
     _retired_versions(manifest, topics)
+    _introduction_versions(manifest, topics)
     from .question_bank import validate_archive
     expected_files.update(validate_archive(blobs, topics))
     from .training_content import validate_archive as validate_training_archive
@@ -162,7 +189,8 @@ def _validate_payload(manifest, blobs):
                                       source=blobs[entry['source']].decode('utf-8-sig') if 'source' in entry else None)
         if assets and not {'source', 'answers', 'review'} <= set(entry):
             raise ValueError('Source attachments require complete reviewed source evidence')
-        expected = {'source': f'sources/{topic_id}/source.md' if assets else f'sources/{topic_id}.md', 'answers': f'courses/{topic_id}.answers.json',
+        suffix = _source_suffix(blobs[entry['source']]) if 'source' in entry else '.md'
+        expected = {'source': f'sources/{topic_id}/source{suffix}' if assets else f'sources/{topic_id}{suffix}', 'answers': f'courses/{topic_id}.answers.json',
                     'review': f'courses/{topic_id}.review.json'}
         if any(key not in expected or value != expected[key] or value not in blobs for key, value in entry.items() if key != 'assets'):
             raise ValueError('Invalid sources path')
@@ -232,7 +260,14 @@ def backup_site(settings, destination=None):
                 from .question_bank import validate_saved_revisions
                 validate_saved_revisions(snapshot, catalog.topics, settings.data_dir)
                 validate_training_saved(snapshot, training_catalog)
-        if any(topic_id in catalog.topics and catalog.topics[topic_id]['version'] != version for topic_id, version in saved_versions):
+        from .topic_runtime import is_introduction
+        introduction_versions = {}
+        for topic_id, version in saved_versions:
+            if (topic_id in catalog.topics and is_introduction(catalog.topics[topic_id])
+                    and catalog.topics[topic_id]['version'] != version):
+                introduction_versions.setdefault(topic_id, []).append(version)
+        if any(topic_id in catalog.topics and not is_introduction(catalog.topics[topic_id])
+               and catalog.topics[topic_id]['version'] != version for topic_id, version in saved_versions):
             raise DomainError('backup_version_changed', '部分进度的课程来源缺失或版本不同，请先处理课程目录。', 409)
         retired_versions = {}
         for topic_id, version in sorted(saved_versions):
@@ -284,7 +319,8 @@ def backup_site(settings, destination=None):
             assets = index.get('assets', [])
             from .topic_assets import validate_assets, read_local_asset
             asset_bytes = validate_assets(assets, lambda name: read_local_asset(source_path.parent, name), source=original.decode('utf-8-sig'))
-            entry['source'] = f'sources/{topic_id}/source.md' if assets else f'sources/{topic_id}.md'
+            suffix = _source_suffix(original)
+            entry['source'] = f'sources/{topic_id}/source{suffix}' if assets else f'sources/{topic_id}{suffix}'
             blobs[entry['source']] = original
             if assets:
                 entry['assets'] = assets
@@ -352,6 +388,7 @@ def backup_site(settings, destination=None):
     manifest = {'format': 2, 'created_at': stamp, 'default_topic_id': catalog.default_topic_id,
                 'topic_versions': {key: topic['version'] for key, topic in catalog.topics.items()},
                 'retired_topic_versions': retired_versions,
+                'introduction_previous_versions': introduction_versions,
                 'sources': sources_index,
                 'sha256': {name: hashlib.sha256(data).hexdigest() for name, data in blobs.items()}}
     if (not all(_safe_name(name) for name in blobs)
@@ -400,10 +437,13 @@ def restore_site(backup, destination):
                 training_catalog = TrainingCatalog(staged)
                 validate_training_saved(con, training_catalog)
                 retired = _retired_versions(manifest, topics)
+                historical = _introduction_versions(manifest, topics)
                 archived_rows = {(topic_id, version) for _, topic_id, version in rows if topic_id not in topics}
                 declared_rows = {(topic_id, version) for topic_id, versions in retired.items() for version in versions}
-                if (archived_rows != declared_rows or any(topic_id in topics and topics[topic_id]['version'] != version
-                                                         for _, topic_id, version in rows)):
+                mismatched_rows = {(topic_id, version) for _, topic_id, version in rows
+                                   if topic_id in topics and topics[topic_id]['version'] != version}
+                previous_rows = {(topic_id, version) for topic_id, versions in historical.items() for version in versions}
+                if archived_rows != declared_rows or mismatched_rows != previous_rows:
                     raise ValueError('Database topics differ from the catalog')
                 learners = [(learner_id, topic_id) for learner_id, topic_id, _ in rows if topic_id in topics]
             if 'judge-daily-quota.sqlite3' in blobs:

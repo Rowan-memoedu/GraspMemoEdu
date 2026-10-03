@@ -26,6 +26,9 @@ from .question_types import public_interaction, parse_answer
 
 class ReviewBackend:
     def __init__(self, learning, *, engine=None, policy=REVIEW_POLICY, clock=None, rng=None):
+        from .topic_runtime import is_introduction
+        if is_introduction(learning.course):
+            raise DomainError('no_scheduled_review', '引论不安排定时复习。', 422)
         self.learning = learning
         self.engine = engine or FSRSEngine()
         self.policy = policy

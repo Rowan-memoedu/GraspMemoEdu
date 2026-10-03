@@ -1,9 +1,10 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=e2e83f84174c2962";
-import {questionInput, answerReady} from './question-input.js?v=e2e83f84174c2962';
-import {reportableContent} from './content-report.js?v=e2e83f84174c2962';
-import {createLearningCache} from './learning-cache.js?v=e2e83f84174c2962';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=9bb0c0fa655f896d";
+import {questionInput, answerReady} from './question-input.js?v=9bb0c0fa655f896d';
+import {reportableContent} from './content-report.js?v=9bb0c0fa655f896d';
+import {createLearningCache} from './learning-cache.js?v=9bb0c0fa655f896d';
 
-import {answerEditor} from './learning-ui.js?v=e2e83f84174c2962';
+import {answerEditor} from './learning-ui.js?v=9bb0c0fa655f896d';
+import {enhanceTopicContent, mountTopicBacklinks, focusContentNode} from './topic-content.js?v=9bb0c0fa655f896d';
 
 applyStaticTranslations();
 
@@ -47,6 +48,7 @@ function content(html) {
   const node = el("div", "courseContent");
   // Course HTML is generated and sanitized by the trusted local course importer.
   node.innerHTML = html || "";
+  enhanceTopicContent(node, state?.content_references);
   return node;
 }
 
@@ -111,14 +113,16 @@ const selectedStep = () => state?.steps?.find((step) => step.id === state.curren
   || state?.steps?.find((step) => step.current)
   || state?.steps?.find((step) => step.id === state.active_step_id);
 const activeStep = () => state?.steps?.find((step) => step.id === state.active_step_id);
+const readingStatus = () => state?.topic_kind === 'introduction' ? state.reading_status : state?.status;
 // Translate system names and structural heading prefixes; preserve authored title text.
 function readerStepTitle(step) {
-  if (step?.kind === "introduction") return t("Introduction");
+  if (step?.kind === "introduction") return state?.topic_format_version === 2 ? step.title : t("Introduction");
   if (step?.kind === "completion") return t("学习结果");
   return learningTitle(step?.title || "");
 }
 function readingSteps() {
   const visited = (state?.steps || []).filter((step) => step.visited && step.unlocked);
+  if (state?.topic_format_version === 2) return visited;
   const introductions = visited.filter((step) => step.kind === "introduction");
   const modules = (state?.modules || []).flatMap((module) => visited.filter((step) => step.module_id === module.id && !["introduction", "completion"].includes(step.kind)));
   const completions = visited.filter((step) => step.kind === "completion");
@@ -691,7 +695,7 @@ function applyState(next, { force = false, announceChange = false } = {}) {
   if (state && next.course_version === state.course_version && next.revision < state.revision) return;
   const accessChanged = next.access && JSON.stringify(next.access) !== JSON.stringify(access);
   if (next.access) access = next.access;
-  const changed = accessChanged || !state || next.course_version !== state.course_version || next.revision !== state.revision || next.current_step_id !== state.current_step_id || next.dependency_ready !== state.dependency_ready;
+  const changed = accessChanged || !state || next.course_version !== state.course_version || next.revision !== state.revision || next.current_step_id !== state.current_step_id || next.dependency_ready !== state.dependency_ready || JSON.stringify(next.content_references) !== JSON.stringify(state.content_references);
   const previousStep = state?.current_step_id;
   state = next;
   connectionIssue = null;
@@ -987,6 +991,16 @@ function renderPageNotice() {
 }
 
 function renderProgress() {
+  if (state.topic_kind === 'introduction') {
+    const progress = Math.round(state.reading_progress || 0), status = readingStatus();
+    const label = t('reader.readingProgress', {progress});
+    $('progressCaption').replaceChildren(el('span', '', label), el('span', '', status === 'paused' ? t('已暂停') : status === 'completed' ? t('学习完成') : t('阅读中')));
+    const target = $('lessonProgress'), fill = el('span', 'introProgressFill');
+    fill.style.width = `${progress}%`;
+    target.setAttribute('aria-valuenow', String(progress)); target.setAttribute('aria-valuetext', label);
+    target.replaceChildren(fill); target.hidden = $('progressCaption').hidden = false;
+    return;
+  }
   const completed = state.modules.filter((module) => module.status === "completed").length;
   const caption = $("progressCaption");
   caption.hidden = false;
@@ -1004,7 +1018,7 @@ function renderProgress() {
 
 function renderPause() {
   const target = $("pauseNotice");
-  target.hidden = state.status !== "paused";
+  target.hidden = readingStatus() !== "paused";
   if (target.hidden) return;
   const automatic = state.pause?.reason === "practice_error_limit";
   target.replaceChildren(
@@ -1021,6 +1035,19 @@ function renderHistory() {
   }
   const nodes = [];
   const visited = readingSteps();
+  if (state.topic_format_version === 2) {
+    for (const step of visited) {
+      if (step.kind === 'introduction') nodes.push(historyGroup(readerStepTitle(step), step.phase === 'completed' ? t('已读') : t('阅读中'), [step]));
+      else if (step.kind === 'completion') nodes.push(historyGroup(t('Topic 完成'), t('已完成'), [step], 'completed'));
+      else if (!visited.slice(0, visited.indexOf(step)).some(item => item.module_id === step.module_id && item.kind !== 'introduction')) {
+        const module = state.modules.find(item => item.id === step.module_id);
+        const steps = visited.filter(item => item.module_id === step.module_id && !['introduction', 'completion'].includes(item.kind));
+        nodes.push(historyGroup(learningTitle(module.title), module.status === 'completed' ? t('reader.completedMastery', {score: module.mastery}) : t('学习中'), steps, module.status, module.attempt_id));
+      }
+    }
+    target.replaceChildren(...nodes);
+    return;
+  }
   const introductions = visited.filter((step) => step.kind === "introduction");
   if (introductions.length) nodes.push(historyGroup(t("Introduction"), state.introduction_read ? t("已读") : t("阅读中"), introductions));
   for (const module of state.modules) {
@@ -1043,11 +1070,11 @@ function historyGroup(title, status, steps, className = "", currentAttempt = nul
     const items = el("div", "historyItems");
     const attempts = [...new Set(steps.map((step) => step.attempt_id).filter(Boolean))];
     for (const step of steps) {
-      let label = step.kind === "introduction" ? t("Introduction") : step.kind === "completion" ? t("学习结果") : step.kind === "example" ? t("Example") : learningTitle(step.title);
+      let label = step.kind === "introduction" ? readerStepTitle(step) : step.kind === "completion" ? t("学习结果") : step.kind === "example" ? t("Example") : learningTitle(step.title);
       if (step.kind === "example" && step.phase === "reading") label += t(" · 讲解");
       const item = button(label, "historyItem", () => selectStep(step.id), actionBusy);
       if (step.id === state.current_step_id) item.setAttribute("aria-current", "step");
-      if (step.id === state.active_step_id && state.status !== "completed") item.append(el("span", "historyMark", t("当前")));
+      if (step.id === state.active_step_id && readingStatus() !== "completed") item.append(el("span", "historyMark", t("当前")));
       else if (currentAttempt && step.attempt_id !== currentAttempt && step.kind !== "introduction") item.append(el("span", "historyMark", t("reader.historyAttempt", { attempt: attempts.indexOf(step.attempt_id) + 1 })));
       items.append(item);
     }
@@ -1083,7 +1110,7 @@ function renderReview(step) {
 }
 
 function renderStep(step) {
-  const key = JSON.stringify([state.course_version, state.revision, state.current_step_id, state.pending_submission_id, state.dependency_ready, submissionError?.request_id, submissionError?.reason, access?.features]);
+  const key = JSON.stringify([state.course_version, state.revision, state.current_step_id, state.pending_submission_id, state.dependency_ready, state.content_references, submissionError?.request_id, submissionError?.reason, access?.features]);
   if (key === renderedKey) return;
   renderedKey = key;
   const target = $("stepCard");
@@ -1101,6 +1128,7 @@ function renderStep(step) {
   if (step.kind === "completion") {
     renderCompletion(target);
     renderStepNavigation(target, step, []);
+    mountTopicBacklinks(target, state.content_references);
     return;
   }
   const heading = el("div", "stepHeader");
@@ -1113,9 +1141,10 @@ function renderStep(step) {
   else if (step.kind === "introduction") heading.append(el("span", "stepCounter", state.introduction_read ? t("已读") : t("阅读")));
   const stem = content(step.html);
   const reportContext = {topic_id: state.topic_id, ...(step.question_id ? {question_id: step.question_id} : {})};
-  reportableContent(stem, reportContext, step.question_id ? `question:${step.question_id}` : 'introduction', step.content_version || state.course_version);
+  reportableContent(stem, reportContext, step.question_id ? `question:${step.question_id}` : step.introduction_id ? `introduction:${step.introduction_id}` : 'introduction', step.content_version || state.course_version);
   const actions = Array.isArray(step.actions) ? step.actions : [];
   target.append(heading, stem);
+  if (state.reread_pending) heading.after(el('p', 'introductionUpdateNotice', t('reader.updatedNotice')));
   if (step.interaction && step.interaction.type !== 'text' && !actions.includes('submit')) {
     target.append(questionInput(step.interaction, {id: 'submittedInteraction', stem,
       value: step.answer || (step.id === state.active_step_id ? draftValue(step) : ''), disabled: true}).element);
@@ -1166,6 +1195,7 @@ function renderStep(step) {
     target.append(wait);
   }
   renderStepNavigation(target, step, actions);
+  mountTopicBacklinks(target, state.content_references);
   void prefillDemoAnswer(step);
   if (focus && previousId === step.id && $("answerInput")) {
     const input = $("answerInput");
@@ -1265,7 +1295,7 @@ function renderCompletion(target) {
   const heading = el("h2", "completionHeading", t("本 Topic 已完成"));
   heading.id = "stepTitle";
   heading.tabIndex = -1;
-  target.append(heading, el("p", "completionIntro", t("各模块的学习结果已保存。你可以通过学习记录回看题目与讲解。")));
+  target.append(heading, el("p", "completionIntro", state.topic_kind === 'introduction' ? t('reader.readingComplete') : t("各模块的学习结果已保存。你可以通过学习记录回看题目与讲解。")));
   const list = el("div", "completionList");
   for (const module of state.modules) {
     const row = el("div", "completionRow");
@@ -1289,8 +1319,8 @@ function renderBusy() {
   if ($("submitButton") && !disabled) $("submitButton").disabled = !answerReady($("answerInput")) || !can("submit_answer");
   for (const element of $("historyPanel").querySelectorAll("button")) element.disabled = disabled || !can("review_history");
   for (const element of $("reviewNotice").querySelectorAll("button")) element.disabled = disabled || !can("review_history");
-  $("pauseButton").hidden = state.status !== "in_progress";
-  $("pauseControl").hidden = state.status !== "in_progress";
+  $("pauseButton").hidden = readingStatus() !== "in_progress";
+  $("pauseControl").hidden = readingStatus() !== "in_progress";
   $("pauseButton").disabled = pauseBusy || identityBusy || (access?.role === "account" && !can("pause_topic"));
   $("pauseButton").title = can("pause_topic") ? t("暂时终止整个 Topic 的作答，等待管理者解锁") : featureMessage("pause_topic");
   $("pauseButton").setAttribute("aria-busy", String(pauseBusy));
@@ -1408,7 +1438,7 @@ document.addEventListener("keydown", (event) => {
 });
 setHistoryOpen(true);
 $("pauseButton").addEventListener("click", () => {
-  if (state?.status === "in_progress" && !pauseBusy) mutate("pause", { request_id: uuid() }, { pause: true });
+  if (readingStatus() === "in_progress" && !pauseBusy) mutate("pause", { request_id: uuid() }, { pause: true });
 });
 window.addEventListener("focus", () => { pageActive = true; syncAnswerClock(); scheduleIdentitySync(); if (!actionBusy && !pauseBusy) refreshState(); });
 window.addEventListener("blur", () => { pageActive = false; syncAnswerClock(); });
@@ -1452,9 +1482,18 @@ async function openTopic(id, subjectId) {
   document.body.classList.add("topicPage");
   setHistoryOpen(historyOpen);
   await start();
+  const nodeId = new URLSearchParams(location.hash.split('?')[1] || '').get('node');
+  if (nodeId && state?.topic_id === id) {
+    const destination = state.content_references?.locations?.find(item => item.node_id === nodeId);
+    if (destination && destination.step_id !== state.current_step_id && can('review_history')) {
+      await mutate('select', mutationPayload({step_id: destination.step_id}));
+    }
+    await new Promise(requestAnimationFrame);
+    if (topicId === id) focusContentNode($('stepCard'), nodeId);
+  }
 }
 
-const { initPortal } = await import("./portal.js?v=e2e83f84174c2962");
+const { initPortal } = await import("./portal.js?v=9bb0c0fa655f896d");
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {
     try { return await fetchGuideAsset(url, subjectId); }

@@ -30,8 +30,13 @@ def validate_correction(topic, question_id, correction, *, question=None, conten
         require(block in fields)
         html = question[fields[block]]
     else:
-        require(block == 'introduction')
-        html = topic['introduction']['html']
+        if topic.get('topic_format_version') == 2:
+            intro = next((item for item in topic['introductions'] if block == 'introduction:' + item['id']), None)
+            require(intro is not None)
+            html = intro['html']
+        else:
+            require(block == 'introduction')
+            html = topic['introduction']['html']
     text = ''.join(ContentText(html).parts)
     quote = correction['quote']
     start, end = quote['start'], quote['end']

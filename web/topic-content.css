@@ -1,0 +1,15 @@
+.courseContent.reading-outline { --article-font-size: 18px; --article-line-height: 1.75; }
+.courseContent [id^="node-"] { scroll-margin-block: 6rem; }
+.courseContent [id^="node-"]:focus { outline: 2px solid var(--accent, #806449); outline-offset: 4px; }
+.courseContent a.topicReference[aria-disabled="true"] { color: inherit; text-decoration: underline dotted; cursor: help; }
+.courseContent .local-mermaid { margin-block: 1rem; }
+.courseContent .mermaid-output { max-width: 100%; overflow-x: auto; padding-block: .5rem; }
+.courseContent .mermaid-output svg { display: block; }
+.courseContent .local-mermaid details { margin-block: .5rem; font-size: .85em; }
+.courseContent .local-mermaid pre { overflow-x: auto; }
+.topicBacklinks { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #dedede; }
+.topicBacklinks h3 { font-size: 1rem; margin: 0 0 .5rem; }
+.topicBacklinks ul { margin: 0; padding-left: 1.3rem; }
+.topicBacklinks a { color: inherit; }
+.introProgressFill { display: block; height: 100%; background: var(--accent, #806449); }
+.introductionUpdateNotice { padding: .75rem 1rem; border-left: 3px solid #806449; background: #faf7f1; }

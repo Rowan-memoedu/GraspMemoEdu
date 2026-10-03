@@ -1,6 +1,6 @@
-import {t, translateMessage} from './i18n.js?v=e2e83f84174c2962';
-import {questionInput, answerReady} from './question-input.js?v=e2e83f84174c2962';
-import {createLearningCache} from './learning-cache.js?v=e2e83f84174c2962';
+import {t, translateMessage} from './i18n.js?v=9bb0c0fa655f896d';
+import {questionInput, answerReady} from './question-input.js?v=9bb0c0fa655f896d';
+import {createLearningCache} from './learning-cache.js?v=9bb0c0fa655f896d';
 
 const node = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const button = (text, cls, action) => { const n = node('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
@@ -8,7 +8,7 @@ const encode = encodeURIComponent;
 const query = fields => new URLSearchParams(fields).toString();
 const html = (content, cls = 'courseContent') => { const n = node('div', cls); n.innerHTML = content || ''; return n; };
 const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy', 'training.retire'];
-import {answerEditor, readerFrame} from './learning-ui.js?v=e2e83f84174c2962';
+import {answerEditor, readerFrame} from './learning-ui.js?v=9bb0c0fa655f896d';
 
 export function createTrainingView(bridge) {
   const {root, request, href, formatDate, getAccess} = bridge;
@@ -81,6 +81,7 @@ export function createTrainingView(bridge) {
         onProgress: () => pending.scrollIntoView({block: 'start'})}), tasks);
       root.replaceChildren(layout);
       bridge.taskTree(pending, data, {training: true, label: t('training.groups'), startLabel: t('training.start'),
+        sourceOrder: bank.groups.map(g => g.id),
         target: task => groupPath(bank.id, task.id)});
       if (!count) pending.append(node('p', 'portalEmpty', t('training.empty')));
     } else if (parts.length === 3) {

@@ -65,7 +65,7 @@ def register_material_routes(app, catalog, access_store, subjects, identity, pub
         if not any(e['kind'] == payload.kind and e['id'] == payload.id for e in entries):
             raise DomainError('unknown_material', '未找到此内容。', 404)
         if payload.kind == 'atomic_card':
-            return public_state(learner.preview_card(payload.id, payload.request_id), access)
+            return public_state(learner.preview_card(payload.id, payload.request_id), access, learner)
         if payload.kind == 'topic':
-            return public_state(learner.state(), access)
+            return public_state(learner.state(), access, learner)
         raise DomainError('unknown_material', '未找到此内容的学习入口。', 404)

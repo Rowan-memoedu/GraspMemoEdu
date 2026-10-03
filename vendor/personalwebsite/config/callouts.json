@@ -1,0 +1,40 @@
+{
+  "schema": "website-callouts-v1",
+  "layout": {
+    "focusedWidthPercent": 90,
+    "expandedWidthPercent": 75,
+    "maxHeightPx": 336,
+    "marginBlockEm": 1.5,
+    "paddingEm": 1
+  },
+  "annotations": {
+    "background": "#eaffd8",
+    "accent": "#2d6636",
+    "text": "#243c2a",
+    "link": "#14552a"
+  },
+  "draft": {
+    "background": "#ffe0de",
+    "accent": "#b42318",
+    "text": "#7a1812",
+    "link": "#941c12"
+  },
+  "tags": [
+    {
+      "key": "inline",
+      "name": "Call Out",
+      "background": "#ffff00",
+      "accent": "#876300",
+      "text": "#443600",
+      "link": "#604000"
+    },
+    {
+      "key": "anecdote",
+      "name": "轶事",
+      "background": "#f3e8ff",
+      "accent": "#7e22ce",
+      "text": "#3b0764",
+      "link": "#6b21a8"
+    }
+  ]
+}

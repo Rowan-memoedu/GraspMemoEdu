@@ -1,4 +1,4 @@
-"""Install an approved author package into an existing course, without replacing Topics."""
+"""Install reviewed Topics; only explicit v2 introductions support version updates."""
 from contextlib import contextmanager
 import hashlib
 import json
@@ -95,18 +95,30 @@ def install_topic(settings, package, *, subject_id, course_id, unit_id=None):
         subjects.authorize_course(subject_id, course_id)
         catalog.course(course_id)
         from .course_graph import GraphStore
-        GraphStore(settings, catalog, subjects).validate_topic_target(topic_id, subject_id, course_id)
+        graph_store = GraphStore(settings, catalog, subjects)
+        graph_store.validate_topic_target(topic_id, subject_id, course_id)
+        introduction = topic.get('topic_format_version') == 2 and topic.get('topic_kind') == 'introduction'
+        if introduction and any(node['topic_id'] == topic_id for graph in graph_store.all() for node in graph['nodes']):
+            raise ValueError('Introduction Topic ID is already declared in the knowledge graph')
+        updating = False
         if topic_id in catalog.topics:
             if catalog.topics[topic_id] == topic and catalog.topic_courses[topic_id] == course_id:
                 return {'status': 'already_installed', 'topic_id': topic_id, 'course_id': course_id,
                         'subject_id': subject_id, 'reload_required': True, 'permissions_changed': False}
-            raise ValueError('Topic ID already exists; existing progress/content will not be overwritten')
+            previous = catalog.topics[topic_id]
+            updating = (introduction and previous.get('topic_format_version') == 2
+                        and previous.get('topic_kind') == 'introduction' and catalog.topic_courses[topic_id] == course_id)
+            if not updating:
+                raise ValueError('Topic ID already exists; existing progress/content will not be overwritten')
         if not settings.catalog_path.is_file():
             raise ValueError('Create an explicit catalog.json before installing author content')
         before = settings.catalog_path.read_bytes()
         raw_catalog = json.loads(before)
         course = next(item for item in raw_catalog['courses'] if item['id'] == course_id)
-        if 'units' in course:
+        if updating:
+            if unit_id is not None and not any(unit['id'] == unit_id and topic_id in unit['topic_ids'] for unit in course.get('units', [])):
+                raise ValueError('Introduction update cannot change its course unit')
+        elif 'units' in course:
             matches = [unit for unit in course['units'] if unit['id'] == unit_id] if unit_id else course['units']
             if len(matches) != 1:
                 raise ValueError('Specify --unit for a course with multiple units')
@@ -117,14 +129,21 @@ def install_topic(settings, package, *, subject_id, course_id, unit_id=None):
         imports.mkdir(exist_ok=True)
         if not imports.resolve().is_relative_to(settings.data_dir.resolve()):
             raise ValueError('Import destination leaves data directory')
-        destination = imports / topic_id
+        # Every introduction artifact remains immutable, including the first one.
+        if introduction and (not isinstance(topic.get('version'), str) or len(topic['version']) != 64
+                             or any(char not in '0123456789abcdef' for char in topic['version'])):
+            raise ValueError('Introduction artifact version must be a SHA-256 digest')
+        destination = imports / (topic_id + '--' + topic['version'] if introduction else topic_id)
         if destination.is_symlink():
             raise ValueError('Import destination must not be a symbolic link')
         record = {'topic_id': topic_id, 'course_id': course_id, 'subject_id': subject_id,
                   'source_sha256': topic['source_sha256'], 'course_version': topic['version']}
+        source_name = manifest['artifacts']['source']
+        if source_name not in ('source.md', 'source.json'):
+            raise ValueError('Unsupported source artifact name')
         with tempfile.TemporaryDirectory(prefix='.author-stage-', dir=imports) as temporary:
             stage = Path(temporary)
-            names = {'source': 'source.md', 'answers': 'answers.json', 'review': 'review.json',
+            names = {'source': source_name, 'answers': 'answers.json', 'review': 'review.json',
                      'audit': 'prepared-audit.json'}
             for key, name in names.items():
                 (stage / name).write_bytes(values[key])
@@ -134,7 +153,7 @@ def install_topic(settings, package, *, subject_id, course_id, unit_id=None):
                 asset.write_bytes(raw)
             converter = Path(__file__).resolve().parents[1] / 'scripts/import_course.mjs'
             env = {**os.environ, 'GRASPMEMOEDU_PYTHON': sys.executable}
-            result = subprocess.run(['node', str(converter), str(stage / 'source.md'), str(stage / 'answers.json'),
+            result = subprocess.run(['node', str(converter), str(stage / source_name), str(stage / 'answers.json'),
                                      str(stage / 'topic.json'), str(stage / 'audit.json'), str(stage / 'review.json')],
                                     capture_output=True, text=True, encoding='utf-8', timeout=180, env=env,
                                     creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
@@ -143,7 +162,7 @@ def install_topic(settings, package, *, subject_id, course_id, unit_id=None):
             if json.loads((stage / 'topic.json').read_text(encoding='utf-8')) != topic:
                 raise ValueError('Installed fields differ from the reviewed source conversion')
             (stage / 'topic.sources.json').write_bytes(encoded({
-                'source_path': str(destination / 'source.md'), 'answers_path': str(destination / 'answers.json'),
+                'source_path': str(destination / source_name), 'answers_path': str(destination / 'answers.json'),
                 'review_path': str(destination / 'review.json'), 'review_sha256': digest(values['review']),
                 'source_sha256': topic['source_sha256'], **({'assets': manifest['assets']} if values['assets'] else {})}))
             (stage / 'import.json').write_bytes(encoded(record))
@@ -152,12 +171,31 @@ def install_topic(settings, package, *, subject_id, course_id, unit_id=None):
                 # A process may have stopped after placing files but before activating the catalog.
                 prior = json.loads((destination / 'import.json').read_text(encoding='utf-8'))
                 if prior != record or any((destination / name).read_bytes() != (stage / name).read_bytes()
-                                          for name in ('source.md', 'answers.json', 'review.json', 'topic.json', 'topic.sources.json', *values['assets'])):
+                                          for name in (source_name, 'answers.json', 'review.json', 'topic.json', 'topic.sources.json', *values['assets'])):
                     raise ValueError('Unactivated import directory conflicts; inspect it without overwriting')
             else:
                 # Copy to a permanent directory; it remains unreachable until catalog commit.
                 shutil.copytree(stage, destination)
-        course['topics'].append({'id': topic_id, 'path': str(destination / 'topic.json'), 'prerequisites': []})
+        catalog_backup = destination / 'catalog-before.json'
+        if catalog_backup.read_bytes() != before:
+            # Re-activating an older immutable artifact still needs the catalog
+            # immediately before this activation, not its very first installation.
+            history = imports / '.catalog-history'
+            history.mkdir(exist_ok=True)
+            if history.is_symlink() or history.resolve().parent != imports.resolve():
+                raise ValueError('Catalog history leaves the import directory')
+            catalog_backup = history / (digest(before) + '.json')
+            if catalog_backup.exists():
+                if catalog_backup.is_symlink() or catalog_backup.read_bytes() != before:
+                    raise ValueError('Catalog history conflicts with its content digest')
+            else:
+                with catalog_backup.open('xb') as stream:
+                    stream.write(before); stream.flush(); os.fsync(stream.fileno())
+        if updating:
+            declaration = next(item for item in course['topics'] if item['id'] == topic_id)
+            declaration['path'] = str(destination / 'topic.json')
+        else:
+            course['topics'].append({'id': topic_id, 'path': str(destination / 'topic.json'), 'prerequisites': []})
         pending = settings.catalog_path.with_name(settings.catalog_path.name + '.author-pending')
         created_pending = False
         try:
@@ -174,6 +212,8 @@ def install_topic(settings, package, *, subject_id, course_id, unit_id=None):
         finally:
             if created_pending and pending.exists():
                 pending.unlink()
-        return {'status': 'installed', **record, 'topic_path': str(destination / 'topic.json'),
+        return {'status': 'updated' if updating else 'installed', **record, 'topic_path': str(destination / 'topic.json'),
+                **({'content_changed': previous.get('content_version') != topic['content_version'],
+                    'previous_course_version': previous['version'], 'learner_database_unchanged': True} if updating else {}),
                 'reload_required': True, 'permissions_changed': False,
-                'catalog_backup': str(destination / 'catalog-before.json')}
+                'catalog_backup': str(catalog_backup)}

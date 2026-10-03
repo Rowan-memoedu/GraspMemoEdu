@@ -26,11 +26,19 @@ def install_course(settings, plan):
     if not plan['topics']:
         raise ValueError('Course needs reviewed Topics')
     topic_ids = []
+    introduction_ids = set()
+    def validate_graph_target(topic_id):
+        store = GraphStore(settings, catalog, subjects)
+        store.validate_topic_target(topic_id, subject_id, course_id)
+        if topic_id in introduction_ids and any(node['topic_id'] == topic_id for graph in store.all() for node in graph['nodes']):
+            raise ValueError('Introduction Topic ID is already declared in the knowledge graph')
     for entry in plan['topics']:
         _, _, topic = read_package(entry['package'])
         if topic['id'] != entry['topic_id'] or topic['id'] in catalog.topics or topic['id'] in topic_ids:
             raise ValueError('Conflicting Topic identity')
-        GraphStore(settings, catalog, subjects).validate_topic_target(topic['id'], subject_id, course_id)
+        if topic.get('topic_format_version') == 2 and topic.get('topic_kind') == 'introduction':
+            introduction_ids.add(topic['id'])
+        validate_graph_target(topic['id'])
         topic_ids.append(topic['id'])
     subjects_path = settings.data_dir / 'subjects.json'
     before_catalog, before_subjects = settings.catalog_path.read_bytes(), subjects_path.read_bytes()
@@ -57,20 +65,25 @@ def install_course(settings, plan):
             if settings.catalog_path.read_bytes() != before_catalog or subjects_path.read_bytes() != before_subjects:
                 raise ValueError('Configuration changed while preparing the course')
             for topic_id in topic_ids:
-                GraphStore(settings, catalog, subjects).validate_topic_target(topic_id, subject_id, course_id)
+                validate_graph_target(topic_id)
             target = settings.data_dir / 'imported-topics'
             target.mkdir(exist_ok=True)
             if target.is_symlink() or not target.resolve().is_relative_to(settings.data_dir.resolve()):
                 raise ValueError('Invalid permanent import destination')
-            if any((target / topic_id).exists() for topic_id in topic_ids):
+            origins = {topic['id']: Path(topic['path']).resolve().parent for topic in installed['topics']}
+            if any(origin.parent != (stage / 'imported-topics').resolve() or origin.is_symlink() for origin in origins.values()):
+                raise ValueError('Staged import path leaves the isolated import directory')
+            if any((target / origin.name).exists() for origin in origins.values()):
                 raise ValueError('An import directory already exists; inspect it without overwriting')
             backup = settings.data_dir / 'course-imports' / course_id
             backup.mkdir(parents=True, exist_ok=False)
             (backup / 'catalog-before.json').write_bytes(before_catalog)
             (backup / 'subjects-before.json').write_bytes(before_subjects)
             for topic in installed['topics']:
-                origin = stage / 'imported-topics' / topic['id']
-                destination = target / topic['id']
+                origin = origins[topic['id']]
+                destination = target / origin.name
+                if destination.resolve().parent != target.resolve():
+                    raise ValueError('Final import path leaves the permanent import directory')
                 index = json.loads((origin / 'topic.sources.json').read_bytes())
                 for key in ('source_path', 'answers_path', 'review_path'):
                     if key in index:

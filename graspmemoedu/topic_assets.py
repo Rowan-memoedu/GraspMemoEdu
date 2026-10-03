@@ -71,7 +71,8 @@ def validate_png(raw):
 def validate_source_assets(source_text, records):
     if not isinstance(source_text, str):
         raise ValueError('PNG source must be Markdown text')
-    paths = [m.group(2) for m in IMAGE_PATTERN.finditer(source_text)]
+    from .topic_format import source_text as normalized_source_text
+    paths = [m.group(2) for m in IMAGE_PATTERN.finditer(normalized_source_text(source_text))]
     for name in paths:
         canonical_asset_path(name)
     expected = [record['path'] for record in records]

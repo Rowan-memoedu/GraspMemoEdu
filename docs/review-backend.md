@@ -12,7 +12,7 @@
 - `graspmemoedu/judging.py`：共用现有 MathAnswerJudge 判题约定；网络判题不持有数据库写锁。
 - `graspmemoedu/review.py`：Example 卡片、到期任务、复习轮次、评分记录、参数配置和优化接口。
 
-每个 `learner_id + topic_id + module_id` 对应一张 FSRS 卡片。Practice 只是这张卡片某次复习时的抽题，不建立自己的调度卡片。课程版本不匹配时拒绝沿用旧卡，保留原数据。首次成功结算 Lesson 模块后，以该模块评分和真实完成时间调用 FSRS；后续完整复习轮次各调用一次。
+每个 `learner_id + topic_id + module_id` 对应一张 FSRS 卡片。Practice 只是这张卡片某次复习时的抽题，不建立自己的调度卡片。课程版本不匹配时拒绝沿用旧卡，保留原数据。首次成功结算 Lesson 模块后，以该模块评分和真实完成时间调用 FSRS；后续完整复习轮次各调用一次。Topic v2 的 Introduction 阅读段不建立卡片；纯引论不安排定时复习，仅在已学过且教学内容更新时推送重读，见 [运行接口](API.md#ordered-topic-v2)。
 
 FSRS 计算与四档评分遵循上游实现。默认使用上游的目标保留度 0.9、学习步骤 1/10 分钟、重学步骤 10 分钟及间隔扰动。**不能保证与某台 Anki 的所有具体到期时间完全相同**：Anki 的牌组配置、每日切换时间、负载分配及版本也影响排程；py-fsrs 的优化实现与 Anki Rust 实现存在差异。本阶段没有复制 Anki 的整套应用调度层。
 

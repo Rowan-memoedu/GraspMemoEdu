@@ -72,6 +72,19 @@ export async function loadAssets(sourcePath, source) {
 
 const assetRecords = assets => [...assets.values()].map(({data, ...record}) => record);
 
+// The Python normalizer is also used by review, backup, and the two serializers.
+// Legacy sources never enter this explicit v2 boundary.
+function authorSource(source, assets = []) {
+  if (!source.replace(/^\uFEFF/, '').trimStart().startsWith('<!-- topic-format:')
+      && !source.trimStart().startsWith('{')) return null;
+  const result = spawnSync(process.env.GRASPMEMOEDU_PYTHON || 'python', ['-m', 'graspmemoedu.topic_format'], {
+    cwd:path.resolve(here, '..'), input:JSON.stringify({source, assets}), encoding:'utf8',
+    maxBuffer:64 * 1024 * 1024, env:{...process.env, PYTHONIOENCODING:'utf-8'}, windowsHide:true
+  });
+  if (result.status !== 0) throw new Error(`Invalid Topic v2 source: ${result.stderr || result.error || result.status}`);
+  return JSON.parse(result.stdout);
+}
+
 export function parseOutline(source) {
   const root = {indent:-2, children:[], lines:[], line:0};
   const stack = [root];
@@ -118,9 +131,9 @@ function practiceNodes(module) {
 
 export function sourceQuestions(topic) {
   const introduction = topic.children.filter(node => /^Introduction$/i.test(node.head));
-  if (introduction.length !== 1) throw new Error('Expected one Introduction');
+  if (!introduction.length || (topic.meta?.topic_format_version !== 2 && introduction.length !== 1)) throw new Error('Expected one Introduction');
   const modules = topic.children.filter(node => /^Example\s+\d+/i.test(node.head));
-  if (modules.length + 1 !== topic.children.length) throw new Error('Unknown top-level sections');
+  if (modules.length + introduction.length !== topic.children.length) throw new Error('Unknown top-level sections');
   const questions = [];
   for (const [index, module] of modules.entries()) {
     const moduleId = `example-${index + 1}`;
@@ -145,10 +158,10 @@ export function sourceQuestions(topic) {
       questions.push({id, moduleId, title:grouped ? `Practice ${i}` : node.head, ...(interaction ? {interaction} : {}),
         ...(grouped ? {source_practice:{label:`${match[1]}.${match[2]}`, group:Number(match[1]), member:Number(match[2])}} : {}),
         line:node.line, node, questionNodes:question,
-        explanationNodes:explanation[0].children, question:question.map(text).join('\n')});
+        explanationNode:explanation[0], explanationNodes:explanation[0].children, question:question.map(text).join('\n')});
     }
   }
-  return {introduction:introduction[0], modules, questions};
+  return {introduction:introduction[0], introductions:introduction, modules, questions};
 }
 
 function applyErrata(nodes, errata) {
@@ -170,7 +183,8 @@ function applyErrata(nodes, errata) {
   return clone;
 }
 
-export async function renderer(assets = new Map()) {
+export async function renderer(assets = new Map(), {v2 = false} = {}) {
+  const presentation = v2 ? await import('./topic-presentation.mjs') : null;
   const bundle = process.env.CODEX_NODE_MODULES || path.join(os.homedir(), '.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules');
   const runtime = process.env.MATH_TOPIC_PDF_RUNTIME || 'D:/Caches/MathTopicPdf/node_modules';
   const br = createRequire(path.join(bundle, '_entry.cjs'));
@@ -189,9 +203,42 @@ export async function renderer(assets = new Map()) {
   const document = mathjax.document('', {InputJax:tex, OutputJax:svg});
   const formulas = [];
   const prose = [];
+  const diagnostics = [];
+  const mermaidPattern = /^(`{3,}|~{3,})mermaid[ \t]*\n([\s\S]*?)^\1[ \t]*(?=\n|$)/gm;
+  const withoutMermaid = raw => raw.replace(mermaidPattern, '');
+  const wrap = (node, html) => v2 && node.meta?.id ? `<div id="node-${escape(node.meta.id)}">${html}</div>` : html;
   function body(node) {
     let raw = [node.head, ...node.lines].join('\n').trim().replace(diagramComment, '');
-    if (/<!--|-->|(?:MATH|IMAGE)IMPORTTOKEN\d+END/.test(raw)) throw new Error('Unsupported comment or reserved placeholder');
+    if (/(?:MATH|IMAGE|MERMAID|REFERENCE|CODE)IMPORTTOKEN\d+END/.test(raw)) throw new Error('Reserved placeholder');
+    const generated = [];
+    if (v2) {
+      raw = raw.replace(/^(`{3,}|~{3,})([^\n]*)\n([\s\S]*?)^\1[ \t]*(?=\n|$)/gm, (_all, _fence, language, code) => {
+        language = language.trim();
+        if (!/^[A-Za-z0-9_-]*$/.test(language)) throw new Error('Unsupported code fence language');
+        let html = `<pre><code${language ? ` class="language-${language}"` : ''}>${escape(code)}</code></pre>`;
+        if (language === 'mermaid') {
+          const prepared = presentation.prepareMermaidHtml(html);
+          if (!prepared.diagnostics.every(d => d.status === 'prepared')) throw new Error('Mermaid was not prepared');
+          diagnostics.push(...prepared.diagnostics);
+          html = prepared.html;
+        } else if (/\\[A-Za-z]+|\$/.test(code)) throw new Error('Mathematics cannot be wrapped in ordinary code');
+        const token = `CODEIMPORTTOKEN${generated.length}END`;
+        generated.push({token, html, block:true});
+        return `\n\n${token}\n\n`;
+      });
+      raw = raw.replace(/(`+)([^\n]*?)\1/g, (_all, _ticks, code) => {
+        if (/\\[A-Za-z]+|\$/.test(code)) throw new Error('Mathematics cannot be wrapped in inline code');
+        const token = `CODEIMPORTTOKEN${generated.length}END`;
+        generated.push({token, html:`<code>${escape(code)}</code>`});
+        return token;
+      });
+      raw = raw.replace(/\[\[id:([A-Za-z0-9_-]{1,128})\|([^\]\n|]+)\]\]/g, (_all, targetRemId, label) => {
+        const token = `REFERENCEIMPORTTOKEN${generated.length}END`;
+        generated.push({token, html:presentation.renderReference({targetRemId, label})});
+        return token;
+      });
+    }
+    if (/<!--|-->/.test(raw)) throw new Error('Unsupported comment');
     const replacements = [];
     const images = [];
     raw = raw.replace(imagePattern, (_all, alt, relative) => {
@@ -224,14 +271,23 @@ export async function renderer(assets = new Map()) {
     if (/<(?:script|iframe|img|a|style|link|object|embed|input|form)\b|\son\w+\s*=/i.test(html)) throw new Error('Unsupported rendered Markdown');
     for (const item of replacements) html = item.display ? html.replace(`<p>${item.token}</p>`, item.html) : html.replace(item.token, item.html);
     for (const item of images) html = html.replace(item.token, item.html);
+    for (const item of generated) html = item.block ? html.replace(`<p>${item.token}</p>`, item.html) : html.replace(item.token, item.html);
     if (/MATHIMPORTTOKEN\d+END/.test(html)) throw new Error('A formula placeholder was not rendered');
     return html;
   }
   function nodes(list, asList=false) {
+    if (v2) {
+      const item = node => {
+        let html = body(node) + (node.children.length ? nodes(node.children, true) : '');
+        if (node.meta?.callout) html = presentation.renderCallout({type:node.meta.callout, html});
+        return `<${asList ? 'li' : 'div'} class="outlineNode" data-source-line="${node.line}">${wrap(node, html)}</${asList ? 'li' : 'div'}>`;
+      };
+      return asList ? `<ul>${list.map(item).join('')}</ul>` : list.map(item).join('');
+    }
     if (asList) return `<ul>${list.map(node => `<li data-source-line="${node.line}">${body(node)}${node.children.length ? nodes(node.children, true) : ''}</li>`).join('')}</ul>`;
     return list.map(node => `<div class="outlineNode" data-source-line="${node.line}">${body(node)}${node.children.length ? nodes(node.children, true) : ''}</div>`).join('');
   }
-  return {nodes, formulas, prose, css:adaptor.textContent(svg.styleSheet(document)),
+  return {nodes, wrap, withoutMermaid, diagnostics, formulas, prose, css:adaptor.textContent(svg.styleSheet(document)),
     versions:{marked:br('marked/package.json').version, mathjax:mr('mathjax-full/package.json').version}};
 }
 
@@ -244,15 +300,19 @@ async function writeAtomic(filename, value) {
 
 export async function inspectCourse(sourcePath) {
   const raw = await fs.readFile(sourcePath);
-  const topic = parseOutline(raw.toString('utf8'));
+  const author = authorSource(raw.toString('utf8'));
+  const topic = author?.outline || parseOutline(raw.toString('utf8'));
   const content = sourceQuestions(topic);
-  const assets = await loadAssets(sourcePath, raw.toString('utf8'));
-  if (!content.modules.length) throw new Error('Expected at least one Example module');
+  const assets = await loadAssets(sourcePath, author?.source_text ?? raw.toString('utf8'));
+  if (!content.modules.length && author?.document.topic_kind !== 'introduction') throw new Error('Expected at least one Example module');
   for (const [index] of content.modules.entries()) {
     if (content.questions.filter(q => q.moduleId === `example-${index + 1}`).length < 8) throw new Error('At least seven Practices per module required');
   }
-  return {title:topic.head, source_sha256:digest(raw), introduction:content.introduction.children.map(text).join('\n'),
-    assets:assetRecords(assets), introduction_image_paths:imagePaths(content.introduction.children.map(text).join('\n')),
+  const introText = content.introductions.flatMap(i => i.children.map(text)).join('\n');
+  return {title:topic.head, source_sha256:digest(raw), introduction:introText,
+    ...(author ? {topic_format_version:2, topic_kind:author.document.topic_kind, id:author.document.id,
+      ignored_nodes:author.ignored_nodes, content_order:author.content_order} : {}),
+    assets:assetRecords(assets), introduction_image_paths:imagePaths(introText),
     modules:content.modules.map((module, index) => ({id:`example-${index + 1}`, title:module.head,
       question_ids:content.questions.filter(q => q.moduleId === `example-${index + 1}`).map(q => q.id)})),
     questions:content.questions.map(q => ({id:q.id, module_id:q.moduleId, title:q.title, line:q.line,
@@ -281,10 +341,14 @@ export async function importCourse(sourcePath, sidecarPath, outputPath, auditPat
   const audit = JSON.parse(check.stdout);
   if (audit.source_sha256 !== sourceHash || audit.sidecar_sha256 !== digest(sidecarBuffer)
       || (reviewPath && audit.review_sha256 !== reviewHash)) throw new Error('Inputs changed during verification');
-  const topic = parseOutline(source);
+  let author = authorSource(source);
+  if (author && author.document.id !== sidecar.course_id) throw new Error('Author Topic ID differs from import ID');
+  const topic = author?.outline || parseOutline(source);
   const content = sourceQuestions(topic);
   if (content.modules.length !== sidecar.expected_module_count || content.questions.length !== sidecar.expected_question_count) throw new Error('Unexpected module or question count');
-  const assets = await loadAssets(sourcePath, source);
+  const assetSource = author?.source_text ?? source;
+  const assets = await loadAssets(sourcePath, assetSource);
+  if (author) author = authorSource(source, assetRecords(assets));
   if (assets.size && reviewPath) {
     const reviewedAssets = JSON.parse(await fs.readFile(reviewPath, 'utf8')).assets;
     const binding = list => list.map(asset => ({path:asset.path, sha256:asset.sha256, size:asset.size, mime:asset.mime}));
@@ -292,9 +356,18 @@ export async function importCourse(sourcePath, sidecarPath, outputPath, auditPat
       throw new Error('Reviewed images differ from source assets; review again');
     }
   }
-  const render = await renderer(assets);
+  const render = await renderer(assets, {v2:!!author});
   const course = {id:sidecar.course_id, title:topic.head, source_sha256:sourceHash,
-    introduction:{id:'introduction', title:'Introduction', html:render.nodes(content.introduction.children, true)}, modules:[], math_css:render.css};
+    introduction:{id:'introduction', title:'Introduction', html:author ? '' : render.nodes(content.introduction.children, true)}, modules:[], math_css:render.css};
+  if (author) {
+    Object.assign(course, {topic_format_version:2, topic_kind:author.document.topic_kind, content_version:author.content_version,
+      ...(author.document.source_rem_id ? {source_rem_id:author.document.source_rem_id} : {}),
+      content_order:author.content_order, content_nodes:author.content_nodes, references:author.references});
+    course.introductions = content.introductions.map(node => ({id:node.meta.id,
+      title:author.document.nodes.find(item => item.id === node.meta.id).text.replace(/^Introduction/i, '引论'),
+      html:render.wrap(node, render.nodes(node.children, true))}));
+    course.introduction = {id:'introduction', title:'引论', html:course.introductions.map(i => i.html).join('')};
+  }
   const formulaChanges = [];
   const interactionTexts = spec => spec?.type === 'choice' ? spec.options : spec?.type === 'true_false' ? spec.statements : spec?.type === 'matching' ? [...spec.left, ...spec.right] : [];
   for (const [index, module] of content.modules.entries()) {
@@ -307,21 +380,22 @@ export async function importCourse(sourcePath, sidecarPath, outputPath, auditPat
       const corrections = (sidecar.errata || []).filter(correction => correction.question_id === question.id);
       const explanationNodes = applyErrata(question.explanationNodes, corrections);
       formulaChanges.push(...corrections);
-      const html = render.nodes(question.questionNodes);
+      const html = render.wrap(question.node, render.nodes(question.questionNodes));
       const interaction = question.interaction ? structuredClone(question.interaction) : null;
       for (const item of interactionTexts(interaction)) item.html = render.nodes([{head: item.text, lines: [], children: [], line: question.line}]);
       const notice = corrections.length ? `<p class="contentErratum" role="note">${escape(corrections.map(c => c.display_note).join(' '))}</p>` : '';
       return {id:question.id, title:question.title, question:question.question, html,
         ...(interaction ? {interaction} : {}),
-        explanation_html:notice + render.nodes(explanationNodes), reference_answer:answer.reference_answer,
+        explanation_html:notice + render.wrap(question.explanationNode, render.nodes(explanationNodes)), reference_answer:answer.reference_answer,
         answer_type:answer.answer_type, constraints:answer.constraints,
         source_line:question.line, ...(question.source_practice ? {source_practice:question.source_practice} : {}),
         ...(corrections.length ? {errata:corrections.map(c => ({original:c.original, replacement:c.replacement, reason:c.reason}))} : {})};
     });
     course.modules.push({id:moduleId, title:module.head, example:built[0], practices:built.slice(1)});
   }
-  const formulaSource = content.questions.some(q => q.interaction)
-    ? [text(content.introduction), ...content.questions.flatMap(q => [q.question, ...interactionTexts(q.interaction).map(i => i.text), ...q.explanationNodes.map(text)])].join('\n') : source;
+  let formulaSource = author || content.questions.some(q => q.interaction)
+    ? [...content.introductions.map(text), ...content.questions.flatMap(q => [q.question, ...interactionTexts(q.interaction).map(i => i.text), ...q.explanationNodes.map(text)])].join('\n') : source;
+  if (author) formulaSource = render.withoutMermaid(formulaSource).replace(/\[\[id:[A-Za-z0-9_-]+\|[^\]\n|]+\]\]/g, '');
   const originalFormulas = [...formulaSource.matchAll(/\$\$([\s\S]*?)\$\$|\$([^$\n]+)\$/g)].map(match => (match[1] ?? match[2]).replace(/^ +/gm, '').trim());
   if (originalFormulas.length !== render.formulas.length) throw new Error('Formula count changed');
   const differences = [];
@@ -337,13 +411,15 @@ export async function importCourse(sourcePath, sidecarPath, outputPath, auditPat
   if (digest(await fs.readFile(sourcePath)) !== sourceHash) throw new Error('Source changed during import');
   if (digest(await fs.readFile(sidecarPath)) !== digest(sidecarBuffer)) throw new Error('Sidecar changed during import');
   if (reviewPath && digest(await fs.readFile(reviewPath)) !== reviewHash) throw new Error('Review changed during import');
-  if (JSON.stringify(assetRecords(await loadAssets(sourcePath, source))) !== JSON.stringify(assetRecords(assets))) throw new Error('Images changed during import');
+  if (JSON.stringify(assetRecords(await loadAssets(sourcePath, assetSource))) !== JSON.stringify(assetRecords(assets))) throw new Error('Images changed during import');
   const report = {...audit, course_version:course.version, course_path:path.resolve(outputPath),
     module_count:course.modules.length, practice_count:course.modules.reduce((count, m) => count + m.practices.length, 0),
     formula_count:render.formulas.length, rendered_formula_count:render.formulas.length,
     reviewed_formula_change_count:differences.length, math_errors:0,
     introduction_hierarchy_preserved:true, source_unchanged:true, external_math_requests:0,
-    renderer_versions:render.versions, formulas:render.formulas, prose_records:render.prose, assets:assetRecords(assets)};
+    renderer_versions:render.versions, formulas:render.formulas, prose_records:render.prose, assets:assetRecords(assets),
+    ...(author ? {topic_format_version:2, content_version:course.content_version, ignored_nodes:author.ignored_nodes,
+      mermaid_diagnostics:render.diagnostics} : {})};
   if (reviewPath) {
     const review = JSON.parse(await fs.readFile(reviewPath, 'utf8'));
     const resolved = review.questions.filter(question => question.review_origin === 'human_resolution');

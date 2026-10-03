@@ -8,9 +8,18 @@ $ErrorActionPreference = 'Stop'
 if ($LASTEXITCODE -ne 0) { throw 'Static asset version check failed. Refresh asset URLs before export and publication.' }
 if ($Repository -notmatch '^[A-Za-z0-9-]+/[A-Za-z0-9_.-]+$') { throw 'Invalid repository name.' }
 $expected = @('.nojekyll','app.js','deployment.json','favicon.svg','index.html','portal.js','review.js','atomic.js','learning-cache.js','question-input.js','content-report.js','catalog-picker.js','portal.css','subjects.js','subjects.css','styles.css','i18n.js','reader-messages.js','portal-messages.js','static-messages.js','course-graph.js','course-graph.css')
-$files = @(Get-ChildItem -LiteralPath $ExportDirectory -File -Force)
+$files = @(Get-ChildItem -LiteralPath $ExportDirectory -File -Force -Recurse)
 $expected += @('training.js','training.css','training-messages.js','learning-ui.js')
-if (@(Compare-Object ($expected | Sort-Object) ($files.Name | Sort-Object)).Count -ne 0) { throw 'Unexpected files in static publication directory.' }
+$expected += @('topic-content.js','topic-content.css','topic-callouts.css')
+$vendor = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'scripts/topic-presentation-assets.json') -Raw | ConvertFrom-Json -AsHashtable
+foreach ($name in $vendor.files.Keys) {
+    if ($name -notmatch '^vendor/(mermaid/[A-Za-z0-9_.-]+\.js|document-backlinks\.mjs)$') { throw 'Invalid vendor asset path.' }
+    $actual = (Get-FileHash -LiteralPath (Join-Path $PSScriptRoot ('web/' + $name)) -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actual -ne $vendor.files[$name]) { throw ('Vendor source differs from pinned build: ' + $name) }
+}
+$expected += @($vendor.files.Keys)
+$relativeFiles = @($files | ForEach-Object { [IO.Path]::GetRelativePath($ExportDirectory, $_.FullName).Replace('\','/') })
+if (@(Compare-Object ($expected | Sort-Object) ($relativeFiles | Sort-Object)).Count -ne 0) { throw 'Unexpected files in static publication directory.' }
 foreach ($name in $expected | Where-Object { $_ -notin @('.nojekyll', 'deployment.json') }) {
     $sourceHash = (Get-FileHash -LiteralPath (Join-Path $PSScriptRoot ('web\' + $name)) -Algorithm SHA256).Hash
     $exportHash = (Get-FileHash -LiteralPath (Join-Path $ExportDirectory $name) -Algorithm SHA256).Hash
@@ -58,15 +67,15 @@ $parent = $reference.object.sha
 $commit = Invoke-Api GET ('repos/' + $Repository + '/git/commits/' + $parent)
 $priorTree = Invoke-Api GET ('repos/' + $Repository + '/git/trees/' + $commit.tree.sha + '?recursive=1')
 $allowedPrior = if ($created) { @('README.md') } else { $expected }
-if ($priorTree.truncated -or @($priorTree.tree | Where-Object { $_.type -ne 'blob' -or $_.path -notin $allowedPrior }).Count) {
+if ($priorTree.truncated -or @($priorTree.tree | Where-Object { ($_.type -eq 'blob' -and $_.path -notin $allowedPrior) -or ($_.type -eq 'tree' -and $_.path -notin @('vendor','vendor/mermaid')) -or $_.type -notin @('blob','tree') }).Count) {
     throw 'Existing repository contains files outside the frontend allowlist. Publication stopped.'
 }
-$treeItems = @($files | ForEach-Object { @{path=$_.Name;mode='100644';type='blob';content=[IO.File]::ReadAllText($_.FullName)} })
+$treeItems = @($files | ForEach-Object { @{path=[IO.Path]::GetRelativePath($ExportDirectory, $_.FullName).Replace('\','/');mode='100644';type='blob';content=[IO.File]::ReadAllText($_.FullName)} })
 $tree = Invoke-Api POST ('repos/' + $Repository + '/git/trees') @{tree=$treeItems}
 $published = Invoke-Api POST ('repos/' + $Repository + '/git/commits') @{message='Publish verified learning frontend';tree=$tree.sha;parents=@($parent)}
 $verifiedTree = Invoke-Api GET ('repos/' + $Repository + '/git/trees/' + $published.tree.sha + '?recursive=1')
-if ($verifiedTree.truncated -or @($verifiedTree.tree | Where-Object type -NE 'blob').Count -or
-    @(Compare-Object ($expected | Sort-Object) ($verifiedTree.tree.path | Sort-Object)).Count) {
+if ($verifiedTree.truncated -or @($verifiedTree.tree | Where-Object { $_.type -notin @('blob','tree') }).Count -or
+    @(Compare-Object ($expected | Sort-Object) (($verifiedTree.tree | Where-Object type -EQ 'blob').path | Sort-Object)).Count) {
     throw 'Remote publication tree failed the exact frontend allowlist.'
 }
 $null = Invoke-Api PATCH ('repos/' + $Repository + '/git/refs/heads/' + $branch) @{sha=$published.sha;force=$false}

@@ -494,10 +494,13 @@ def resume_topic(package, run_dir, *, source=None, resolutions=None, client=None
     package = Path(package).resolve()
     manifest = json.loads((package / 'manifest.json').read_text(encoding='utf-8'))
     using_snapshot = source is None
-    source = Path(source).resolve() if source is not None else package / 'source.md'
+    source_name = manifest.get('artifacts', {}).get('source', 'source.md')
+    if source_name not in ('source.md', 'source.json'):
+        raise ValueError('Invalid source snapshot name')
+    source = Path(source).resolve() if source is not None else package / source_name
     if mode == 'mechanical':
         if using_snapshot:
-            if _hash(source) != manifest.get('files', {}).get('source.md'):
+            if _hash(source) != manifest.get('files', {}).get(source_name):
                 raise ValueError('Original source snapshot hash changed')
             validate_assets(manifest.get('assets', []), lambda name: read_local_asset(package, name),
                             source=source.read_text(encoding='utf-8-sig'))
@@ -594,19 +597,25 @@ def prepare_topic(source, topic_id, run_dir, client=None, *, mode='mechanical', 
         raise ValueError('Import mode must be mechanical or explicitly selected semantic')
     mechanical = mode == 'mechanical'
     source, folder = Path(source).resolve(), Path(run_dir).resolve()
-    if source.suffix.lower() != '.md' or not source.is_file():
-        raise ValueError('Source must be an existing Markdown file')
+    if source.suffix.lower() not in ('.md', '.json') or not source.is_file():
+        raise ValueError('Source must be an existing Markdown or Topic v2 JSON file')
     if folder.exists():
         raise ValueError('Import run directory must be new')
     folder.mkdir(parents=True, exist_ok=False)
     manifest = {'schema_version': 1, 'status': 'failed', 'topic_id': topic_id,
-                'artifacts': {'source': 'source.md', 'inspection': 'inspection.json',
+                'artifacts': {'source': 'source' + source.suffix.lower(), 'inspection': 'inspection.json',
                               'answers': 'answers.json', 'review': 'review.json',
                               'topic': 'topic.json', 'audit': 'audit.json', 'sources': 'topic.sources.json'}}
     stage = 'snapshot'
     try:
         original = json.loads(_node('--inspect', source))
-        snapshot = folder / 'source.md'
+        if source.suffix.lower() == '.json' and original.get('topic_format_version') != 2:
+            raise ValueError('JSON source requires explicit Topic format v2')
+        if original.get('topic_format_version') == 2 and original.get('id') != topic_id:
+            raise ValueError('Author Topic ID differs from import ID')
+        if original.get('topic_format_version') == 2 and not mechanical:
+            raise ValueError('Topic v2 uses mechanical import only')
+        snapshot = folder / manifest['artifacts']['source']
         snapshot.write_bytes(source.read_bytes())
         manifest['source_sha256'] = _hash(snapshot)
         if original['source_sha256'] != manifest['source_sha256']:
@@ -631,7 +640,8 @@ def prepare_topic(source, topic_id, run_dir, client=None, *, mode='mechanical', 
         if inspection.get('assets', []) != assets:
             raise ValueError('Snapshot image asset inventory differs from original')
         questions = inspection['questions']
-        if not questions or len({q['id'] for q in questions}) != len(questions):
+        intro_only = inspection.get('topic_format_version') == 2 and inspection.get('topic_kind') == 'introduction'
+        if (not questions and not intro_only) or len({q['id'] for q in questions}) != len(questions):
             raise ValueError('Empty or duplicate question set')
         if set(q['module_id'] for q in questions) != {m['id'] for m in inspection['modules']}:
             raise ValueError('Module membership mismatch')
