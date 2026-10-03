@@ -32,6 +32,22 @@ def write_json(path, value):
 
 
 class SiteBackupAcceptanceTests(unittest.TestCase):
+    def test_question_bank_and_frozen_presentations_survive_portable_restore(self):
+        from graspmemoedu.question_bank import QuestionBank, install_bank
+        from tests.test_question_bank import bank_fixture
+        course = self.topics['portable-a']
+        revision = install_bank(bank_fixture(course), course, self.data)
+        service = LearningService(course, self.data, learner_id='bank-fixture-learner')
+        before = service.state()
+        self.assertEqual(before['steps'][0]['question_bank_revision'], revision)
+        archive = self.root / 'with-bank.zip'
+        backup_site(self.settings, archive)
+        destination = self.root / 'with-bank-restored'
+        restore_site(archive, destination)
+        restored = LearningService(course, destination, learner_id=service.learner_id)
+        self.assertEqual(before, restored.state())
+        self.assertEqual(revision, QuestionBank(course, destination).active_revision())
+
     def setUp(self):
         self.temporary = temporary_test_directory()
         self.addCleanup(self.temporary.cleanup)

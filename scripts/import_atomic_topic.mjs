@@ -33,7 +33,7 @@ const topic = {id: source.id, title: source.title, training_mode: 'atomic_retrie
 for (const card of topic.flashcards) {
   delete card.explanation;
   const spec = card.interaction;
-  for (const item of [...(spec?.left || []), ...(spec?.right || []), ...(spec?.statements || [])]) item.html = html(item.text);
+  for (const item of [...(spec?.left || []), ...(spec?.right || []), ...(spec?.statements || []), ...(spec?.options || [])]) item.html = html(item.text);
 }
 topic.math_css = render.css;
 const repo = path.dirname(path.dirname(fileURLToPath(import.meta.url)));

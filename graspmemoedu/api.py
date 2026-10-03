@@ -614,7 +614,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                 or step['id'] != state['active_step_id'] or 'submit' not in step['actions']):
             raise DomainError('demo_answer_unavailable', '当前页面没有可作答的题目。', 409)
         return {'step_id': step['id'], 'question_id': step['question_id'],
-                'answer': interaction_demo_answer(learner.questions[step['question_id']])}
+                'answer': interaction_demo_answer(learner.question_for_step(step))}
 
     @app.get('/api/state')
     def state(request: Request):

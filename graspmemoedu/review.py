@@ -386,8 +386,11 @@ class ReviewBackend:
             'phase', 'pending_submission_id', 'created_at', 'completed_at', 'paused_at',
             'pause_reason', 'pause_event_id', 'due_at')}
         result.update(learner_id=self.key[0], topic_id=self.key[1], policy_version=state['policy']['version'])
-        question = self.learning.questions[state['order'][state['index']]]
+        if state.get('question_bank_revision'):
+            result['question_bank_revision'] = state['question_bank_revision']
+        question = self.question_for_session(state)
         result['practice'] = {'id': question['id'], 'title': question['title'], 'html': question['html'],
+                              'content_version': state.get('question_bank_revision') or self.version,
                               'kind': 'practice', 'explanation_html':
                               question['explanation_html'] if state['phase'] == 'feedback' else None}
         result['feedback'] = state.get('feedback')
@@ -397,6 +400,10 @@ class ReviewBackend:
         result['actions'] = ([] if state['status'] != 'in_progress' or state['pending_submission_id']
                              else ['submit'] if state['phase'] == 'answer' else ['continue'])
         return result
+
+    def question_for_session(self, state, question_id=None):
+        question_id = question_id or state['order'][state['index']]
+        return self.learning.question_bank.question(question_id, state.get('question_bank_revision'), state['session_id'] + ':' + question_id)
 
     def state(self, session_id):
         self.learning.flush_logs()
@@ -450,6 +457,9 @@ class ReviewBackend:
                          'practice_target_count': self.policy.targets[0], 'pending_submission_id': None,
                          'created_at': self._now().isoformat(), 'completed_at': None,
                          'paused_at': None, 'pause_reason': None, 'pause_event_id': None, 'due_at': card['due_at']}
+                revision = self.learning.question_bank.active_revision()
+                if revision:
+                    state['question_bank_revision'] = revision
                 if grouped:
                     state['practice_queue_version'] = PRACTICE_QUEUE_VERSION
                 con.execute('INSERT INTO review_sessions VALUES (?,?,?,?,?,?,?)',
@@ -532,7 +542,7 @@ class ReviewBackend:
             if state['phase'] != 'answer':
                 raise DomainError('already_answered', '当前题目已经获得判定。')
             try:
-                parse_answer(self.learning.questions[data['question_id']], answer)
+                parse_answer(self.question_for_session(state, data['question_id']), answer)
             except (ValueError, TypeError, KeyError) as exc:
                 raise DomainError('invalid_answer', '请完成全部作答，且不要重复使用配对选项。', 422) from exc
             stamp = self._now().isoformat()
@@ -557,7 +567,8 @@ class ReviewBackend:
             run_token = uuid.uuid4().hex
             con.execute("UPDATE review_submissions SET status='running',run_token=?,updated_at=? WHERE id=?",
                         (run_token, self._now().isoformat(), submission_id))
-        correct, reason = judge_answer(self.learning.judge, self.learning.questions[item['question']], item['answer'])
+            question = self.question_for_session(self._session(con, item['session']), item['question'])
+        correct, reason = judge_answer(self.learning.judge, question, item['answer'])
         with self.learning._transaction() as con:
             latest = self._submission(con, submission_id)
             if latest['status'] != 'running' or latest['run_token'] != run_token:

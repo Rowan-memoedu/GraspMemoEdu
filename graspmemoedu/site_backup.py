@@ -148,6 +148,8 @@ def _validate_payload(manifest, blobs):
     if not topics or set(versions) != set(topics) or set(sources) != set(topics) or default_id not in topics:
         raise ValueError('Topic manifest membership differs from catalog')
     _retired_versions(manifest, topics)
+    from .question_bank import validate_archive
+    expected_files.update(validate_archive(blobs, topics))
     from .training_content import validate_archive as validate_training_archive
     expected_files.update(validate_training_archive(blobs))
     for topic_id, entry in sources.items():
@@ -227,6 +229,8 @@ def backup_site(settings, destination=None):
                 if snapshot.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
                     raise DomainError('backup_failed', '备份数据库完整性校验失败。', 500)
                 saved_versions = snapshot.execute('SELECT DISTINCT topic,version FROM topics').fetchall()
+                from .question_bank import validate_saved_revisions
+                validate_saved_revisions(snapshot, catalog.topics, settings.data_dir)
                 validate_training_saved(snapshot, training_catalog)
         if any(topic_id in catalog.topics and catalog.topics[topic_id]['version'] != version for topic_id, version in saved_versions):
             raise DomainError('backup_version_changed', '部分进度的课程来源缺失或版本不同，请先处理课程目录。', 409)
@@ -248,6 +252,11 @@ def backup_site(settings, destination=None):
             blobs['judge-daily-quota.sqlite3'] = quota_snapshot.read_bytes()
     blobs.update(training_catalog.archive_blobs())
     sources_index = {}
+    for topic_id in catalog.topics:
+        bank_root = settings.data_dir / 'question-banks' / topic_id
+        if bank_root.exists():
+            for bank_path in bank_root.glob('*.json'):
+                blobs[f'question-banks/{topic_id}/{bank_path.name}'] = bank_path.read_bytes()
     for topic_id, topic in catalog.topics.items():
         path = catalog.topic_paths[topic_id]
         course_bytes = path.read_bytes()
@@ -385,6 +394,8 @@ def restore_site(backup, destination):
                 if con.execute('PRAGMA integrity_check').fetchone()[0] != 'ok' or con.execute('PRAGMA foreign_key_check').fetchone():
                     raise ValueError('Invalid database integrity')
                 rows = con.execute('SELECT learner,topic,version FROM topics').fetchall()
+                from .question_bank import validate_saved_revisions
+                validate_saved_revisions(con, topics, staged)
                 from .training_content import TrainingCatalog, validate_saved as validate_training_saved
                 training_catalog = TrainingCatalog(staged)
                 validate_training_saved(con, training_catalog)
@@ -430,7 +441,7 @@ def restore_site(backup, destination):
         if exc.code == 'restore_exists':
             raise
         raise DomainError('invalid_backup', '备份内容或数据库校验失败，未创建恢复目录。', 422) from exc
-    except (ValueError, TypeError, KeyError, IndexError, AttributeError, sqlite3.Error, zipfile.BadZipFile) as exc:
+    except (ValueError, TypeError, KeyError, IndexError, AttributeError, OSError, sqlite3.Error, zipfile.BadZipFile) as exc:
         raise DomainError('invalid_backup', '备份内容或数据库校验失败，未创建恢复目录。', 422) from exc
     return {'restored_to': str(destination), 'format': 2, 'courses': len(catalog.courses),
             'topics': len(catalog.topics), 'learner_topics': len(learners)}

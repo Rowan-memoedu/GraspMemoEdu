@@ -57,15 +57,18 @@ def register_review_routes(app, identity, admission_lock, limits, schedule, outs
             reasons = {row['question']: row['reason'] for row in con.execute(
                 "SELECT question,reason FROM review_submissions WHERE session=? AND learner=? AND topic=? AND status='judged'",
                 (state['session_id'], learner.learner_id, learner.topic_id))}
-        state['answers'] = [{**answer, 'title': learner.questions[answer['question_id']]['title'],
-                             'interaction': public_interaction(learner.questions[answer['question_id']]),
-                             'answer_display': display_answer(learner.questions[answer['question_id']], answer['answer']),
-                             'html': learner.questions[answer['question_id']]['html'],
-                             'explanation_html': learner.questions[answer['question_id']]['explanation_html'],
+        questions = {answer['question_id']: learner.review_backend.question_for_session(state, answer['question_id'])
+                     for answer in state['answers']}
+        state['answers'] = [{**answer, 'title': questions[answer['question_id']]['title'],
+                             'interaction': public_interaction(questions[answer['question_id']]),
+                             'content_version': state.get('question_bank_revision') or state['course_version'],
+                             'answer_display': display_answer(questions[answer['question_id']], answer['answer']),
+                             'html': questions[answer['question_id']]['html'],
+                             'explanation_html': questions[answer['question_id']]['explanation_html'],
                              'feedback': {'correct': answer['correct'], 'reason': reasons.get(answer['question_id'])}}
                             for answer in state['answers']]
         state.update(topic_title=learner.course['title'], module_title=module.get('title', state['module_id']),
-                     math_css=learner.course.get('math_css', ''), access=access)
+                     math_css=learner.course.get('math_css', '') + learner.question_bank.css([state.get('question_bank_revision')]), access=access)
         action_features = {'submit': 'submit_answer', 'continue': 'learn'}
         state['dependency_ready'] = dependency_policy is None or dependency_policy.is_ready(access, learner.topic_id)
         state['actions'] = [a for a in state['actions'] if state['dependency_ready'] and action_features.get(a) in access['features']]
@@ -110,7 +113,7 @@ def register_review_routes(app, identity, admission_lock, limits, schedule, outs
         if state['status'] != 'in_progress' or state['pending_submission_id'] or 'submit' not in state['actions']:
             raise DomainError('demo_answer_unavailable', '当前页面没有可作答的题目。', 409)
         return {'session_id': session_id, 'question_id': state['practice']['id'],
-                'answer': demo_answer(learner.questions[state['practice']['id']])}
+                'answer': demo_answer(learner.review_backend.question_for_session(state, state['practice']['id']))}
 
     @app.post('/api/review/sessions/{session_id}/submit')
     def submit(session_id: str, payload: ReviewAnswer, request: Request):

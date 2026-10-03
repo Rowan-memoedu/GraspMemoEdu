@@ -14,6 +14,7 @@ from .judging import judge_answer
 from .practice import LESSON_POLICY, apply_practice_result
 from .practice_queue import PersistentPracticeQueue
 from .question_types import validate_interaction, public_interaction, parse_answer, display_answer
+from .question_bank import QuestionBank
 
 
 def now():
@@ -50,6 +51,7 @@ class LearningService:
         self._log_lock = threading.Lock()
         self.questions = {}
         self._validate_course()
+        self.question_bank = QuestionBank(course, data_dir)
         self.practice_queue = PersistentPracticeQueue(self)
         for module in self.course.get('modules', []):
             self.practice_queue.supported(module)
@@ -192,9 +194,16 @@ class LearningService:
         step = {'id': f"{attempt['id']}:{question_id or kind}", 'kind': kind, 'phase': phase,
                 'module_id': attempt['module_id'], 'attempt_id': attempt['id'],
                 'question_id': question_id, 'feedback': None, 'answer': None}
+        if question_id:
+            revision = self.question_bank.active_revision(question_id)
+            if revision:
+                step['question_bank_revision'] = revision
         state['steps'].append(step)
         state['active_step_id'] = state['current_step_id'] = step['id']
         return step
+
+    def question_for_step(self, step):
+        return self.question_bank.question(step['question_id'], step.get('question_bank_revision'), step['id'])
 
     def _fingerprint(self, kind, payload):
         # Absent timing has the same fingerprint as every pre-timing client.
@@ -264,9 +273,10 @@ class LearningService:
         steps = []
         for saved in state['steps']:
             step = dict(saved)
-            question = self.questions.get(saved['question_id'])
+            question = self.question_for_step(saved) if saved['question_id'] else None
             if question:
                 step.update(title=question['title'], html=question['html'], explanation_html=None)
+                step['content_version'] = saved.get('question_bank_revision') or self.course['version']
                 if question.get('interaction'):
                     step['interaction'] = public_interaction(question)
                     step['answer_display'] = display_answer(question, saved.get('answer'))
@@ -289,7 +299,7 @@ class LearningService:
                     step['actions'] = ['continue']
             steps.append(step)
         return {'topic_id': self.topic_id, 'title': self.course['title'], 'course_version': self.course['version'],
-                'math_css': self.course.get('math_css', ''),
+                'math_css': self.course.get('math_css', '') + self.question_bank.css(s.get('question_bank_revision') for s in state['steps']),
                 'learner_id': self.learner_id, 'revision': state['revision'], 'status': state['status'],
                 'introduction_read': state['introduction_read'], 'active_step_id': state['active_step_id'],
                 'current_step_id': state['current_step_id'], 'attempt_id': attempt['id'], 'pause': state['pause'],
@@ -504,7 +514,7 @@ class LearningService:
             if not isinstance(answer, str) or not answer.strip() or len(answer) > 2000:
                 raise DomainError('invalid_answer', '请输入有效答案（最多 2000 字）。', 422)
             try:
-                parse_answer(self.questions[step['question_id']], answer)
+                parse_answer(self.question_for_step(step), answer)
             except (ValueError, TypeError, KeyError) as exc:
                 raise DomainError('invalid_answer', '请完成全部作答，且不要重复使用配对选项。', 422) from exc
             if old:
@@ -539,7 +549,12 @@ class LearningService:
                 return
             con.execute("UPDATE submissions SET status='running',updated_at=? WHERE id=?", (now(), submission_id))
             item = dict(row)
-        question = self.questions[item['question']]
+            state = self._load(con)
+            saved = next((s for s in state['steps'] if s['id'] == item['step']), None)
+            if saved is None:
+                con.execute("UPDATE submissions SET status='discarded',updated_at=? WHERE id=?", (now(), submission_id))
+                return
+            question = self.question_for_step(saved)
         correct, reason = judge_answer(self.judge, question, item['answer'])
         valid = correct is not None
         with self._transaction() as con:

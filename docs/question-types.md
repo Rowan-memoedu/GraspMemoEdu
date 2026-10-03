@@ -22,7 +22,7 @@ Example 与 Practice 共用可选 `interaction`（version 1）。不填时保留
 
 ## 问答与填空的两种判题模式
 
-`grading: "exact"` 对应复刻，服务端脚本严格比较；`grading: "semantic"` 对应复现，调用已有独立判题 LLM。判断与配对始终由脚本判题。
+`grading: "exact"` 对应复刻，服务端脚本严格比较；`grading: "semantic"` 对应复现，调用已有独立判题 LLM。选择、判断与配对始终由脚本判题。
 
 复刻只合并 Unicode NFC、全角 ASCII 与空白差异；保留大小写、正负号、小数点、数学符号及上标差异，不做词义或代数等价推断。可用 `answers` 列出允许的精确写法。需要包装格式时设置 `extract_pattern`：正则必须恰有一个捕获组，完整匹配作答后提取该组比较，执行有超时保护。不要设置允许任意前后文字的宽泛模式。
 
@@ -35,6 +35,16 @@ Example 与 Practice 共用可选 `interaction`（version 1）。不填时保留
 ```
 
 语义问答可省略 `answers`，此时沿用 `reference_answer`。语义填空在一条判题请求中提供题干、每空参考、所有作答以及“所有空都正确才判整题正确”的要求。
+
+## 单项选择题
+
+```json
+{"version":1,"type":"choice","options":[{"id":"oa","text":"$3$"},{"id":"ob","text":"$4$"},{"id":"oc","text":"$5$"},{"id":"od","text":"$6$"},{"id":"oe","text":"$7$"},{"id":"of","text":"$8$"}],"correct_id":"ob"}
+```
+
+通用结构支持 2–12 个选项、唯一正确项；本轮题型转换固定六选一。ID 必须唯一，不能携带正确性含义。提交为 `{"selected":"ob"}`，空选、多选、未知 ID 和额外字段均拒绝，不计错。公共元数据不含 `correct_id`。
+
+选项文本复用安全 Markdown 和离线 MathJax。Lesson 与 Review 按呈现标识确定选项顺序，刷新、恢复草稿和重试保持不变；后续呈现重新排列。鼠标、触屏和方向键均可选择，Ctrl + Enter 提交。转换旧题与保留旧记录的版本规则见 [题库转换工作流](question-bank-workflow.md)。
 
 ## 判断题
 

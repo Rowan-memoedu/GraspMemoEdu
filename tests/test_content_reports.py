@@ -9,7 +9,9 @@ from fastapi.testclient import TestClient
 from graspmemoedu.api import create_app
 from graspmemoedu.config import Settings
 from graspmemoedu.service import LearningService
+from graspmemoedu.question_bank import install_bank
 from tests.fixtures import synthetic_course, temporary_test_directory
+from tests.test_question_bank import bank_fixture
 
 
 class ContentReportTests(unittest.TestCase):
@@ -75,6 +77,24 @@ class ContentReportTests(unittest.TestCase):
         self.assertEqual(self.post({'message': 'General feedback'})['status'], 'saved')
         self.body['correction']['replacement'] = 'x' * 2001
         self.post(self.body, 422)
+
+    def test_bank_correction_must_match_the_presented_revision_and_exact_text(self):
+        bank = bank_fixture(self.learning.course)
+        revision = install_bank(bank, self.learning.course, self.root)
+        # This learner opened the original step before installation.
+        unvisited = copy.deepcopy(self.body)
+        unvisited['correction']['content_version'] = revision
+        self.post(unvisited, 409)
+        self.assertEqual(self.post(self.body)['status'], 'saved')
+        # A different learner receives the converted step and its exact anchor.
+        guest = self.client.post('/api/access/guest', headers=self.headers, json={}).json()
+        self.headers['X-Learning-Identity'] = guest['identity_token']
+        state = self.client.get('/api/state', headers=self.headers).json()
+        self.assertEqual(state['steps'][0]['content_version'], revision)
+        self.assertEqual(state['steps'][0]['interaction']['type'], 'choice')
+        unvisited['correction']['quote']['suffix'] += 'Choose one.'
+        self.assertEqual(self.post(unvisited)['status'], 'saved')
+        self.post(self.body, 409)
 
 
 if __name__ == '__main__':

@@ -17,6 +17,7 @@ from .service import DomainError, now
 from .dependencies import DependencyPolicy
 from .question_types import public_interaction, display_answer
 from .content_reports import validate_correction
+from .question_bank import QuestionBank
 from .course_hierarchy import pending_hierarchy
 
 
@@ -446,17 +447,20 @@ class DashboardStore:
         if snapshot['status'] != 'completed' or not rows:
             raise DomainError('unknown_task_answers', '此身份尚无该任务的已完成作答记录。', 404)
         groups = []
+        bank = QuestionBank(topic, self.access_store.data_dir)
+        steps = {s['id']: s for s in snapshot['state']['steps']}
         for module in topic['modules']:
             questions = {question['id']: question for question in [module['example'], *module['practices']]}
             answers = []
             for row in rows:
                 if row['question'] not in questions:
                     continue
-                question = questions[row['question']]
+                step = steps[row['step']]
+                question = bank.question(row['question'], step.get('question_bank_revision'), step['id'])
                 # Explanation is available only with that learner's actual
                 # judged answer. Reference answers and locked questions never leave.
                 answers.append({'id': row['id'], 'question_id': row['question'], 'html': question['html'],
-                                'interaction': public_interaction(question), 'content_version': topic['version'],
+                                'interaction': public_interaction(question), 'content_version': step.get('question_bank_revision') or topic['version'],
                                 'answer_display': display_answer(question, row['answer']), 'reason': row['reason'],
                                 'explanation_html': question['explanation_html'], 'answer': row['answer'],
                                 'correct': bool(row['correct']), 'result': 'correct' if row['correct'] else 'incorrect',
@@ -465,7 +469,7 @@ class DashboardStore:
                                 'difficulty': None})
             if answers:
                 groups.append({'id': module['id'], 'title': module['title'], 'answers': answers})
-        return {'task': task, 'groups': groups, 'math_css': topic.get('math_css', '')}
+        return {'task': task, 'groups': groups, 'math_css': topic.get('math_css', '') + bank.css(s.get('question_bank_revision') for s in steps.values())}
 
     def _review_answers(self, access, task_id, topic_id):
         topic = self.catalog.topic(topic_id)
@@ -479,9 +483,11 @@ class DashboardStore:
             rows = con.execute("SELECT * FROM review_submissions WHERE session=? AND learner=? AND topic=? AND status='judged' ORDER BY created_at,id",
                                (row['id'], access['learner_id'], topic_id)).fetchall()
         module = next(item for item in topic['modules'] if item['id'] == row['module'])
-        questions = {question['id']: question for question in module['practices']}
+        bank = QuestionBank(topic, self.access_store.data_dir)
+        revision = state.get('question_bank_revision')
+        questions = {q['id']: bank.question(q['id'], revision, state['session_id'] + ':' + q['id']) for q in module['practices']}
         answers = [{'id': answer['id'], 'question_id': answer['question'], 'html': questions[answer['question']]['html'],
-                    'interaction': public_interaction(questions[answer['question']]), 'content_version': topic['version'],
+                    'interaction': public_interaction(questions[answer['question']]), 'content_version': revision or topic['version'],
                     'answer_display': display_answer(questions[answer['question']], answer['answer']), 'reason': answer['reason'],
                     'explanation_html': questions[answer['question']]['explanation_html'], 'answer': answer['answer'],
                     'correct': bool(answer['correct']), 'result': 'correct' if answer['correct'] else 'incorrect',
@@ -490,7 +496,7 @@ class DashboardStore:
                    for answer in rows if answer['question'] in questions]
         course = self.catalog.courses[self.catalog.topic_courses[topic_id]]
         return {'task': self._review_task(course, topic_id, module['id'], state=state),
-                'groups': [{'id': module['id'], 'title': module['title'], 'answers': answers}], 'math_css': topic.get('math_css', '')}
+                'groups': [{'id': module['id'], 'title': module['title'], 'answers': answers}], 'math_css': topic.get('math_css', '') + bank.css([revision])}
 
     def save_feedback(self, access, values):
         message = values['message'].strip()
@@ -517,7 +523,8 @@ class DashboardStore:
         if correction:
             if not topic_id:
                 raise DomainError('invalid_feedback_context', '文字纠错需要指定对应 Topic。', 422)
-            validate_correction(self.catalog.topic(topic_id), question_id, correction)
+            if not question_id:
+                validate_correction(self.catalog.topic(topic_id), question_id, correction)
         created_at = now()
         cutoff = (datetime.fromisoformat(created_at) - timedelta(seconds=60)).isoformat()
         feedback_id = str(uuid.uuid4())
@@ -537,6 +544,20 @@ class DashboardStore:
                     visited = set(state.get('order', [])[:state.get('index', -1) + 1])
                 if question_id not in visited:
                     raise DomainError('locked_step', '只能反馈已访问的题目。', 403)
+                if correction:
+                    topic = self.catalog.topic(topic_id)
+                    revision = correction['content_version']
+                    if saved and saved.get('training_mode') == 'atomic_retrieval':
+                        validate_correction(topic, question_id, correction)
+                    else:
+                        allowed = ({state.get('question_bank_revision') or topic['version']}
+                                   if task_id and task_id.startswith('review:') else
+                                   {s.get('question_bank_revision') or topic['version'] for s in saved['steps'] if s['question_id'] == question_id})
+                        if revision not in allowed:
+                            raise DomainError('invalid_correction', '只能纠错本人已访问的题目版本。', 409)
+                        question = QuestionBank(topic, self.access_store.data_dir).question(
+                            question_id, revision if revision != topic['version'] else None)
+                        validate_correction(topic, question_id, correction, question=question, content_version=revision)
             recent = con.execute('SELECT created_at FROM feedback WHERE learner_id=? AND created_at>? ORDER BY created_at',
                                  (access['learner_id'], cutoff)).fetchall()
             if len(recent) >= 5:

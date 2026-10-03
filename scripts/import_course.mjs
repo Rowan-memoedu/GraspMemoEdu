@@ -296,7 +296,7 @@ export async function importCourse(sourcePath, sidecarPath, outputPath, auditPat
   const course = {id:sidecar.course_id, title:topic.head, source_sha256:sourceHash,
     introduction:{id:'introduction', title:'Introduction', html:render.nodes(content.introduction.children, true)}, modules:[], math_css:render.css};
   const formulaChanges = [];
-  const interactionTexts = spec => spec?.type === 'true_false' ? spec.statements : spec?.type === 'matching' ? [...spec.left, ...spec.right] : [];
+  const interactionTexts = spec => spec?.type === 'choice' ? spec.options : spec?.type === 'true_false' ? spec.statements : spec?.type === 'matching' ? [...spec.left, ...spec.right] : [];
   for (const [index, module] of content.modules.entries()) {
     const moduleId = `example-${index + 1}`;
     const members = content.questions.filter(q => q.moduleId === moduleId);
