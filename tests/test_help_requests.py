@@ -17,6 +17,8 @@ from graspmemoedu.service import DomainError
 from graspmemoedu import cli
 from tests.fixtures import synthetic_course, DeterministicJudge, temporary_test_directory
 from tests.atomic_fixtures import atomic_topic
+from graspmemoedu.question_bank import install_bank
+from tests.test_question_bank import bank_fixture
 
 
 class HelpRequestTests(unittest.TestCase):
@@ -87,6 +89,62 @@ class HelpRequestTests(unittest.TestCase):
         self.assertNotIn('REFERENCE_ONLY', inbox.text)
         self.assertEqual(self.client.get('/api/state', headers=self.headers).json(), before)
         self.assertEqual(self.client.post('/api/help-requests', headers=self.headers, json={**payload, 'is_student': True}).status_code, 422)
+
+    def test_help_uses_the_presented_bank_revision_without_changing_learning(self):
+        revision = install_bank(bank_fixture(self.course), self.course, self.root)
+        state = self.client.get('/api/state', headers=self.headers).json()
+        step = state['steps'][0]
+        self.assertEqual(step['content_version'], revision)
+        self.assertNotEqual(revision, self.course['version'])
+        for field in ('question', 'explanation'):
+            response = self.send(self.payload(message='', question_id=step['question_id'],
+                content_block_id=f"{field}:{step['question_id']}", content_version=step['content_version']))
+            self.assertEqual(response.status_code, 200, response.text)
+        items = self.client.get('/api/help-requests', headers=self.admin_headers).json()['items']
+        question = next(item for item in items if item['request']['content_block_id'].startswith('question:'))
+        explanation = next(item for item in items if item['request']['content_block_id'].startswith('explanation:'))
+        self.assertIn('Choose one.', question['content_text'])
+        self.assertNotIn('Choose one.', explanation['content_text'])
+        self.assertTrue(all(item['request']['content_version'] == revision for item in items))
+        self.assertEqual(self.client.get('/api/state', headers=self.headers).json(), state)
+
+    def test_pinned_bank_help_survives_active_revision_change_and_rejects_unbound_versions(self):
+        bank = bank_fixture(self.course)
+        revision = install_bank(bank, self.course, self.root)
+        state = self.client.get('/api/state', headers=self.headers).json()
+        step = state['steps'][0]
+        bank['questions'][step['question_id']]['html'] += '<p>New variant.</p>'
+        newer = install_bank(bank, self.course, self.root)
+        self.assertNotEqual(newer, revision)
+        payload = self.payload(question_id=step['question_id'],
+            content_block_id=f"question:{step['question_id']}", content_version=step['content_version'])
+        self.assertEqual(self.send(payload).status_code, 200)
+        item = self.client.get('/api/help-requests', headers=self.admin_headers).json()['items'][0]
+        self.assertIn('Choose one.', item['content_text'])
+        self.assertNotIn('New variant.', item['content_text'])
+        self.assertEqual(self.send(self.payload(question_id=step['question_id'],
+            content_block_id=f"question:{step['question_id']}")).status_code, 200)
+        for updates in ({'content_version': 'f' * 64},
+                        {'content_version': '../active'},
+                        {'question_id': None, 'content_block_id': 'introduction'}):
+            response = self.send({**payload, 'request_id': str(uuid.uuid4()), **updates})
+            self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(self.client.get('/api/state', headers=self.headers).json(), state)
+
+    def test_help_rejects_a_modified_or_wrongly_bound_bank(self):
+        bank = bank_fixture(self.course)
+        revision = install_bank(bank, self.course, self.root)
+        state = self.client.get('/api/state', headers=self.headers).json()
+        step = state['steps'][0]
+        payload = self.payload(question_id=step['question_id'],
+            content_block_id=f"question:{step['question_id']}", content_version=revision)
+        path = self.root / 'question-banks' / self.course['id'] / (revision + '.json')
+        for field, value in [('course_version', 'other-topic-version'), ('math_css', 'modified')]:
+            original = dict(bank)
+            original[field] = value
+            path.write_text(json.dumps(original), encoding='utf-8')
+            self.assertEqual(self.send(payload).status_code, 409)
+        self.assertEqual(self.client.get('/api/help-requests', headers=self.admin_headers).json()['total'], 0)
 
     def test_version_subject_and_content_position_are_validated_before_storage(self):
         for updates, status in [({'content_version': 'old'}, 409),

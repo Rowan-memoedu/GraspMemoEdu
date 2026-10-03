@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .service import DomainError, now
 from .public_limits import PublicLimitError
 from .content_reports import ContentText
+from .question_bank import QuestionBank
 
 
 class HelpRequest(BaseModel):
@@ -102,13 +103,25 @@ class HelpRequestStore:
             except DomainError:
                 raise DomainError('help_admin_unavailable', '答疑管理员暂不可用，请稍后重试。', 503) from None
             topic = self.catalog.topic(topic_id)
-            if payload['content_version'] != topic['version']:
-                raise DomainError('content_version_mismatch', '正文版本已变化，请刷新后重新提交答疑请求。', 409)
             block, question_id = payload['content_block_id'], payload.get('question_id')
+            revision = payload['content_version']
+            bank_question = None
+            if revision != topic['version']:
+                # Converted questions pin an immutable bank revision rather than
+                # the source Topic version, including in history and reviews.
+                try:
+                    if not question_id or topic.get('training_mode') == 'atomic_retrieval':
+                        raise ValueError('A bank revision requires a paradigm question')
+                    bank = QuestionBank(topic, self.access_store.data_dir)
+                    if question_id not in bank.load(revision)['questions']:
+                        raise ValueError('The revision does not contain this question')
+                    bank_question = bank.question(question_id, revision)
+                except (ValueError, KeyError, OSError):
+                    raise DomainError('content_version_mismatch', '正文版本已变化，请刷新后重新提交答疑请求。', 409) from None
             html = None
             if question_id:
                 questions = topic['flashcards'] if topic.get('training_mode') == 'atomic_retrieval' else [q for m in topic['modules'] for q in [m['example'], *m['practices']]]
-                question = next((q for q in questions if q['id'] == question_id), None)
+                question = bank_question or next((q for q in questions if q['id'] == question_id), None)
                 field = {f'question:{question_id}': 'html', f'explanation:{question_id}': 'explanation_html'}.get(block)
                 if question and field: html = question[field]
             elif block == 'introduction':
