@@ -1,7 +1,7 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=e510364d1ede8b9a";
-import {questionInput, answerReady} from './question-input.js?v=e510364d1ede8b9a';
-import {reportableContent} from './content-report.js?v=e510364d1ede8b9a';
-import {createLearningCache} from './learning-cache.js?v=e510364d1ede8b9a';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=318501d54750dd15";
+import {questionInput, answerReady} from './question-input.js?v=318501d54750dd15';
+import {reportableContent} from './content-report.js?v=318501d54750dd15';
+import {createLearningCache} from './learning-cache.js?v=318501d54750dd15';
 
 applyStaticTranslations();
 
@@ -1241,11 +1241,11 @@ function answerForm(step, stem) {
       form.requestSubmit();
     }
   });
-  const error = el("p", "inputError", t(structured ? 'question.completeHint' : '请先填写答案。'));
+  const error = el("p", "inputError", t(step.interaction?.type === 'choice' ? 'question.choiceHint' : structured ? 'question.completeHint' : '请先填写答案。'));
   error.id = "answerError";
   error.hidden = true;
   const bottom = el("div", "answerBottom");
-  const hint = el("p", "inputHint", t(step.interaction?.grading === 'exact' ? 'question.exactHint'
+  const hint = el("p", "inputHint", t(step.interaction?.type === 'choice' ? 'question.choiceHint' : step.interaction?.grading === 'exact' ? 'question.exactHint'
     : step.interaction?.grading === 'semantic' ? 'question.semanticHint'
     : structured && step.interaction.type !== 'fill_blank' ? 'question.completeHint'
     : "只要描述清楚正确答案的形式即可，表达方式不限，夹杂口语也没关系。Ctrl + Enter 提交。"));
@@ -1482,7 +1482,7 @@ async function openTopic(id, subjectId) {
   await start();
 }
 
-const { initPortal } = await import("./portal.js?v=e510364d1ede8b9a");
+const { initPortal } = await import("./portal.js?v=318501d54750dd15");
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {
     try { return await fetchGuideAsset(url, subjectId); }
