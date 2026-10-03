@@ -2,7 +2,7 @@
 
 本表从当前界面词库自动生成。修改以词库为准，随后重新生成并检查本表。术语约定见 [界面语言规范](ui-language.md)。
 
-共 552 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
+共 554 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
 
 不包括作者课程正文、题目、答案、解析或用户输入。首页的学科双语副标题按约定保留。
 
@@ -572,6 +572,8 @@
 | This feature requires advanced learner status. | 此功能需要高阶学习者资格。 |
 | This feature requires student status. | 此功能需要学员资格。 |
 | Only administrators can view this page. | 此页面仅供管理员查看。 |
+| A help administrator has not been assigned yet. Please try again later. | 答疑管理员尚未配置，请稍后重试。 |
+| Your help administrator is temporarily unavailable. Please try again later. | 答疑管理员暂不可用，请稍后重试。 |
 | Enter your question about the content. | 请填写需要答疑的问题。 |
 | This request ID was already used for different content. | 同一请求标识不能用于不同内容。 |
 | The content has changed. Refresh and submit your question again. | 正文版本已变化，请刷新后重新提交答疑请求。 |

@@ -91,6 +91,13 @@ def split_permissions(value):
     return None if value is None else [item.strip() for item in value.split(',') if item.strip()]
 
 
+def make_help_store(settings):
+    from .help_requests import HelpRequestStore
+    from .subjects import Subjects
+    catalog = Catalog.load(settings)
+    return HelpRequestStore(catalog, make_access_store(settings), Subjects(settings, catalog))
+
+
 def learner_statuses(settings):
     store = make_access_store(settings)
     with closing(sqlite3.connect(store.db_path)) as con:
@@ -321,6 +328,14 @@ def main():
     usage_report.add_argument('--learner', help='只查看指定 learner_id')
     feedback = sub.add_parser('feedback-list', help='仅在本机查看收到的支持与内容纠错反馈')
     feedback.add_argument('--limit', type=int, default=30)
+    help_default = sub.add_parser('help-admin-default', help='设置未单独分配学员的默认答疑管理员')
+    help_default.add_argument('--admin', required=True, help='管理员账号 learner_id')
+    help_assign = sub.add_parser('help-assign', help='设置学员的答疑管理员；已有请求同时按新归属隔离')
+    help_assign.add_argument('--learner', required=True, help='学员账号 learner_id')
+    help_owner = help_assign.add_mutually_exclusive_group(required=True)
+    help_owner.add_argument('--admin', help='管理员账号 learner_id')
+    help_owner.add_argument('--default-admin', action='store_true', help='恢复默认答疑管理员')
+    sub.add_parser('help-assignments', help='查看学员与答疑管理员的对应关系，不含邀请码')
     permissions = sub.add_parser('account-permissions', help='设置账号权限；下一次 API 请求生效')
     permissions.add_argument('--learner', required=True, help='account-list 返回的账号 learner_id')
     permissions.add_argument('--topics', help='逗号分隔 Topic 标识；空字符串清空；省略则保留')
@@ -439,6 +454,12 @@ def main():
                     if con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='feedback'").fetchone():
                         rows = [dict(row) for row in con.execute('SELECT * FROM feedback ORDER BY created_at DESC,id DESC LIMIT ?', (max(1, min(500, args.limit)),))]
             output({'feedback': rows})
+        elif args.command == 'help-admin-default':
+            output(make_help_store(settings).set_default_admin(args.admin))
+        elif args.command == 'help-assign':
+            output(make_help_store(settings).assign_admin(args.learner, None if args.default_admin else args.admin))
+        elif args.command == 'help-assignments':
+            output(make_help_store(settings).assignments())
         elif args.command == 'account-permissions':
             if args.topics is None and args.features is None and not args.default_topics and not args.default_features and args.is_advanced_learner is None and args.is_student is None:
                 raise DomainError('permissions_required', '请指定权限列表、恢复默认权限或学习者资格。', 422)

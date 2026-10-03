@@ -1,15 +1,20 @@
 """Student question isolation, exact context, safe retries and durable inbox."""
-from contextlib import closing
+from contextlib import closing, redirect_stdout
+import io
 import json
 from pathlib import Path
 import sqlite3
+import sys
 import unittest
 import uuid
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 from graspmemoedu.api import create_app
 from graspmemoedu.config import Settings
 from graspmemoedu.service import LearningService
 from graspmemoedu.site_backup import backup_site, restore_site
+from graspmemoedu.service import DomainError
+from graspmemoedu import cli
 from tests.fixtures import synthetic_course, DeterministicJudge, temporary_test_directory
 from tests.atomic_fixtures import atomic_topic
 
@@ -27,6 +32,7 @@ class HelpRequestTests(unittest.TestCase):
         self.addCleanup(self.client.__exit__, None, None, None)
         self.student, self.headers = self.identity(is_student=True)
         self.admin, self.admin_headers = self.identity(is_admin=True)
+        self.app.state.help_requests.set_default_admin(self.admin)
 
     def identity(self, **flags):
         with self.store._transaction() as con:
@@ -124,6 +130,7 @@ class HelpRequestTests(unittest.TestCase):
         restored = self.root / 'restored'; restore_site(archive, restored)
         with closing(sqlite3.connect(restored / 'learning.sqlite3')) as con:
             self.assertEqual(con.execute('SELECT COUNT(*) FROM help_requests').fetchone()[0], 3)
+            self.assertEqual(con.execute('SELECT admin_id FROM help_admin_config WHERE id=1').fetchone()[0], self.admin)
 
     def test_atomic_chunks_cards_and_explanations_use_the_same_request_contract(self):
         topic = atomic_topic()
@@ -133,6 +140,89 @@ class HelpRequestTests(unittest.TestCase):
         (atomic_root / 'subjects.json').write_text(json.dumps({'subjects': [{'id': 'english', 'course_ids': ['english-course']}]}), encoding='utf-8')
         app = create_app(Settings.load(atomic_root))
         account = app.state.access_store.create_account('Atomic student', is_student=True)['account']
+        with app.state.access_store._transaction() as con:
+            admin = app.state.access_store._insert_account(con, 'Atomic admin', is_admin=True)['account']
+        app.state.help_requests.set_default_admin(admin['learner_id'])
         for block, question in [('chunk:colors', None), ('question:a-1', 'a-1'), ('explanation:a-1', 'a-1')]:
             values = self.payload(topic_id=topic['id'], content_version=topic['version'], content_block_id=block, question_id=question)
             self.assertEqual(app.state.help_requests.save(account, values, 'english')['status'], 'saved')
+
+    def test_administrator_one_alone_sees_default_students_including_new_students(self):
+        other_admin, other_headers = self.identity(is_admin=True)
+        _, third_headers = self.identity(is_admin=True)
+        self.assertEqual(self.send().status_code, 200)
+        future, future_headers = self.identity(is_student=True, is_advanced_learner=True)
+        self.assertEqual(self.send(headers=future_headers).status_code, 200)
+        owner = self.client.get('/api/help-requests', headers=self.admin_headers).json()
+        self.assertEqual(owner['total'], 2)
+        self.assertEqual({item['learner_id'] for item in owner['items']}, {self.student, future})
+        for headers in (other_headers, third_headers):
+            response = self.client.get('/api/help-requests?admin_id=' + self.admin + '&learner_id=' + self.student, headers=headers)
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.json(), {'items': [], 'total': 0, 'next_offset': None})
+        assignments = self.app.state.help_requests.assignments()
+        self.assertEqual(assignments['default_admin_id'], self.admin)
+        self.assertTrue(all(row['admin_id'] == self.admin and row['uses_default'] for row in assignments['items']))
+        self.assertEqual(self.send({**self.payload(), 'admin_id': other_admin}).status_code, 422)
+
+    def test_assignment_filters_records_counts_and_pagination_and_moves_existing_requests(self):
+        other_admin, other_headers = self.identity(is_admin=True)
+        other_student, other_student_headers = self.identity(is_student=True)
+        self.assertEqual(self.send().status_code, 200)
+        for _ in range(2): self.assertEqual(self.send(headers=other_student_headers).status_code, 200)
+        with closing(sqlite3.connect(self.store.db_path)) as con:
+            before = con.execute('SELECT * FROM help_requests ORDER BY id').fetchall()
+        self.app.state.help_requests.assign_admin(other_student, other_admin)
+        first = self.client.get('/api/help-requests?limit=1', headers=self.admin_headers).json()
+        self.assertEqual(first['total'], 1); self.assertIsNone(first['next_offset'])
+        self.assertEqual(first['items'][0]['learner_id'], self.student)
+        second = self.client.get('/api/help-requests?limit=1', headers=other_headers).json()
+        self.assertEqual(second['total'], 2); self.assertEqual(second['next_offset'], 1)
+        next_page = self.client.get('/api/help-requests?limit=1&offset=1&admin_id=' + self.admin, headers=other_headers).json()
+        self.assertEqual(next_page['total'], 2); self.assertIsNone(next_page['next_offset'])
+        self.assertEqual({item['learner_id'] for item in second['items'] + next_page['items']}, {other_student})
+        self.app.state.help_requests.assign_admin(other_student)
+        self.assertEqual(self.client.get('/api/help-requests', headers=other_headers).json()['total'], 0)
+        self.assertEqual(self.client.get('/api/help-requests', headers=self.admin_headers).json()['total'], 3)
+        with closing(sqlite3.connect(self.store.db_path)) as con:
+            self.assertEqual(con.execute('SELECT * FROM help_requests ORDER BY id').fetchall(), before)
+
+    def test_no_configuration_and_disabled_owner_never_expose_or_reroute_requests(self):
+        _, other_headers = self.identity(is_admin=True)
+        self.assertEqual(self.send().status_code, 200)
+        with self.store._transaction() as con: con.execute('DELETE FROM help_admin_config')
+        for headers in (self.admin_headers, other_headers):
+            self.assertEqual(self.client.get('/api/help-requests', headers=headers).json()['total'], 0)
+        self.assertEqual(self.send().status_code, 503)
+        self.app.state.help_requests.set_default_admin(self.admin)
+        self.assertEqual(self.client.get('/api/help-requests', headers=self.admin_headers).json()['total'], 1)
+        self.store.set_enabled(self.admin, False)
+        self.assertEqual(self.send().status_code, 503)
+        self.assertEqual(self.client.get('/api/help-requests', headers=other_headers).json()['total'], 0)
+
+    def test_invalid_owners_are_rejected_and_cli_can_assign_and_restore_default(self):
+        helper = self.app.state.help_requests
+        ordinary, _ = self.identity()
+        for admin in (self.student, ordinary, 'missing'):
+            with self.assertRaises(DomainError): helper.set_default_admin(admin)
+            with self.assertRaises(DomainError): helper.assign_admin(self.student, admin)
+        with self.assertRaises(DomainError): helper.assign_admin(ordinary, self.admin)
+        self.assertEqual(helper.assignments()['default_admin_id'], self.admin)
+        other_admin, _ = self.identity(is_admin=True)
+        def invoke(*args):
+            stream = io.StringIO()
+            with redirect_stdout(stream), patch.object(sys, 'argv', ['graspmemoedu', '--data-dir', str(self.root), *args]):
+                cli.main()
+            return json.loads(stream.getvalue())
+        self.assertEqual(invoke('help-admin-default', '--admin', self.admin)['default_admin_id'], self.admin)
+        self.assertEqual(invoke('help-assign', '--learner', self.student, '--admin', other_admin)['admin_id'], other_admin)
+        listing = invoke('help-assignments')
+        self.assertNotIn('invitation', json.dumps(listing)); self.assertNotIn('identity_token', json.dumps(listing))
+        self.assertEqual(listing['items'][0]['admin_id'], other_admin)
+        restored = invoke('help-assign', '--learner', self.student, '--default-admin')
+        self.assertEqual(restored['admin_id'], self.admin); self.assertTrue(restored['uses_default'])
+        helper.assign_admin(self.student, other_admin)
+        archive = self.root / 'assigned.zip'; backup_site(self.settings, archive)
+        restored_root = self.root / 'assigned-restored'; restore_site(archive, restored_root)
+        with closing(sqlite3.connect(restored_root / 'learning.sqlite3')) as con:
+            self.assertEqual(con.execute('SELECT admin_id FROM help_admin_assignments WHERE learner_id=?', (self.student,)).fetchone()[0], other_admin)

@@ -1,8 +1,8 @@
 // UI strings only. Course HTML, names, answers and explanations never enter this module.
-import {trainingMessages} from './training-messages.js?v=a4ab0a0627eabccf';
-import {readerMessages} from './reader-messages.js?v=a4ab0a0627eabccf';
-import {portalMessages} from './portal-messages.js?v=a4ab0a0627eabccf';
-import {staticMessages} from './static-messages.js?v=a4ab0a0627eabccf';
+import {trainingMessages} from './training-messages.js?v=e2e83f84174c2962';
+import {readerMessages} from './reader-messages.js?v=e2e83f84174c2962';
+import {portalMessages} from './portal-messages.js?v=e2e83f84174c2962';
+import {staticMessages} from './static-messages.js?v=e2e83f84174c2962';
 
 export const LANGUAGE_KEY = 'graspmemoedu:ui-language';
 // Read the previous namespace once on the same origin. Renaming the public
@@ -98,6 +98,8 @@ const errors = {
   '此功能需要高阶学习者资格。': 'This feature requires advanced learner status.',
   '此功能需要学员资格。': 'This feature requires student status.',
   '此页面仅供管理员查看。': 'Only administrators can view this page.',
+  '答疑管理员尚未配置，请稍后重试。': 'A help administrator has not been assigned yet. Please try again later.',
+  '答疑管理员暂不可用，请稍后重试。': 'Your help administrator is temporarily unavailable. Please try again later.',
   '请填写需要答疑的问题。': 'Enter your question about the content.',
   '同一请求标识不能用于不同内容。': 'This request ID was already used for different content.',
   '正文版本已变化，请刷新后重新提交答疑请求。': 'The content has changed. Refresh and submit your question again.',

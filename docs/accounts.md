@@ -108,4 +108,15 @@ sudo -u graspmemoedu /opt/graspmemoedu/venv/bin/python -m graspmemoedu --data-di
 
 请求保存在正式 SQLite 的 `help_requests` 表，随完整网站备份恢复；不进入学习状态、评分或 FSRS 推送。记录包括学习者身份与当时名称、提交时间、问题、课程、Topic、内容位置、版本及正文快照。邀请码和会话凭据不进入答疑记录。
 
-管理员从账号菜单打开“答疑请求”（`#/help-requests`），分页查看全部请求和正文快照，并可前往对应 Topic。`GET /api/help-requests` 仅管理员可读；其他学习者不能读取自己或他人的请求。网页仍不提供建号、权限修改或解锁接口。
+管理员从账号菜单打开“答疑请求”（`#/help-requests`），分页查看自己所负责学员的请求和正文快照，并可前往对应 Topic。服务端按学员与管理员的对应关系过滤记录、总数和分页；其他管理员不能借管理员身份、查询参数或分页读取这些请求。其他学习者不能读取自己或他人的请求。网页仍不提供建号、权限修改或解锁接口。
+
+当前所有学员默认对应邀请码清单中的 1 号管理员，只有该管理员可以看到他们的答疑。以后新增的学员或升级为学员的账号也继承默认归属；可以通过服务器 CLI 单独调整，调整后已有和后续请求都跟随该学员的新归属，不改写请求内容或学习记录。未配置默认管理员或负责管理员被停用时，新提交返回明确错误，不能自动转给其他管理员。
+
+```sh
+sudo -u graspmemoedu /opt/graspmemoedu/venv/bin/python -m graspmemoedu --data-dir /var/lib/graspmemoedu help-admin-default --admin '<1号管理员 learner_id>'
+sudo -u graspmemoedu /opt/graspmemoedu/venv/bin/python -m graspmemoedu --data-dir /var/lib/graspmemoedu help-assignments
+sudo -u graspmemoedu /opt/graspmemoedu/venv/bin/python -m graspmemoedu --data-dir /var/lib/graspmemoedu help-assign --learner '<学员 learner_id>' --admin '<管理员 learner_id>'
+sudo -u graspmemoedu /opt/graspmemoedu/venv/bin/python -m graspmemoedu --data-dir /var/lib/graspmemoedu help-assign --learner '<学员 learner_id>' --default-admin
+```
+
+对应关系保存在同一 SQLite 的 `help_admin_config` 与 `help_admin_assignments`，随网站备份恢复；不在网页开放修改接口。

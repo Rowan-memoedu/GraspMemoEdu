@@ -1,4 +1,4 @@
-"""Student questions retained privately and readable only by administrators."""
+"""Student questions retained privately for each learner's assigned administrator."""
 from contextlib import closing
 from datetime import datetime, timedelta
 import json
@@ -28,7 +28,56 @@ class HelpRequestStore:
                 id TEXT PRIMARY KEY, learner_id TEXT NOT NULL REFERENCES access_principals(learner_id),
                 request_id TEXT NOT NULL, body TEXT NOT NULL, created_at TEXT NOT NULL,
                 UNIQUE(learner_id,request_id));
-                CREATE INDEX IF NOT EXISTS help_request_created ON help_requests(created_at,id);''')
+                CREATE INDEX IF NOT EXISTS help_request_created ON help_requests(created_at,id);
+                CREATE TABLE IF NOT EXISTS help_admin_config (
+                    id INTEGER PRIMARY KEY CHECK(id=1),
+                    admin_id TEXT NOT NULL REFERENCES access_principals(learner_id));
+                CREATE TABLE IF NOT EXISTS help_admin_assignments (
+                    learner_id TEXT PRIMARY KEY REFERENCES access_principals(learner_id),
+                    admin_id TEXT NOT NULL REFERENCES access_principals(learner_id));''')
+
+    @staticmethod
+    def _require_admin(con, admin_id):
+        row = con.execute('SELECT role,is_admin,enabled FROM access_principals WHERE learner_id=?', (admin_id,)).fetchone()
+        if not row or row['role'] != 'account' or not row['is_admin'] or not row['enabled']:
+            raise DomainError('invalid_help_admin', '答疑归属必须指定有效的管理员账号。', 422)
+
+    @staticmethod
+    def _owner(con, learner_id):
+        row = con.execute('''SELECT COALESCE(
+            (SELECT admin_id FROM help_admin_assignments WHERE learner_id=?),
+            (SELECT admin_id FROM help_admin_config WHERE id=1))''', (learner_id,)).fetchone()
+        return row[0]
+
+    def set_default_admin(self, admin_id):
+        with self.access_store._transaction() as con:
+            self._require_admin(con, admin_id)
+            con.execute('INSERT INTO help_admin_config VALUES (1,?) ON CONFLICT(id) DO UPDATE SET admin_id=excluded.admin_id', (admin_id,))
+        return {'default_admin_id': admin_id}
+
+    def assign_admin(self, learner_id, admin_id=None):
+        with self.access_store._transaction() as con:
+            learner = con.execute('SELECT role,is_student FROM access_principals WHERE learner_id=?', (learner_id,)).fetchone()
+            if not learner or learner['role'] != 'account' or not learner['is_student']:
+                raise DomainError('invalid_help_learner', '答疑归属只能设置给学员账号。', 422)
+            if admin_id is None:
+                con.execute('DELETE FROM help_admin_assignments WHERE learner_id=?', (learner_id,))
+            else:
+                self._require_admin(con, admin_id)
+                con.execute('INSERT INTO help_admin_assignments VALUES (?,?) ON CONFLICT(learner_id) DO UPDATE SET admin_id=excluded.admin_id', (learner_id, admin_id))
+            owner = self._owner(con, learner_id)
+        return {'learner_id': learner_id, 'admin_id': owner, 'uses_default': admin_id is None}
+
+    def assignments(self):
+        with closing(self.access_store._connect()) as con:
+            default = con.execute('SELECT admin_id FROM help_admin_config WHERE id=1').fetchone()
+            rows = con.execute('''SELECT p.learner_id,p.display_name,COALESCE(a.admin_id,c.admin_id) AS admin_id,
+                a.admin_id IS NULL AS uses_default FROM access_principals p
+                LEFT JOIN help_admin_assignments a ON a.learner_id=p.learner_id
+                LEFT JOIN help_admin_config c ON c.id=1
+                WHERE p.role='account' AND p.is_student=1 ORDER BY p.learner_id''').fetchall()
+        return {'default_admin_id': default[0] if default else None,
+                'items': [{**dict(row), 'uses_default': bool(row['uses_default'])} for row in rows]}
 
     def save(self, access, values, subject_id=None):
         topic_id = values['topic_id']
@@ -45,6 +94,13 @@ class HelpRequestStore:
                 if json.loads(existing['body'])['request'] != payload:
                     raise DomainError('request_conflict', '同一请求标识不能用于不同内容。', 409)
                 return {'id': existing['id'], 'status': 'saved', 'created_at': existing['created_at']}
+            owner = self._owner(con, access['learner_id'])
+            if owner is None:
+                raise DomainError('help_admin_unavailable', '答疑管理员尚未配置，请稍后重试。', 503)
+            try:
+                self._require_admin(con, owner)
+            except DomainError:
+                raise DomainError('help_admin_unavailable', '答疑管理员暂不可用，请稍后重试。', 503) from None
             topic = self.catalog.topic(topic_id)
             if payload['content_version'] != topic['version']:
                 raise DomainError('content_version_mismatch', '正文版本已变化，请刷新后重新提交答疑请求。', 409)
@@ -80,8 +136,15 @@ class HelpRequestStore:
         if not access.get('is_admin'):
             raise DomainError('feature_forbidden', '此页面仅供管理员查看。', 403)
         with closing(self.access_store._connect()) as con:
-            rows = con.execute('SELECT id,learner_id,body,created_at FROM help_requests ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?', (limit + 1, offset)).fetchall()
-            total = con.execute('SELECT COUNT(*) FROM help_requests').fetchone()[0]
+            con.execute('BEGIN')
+            # No administrator bypass: records and counts use the same owner filter.
+            scope = '''FROM help_requests r
+                LEFT JOIN help_admin_assignments a ON a.learner_id=r.learner_id
+                LEFT JOIN help_admin_config c ON c.id=1
+                WHERE COALESCE(a.admin_id,c.admin_id)=?'''
+            rows = con.execute('SELECT r.id,r.learner_id,r.body,r.created_at ' + scope +
+                               ' ORDER BY r.created_at DESC,r.id DESC LIMIT ? OFFSET ?', (access['learner_id'], limit + 1, offset)).fetchall()
+            total = con.execute('SELECT COUNT(*) ' + scope, (access['learner_id'],)).fetchone()[0]
         return {'items': [{**json.loads(row['body']), 'id': row['id'], 'learner_id': row['learner_id'],
                            'created_at': row['created_at']} for row in rows[:limit]],
                 'total': total, 'next_offset': offset + limit if len(rows) > limit else None}
