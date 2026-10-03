@@ -56,6 +56,33 @@ class CourseHierarchyTests(unittest.TestCase):
         self.assertEqual([unit['id'] for unit in restricted['pending_hierarchy']], ['a', 'b', 'c'])
         self.assertNotIn('topic-b', json.dumps(restricted['pending_hierarchy']))
 
+    def test_legacy_course_container_is_not_a_visible_chapter(self):
+        high = self._account()
+        data = self._get('/api/dashboard?course_id=course-b', high)
+        self.assertTrue(data['course_hierarchy_enabled'])
+        self.assertEqual(data['pending_hierarchy'], [])
+        self.assertEqual([task['topic_id'] for task in data['tasks']], ['topic-c'])
+        # Genuine course-internal chapters retain their grouping, even when
+        # there is only one chapter in a course.
+        self.catalog_data['courses'][1]['units'] = [
+            {'id': 'chapter-c', 'title': 'Chapter C', 'topic_ids': ['topic-c']}]
+        self._write(); self._restart()
+        grouped = self._get('/api/dashboard?course_id=course-b', high)
+        self.assertEqual([unit['id'] for unit in grouped['pending_hierarchy']], ['chapter-c'])
+
+    def test_course_root_children_are_promoted_without_losing_direct_topics(self):
+        self.catalog_data['courses'][0]['units'] = [
+            {'id': 'course-a', 'title': 'Course A', 'topic_ids': ['topic-a']},
+            {'id': 'chapter', 'title': 'Chapter', 'parent_id': 'course-a', 'topic_ids': []},
+            {'id': 'section', 'title': 'Section', 'parent_id': 'chapter', 'topic_ids': ['topic-b']}]
+        self._write(); self._restart()
+        high = self._account()
+        data = self._get('/api/dashboard?course_id=course-a', high)
+        self.assertEqual([unit['id'] for unit in data['pending_hierarchy']], ['chapter', 'section'])
+        self.assertIsNone(data['pending_hierarchy'][0]['parent_id'])
+        self.assertEqual(data['pending_hierarchy'][1]['parent_id'], 'chapter')
+        self.assertEqual({task['topic_id'] for task in data['tasks']}, {'topic-a', 'topic-b'})
+
     def test_default_off_for_standard_and_guest_and_cross_device_preference(self):
         self._hierarchy()
         ordinary = self._account(False)
