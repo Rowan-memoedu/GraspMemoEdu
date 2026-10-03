@@ -122,6 +122,9 @@ export function createAtomicView(bridge) {
     form.addEventListener('submit', event => { event.preventDefault(); if (!disabled) void submit(input); });
     if (!history && question.phase === 'answer') form.append(send);
     box.append(form);
+    if (!history && question.phase === 'answer' && question.interaction?.type === 'choice') {
+      box.append(node('p', 'inputHint', t('question.choiceHint')));
+    }
     if (!history && question.phase === 'answer' && question.interaction?.grading) {
       box.append(node('p', 'inputHint', t(question.interaction.grading === 'exact' ? 'question.exactHint' : 'question.semanticHint')));
     }

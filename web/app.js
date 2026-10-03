@@ -940,7 +940,7 @@ function render() {
   renderConnectionNotice();
   renderPageNotice();
   if (!state) return;
-  if (mathStyleVersion !== state.course_version) {
+  if (mathStyleVersion !== state.math_css) {
     let style = $("courseMathStyle");
     if (!style) {
       style = document.createElement("style");
@@ -948,7 +948,7 @@ function render() {
       document.head.append(style);
     }
     style.textContent = state.math_css || "";
-    mathStyleVersion = state.course_version;
+    mathStyleVersion = state.math_css;
   }
   $("loadingState").hidden = true;
   $("courseShell").hidden = false;
@@ -1111,7 +1111,7 @@ function renderStep(step) {
   else if (step.kind === "introduction") heading.append(el("span", "stepCounter", state.introduction_read ? t("已读") : t("阅读")));
   const stem = content(step.html);
   const reportContext = {topic_id: state.topic_id, ...(step.question_id ? {question_id: step.question_id} : {})};
-  reportableContent(stem, reportContext, step.question_id ? `question:${step.question_id}` : 'introduction', state.course_version);
+  reportableContent(stem, reportContext, step.question_id ? `question:${step.question_id}` : 'introduction', step.content_version || state.course_version);
   const actions = Array.isArray(step.actions) ? step.actions : [];
   target.append(heading, stem);
   if (step.interaction && step.interaction.type !== 'text' && !actions.includes('submit')) {
@@ -1134,7 +1134,7 @@ function renderStep(step) {
     target.append(feedback);
   }
   if (step.explanation_html) {
-    const explanation = reportableContent(content(step.explanation_html), reportContext, `explanation:${step.question_id}`, state.course_version);
+    const explanation = reportableContent(content(step.explanation_html), reportContext, `explanation:${step.question_id}`, step.content_version || state.course_version);
     target.append(el("h3", "exampleExplanationHeader", t("Explanation · 解析")), explanation);
   }
   if (state.dependency_ready === false && !actions.length) target.append(el("p", "featureNotice", translateMessage("请先完成前置知识的学习和待复习内容，并解除前置知识的暂停状态。")));
