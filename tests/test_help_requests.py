@@ -83,7 +83,7 @@ class HelpRequestTests(unittest.TestCase):
         self.assertEqual(self.client.post('/api/help-requests', headers=self.headers, json={**payload, 'is_student': True}).status_code, 422)
 
     def test_version_subject_and_content_position_are_validated_before_storage(self):
-        for updates, status in [({'content_version': 'old'}, 409), ({'message': '  '}, 422),
+        for updates, status in [({'content_version': 'old'}, 409),
                 ({'message': 'bad\x00'}, 422), ({'content_block_id': 'chunk:unknown'}, 422),
                 ({'question_id': 'unknown', 'content_block_id': 'question:unknown'}, 422),
                 ({'question_id': 'module-1-example', 'content_block_id': 'introduction'}, 422)]:
@@ -93,6 +93,22 @@ class HelpRequestTests(unittest.TestCase):
             response = self.send(self.payload(question_id='module-1-example', content_block_id=block + ':module-1-example'))
             self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(self.client.get('/api/help-requests', headers=self.admin_headers).json()['total'], 2)
+
+    def test_empty_whitespace_and_omitted_messages_save_context_and_retry_once(self):
+        for message in ('', ' \n\t ', None):
+            payload = self.payload(message=message)
+            if message is None: payload.pop('message')
+            response = self.send(payload)
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(self.send(payload).json(), response.json())
+        inbox = self.client.get('/api/help-requests', headers=self.admin_headers).json()
+        self.assertEqual(inbox['total'], 3)
+        for item in inbox['items']:
+            self.assertEqual(item['request']['message'], '')
+            self.assertEqual(item['request']['content_block_id'], 'introduction')
+            self.assertEqual(item['request']['content_version'], self.course['version'])
+            self.assertIn('INTRODUCTION_ONLY', item['content_text'])
+            self.assertEqual(item['learner_id'], self.student)
 
     def test_rate_limit_does_not_block_replays_and_pagination_and_backup_survive(self):
         payloads = [self.payload(message='Synthetic ' + str(index)) for index in range(3)]

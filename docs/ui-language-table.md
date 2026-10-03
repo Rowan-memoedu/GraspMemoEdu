@@ -2,7 +2,7 @@
 
 本表从当前界面词库自动生成。修改以词库为准，随后重新生成并检查本表。术语约定见 [界面语言规范](ui-language.md)。
 
-共 551 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
+共 552 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
 
 不包括作者课程正文、题目、答案、解析或用户输入。首页的学科双语副标题按约定保留。
 
@@ -259,7 +259,8 @@
 | Non-student | 非学员 |
 | Request help | 请求答疑 |
 | Help requests | 答疑请求 |
-| Describe your question about this content. | 请说明你对这段内容的疑问。 |
+| Optionally describe your question about this content, or submit without a message. | 可补充你对这段内容的疑问，也可留空直接提交。 |
+| No additional message | 未填写补充说明 |
 | Your help request has been saved. | 答疑请求已保存。 |
 | Saving your help request… | 正在保存答疑请求… |
 | No help requests yet. | 暂无答疑请求。 |

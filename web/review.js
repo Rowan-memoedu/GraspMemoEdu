@@ -1,7 +1,7 @@
-import { t, translateMessage, learningTitle } from './i18n.js?v=5c1d9a1a6408ac9a';
-import {questionInput, answerReady} from './question-input.js?v=5c1d9a1a6408ac9a';
-import {reportableContent} from './content-report.js?v=5c1d9a1a6408ac9a';
-import {createLearningCache} from './learning-cache.js?v=5c1d9a1a6408ac9a';
+import { t, translateMessage, learningTitle } from './i18n.js?v=a4ab0a0627eabccf';
+import {questionInput, answerReady} from './question-input.js?v=a4ab0a0627eabccf';
+import {reportableContent} from './content-report.js?v=a4ab0a0627eabccf';
+import {createLearningCache} from './learning-cache.js?v=a4ab0a0627eabccf';
 
 const node = (tag, cls = '', text) => {
   const item = document.createElement(tag); item.className = cls;

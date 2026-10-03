@@ -13,7 +13,7 @@ from .content_reports import ContentText
 class HelpRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     request_id: str = Field(min_length=1, max_length=128)
-    message: str = Field(min_length=1, max_length=4000)
+    message: str = Field(default='', max_length=4000)
     topic_id: str = Field(min_length=1, max_length=128)
     question_id: str | None = Field(default=None, max_length=256)
     content_block_id: str = Field(min_length=1, max_length=300)
@@ -35,8 +35,8 @@ class HelpRequestStore:
         self.access_store.authorize(access, topic_id, 'request_help')
         self.subjects.authorize_topic(subject_id, topic_id)
         message = values['message'].strip()
-        if not message or '\x00' in message:
-            raise DomainError('invalid_help_request', '请填写需要答疑的问题。', 422)
+        if '\x00' in message:
+            raise DomainError('invalid_help_request', '请求字段不完整或格式错误，请刷新后重试。', 422)
         payload = {**values, 'message': message}
         with self.access_store._transaction() as con:
             existing = con.execute('SELECT id,body,created_at FROM help_requests WHERE learner_id=? AND request_id=?',
