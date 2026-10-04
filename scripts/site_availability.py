@@ -114,9 +114,15 @@ def operate(action):
                 return {'phase': 'online', 'already_online': True}
             assert github('GET', PAGES + '/git/ref/heads/main')['object']['sha'] == state['commit'], 'Published branch changed; review before restoring'
             state['phase'] = 'online_pending'; save(state)
-            if github('GET', PAGES + '/pages', missing=True) is None:
+            pages = github('GET', PAGES + '/pages', missing=True)
+            if pages is None:
                 github('POST', PAGES + '/pages', {k: state['pages'][k] for k in ('source', 'build_type')})
-            github('PUT', PAGES + '/pages', state['pages'])
+                pages = github('GET', PAGES + '/pages')
+            # Recreated Pages can already have HTTPS enabled while its certificate
+            # metadata is pending. Reapplying that setting needlessly fails.
+            updates = {k: v for k, v in state['pages'].items() if k not in pages or pages[k] != v}
+            if updates:
+                github('PUT', PAGES + '/pages', updates)
             github('POST', PAGES + '/pages/builds')
             gate('online')
             verify(False)

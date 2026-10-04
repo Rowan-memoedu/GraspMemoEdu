@@ -107,3 +107,23 @@ class SiteAvailabilityTests(unittest.TestCase):
         state = self.state(); state['phase'] = 'online_pending'; site.save(state)
         self.assertEqual(site.operate('verify')['phase'], 'online')
         self.assertTrue(self.monitor)
+
+    def test_restore_skips_settings_update_when_recreated_site_already_matches(self):
+        site.operate('prepare'); original = copy.deepcopy(self.pages); site.operate('offline')
+        self.pages = original
+        self.pages['https_certificate'] = None
+        self.fail = ('PUT', site.PAGES + '/pages')
+        self.calls.clear()
+        self.assertEqual(site.operate('online')['phase'], 'online')
+        self.assertTrue(self.monitor); self.assertEqual(self.gate_state, 'online')
+        self.assertFalse(any(method == 'PUT' and endpoint == site.PAGES + '/pages'
+                             for method, endpoint, _ in self.calls))
+
+    def test_restore_updates_only_settings_that_differ(self):
+        site.operate('prepare'); original = copy.deepcopy(self.pages); site.operate('offline')
+        self.pages = original; self.pages['source'] = {'branch': 'main', 'path': '/docs'}
+        self.calls.clear()
+        self.assertEqual(site.operate('online')['phase'], 'online')
+        updates = [body for method, endpoint, body in self.calls
+                   if method == 'PUT' and endpoint == site.PAGES + '/pages']
+        self.assertEqual(updates, [{'source': {'branch': 'main', 'path': '/'}}])
