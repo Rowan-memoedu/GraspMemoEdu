@@ -68,6 +68,44 @@ class PhysicsConversionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             PhysicsAdapter.validate(source, {'distractors': rows})
 
+    def test_plain_integer_units_preserve_the_whole_quantity(self):
+        # Regression format plus independent units/parameters; never extract an
+        # integer from a formula, a fractional value or a multi-part answer.
+        for reference, expected, unit in [('-18 m/s²', '-18', 'm/s²'),
+                                          ('$−23 m/s³$', '-23', 'm/s³'),
+                                          ('F = +17 N', '17', 'N'),
+                                          ('ω = -7 rad/s', '-7', 'rad/s'),
+                                          ('81 kg·m/s^2', '81', 'kg·m/s^2'),
+                                          ('9 kPa', '9', 'kPa'),
+                                          (r'$31\,\mathrm{cm/s}$', '31', r'\mathrm{cm/s}')]:
+            with self.subTest(reference=reference):
+                parts = integer_blank({'reference_answer': reference})
+                self.assertEqual(parts['answer'], expected)
+                self.assertEqual(parts['unit'], unit)
+        for reference in ('x=0', 'x+y=5 m', '7 q', '3 m/s；4 m/s', '17 N（向左）',
+                          '3/2 m/s', r'2\sqrt3 m/s', '2m', 'm=3', '3 m extra',
+                          '7 m/s + 2 m/s', '7 m/s=0'):
+            with self.subTest(reference=reference):
+                self.assertIsNone(integer_blank({'reference_answer': reference}))
+
+    def test_plain_unit_canary_compiles_and_grades_without_model_calls(self):
+        course = course_fixture('independent-plain-units')
+        originals = [course['modules'][0]['example'], *course['modules'][0]['practices']]
+        for i, q in enumerate(originals):
+            q['reference_answer'] = f'{-(i + 27)} m/s³'
+        with temporary_test_directory() as directory:
+            factory = Mock(side_effect=AssertionError('Integer conversion must not call a model'))
+            result = run_conversion([course], directory, client_factory=factory)
+            self.assertEqual(result['topics'][0]['fill_blank'], len(originals))
+            self.assertEqual(result['topics'][0]['choice'], 0)
+            factory.assert_not_called()
+            bank = json.loads((Path(directory) / course['id'] / 'bank.json').read_text(encoding='utf-8'))
+            for q in originals:
+                variant = bank['questions'][q['id']]
+                self.assertTrue(variant['html'].startswith(q['html']))
+                self.assertTrue(deterministic_verdict(variant, demo_answer(variant))[0])
+                self.assertFalse(deterministic_verdict(variant, json.dumps({'result': '12345'}))[0])
+
     def test_mechanical_grouping_preserves_conditions_and_qualified_ids(self):
         a, b = course_fixture('topic-a'), course_fixture('topic-b')
         sources = [make_source(c, q) for c in (a, b) for q in [c['modules'][0]['example'], *c['modules'][0]['practices']]]
