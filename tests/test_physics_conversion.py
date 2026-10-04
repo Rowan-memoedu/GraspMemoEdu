@@ -2,6 +2,7 @@
 from copy import deepcopy
 import json
 from pathlib import Path
+import subprocess
 import unittest
 from unittest.mock import Mock
 
@@ -196,6 +197,58 @@ class PhysicsConversionTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     run_conversion([course_fixture()], directory, client_factory=factory, batch_size=size)
                 factory.assert_not_called()
+
+    def test_answer_diagrams_stay_in_explanation_without_a_choice_key_cue(self):
+        # Two unrelated diagram paths and values exercise the same mechanical
+        # presentation rule; the original answer and rendered source stay exact.
+        for index, (value, image_path) in enumerate(((11, 'assets/velocity.png'), (23, 'figures/independent.png'))):
+            course = synthetic_course(1)
+            course['id'] = f'diagram-choice-{index}'
+            question = course['modules'][0]['example']
+            course['modules'][0]['practices'] = []
+            diagram = '<img alt="Source diagram" src="data:image/png;base64,AAAA">'
+            question['html'] += diagram
+            question['explanation_html'] += diagram
+            answer = f'![解析图]({image_path})\n结果为\n$$x={value}$$\n单位保持不变。'
+            literal = r' 另记 A=(2,2*sqrt(7))、B=(3,3*sqrt(11))、l_2=\sqrt5\,\mathrm m。'
+            answer += literal
+            question['reference_answer'] = answer
+            source = make_source(course, question)
+            rows = [{'value': '结果为 ' + start + f'x={value+n}' + end + ' 单位保持不变。' + literal, 'reason': 'Synthetic'}
+                    for n, start, end in ((2, r'\[', r'\]'), (4, r'\(', r'\)'), (6, '$', '$'))]
+            PhysicsAdapter.validate(source, {'distractors': rows})
+            variant = build_variant(question, {'candidate': {'distractors': rows}})
+            bank = {'schema': 1, 'topic_id': course['id'], 'course_version': course['version'],
+                    'questions': {question['id']: variant}, 'math_css': '', 'provenance': {'synthetic': True}}
+            with temporary_test_directory() as directory:
+                root = Path(directory)
+                for name, content in [('source.json', course), ('raw.json', bank)]:
+                    (root / name).write_text(json.dumps(content, ensure_ascii=False), encoding='utf-8')
+                subprocess.run(['node', str(Path(__file__).resolve().parents[1] / 'scripts/compile_question_bank.mjs'),
+                                str(root / 'raw.json'), str(root / 'bank.json'), str(root / 'source.json')],
+                               check=True, capture_output=True)
+                compiled = json.loads((root / 'bank.json').read_text(encoding='utf-8'))
+                self.assertEqual(audit_bank(compiled, course)['questions'], 1)
+                self.assertEqual(question['reference_answer'], answer)
+                self.assertIn(diagram, question['explanation_html'])
+                rendered = compiled['questions'][question['id']]
+                self.assertTrue(rendered['html'].startswith(question['html']))
+                for option in rendered['interaction']['options']:
+                    self.assertNotIn('![', option['text'])
+                    self.assertNotIn('<img', option['html'])
+                    self.assertIn('<svg', option['html'])
+                    self.assertNotIn('<em>', option['html'])
+                correct = next(o for o in rendered['interaction']['options'] if o['id'] == rendered['interaction']['correct_id'])
+                correct['html'] = '<p>Changed answer</p>'
+                with self.assertRaisesRegex(ValueError, 'rendering changed'):
+                    audit_bank(compiled, course)
+            duplicate = deepcopy(rows)
+            duplicate[0]['value'] = answer.split('\n', 1)[1]
+            with self.assertRaisesRegex(ValueError, 'equals the original'):
+                PhysicsAdapter.validate(source, {'distractors': duplicate})
+            rows[0]['value'] += '\n![invented](assets/other.png)'
+            with self.assertRaisesRegex(ValueError, 'Unsupported option markup'):
+                PhysicsAdapter.validate(source, {'distractors': rows})
 
 
 if __name__ == '__main__':

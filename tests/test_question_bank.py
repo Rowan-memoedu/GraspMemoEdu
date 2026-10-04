@@ -34,6 +34,17 @@ def bank_fixture(course):
 
 
 class ChoiceContractTests(unittest.TestCase):
+    def test_complete_long_choice_answers_remain_bounded(self):
+        spec = choice_spec()
+        spec['options'][0]['text'] = '完整原答案：' + 'x' * (2000 - len('完整原答案：'))
+        validate_interaction(spec)
+        public = public_interaction({'interaction': spec})
+        self.assertEqual(public['options'][0]['text'], spec['options'][0]['text'])
+        self.assertNotIn('correct_id', public)
+        spec['options'][0]['text'] += 'x'
+        with self.assertRaises(ValueError):
+            validate_interaction(spec)
+
     def test_denominator_and_sign_variants_with_multiple_centers_are_allowed(self):
         for denominator in (23, 47):
             correct = f'1/{denominator}'

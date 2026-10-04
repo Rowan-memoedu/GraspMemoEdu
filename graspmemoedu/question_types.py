@@ -69,7 +69,7 @@ def validate_interaction(spec, stem=''):
     elif kind == 'choice':
         _keys(spec, common | {'options', 'correct_id'})
         ids = _items(spec['options'], {'text'}, {'html'}, maximum=12)
-        _require(len(ids) >= 2 and all(_string(s['text']) for s in spec['options']))
+        _require(len(ids) >= 2 and all(_string(s['text'], 2000) for s in spec['options']))
         _require(len({s['text'].strip() for s in spec['options']}) == len(ids), 'Choice options must differ')
         _require(isinstance(spec['correct_id'], str) and spec['correct_id'] in ids)
     elif kind == 'true_false':

@@ -6,10 +6,11 @@ import json
 from pathlib import Path
 import re
 import subprocess
+from threading import Lock
 import unicodedata
 
 from .author_import import make_client
-from .conversion_run import ConversionRun, ConversionStopped
+from .conversion_run import ConversionRun, ConversionStopped, run_batches
 from .question_bank import digest, source_questions, validate_bank
 from .question_conversion import generate_batch, source_text, write_json
 from .mechanical_templates import group_sources, expand_candidate
@@ -210,7 +211,7 @@ def numeric_display(tex):
 
 
 def normalized_option(value):
-    value = unicodedata.normalize('NFC', value).strip()
+    value = unicodedata.normalize('NFC', choice_option_text(value)).strip()
     if '$' not in value and not re.search(r'[\u3400-\u9fff]', value):
         try:
             return 'math:' + canonical_math(value)
@@ -334,6 +335,25 @@ def make_source(course, question):
             'images': list({item['image_id']: item for item in [*context_images, *images, *explanation_images]}.values())}
 
 
+def choice_option_text(value):
+    """Keep source answer diagrams in the explanation, not as a choice-key cue."""
+    value = re.sub(r'<!-- topic-diagrams:[a-f0-9]{64} -->', '', value)
+    value = re.sub(r'!\[[^\]\n]*\]\([^)\n]+\)', '', value).strip()
+    # Normalize standard TeX delimiters before Markdown can consume their
+    # backslashes. Existing dollar-delimited formulas are kept byte for byte.
+    value = re.sub(r'(\$\$[\s\S]*?\$\$|\$[^$\n]*\$)|\\\[([\s\S]*?)\\\]|\\\(([\s\S]*?)\\\)',
+                   lambda m: m[1] if m[1] is not None else ('$$' + m[2] + '$$' if m[2] is not None else '$' + m[3] + '$'), value)
+    if not value:
+        raise ValueError('A choice needs an answer beyond its explanation diagram')
+    return value
+
+
+def option_rendering_text(value):
+    # The safe renderer normalizes block/inline math delimiters and paragraph
+    # spacing. Compare all actual prose and TeX, without treating layout as data.
+    return re.sub(r'\s+', '', value.replace('$$', '$'))
+
+
 def build_variant(question, artifact=None):
     blank = integer_blank(question)
     if blank:
@@ -350,6 +370,7 @@ def build_variant(question, artifact=None):
         values = [display_option(value) for value in local] if local else [correct_display(question), *[
             scalar_display(parts, row['value']) if parts else display_option(row['value'])
             for row in artifact['candidate']['distractors']]]
+        values = [choice_option_text(value) for value in values]
         option_id = lambda value: 'o' + digest({'source': digest(question), 'value': value})[:20]
         spec = {'version': 1, 'type': 'choice', 'correct_id': option_id(values[0]),
                 'options': sorted([{'id': option_id(v), 'text': v} for v in values], key=lambda o: o['id'])}
@@ -437,7 +458,7 @@ def audit_bank(bank, course):
             if spec['type'] != 'choice' or len(spec['options']) != choice_count(q):
                 raise ValueError('Option count differs from the fixed question policy')
             correct = next(o for o in spec['options'] if o['id'] == spec['correct_id'])
-            if correct['text'] != correct_display(q):
+            if correct['text'] != choice_option_text(correct_display(q)):
                 raise ValueError('Choice key differs from the original answer')
             if local_choices(q):
                 expected = build_variant(q)
@@ -453,7 +474,7 @@ def audit_bank(bank, course):
             source = make_source(course, q)
             distractors = []
             for option in spec['options']:
-                if source_text(option['html']) != option['text']:
+                if option_rendering_text(source_text(option['html'])) != option_rendering_text(option['text']):
                     raise ValueError('Option rendering changed its text')
                 if option['id'] != spec['correct_id']:
                     parts = scalar_parts(option['text'])
@@ -467,11 +488,13 @@ def audit_bank(bank, course):
     return {'topic_id': course['id'], 'revision': revision, 'questions': len(originals), **counts}
 
 
-def run_conversion(courses, output, *, sample_reviewed=False, client_factory=make_client, config=None, reuse_reviewed=None, batch_size=None):
+def run_conversion(courses, output, *, sample_reviewed=False, client_factory=make_client, config=None, reuse_reviewed=None, batch_size=None, concurrency=1):
     if batch_size is None:
         batch_size = 2 if config and config.get('thinking') else 4
     if type(batch_size) is not int or not 1 <= batch_size <= 4:
         raise ValueError('Use one to four representative questions per request')
+    if type(concurrency) is not int or not 1 <= concurrency <= 64:
+        raise ValueError('Use one to 64 concurrent generation requests')
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
     reuse = json.loads(Path(reuse_reviewed).read_text(encoding='utf-8')) if reuse_reviewed else None
@@ -479,6 +502,8 @@ def run_conversion(courses, output, *, sample_reviewed=False, client_factory=mak
     plan, sources = production_plan(courses)
     plan.update(batch_size=batch_size, planned_requests=(len(sources) + batch_size - 1) // batch_size,
                 rejected_cached_ids=sorted(quality_rejections))
+    if concurrency != 1:
+        plan['concurrency'] = concurrency
     plan_path = output / 'workflow-plan.json'
     if plan_path.exists() and json.loads(plan_path.read_text(encoding='utf-8')) != plan:
         raise ConversionStopped('Source or workflow changed; end this run before offline redesign')
@@ -547,14 +572,18 @@ def run_conversion(courses, output, *, sample_reviewed=False, client_factory=mak
             old = json.loads((previous_cache / 'validated-items' / (digest(source) + '.json')).read_text(encoding='utf-8'))
             initial_errors[source['id']] = {'message': quality_rejections[source['id']],
                                            'previous_candidate': old['candidate'], 'failures': []}
+    cache_lock = Lock()
     def save_accepted(source, artifact):
         write_json(cache_root / (digest(source) + '.json'), artifact)
-        cached[source['id']] = artifact
-    for start in range(0, len(pending), batch_size):
-        group = pending[start:start + batch_size]
+        with cache_lock:
+            cached[source['id']] = artifact
+    def generate_group(group):
         generate_batch(client_factory, run, output / 'requests', group, adapter=PhysicsAdapter,
                        on_accepted=save_accepted, initial_errors=initial_errors)
-        print(json.dumps({'generated_representatives': len(cached), 'total_representatives': len(sources)}), flush=True)
+        with cache_lock:
+            print(json.dumps({'generated_representatives': len(cached), 'total_representatives': len(sources)}), flush=True)
+    run_batches((pending[start:start + batch_size] for start in range(0, len(pending), batch_size)),
+                generate_group, run)
     if not sample_reviewed and sources:
         write_json(sample_path, [{'source': s, 'artifact': cached[s['id']]} for s in sample_sources])
         return {'status': 'sample_review_required', 'sample_ids': plan['sample_ids'], 'usage': run.summary()}
@@ -597,6 +626,7 @@ def main():
     parser.add_argument('--reuse-reviewed', type=Path)
     parser.add_argument('--config', type=Path)
     parser.add_argument('--batch-size', type=int, choices=(1, 2, 3, 4), help='Freeze representative questions per request')
+    parser.add_argument('--concurrency', type=int, choices=range(1, 65), default=1, help='Freeze simultaneous generation requests')
     args = parser.parse_args()
     courses = [json.loads(path.read_text(encoding='utf-8-sig')) for path in args.courses]
     if args.plan_only:
@@ -604,6 +634,8 @@ def main():
         config = json.loads(args.config.read_text(encoding='utf-8')) if args.config else None
         batch_size = args.batch_size or (2 if config and config.get('thinking') else 4)
         plan.update(batch_size=batch_size, planned_requests=(plan['mechanical_groups'] + batch_size - 1) // batch_size)
+        if args.concurrency != 1:
+            plan['concurrency'] = args.concurrency
         args.output.mkdir(parents=True, exist_ok=True)
         write_json(args.output / 'offline-plan.json', plan)
         result = plan
@@ -611,7 +643,7 @@ def main():
         result = {'topics': [audit_bank(json.loads((args.output / c['id'] / 'bank.json').read_text(encoding='utf-8')), c) for c in courses], 'api_requests': 0}
     else:
         config = json.loads(args.config.read_text(encoding='utf-8')) if args.config else None
-        result = run_conversion(courses, args.output, sample_reviewed=args.sample_reviewed, reuse_reviewed=args.reuse_reviewed, config=config, batch_size=args.batch_size)
+        result = run_conversion(courses, args.output, sample_reviewed=args.sample_reviewed, reuse_reviewed=args.reuse_reviewed, config=config, batch_size=args.batch_size, concurrency=args.concurrency)
     print(json.dumps(result, ensure_ascii=False), flush=True)
 
 

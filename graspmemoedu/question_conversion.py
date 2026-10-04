@@ -196,9 +196,12 @@ def generate_batch(client_factory, budget, folder, sources, *, adapter=None, on_
     if not 1 <= len(sources) <= 4 or len({s['id'] for s in sources}) != len(sources):
         raise ValueError('A batch contains one to four distinct source questions')
     remaining, accepted, errors = list(sources), {}, dict(initial_errors or {})
+    already_failed = {source['id'] for source in remaining if source['id'] in errors}
     for attempt in range(2):
         try:
-            response, key = bounded_call(client_factory, budget, folder, remaining, retry=bool(attempt), adapter=adapter, repair_errors=errors)
+            response, key = bounded_call(client_factory, budget, folder, remaining,
+                                        retry=bool(attempt) or bool(already_failed),
+                                        adapter=adapter, repair_errors=errors)
         except (ValueError, KeyError, TypeError):
             response, key = {}, None
         rows = response.get('questions') if isinstance(response, dict) and set(response) == {'questions'} else None
@@ -231,6 +234,8 @@ def generate_batch(client_factory, budget, folder, sources, *, adapter=None, on_
         remaining = failed
         if not remaining:
             return accepted
+        if any(source['id'] in already_failed for source in remaining):
+            break
     budget.stop('Hard validation failed after one repair')
     raise BudgetStopped('Failed question(s) retained; batch stopped after one repair')
 
