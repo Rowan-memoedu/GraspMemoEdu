@@ -24,6 +24,7 @@ from .atomic_content import is_atomic
 from .atomic_api import register_atomic_routes
 from .access import AccessStore
 from .access import credential_digest
+from .admin_pauses import register_admin_pause_routes, PUBLIC_PATHS as ADMIN_PAUSE_PATHS
 from .learning_storage import MemoryLearningStore, administrator
 from .catalog import Catalog
 from .dashboard import DashboardStore
@@ -407,6 +408,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                         '/api/state', '/api/demo-answer', '/api/guest/reset', '/api/choose', '/api/continue', '/api/select', '/api/pause', '/api/submit',
                         '/api/subjects', '/api/catalog', '/api/catalog/select', '/api/dashboard', '/api/profile', '/api/feedback', '/api/help-requests', '/api/guide', '/api/atomic/reviews'}
         public_paths.update(TRAINING_PATHS)
+        public_paths.update(ADMIN_PAUSE_PATHS)
         task_answers_path = path.startswith('/api/tasks/') and path.endswith('/answers') and path.count('/') == 4
         review_feature = review_route_feature(path, request.method)
         review_path = review_feature is not None
@@ -459,7 +461,9 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                     return deny(exc.code, exc.message, exc.status_code)
             elif path not in ('/api/access/guest', '/api/access/login'):
                 try:
-                    access_store.resolve(request.headers.get('x-learning-identity'))
+                    access = access_store.resolve(request.headers.get('x-learning-identity'))
+                    if path in ADMIN_PAUSE_PATHS and not access.get('is_admin'):
+                        return deny('feature_forbidden', '此页面仅供管理员使用。')
                 except DomainError as exc:
                     return deny(exc.code, exc.message, exc.status_code)
         response = await call_next(request)
@@ -697,6 +701,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
 
     from .materials import register_material_routes
     register_help_routes(app, catalog, access_store, subjects)
+    register_admin_pause_routes(app, catalog, access_store, subjects, service_for)
     register_material_routes(app, catalog, access_store, subjects, identity, public_state)
     register_atomic_routes(app, catalog, access_store, subjects, dependency_policy, clock=atomic_clock)
     register_training_routes(app, training, access_store, subjects, service_for,

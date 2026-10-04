@@ -587,7 +587,7 @@ class PublicAccessAcceptanceTests(unittest.TestCase):
                    "/api/access/login", "/api/access/logout", "/api/state", "/api/demo-answer", "/api/guest/reset", "/api/choose", "/api/continue",
                    "/api/select", "/api/pause", "/api/submit", "/api/submissions/{submission_id}",
                    "/api/subjects", "/api/catalog", "/api/catalog/select", "/api/dashboard", "/api/profile", "/api/feedback",
-                   "/api/atomic/reviews", "/api/help-requests",
+                   "/api/atomic/reviews", "/api/help-requests", "/api/admin/pauses", "/api/admin/pauses/unlock",
                    "/api/materials", "/api/materials/open",
                    "/api/graphs", "/api/graphs/{course_id}",
                    "/api/tasks/{task_id}/answers", "/api/guide", "/guide-assets/{relative:path}",
@@ -603,6 +603,9 @@ class PublicAccessAcceptanceTests(unittest.TestCase):
         self.assertEqual(atomic_route.methods, {'GET'})
         identity, _ = self._guest()
         before = self._state(identity)
+        # These two explicitly authorized admin routes remain inaccessible to learners.
+        self._assert_error(self.client.get('/api/admin/pauses', headers=self._headers(identity)), 403, 'feature_forbidden')
+        self._assert_error(self.client.post('/api/admin/pauses/unlock', json={}, headers=self._headers(identity)), 403, 'feature_forbidden')
         self._assert_error(self.client.get('/api/atomic/reviews', headers=self._headers()), 401, 'identity_required')
         self.assertEqual(self.client.get('/api/atomic/reviews', headers=self._headers(identity)).status_code, 200)
         self.assertEqual(self.client.post('/api/atomic/reviews', json={}, headers=self._headers(identity)).status_code, 405)

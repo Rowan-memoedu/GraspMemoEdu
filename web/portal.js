@@ -1,13 +1,13 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=9bb0c0fa655f896d";
-import { createReviewView } from "./review.js?v=9bb0c0fa655f896d";
-import { renderCourseGraph } from "./course-graph.js?v=9bb0c0fa655f896d";
-import {questionInput} from './question-input.js?v=9bb0c0fa655f896d';
-import {enhanceTopicContent} from './topic-content.js?v=9bb0c0fa655f896d';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=9bb0c0fa655f896d';
-import {createCatalogPicker} from './catalog-picker.js?v=9bb0c0fa655f896d';
-import {createAtomicView} from './atomic.js?v=9bb0c0fa655f896d';
-import {createTrainingView} from './training.js?v=9bb0c0fa655f896d';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=9bb0c0fa655f896d";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=1d94d46bef72aae3";
+import { createReviewView } from "./review.js?v=1d94d46bef72aae3";
+import { renderCourseGraph } from "./course-graph.js?v=1d94d46bef72aae3";
+import {questionInput} from './question-input.js?v=1d94d46bef72aae3';
+import {enhanceTopicContent} from './topic-content.js?v=1d94d46bef72aae3';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=1d94d46bef72aae3';
+import {createCatalogPicker} from './catalog-picker.js?v=1d94d46bef72aae3';
+import {createAtomicView} from './atomic.js?v=1d94d46bef72aae3';
+import {createTrainingView} from './training.js?v=1d94d46bef72aae3';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=1d94d46bef72aae3";
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -157,6 +157,7 @@ export function initPortal(bridge) {
     $("menuDisplayName").textContent = name;
     $("menuRole").textContent = expired ? t("portal.session.expired.14") : current?.is_admin ? t('admin.identity') : current?.role === 'account' ? t(current.is_advanced_learner ? 'account.advancedLearner' : 'account.standardLearner') + ' · ' + t(current.is_student ? 'account.student' : 'account.nonStudent') : t("portal.guest.16");
     $('helpInboxLink').hidden = !current?.is_admin;
+    $('pauseInboxLink').hidden = !current?.is_admin;
     helpReporting?.refresh();
     $('adminLearningNotice').hidden = expired || !current?.is_admin;
     $("menuAccountPurpose").hidden = current?.role !== "account" || current?.purpose !== "test";
@@ -309,6 +310,9 @@ export function initPortal(bridge) {
       } else if (path === '/help-requests') {
         document.title = pageTitle(t('help.inbox'));
         await renderHelpInbox(ticket);
+      } else if (path === '/admin/pauses') {
+        document.title = pageTitle(t('pause.inbox'));
+        await renderPauseInbox(ticket);
       } else if (path === "/settings") {
         document.title = pageTitle(t("nav.settings")); await renderSettings();
       } else if (/^\/courses\/[^/]+\/progress$/.test(path)) {
@@ -953,6 +957,52 @@ export function initPortal(bridge) {
       finally { busy = false; more.disabled = false; }
     }
     await load();
+  }
+  async function renderPauseInbox(ticket) {
+    const page = node('section', 'helpInbox'); page.append(node('h1', 'portalPageTitle', t('pause.inbox')));
+    const list = node('div', 'helpRequestList'), status = node('p', 'feedbackStatus'); status.setAttribute('role', 'status');
+    const refresh = control(t('pause.refresh'), 'secondaryButton', () => load(true));
+    const more = control(t('help.more'), 'secondaryButton', () => load(false)); more.hidden = true;
+    page.append(node('p', 'inputHint', t('pause.hint')), refresh, status, list, more); root.replaceChildren(page);
+    let offset = 0, busy = false;
+    async function load(reset) {
+      if (busy) return; busy = true; refresh.disabled = more.disabled = true;
+      if (reset) offset = 0;
+      try {
+        const result = await bridge.request(`admin/pauses?offset=${offset}`);
+        if (ticket !== sequence) return;
+        if (reset) list.replaceChildren();
+        if (!result.items.length && offset === 0) list.append(emptyBox(t('pause.empty')));
+        for (const item of result.items) {
+          const card = node('article', 'courseChoice helpRequest');
+          const reason = ['manual', 'manual_difficulty', 'review_manual_difficulty'].includes(item.reason) ? 'pause.manual' : 'pause.errors';
+          card.append(node('h2', '', item.display_name), node('p', '', `${item.course_title} · ${item.topic_title}`),
+            node('p', '', `${t(reason)} · ${apiDate(item.paused_at, true)}`),
+            node('p', '', item.module_title || t('pause.reviewOnly')));
+          const unlock = control(t('pause.unlock'), 'primaryButton', async () => {
+            if (busy || !window.confirm(t('pause.confirm', {name: item.display_name, topic: item.topic_title}))) return;
+            busy = true; unlock.disabled = refresh.disabled = more.disabled = true; status.textContent = t('pause.unlocking');
+            try {
+              await bridge.request('admin/pauses/unlock', {method: 'POST', body: {learner_id: item.learner_id,
+                topic_id: item.topic_id, module_id: item.module_id, pause_event_id: item.pause_event_id}});
+              if (ticket !== sequence) return;
+              status.textContent = t('pause.unlocked'); dashboards.clear(); answerCache.clear();
+            } catch (error) { if (ticket === sequence) status.textContent = translateMessage(error.message); }
+            finally {
+              busy = false; unlock.disabled = refresh.disabled = more.disabled = false;
+              if (ticket === sequence) await load(true);
+            }
+          });
+          unlock.disabled = !item.version_current;
+          if (!item.version_current) card.append(node('p', 'inputHint', t('pause.oldVersion')));
+          card.append(unlock, link(t('help.location'), subjectHref(item.subject_id, '/topic/' + encode(item.topic_id)), 'textButton'));
+          list.append(card);
+        }
+        offset = result.next_offset; more.hidden = offset === null;
+      } catch (error) { if (ticket === sequence) status.textContent = translateMessage(error.message); }
+      finally { busy = false; refresh.disabled = more.disabled = false; }
+    }
+    await load(true);
   }
   const feedbackDialog = node("dialog", "feedbackDialog"), feedbackForm = node("form"), feedbackHeading = node("div", "dialogHeading"), feedbackTitle = node("h2", "", t("portal.feedback.122"));
   const feedbackClose = control("×", "iconButton", () => feedbackDialog.close()); feedbackClose.setAttribute("aria-label", t("portal.close.feedback.123")); feedbackHeading.append(feedbackTitle, feedbackClose);

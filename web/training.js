@@ -1,6 +1,6 @@
-import {t, translateMessage} from './i18n.js?v=9bb0c0fa655f896d';
-import {questionInput, answerReady} from './question-input.js?v=9bb0c0fa655f896d';
-import {createLearningCache} from './learning-cache.js?v=9bb0c0fa655f896d';
+import {t, translateMessage} from './i18n.js?v=1d94d46bef72aae3';
+import {questionInput, answerReady} from './question-input.js?v=1d94d46bef72aae3';
+import {createLearningCache} from './learning-cache.js?v=1d94d46bef72aae3';
 
 const node = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const button = (text, cls, action) => { const n = node('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
@@ -8,7 +8,7 @@ const encode = encodeURIComponent;
 const query = fields => new URLSearchParams(fields).toString();
 const html = (content, cls = 'courseContent') => { const n = node('div', cls); n.innerHTML = content || ''; return n; };
 const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy', 'training.retire'];
-import {answerEditor, readerFrame} from './learning-ui.js?v=9bb0c0fa655f896d';
+import {answerEditor, readerFrame} from './learning-ui.js?v=1d94d46bef72aae3';
 
 export function createTrainingView(bridge) {
   const {root, request, href, formatDate, getAccess} = bridge;

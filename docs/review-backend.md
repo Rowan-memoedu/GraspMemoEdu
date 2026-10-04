@@ -57,7 +57,7 @@ scheduled = reviews.record_module_result(
 - `POST /api/review/begin` 接收 `module_id/request_id`；`GET /api/review/sessions/{id}` 读取当前轮次。前端地址为 `#/review/<topic>/<module>?session=<id>`，刷新恢复相同轮次。
 - `POST /api/review/sessions/{id}/submit`、`/continue`、`/pause` 对应提交、下一题与主动暂停；`GET /api/review/submissions/{id}` 读取判题结果。前两者使用 revision 与 question_id 校验；所有请求带 `topic_id` 并核对身份和权限。
 - 复习页面只有当前 Practice 和本轮已答题，不提供 Example、Introduction、未来题或未作答题解析。游客主动暂停返回 403；游客自愿开启体验浏览时，`GET /api/review/sessions/{id}/demo-answer` 只提供当前可提交题的标准答案，已有草稿不覆盖。
-- 保留度、优化、解锁及后台配置不开放网页接口。`review-status --learner ... --topic ...` 查看服务端复习状态；`review-unlock --learner ... --topic ... --pause-event ...` 按精确暂停事件解锁，Lesson 已完成时同样有效。
+- 保留度、优化及后台配置不开放网页接口。管理员可在“暂停管理”页解除自己负责学员的暂停，见 [管理员暂停管理](admin-pauses.md)；普通账号与游客不可使用。`review-status --learner ... --topic ...` 查看服务端复习状态；`review-unlock --learner ... --topic ... --pause-event ...` 按精确暂停事件解锁，Lesson 已完成时同样有效。
 - 本次推送指网站内到期任务；浏览器系统通知、邮件与站外消息未接入。
 
 ## 到期推送与复习轮次
