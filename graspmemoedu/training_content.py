@@ -57,9 +57,12 @@ def validate(bank):
             require(isinstance(q, dict) and identifier(q.get('id')) and q['id'] not in questions,
                     'Question IDs must be unique within the bank')
             questions.add(q['id'])
-            require(all(text(q.get(key)) for key in ('question', 'html', 'reference_answer',
-                                                    'explanation_html', 'answer_type', 'constraints')),
+            require(all(text(q.get(key)) for key in ('question', 'reference_answer', 'answer_type', 'constraints')),
                     'Question needs a stem, reference answer and explanation')
+            # Offline SVG formulae and embedded PNGs are larger than source prose.
+            # The complete bank still has the existing 32 MB file limit.
+            require(all(text(q.get(key), 1000000) for key in ('html', 'explanation_html')),
+                    'Missing or oversized rendered question or explanation')
             require(text(q.get('title', q['id']), 200), 'Invalid question title')
             validate_interaction(q.get('interaction'), q['question'])
     require(0 < len(questions) <= 5000, 'Bank must contain 1 to 5000 questions')

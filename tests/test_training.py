@@ -217,5 +217,17 @@ class TrainingTests(unittest.TestCase):
             self.catalog.banks.clear()
             with self.assertRaises(ValueError): validate_saved(con, self.catalog)
 
+    def test_rendered_markup_limit_does_not_expand_source_prose_limit(self):
+        for field, maximum in (('html', 1000000), ('explanation_html', 1000000),
+                               ('question', 100000), ('reference_answer', 100000)):
+            bank = deepcopy(self.bank)
+            question = next(q for group in bank['groups'] for q in group['questions'])
+            question[field] = 'x' * maximum
+            bank['version'] = fingerprint(bank)
+            validate(bank)
+            question[field] += 'x'
+            bank['version'] = fingerprint(bank)
+            with self.assertRaises(ValueError): validate(bank)
+
 
 if __name__ == '__main__': unittest.main()

@@ -17,6 +17,8 @@ from .service import DomainError, LearningService, create_learning_service
 from .subjects import Subjects
 from scripts.verify_content import collect_questions, parse_outline, sha256
 
+MAX_ARCHIVE_BYTES = 500_000_000
+
 
 def _json(value):
     return json.dumps(value, ensure_ascii=False, indent=2).encode('utf-8')
@@ -134,7 +136,7 @@ def _read_archive(backup):
         if (len(names) > 10000 or len(names) != len({name.casefold() for name in names})
                 or not required <= set(names) or not all(_safe_name(name) for name in names)
                 or any(info.file_size > 100_000_000 for info in infos)
-                or sum(info.file_size for info in infos) > 250_000_000
+                or sum(info.file_size for info in infos) > MAX_ARCHIVE_BYTES
                 or archive.getinfo('manifest.json').file_size > 1_000_000):
             raise ValueError('Invalid archive structure')
         files = {name.casefold() for name in names}
@@ -391,16 +393,18 @@ def backup_site(settings, destination=None):
                 'introduction_previous_versions': introduction_versions,
                 'sources': sources_index,
                 'sha256': {name: hashlib.sha256(data).hexdigest() for name, data in blobs.items()}}
+    manifest_bytes = _json(manifest)
     if (not all(_safe_name(name) for name in blobs)
             or any(len(data) > 100_000_000 for data in blobs.values())
-            or sum(map(len, blobs.values())) > 250_000_000):
+            or len(manifest_bytes) > 1_000_000
+            or sum(map(len, blobs.values())) + len(manifest_bytes) > MAX_ARCHIVE_BYTES):
         raise DomainError('invalid_backup', '备份路径或体积超出可恢复范围。', 422)
     _validate_payload(manifest, blobs)
     target.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(target, 'x', compression=zipfile.ZIP_DEFLATED) as archive:
         for name, data in blobs.items():
             archive.writestr(name, data)
-        archive.writestr('manifest.json', _json(manifest))
+        archive.writestr('manifest.json', manifest_bytes)
     return {'backup': str(target), 'sha256': hashlib.sha256(target.read_bytes()).hexdigest(),
             'format': 2, 'contains': [*blobs, 'manifest.json']}
 

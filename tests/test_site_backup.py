@@ -32,6 +32,21 @@ def write_json(path, value):
 
 
 class SiteBackupAcceptanceTests(unittest.TestCase):
+    def test_backup_and_restore_share_total_limit_including_manifest(self):
+        archive = self._backup()
+        with zipfile.ZipFile(archive) as saved:
+            total = sum(info.file_size for info in saved.infolist())
+        rejected = self.root / 'over-limit.zip'
+        with patch('graspmemoedu.site_backup.MAX_ARCHIVE_BYTES', total - 1):
+            with self.assertRaises(DomainError) as caught:
+                backup_site(self.settings, rejected)
+            self.assertEqual(caught.exception.code, 'invalid_backup')
+            self.assertFalse(rejected.exists())
+            self._assert_invalid_without_target(archive)
+        with patch('graspmemoedu.site_backup.MAX_ARCHIVE_BYTES', total):
+            backup_site(self.settings, self.root / 'at-limit.zip')
+            restore_site(archive, self.root / 'at-limit-restored')
+
     def test_question_bank_and_frozen_presentations_survive_portable_restore(self):
         from graspmemoedu.question_bank import QuestionBank, install_bank
         from tests.test_question_bank import bank_fixture

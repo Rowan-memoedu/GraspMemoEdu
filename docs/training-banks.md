@@ -6,7 +6,7 @@
 
 `training_content.py` 管理题库，`training.py` 管理作答和单题排期，`training_api.py` 注册公开学习端点，`web/training.js` 管理页面。题组树直接调用学习主页的 `courseSidebar`、`taskTree` 和任务卡组件；训练页直接复用 `index.html` 的阅读框架及原样式，左侧保留学习记录和移动端抽屉。`learning-ui.js` 的作答表单同时用于原 Lesson 和训练页，仅由各自调用者处理提交。复用 `question_types.py`、`judging.py`、`FSRSEngine`、`questionInput` 和身份/配额/后台判题队列。题库题目不进入原课程 Catalog，不改变 Topic ID、课程内容、学习任务或原课程复习记录。
 
-题库数据位于私密数据目录的 `training-banks/<bank-id>.json`。它与用于现有课程题型转换的 `question-banks/<topic-id>/<revision>.json` 不同，二者不互相收集内容。本次交付只有架构，不附带正式题库内容。
+题库数据位于私密数据目录的 `training-banks/<bank-id>.json`。它与用于现有课程题型转换的 `question-banks/<topic-id>/<revision>.json` 不同，二者不互相收集内容。书籍来源、OCR 和清洗流程由独立的 GraspMemoEduSourcePrep 项目维护，网站只接收经过来源校验的编译产物。
 
 SQLite 使用 `training_attempts`、`training_submissions`、`training_memory`、`training_ratings`、`training_preferences` 和 `training_suspensions`。每个身份、题库版本、题目只有一张记忆卡；不限作答次数。题目内容和选项顺序在开始本次作答时冻结。客户端刷新恢复同一次作答；请求重试不会再判题或重复排期。两次并发作答只有匹配记忆卡版本的一次能更新排期，另一次保存为额外训练。
 
@@ -35,6 +35,8 @@ node scripts/import_training_bank.mjs '<作者 JSON>' '<新的编译 JSON>'
 ```
 
 导入器复用既有安全 Markdown 与离线 MathJax 渲染器。相对 PNG 按现有附件约束读取并内嵌；来源 SHA-256 保存在编译产物中。保留原稿和原图在已授权的私密来源包中。校验稳定 ID、题型、树环、重复题目和整份内容哈希。
+
+书籍 OCR 可加 `--literal-prose`，将方括号题源和裸不等号按字面显示，并兼容 OCR 中不成对的 TeX 伸缩括号控制；不改写保存的原题或答案。每个题干、解析采用自包含的 MathJax 原生字形缓存，减少重复 SVG 路径。原文字段上限为 100,000 字符，`html`、`explanation_html` 各为 1,000,000 字符，完整题库文件仍限 32 MB。编译失败和体积诊断保存在输出目录，不会写出部分成功的题库。
 
 正式安装在服务器使用：
 

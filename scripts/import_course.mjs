@@ -183,7 +183,7 @@ function applyErrata(nodes, errata) {
   return clone;
 }
 
-export async function renderer(assets = new Map(), {v2 = false} = {}) {
+export async function renderer(assets = new Map(), {v2 = false, cacheGlyphs = false} = {}) {
   const presentation = v2 ? await import('./topic-presentation.mjs') : null;
   const bundle = process.env.CODEX_NODE_MODULES || path.join(os.homedir(), '.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules');
   const runtime = process.env.MATH_TOPIC_PDF_RUNTIME || 'D:/Caches/MathTopicPdf/node_modules';
@@ -199,16 +199,20 @@ export async function renderer(assets = new Map(), {v2 = false} = {}) {
   const adaptor = liteAdaptor();
   RegisterHTMLHandler(adaptor);
   const tex = new TeX({packages:AllPackages, formatError:(_jax, error) => { throw error; }});
-  const svg = new SVG({fontCache:'none'});
+  const svg = new SVG({fontCache:cacheGlyphs ? 'global' : 'none'});
   const document = mathjax.document('', {InputJax:tex, OutputJax:svg});
   const formulas = [];
   const prose = [];
   const diagnostics = [];
+  let bodyCount = 0;
   const mermaidPattern = /^(`{3,}|~{3,})mermaid[ \t]*\n([\s\S]*?)^\1[ \t]*(?=\n|$)/gm;
   const withoutMermaid = raw => raw.replace(mermaidPattern, '');
   const wrap = (node, html) => v2 && node.meta?.id ? `<div id="node-${escape(node.meta.id)}">${html}</div>` : html;
   function body(node) {
     let raw = [node.head, ...node.lines].join('\n').trim().replace(diagramComment, '');
+    // Each fragment owns its glyph definitions, so it also renders in isolation.
+    const glyphPrefix = `fragment-${digest(raw).slice(0, 16)}-${++bodyCount}`;
+    if (cacheGlyphs) svg.clearFontCache();
     if (/(?:MATH|IMAGE|MERMAID|REFERENCE|CODE)IMPORTTOKEN\d+END/.test(raw)) throw new Error('Reserved placeholder');
     const generated = [];
     if (v2) {
@@ -252,6 +256,7 @@ export async function renderer(assets = new Map(), {v2 = false} = {}) {
       const display = block !== undefined;
       const latex = (display ? block : inline).trim();
       if (/\\(?:href|url|htmlClass|htmlId|htmlStyle|class|style|cssId|require)\b/.test(latex)) throw new Error('Active TeX content is not supported');
+      if (cacheGlyphs) svg.fontCache.useLocalID(glyphPrefix);
       const rendered = adaptor.outerHTML(document.convert(latex, {display, em:15, ex:7.5, containerWidth:655}));
       if (/data-mml-node="merror"|data-mjx-error|<script|(?:href|src)="(?:https?:|\/\/)/i.test(rendered)) throw new Error(`Invalid math at line ${node.line}`);
       const id = formulas.length;
@@ -273,6 +278,10 @@ export async function renderer(assets = new Map(), {v2 = false} = {}) {
     for (const item of images) html = html.replace(item.token, item.html);
     for (const item of generated) html = item.block ? html.replace(`<p>${item.token}</p>`, item.html) : html.replace(item.token, item.html);
     if (/MATHIMPORTTOKEN\d+END/.test(html)) throw new Error('A formula placeholder was not rendered');
+    if (cacheGlyphs && replacements.length) {
+      html = adaptor.outerHTML(svg.svg('svg', {xmlns:'http://www.w3.org/2000/svg',
+        'aria-hidden':'true', style:'display:none'}, [svg.fontCache.getCache()])) + html;
+    }
     return html;
   }
   function nodes(list, asList=false) {
