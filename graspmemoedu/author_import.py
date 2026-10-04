@@ -110,7 +110,7 @@ class CompatibleClient:
         return self._complete(messages, thinking=True)
 
     def complete_limited(self, messages, *, max_tokens, thinking, reasoning_effort=None, stream=False):
-        if type(max_tokens) is not int or not 1 <= max_tokens <= (32768 if thinking else 8192):
+        if type(max_tokens) is not int or not 1 <= max_tokens <= (65536 if thinking else 8192):
             raise ValueError('Invalid question conversion output limit')
         if reasoning_effort is not None and (not thinking or reasoning_effort not in ('low', 'high', 'max')):
             raise ValueError('Invalid explicit reasoning effort')

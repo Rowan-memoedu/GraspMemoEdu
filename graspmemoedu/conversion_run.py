@@ -21,7 +21,7 @@ class ConversionRun:
                 or self.limits['model'] != 'deepseek-flash'
                 or type(self.limits['thinking']) is not bool
                 or type(self.limits['max_output_tokens']) is not int
-                or not 1 <= self.limits['max_output_tokens'] <= (32768 if self.limits['thinking'] else 8192)
+                or not 1 <= self.limits['max_output_tokens'] <= (65536 if self.limits['thinking'] else 8192)
                 or ('stream' in self.limits and type(self.limits['stream']) is not bool)
                 or ('reasoning_effort' in self.limits and (not self.limits['thinking']
                     or self.limits['reasoning_effort'] not in ('low', 'high', 'max')))):

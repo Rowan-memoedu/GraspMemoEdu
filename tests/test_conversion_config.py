@@ -84,7 +84,7 @@ class ConversionConfigTests(unittest.TestCase):
 
     def test_invalid_combinations_fail_before_network(self):
         client = CompatibleClient('https://api.deepseek.com', 'synthetic-key', 'deepseek-flash')
-        for thinking, effort, cap in ((False, 'low', 8192), (True, 'unknown', 8192), (True, 'low', 32769)):
+        for thinking, effort, cap in ((False, 'low', 8192), (False, None, 8193), (True, 'unknown', 8192), (True, 'low', 65537)):
             with temporary_test_directory() as directory:
                 with self.assertRaises(ValueError):
                     ConversionRun(Path(directory) / 'run.sqlite3', {}, {
@@ -92,3 +92,32 @@ class ConversionConfigTests(unittest.TestCase):
                         'reasoning_effort': effort, 'max_output_tokens': cap})
                 with self.assertRaises(ValueError):
                     client.complete_limited([], thinking=thinking, reasoning_effort=effort, max_tokens=cap)
+
+    def test_explicit_64k_stream_limit_preserves_cache_freeze_and_stop_rules(self):
+        config = {'model': 'deepseek-flash', 'thinking': True, 'reasoning_effort': 'low',
+                  'max_output_tokens': 65536, 'stream': True}
+        for finish in ('stop', 'length'):
+            with self.subTest(finish=finish), temporary_test_directory() as directory:
+                root = Path(directory)
+                run = ConversionRun(root / 'run.sqlite3', {'scope': 'independent-limit-canary'}, config)
+                opener = Mock()
+                opener.open.return_value = BytesIO(self.stream_data(finish=finish))
+                factory = lambda: CompatibleClient('https://api.deepseek.com', 'synthetic', 'deepseek-flash')
+                with patch('graspmemoedu.author_import.urllib.request.build_opener', return_value=opener):
+                    if finish == 'stop':
+                        result = bounded_call(factory, run, root / 'requests', [{'id': 'q'}])
+                        self.assertEqual(result, bounded_call(factory, run, root / 'requests', [{'id': 'q'}]))
+                    else:
+                        with self.assertRaises(ConversionStopped):
+                            bounded_call(factory, run, root / 'requests', [{'id': 'q'}])
+                        with self.assertRaises(ConversionStopped):
+                            run.assert_resumable()
+                payload = json.loads(opener.open.call_args.args[0].data)
+                self.assertEqual(payload['max_tokens'], 65536)
+                self.assertEqual(payload['reasoning_effort'], 'low')
+                self.assertEqual(payload['thinking'], {'type': 'enabled'})
+                self.assertTrue(payload['stream'])
+                self.assertEqual(opener.open.call_count, 1)
+                with self.assertRaises(ConversionStopped):
+                    ConversionRun(root / 'run.sqlite3', {'scope': 'independent-limit-canary'},
+                                  dict(config, max_output_tokens=16384))
