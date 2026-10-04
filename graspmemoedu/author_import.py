@@ -3,9 +3,12 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import http.client
 import json
 import os
 import re
+import socket
+import ssl
 from pathlib import Path, PurePosixPath
 import subprocess
 import sys
@@ -70,6 +73,27 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         raise urllib.error.HTTPError(request.full_url, code, 'Author API redirects are prohibited', headers, fp)
 
 
+class _RequestNotSent(ConnectionError):
+    """A transient connection failure before sending the application request."""
+
+
+class _PreconnectedHTTPSConnection(http.client.HTTPSConnection):
+    def request(self, *args, **kwargs):
+        if self.sock is None:
+            try:
+                # Complete DNS/TCP/proxy CONNECT/TLS before any API headers or
+                # body are sent. Failures after this boundary remain uncertain.
+                self.connect()
+            except (ConnectionError, TimeoutError, socket.gaierror, ssl.SSLEOFError) as exc:
+                raise _RequestNotSent(type(exc).__name__) from exc
+        return super().request(*args, **kwargs)
+
+
+class _PreconnectedHTTPSHandler(urllib.request.HTTPSHandler):
+    def https_open(self, request):
+        return self.do_open(_PreconnectedHTTPSConnection, request, context=self._context)
+
+
 class CompatibleClient:
     def __init__(self, base_url, api_key, model, timeout=180):
         parsed = urlsplit(base_url)
@@ -117,11 +141,21 @@ class CompatibleClient:
             data=body,
             headers={'Authorization': 'Bearer ' + self._api_key, 'Content-Type': 'application/json'})
         # Dedicated credentials must never follow redirects to another host.
-        with urllib.request.build_opener(_NoRedirect()).open(request, timeout=max(self.timeout, 300) if thinking else self.timeout) as response:
-            if stream:
-                from .completion_stream import read_completion_stream
-                return read_completion_stream(response)
-            return json.loads(response.read().decode('utf-8'))
+        opener = urllib.request.build_opener(_NoRedirect(), _PreconnectedHTTPSHandler())
+        for connection_attempt in range(2):
+            try:
+                with opener.open(request, timeout=max(self.timeout, 300) if thinking else self.timeout) as response:
+                    if stream:
+                        from .completion_stream import read_completion_stream
+                        result = read_completion_stream(response)
+                    else:
+                        result = json.loads(response.read().decode('utf-8'))
+                if connection_attempt:
+                    result['_client_transport'] = {'pre_request_connection_retries': connection_attempt}
+                return result
+            except urllib.error.URLError as exc:
+                if connection_attempt or not isinstance(exc.reason, _RequestNotSent):
+                    raise
 
 
 def make_client():

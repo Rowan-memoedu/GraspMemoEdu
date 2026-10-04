@@ -168,6 +168,35 @@ class PhysicsConversionTests(unittest.TestCase):
             with self.assertRaises(ConversionStopped):
                 ConversionRun(root / 'run.sqlite3', {'scope': 'fixed'}).assert_resumable()
 
+    def test_single_representative_requests_are_frozen_and_reused(self):
+        courses = [course_fixture('independent-a'), course_fixture('independent-b')]
+        with temporary_test_directory() as directory:
+            client = Mock(model='deepseek-flash')
+            def generate(messages, **kwargs):
+                payload = json.loads(messages[1]['content'][0]['text'].split('输入数据：\n')[1])
+                self.assertEqual(len(payload['questions']), 1)
+                source = payload['questions'][0]
+                return raw_result({'questions': [{'id': source['id'], 'distractors': [
+                    {'value': [{'expr': 'answer+' + str(n)}], 'reason': 'Synthetic'} for n in (1, 2, 3, 4, 5)]}]})
+            client.complete_limited.side_effect = generate
+            config = {'model': 'deepseek-flash', 'thinking': True, 'max_output_tokens': 16384, 'reasoning_effort': 'low', 'stream': True}
+            result = run_conversion(courses, directory, client_factory=lambda: client, config=config, batch_size=1)
+            self.assertEqual(result['status'], 'sample_review_required')
+            self.assertEqual(client.complete_limited.call_count, 2)
+            run_conversion(courses, directory, client_factory=lambda: client, config=config, batch_size=1)
+            self.assertEqual(client.complete_limited.call_count, 2)
+            with self.assertRaises(ConversionStopped):
+                run_conversion(courses, directory, client_factory=lambda: client, config=config, batch_size=2)
+            self.assertEqual(client.complete_limited.call_count, 2)
+
+    def test_invalid_batch_size_fails_before_any_provider_call(self):
+        for size in (0, 5, True, '1'):
+            with self.subTest(size=size), temporary_test_directory() as directory:
+                factory = Mock(side_effect=AssertionError('No provider call allowed'))
+                with self.assertRaises(ValueError):
+                    run_conversion([course_fixture()], directory, client_factory=factory, batch_size=size)
+                factory.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()
