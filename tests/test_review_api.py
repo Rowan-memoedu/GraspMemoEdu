@@ -115,6 +115,14 @@ class ReviewAPITests(unittest.TestCase):
         self.assertEqual(result['detail']['code'], 'daily_judge_quota')
         self.assertEqual(self.learner.state()['pending_submission_id'], None)
 
+    def test_demo_remains_forbidden_for_non_admin_accounts(self):
+        state = self.enroll()
+        with self.app.state.access_store._transaction() as con:
+            account = self.app.state.access_store._insert_account(con, 'Ordinary demo boundary')
+        login = self.app.state.access_store.login(account['invitation_code'])
+        self.headers['X-Learning-Identity'] = login['identity_token']
+        self.call('GET', '/api/review/sessions/' + state['session_id'] + '/demo-answer', status=403)
+
     def test_shared_pending_limit_blocks_both_directions(self):
         state = self.enroll()
         self.app.state.public_limits.max_pending = 1

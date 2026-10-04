@@ -1,8 +1,8 @@
 // UI strings only. Course HTML, names, answers and explanations never enter this module.
-import {trainingMessages} from './training-messages.js?v=1d94d46bef72aae3';
-import {readerMessages} from './reader-messages.js?v=1d94d46bef72aae3';
-import {portalMessages} from './portal-messages.js?v=1d94d46bef72aae3';
-import {staticMessages} from './static-messages.js?v=1d94d46bef72aae3';
+import {trainingMessages} from './training-messages.js?v=0ac81f397cdcb2ec';
+import {readerMessages} from './reader-messages.js?v=0ac81f397cdcb2ec';
+import {portalMessages} from './portal-messages.js?v=0ac81f397cdcb2ec';
+import {staticMessages} from './static-messages.js?v=0ac81f397cdcb2ec';
 
 export const LANGUAGE_KEY = 'graspmemoedu:ui-language';
 // Read the previous namespace once on the same origin. Renaming the public
@@ -83,7 +83,7 @@ const errors = {
   '答案正在判定，请稍候。': 'Your answer is being checked. Please wait.',
   '当前 Topic 已暂停或完成。': 'This topic is paused or completed.',
   '直接重置仅供游客使用。': 'Direct reset is available to guests only.',
-  '体验专用浏览版仅供游客使用。': 'Demo browsing is available to guests only.',
+  '体验专用浏览版仅供游客和管理员使用。': 'Demo browsing is available to guests and administrators only.',
   '当前页面没有可作答的题目。': 'There is no answerable question on this page.',
   '当前判题队列已满，请稍后重试；本次未计入作答。': 'Answer checking is busy. Try again shortly; this attempt has not been counted.',
   '判题服务暂时不可用，请重试；本次未计入作答。': 'Answer checking is temporarily unavailable. Please retry; this attempt has not been counted.',

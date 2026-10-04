@@ -1,8 +1,8 @@
-import { t, translateMessage, learningTitle } from './i18n.js?v=1d94d46bef72aae3';
-import {questionInput, answerReady} from './question-input.js?v=1d94d46bef72aae3';
-import {reportableContent} from './content-report.js?v=1d94d46bef72aae3';
-import {createLearningCache} from './learning-cache.js?v=1d94d46bef72aae3';
-import {enhanceTopicContent} from './topic-content.js?v=1d94d46bef72aae3';
+import { t, translateMessage, learningTitle } from './i18n.js?v=0ac81f397cdcb2ec';
+import {questionInput, answerReady} from './question-input.js?v=0ac81f397cdcb2ec';
+import {reportableContent} from './content-report.js?v=0ac81f397cdcb2ec';
+import {createLearningCache} from './learning-cache.js?v=0ac81f397cdcb2ec';
+import {enhanceTopicContent} from './topic-content.js?v=0ac81f397cdcb2ec';
 
 const node = (tag, cls = '', text) => {
   const item = document.createElement(tag); item.className = cls;
@@ -266,7 +266,7 @@ export function createReviewView(bridge) {
   }
   async function prefill() {
     const input = root.querySelector('#reviewAnswerInput');
-    if (!state || bridge.getAccess()?.role !== 'guest' || !bridge.demoEnabled() || !input || input.value || read(draftKey()) !== null) return;
+    if (!state || !bridge.demoEnabled() || !input || input.value || read(draftKey()) !== null) return;
     const ticket = epoch, key = draftKey(), question = state.practice.id;
     try {
       const result = await call(sessionPath('demo-answer'));

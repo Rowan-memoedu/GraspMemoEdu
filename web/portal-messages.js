@@ -470,8 +470,8 @@ export const portalMessages = {
     "How do I use demo browsing?"
   ],
   "portal.as.a.guest.select.demo.browsing.beside.your.avatar.to.fill.answer.102": [
-    "游客勾选右上角的“体验专用浏览版”后，作答框会自动填入参考答案，点击“提交”即可。你也可以修改答案，系统仍会正常判对错；取消勾选后，后续题目需要自行作答。",
-    "As a guest, select Demo browsing beside your avatar to fill answer fields with a reference answer, then click Submit. You can edit the answer, and it will still be checked normally. Turn the option off to answer subsequent questions yourself."
+    "游客或管理员勾选右上角的“体验专用浏览版”后，作答框会自动填入参考答案，点击“提交”即可。你也可以修改答案，系统仍会正常判对错；取消勾选后，后续题目需要自行作答。",
+    "As a guest or administrator, select Demo browsing beside your avatar to fill answer fields with a reference answer, then click Submit. You can edit the answer, and it will still be checked normally. Turn the option off to answer subsequent questions yourself."
   ],
   "portal.what.does.reset.clear.103": [
     "“重置”会清除什么？",

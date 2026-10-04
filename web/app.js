@@ -1,10 +1,10 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=1d94d46bef72aae3";
-import {questionInput, answerReady} from './question-input.js?v=1d94d46bef72aae3';
-import {reportableContent} from './content-report.js?v=1d94d46bef72aae3';
-import {createLearningCache} from './learning-cache.js?v=1d94d46bef72aae3';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=0ac81f397cdcb2ec";
+import {questionInput, answerReady} from './question-input.js?v=0ac81f397cdcb2ec';
+import {reportableContent} from './content-report.js?v=0ac81f397cdcb2ec';
+import {createLearningCache} from './learning-cache.js?v=0ac81f397cdcb2ec';
 
-import {answerEditor} from './learning-ui.js?v=1d94d46bef72aae3';
-import {enhanceTopicContent, mountTopicBacklinks, focusContentNode} from './topic-content.js?v=1d94d46bef72aae3';
+import {answerEditor} from './learning-ui.js?v=0ac81f397cdcb2ec';
+import {enhanceTopicContent, mountTopicBacklinks, focusContentNode} from './topic-content.js?v=0ac81f397cdcb2ec';
 
 applyStaticTranslations();
 
@@ -592,8 +592,8 @@ function renderIdentity() {
   $("invitationCode").disabled = identityBusy;
   $("closeIdentityButton").disabled = identityBusy;
   $("cancelIdentityButton").disabled = identityBusy;
-  $("guestDemoOption").hidden = access?.role !== "guest";
-  $("guestDemoCheckbox").checked = access?.role === "guest" && storageRead(localStorage, demoPreferenceKey(), "false") === "true";
+  $("guestDemoOption").hidden = !canUseDemo();
+  $("guestDemoCheckbox").checked = canUseDemo() && storageRead(localStorage, demoPreferenceKey(), "false") === "true";
   renderIdentityNotice();
   portal?.setIdentity(access);
 }
@@ -642,17 +642,18 @@ function saveDraft(step, answer) {
   storageWrite(sessionStorage, key, answer);
 }
 function demoPreferenceKey() { return `guest-demo:${scope()}:${learnerScope()}`; }
+function canUseDemo() { return access?.role === "guest" || Boolean(access?.is_admin); }
 let demoFillGeneration = 0;
 async function prefillDemoAnswer(step) {
   const input = $("answerInput");
-  if (access?.role !== "guest" || !$("guestDemoCheckbox").checked || !input || !step?.actions?.includes("submit")) return;
+  if (!canUseDemo() || !$("guestDemoCheckbox").checked || !input || !step?.actions?.includes("submit")) return;
   const key = draftKey(step);
   if (input.value || drafts.has(key) || storageRead(sessionStorage, key) !== null) return;
   const generation = ++demoFillGeneration, token = identityToken, topic = topicId;
   try {
     const result = await topicRequest("demo-answer", { timeout: STATE_TIMEOUT });
     if (generation !== demoFillGeneration || !input.isConnected || identityToken !== token || topicId !== topic
-        || access?.role !== "guest" || !$("guestDemoCheckbox").checked || result.step_id !== step.id
+        || !canUseDemo() || !$("guestDemoCheckbox").checked || result.step_id !== step.id
         || result.question_id !== step.question_id || input.value || drafts.has(key)
         || storageRead(sessionStorage, key) !== null || typeof result.answer !== "string") return;
     input.value = result.answer;
@@ -1417,7 +1418,7 @@ async function start() {
 $("identityButton").addEventListener("click", openIdentity);
 $("guestDemoCheckbox").addEventListener("change", () => {
   demoFillGeneration += 1;
-  if (access?.role !== "guest") return;
+  if (!canUseDemo()) return;
   storageWrite(localStorage, demoPreferenceKey(), String($("guestDemoCheckbox").checked));
   if ($("guestDemoCheckbox").checked) void prefillDemoAnswer(selectedStep());
 });
@@ -1493,7 +1494,7 @@ async function openTopic(id, subjectId) {
   }
 }
 
-const { initPortal } = await import("./portal.js?v=1d94d46bef72aae3");
+const { initPortal } = await import("./portal.js?v=0ac81f397cdcb2ec");
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {
     try { return await fetchGuideAsset(url, subjectId); }
@@ -1518,7 +1519,7 @@ portal = initPortal({
   },
   getApiOrigin: () => apiBase || window.location.origin,
   setAccess: next => { access = next; renderIdentity(); },
-  demoEnabled: () => $("guestDemoCheckbox").checked,
+  demoEnabled: () => canUseDemo() && $("guestDemoCheckbox").checked,
   openIdentity, returnToGuest, openTopic, leaveTopic,
 });
 await portal.start();

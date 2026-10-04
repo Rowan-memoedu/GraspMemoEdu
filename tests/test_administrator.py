@@ -106,6 +106,47 @@ class AdministratorTests(unittest.TestCase):
         with self.assertRaises(DomainError): service.backup(self.root / 'forbidden.sqlite3')
         self.assertFalse((self.root / 'forbidden.sqlite3').exists())
 
+    def test_demo_lesson_and_review_answers_preserve_ephemeral_storage(self):
+        from datetime import datetime, timedelta, timezone
+
+        self.call('GET', 'demo-answer?topic_id=after', status=409)
+        state = self.call('GET', 'state?topic_id=after')
+        state = self.call('POST', 'choose?topic_id=after', self.payload(state, choice='mastered'))
+        demo = self.call('GET', 'demo-answer?topic_id=after')
+        self.assertEqual(demo['step_id'], state['active_step_id'])
+        self.assertEqual(demo['answer'], self.topics['after']['modules'][0]['example']['reference_answer'])
+        self.assertEqual(self.call('GET', 'state?topic_id=after'), state)
+        service = next(s for s in self.app.state.learning_services.values()
+                       if s.learner_id == self.learner and s.topic_id == 'after')
+        service.judge = lambda question, reference, answer: {
+            'status': 'judged', 'correct': answer == reference, 'reason': 'Exact fixture judge'}
+        result = self.submit('after', state, demo['answer'])
+        self.assertTrue(result['correct'])
+        self.call('GET', 'demo-answer?topic_id=after', status=409)
+
+        service.review_backend.clock = lambda: datetime.now(timezone.utc) + timedelta(days=365)
+        review = self.call('POST', 'review/begin?topic_id=after',
+                           {'request_id': str(uuid.uuid4()), 'module_id': 'module-1'})
+        route = 'review/sessions/' + review['session_id'] + '?topic_id=after'
+        demo = self.call('GET', route.replace('?topic_id=', '/demo-answer?topic_id='))
+        self.assertEqual(demo['question_id'], review['practice']['id'])
+        self.assertEqual(demo['answer'], service.review_backend.question_for_session(
+            review, review['practice']['id'])['reference_answer'])
+        self.assertEqual(self.call('GET', route), review)
+        self.assertEqual(self.learning_snapshot(), self.before)
+
+    def test_demo_atomic_answer_uses_same_administrator_preview(self):
+        state = self.call('POST', 'materials/open?topic_id=atoms',
+                          {'request_id': 'demo-bundle', 'kind': 'atomic_card', 'id': 'ab-bundle'})
+        demo = self.call('GET', 'demo-answer?topic_id=atoms')
+        self.assertEqual(demo['question_id'], state['current']['card_id'])
+        self.assertEqual(json.loads(demo['answer']), {'a': '红色', 'b': '蓝色'})
+        after = self.call('GET', 'state?topic_id=atoms')
+        self.assertEqual({k: v for k, v in after.items() if k != 'server_time'},
+                         {k: v for k, v in state.items() if k != 'server_time'})
+        self.assertTrue(self.submit('atoms', state, demo['answer'])['correct'])
+        self.assertEqual(self.learning_snapshot(), self.before)
+
     def test_all_unlearned_variants_and_bundle_use_normal_card_flow_without_delivery(self):
         inventory = self.call('GET', 'atomic/reviews?subject_id=english')
         self.assertTrue(inventory['all_materials']); self.assertIsNone(inventory['next_due_at'])

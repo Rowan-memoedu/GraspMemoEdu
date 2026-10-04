@@ -626,8 +626,8 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     @app.get('/api/demo-answer')
     def demo_answer(request: Request):
         access, learner = identity(request, 'submit_answer')
-        if access['role'] != 'guest':
-            raise DomainError('feature_forbidden', '体验专用浏览版仅供游客使用。', 403)
+        if access['role'] != 'guest' and not access.get('is_admin'):
+            raise DomainError('feature_forbidden', '体验专用浏览版仅供游客和管理员使用。', 403)
         state = learner.state()
         if is_atomic(learner.course):
             current = state['current']

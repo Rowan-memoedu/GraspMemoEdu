@@ -109,8 +109,8 @@ def register_review_routes(app, identity, admission_lock, limits, schedule, outs
     @app.get('/api/review/sessions/{session_id}/demo-answer')
     def demo(session_id: str, request: Request):
         access, learner = identity(request, 'submit_answer')
-        if access['role'] != 'guest':
-            raise DomainError('feature_forbidden', '体验专用浏览版仅供游客使用。', 403)
+        if access['role'] != 'guest' and not access.get('is_admin'):
+            raise DomainError('feature_forbidden', '体验专用浏览版仅供游客和管理员使用。', 403)
         state = learner.review_backend.state(session_id)
         if state['status'] != 'in_progress' or state['pending_submission_id'] or 'submit' not in state['actions']:
             raise DomainError('demo_answer_unavailable', '当前页面没有可作答的题目。', 409)

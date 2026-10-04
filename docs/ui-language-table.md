@@ -421,7 +421,7 @@
 | Is my progress saved? | 学习进度会保存吗？ |
 | Progress is saved automatically. Guests should continue in the same browser; changing devices or clearing browser data may make their original guest identity unavailable. Invite-code accounts can sign in on another device and continue. | 进度会自动保存。游客请使用同一浏览器继续学习；更换设备或清除浏览器数据后，可能无法找回原游客身份。使用邀请码登录的账号可在其他设备登录后继续。 |
 | How do I use demo browsing? | “体验专用浏览版”怎么用？ |
-| As a guest, select Demo browsing beside your avatar to fill answer fields with a reference answer, then click Submit. You can edit the answer, and it will still be checked normally. Turn the option off to answer subsequent questions yourself. | 游客勾选右上角的“体验专用浏览版”后，作答框会自动填入参考答案，点击“提交”即可。你也可以修改答案，系统仍会正常判对错；取消勾选后，后续题目需要自行作答。 |
+| As a guest or administrator, select Demo browsing beside your avatar to fill answer fields with a reference answer, then click Submit. You can edit the answer, and it will still be checked normally. Turn the option off to answer subsequent questions yourself. | 游客或管理员勾选右上角的“体验专用浏览版”后，作答框会自动填入参考答案，点击“提交”即可。你也可以修改答案，系统仍会正常判对错；取消勾选后，后续题目需要自行作答。 |
 | What does Reset clear? | “重置”会清除什么？ |
 | As a guest, click the yellow Reset button beside a lesson to clear that topic’s progress and answer records and start again. Other topics and other people’s progress are unaffected. | 游客点击学习任务旁的黄色“重置”，会清空该主题的学习进度和作答记录，让你从头开始。其他主题和其他人的进度不受影响。 |
 | What if I find a problem or need help? | 题目有问题，或者不知道怎么操作怎么办？ |
@@ -577,7 +577,7 @@
 | Your answer is being checked. Please wait. | 答案正在判定，请稍候。 |
 | This topic is paused or completed. | 当前 主题 已暂停或完成。 |
 | Direct reset is available to guests only. | 直接重置仅供游客使用。 |
-| Demo browsing is available to guests only. | 体验专用浏览版仅供游客使用。 |
+| Demo browsing is available to guests and administrators only. | 体验专用浏览版仅供游客和管理员使用。 |
 | There is no answerable question on this page. | 当前页面没有可作答的题目。 |
 | Answer checking is busy. Try again shortly; this attempt has not been counted. | 当前判题队列已满，请稍后重试；本次未计入作答。 |
 | Answer checking is temporarily unavailable. Please retry; this attempt has not been counted. | 判题服务暂时不可用，请重试；本次未计入作答。 |
