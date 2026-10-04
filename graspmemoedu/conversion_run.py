@@ -16,10 +16,15 @@ class ConversionRun:
     def __init__(self, path, plan, config=None):
         self.path = Path(path)
         self.limits = dict(DEFAULT_CONFIG if config is None else config)
-        if (set(self.limits) != set(DEFAULT_CONFIG) or self.limits['model'] != 'deepseek-flash'
+        if (not set(DEFAULT_CONFIG) <= set(self.limits)
+                or set(self.limits) - set(DEFAULT_CONFIG) - {'reasoning_effort', 'stream'}
+                or self.limits['model'] != 'deepseek-flash'
                 or type(self.limits['thinking']) is not bool
                 or type(self.limits['max_output_tokens']) is not int
-                or not 1 <= self.limits['max_output_tokens'] <= 8192):
+                or not 1 <= self.limits['max_output_tokens'] <= (32768 if self.limits['thinking'] else 8192)
+                or ('stream' in self.limits and type(self.limits['stream']) is not bool)
+                or ('reasoning_effort' in self.limits and (not self.limits['thinking']
+                    or self.limits['reasoning_effort'] not in ('low', 'high', 'max')))):
             raise ValueError('Invalid frozen generation configuration')
         self.path.parent.mkdir(parents=True, exist_ok=True)
         body = json.dumps({'plan': plan, 'config': self.limits}, sort_keys=True, ensure_ascii=False)

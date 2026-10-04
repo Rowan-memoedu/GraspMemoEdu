@@ -151,6 +151,7 @@ def write_json(path, value):
 
 
 def bounded_call(client_factory, budget, folder, sources, *, retry=False, adapter=None, repair_errors=None):
+    decode = adapter.decode_response if adapter and hasattr(adapter, 'decode_response') else _object
     request_sources = [dict(s, local_validation_error=repair_errors[s['id']])
                        if repair_errors and s['id'] in repair_errors else s for s in sources]
     messages = adapter.messages(request_sources) if adapter else [
@@ -159,6 +160,9 @@ def bounded_call(client_factory, budget, folder, sources, *, retry=False, adapte
     request = {'model': budget.limits['model'], 'thinking': budget.limits['thinking'],
                'max_tokens': budget.limits['max_output_tokens'], 'prompt_version': adapter.version if adapter else PROMPT_VERSION,
                'messages': messages, 'repair_attempt': retry}
+    for option in ('reasoning_effort', 'stream'):
+        if option in budget.limits:
+            request[option] = budget.limits[option]
     key = digest(request)
     folder.mkdir(parents=True, exist_ok=True)
     request_path, response_path = folder / (key + '.request.json'), folder / (key + '.response.json')
@@ -166,14 +170,15 @@ def bounded_call(client_factory, budget, folder, sources, *, retry=False, adapte
         if json.loads(request_path.read_text(encoding='utf-8')) != request:
             raise BudgetStopped('Cached request binding changed')
         if response_path.exists():
-            return _object(json.loads(response_path.read_text(encoding='utf-8'))), key
+            return decode(json.loads(response_path.read_text(encoding='utf-8'))), key
     write_json(request_path, request)
     reservation = budget.reserve(key, messages)
     try:
         client = client_factory()
         if client.model != budget.limits['model']:
             raise BudgetStopped('Configured model differs from frozen plan')
-        raw = client.complete_limited(messages, max_tokens=request['max_tokens'], thinking=request['thinking'])
+        options = {k: request[k] for k in ('max_tokens', 'thinking', 'reasoning_effort', 'stream') if k in request}
+        raw = client.complete_limited(messages, **options)
         write_json(response_path, raw)
         budget.settle(reservation, raw)
     except BaseException as exc:
@@ -183,36 +188,46 @@ def bounded_call(client_factory, budget, folder, sources, *, retry=False, adapte
     if raw.get('choices', [{}])[0].get('finish_reason') != 'stop':
         budget.stop('Model did not finish within frozen output limit')
         raise BudgetStopped('Truncated/incomplete model output; no automatic retry')
-    return _object(raw), key
+    return decode(raw), key
 
 
-def generate_batch(client_factory, budget, folder, sources, *, adapter=None):
+def generate_batch(client_factory, budget, folder, sources, *, adapter=None, on_accepted=None, initial_errors=None):
     """At most one local-validation repair, only for the failed source items."""
     if not 1 <= len(sources) <= 4 or len({s['id'] for s in sources}) != len(sources):
         raise ValueError('A batch contains one to four distinct source questions')
-    remaining, accepted, errors = list(sources), {}, {}
+    remaining, accepted, errors = list(sources), {}, dict(initial_errors or {})
     for attempt in range(2):
         try:
             response, key = bounded_call(client_factory, budget, folder, remaining, retry=bool(attempt), adapter=adapter, repair_errors=errors)
         except (ValueError, KeyError, TypeError):
             response, key = {}, None
         rows = response.get('questions') if isinstance(response, dict) and set(response) == {'questions'} else None
-        structural = (isinstance(rows, list) and len(rows) == len(remaining)
-                      and all(isinstance(row, dict) and set(row) == {'id', 'distractors'}
-                              and isinstance(row['id'], str) for row in rows))
-        structural = structural and {row['id'] for row in rows} == {s['id'] for s in remaining} and len({row['id'] for row in rows}) == len(rows)
-        indexed = {row['id']: row for row in rows} if structural else {}
+        expected_ids = {s['id'] for s in remaining}
+        indexed, duplicate_ids = {}, set()
+        for row in rows if isinstance(rows, list) else []:
+            if (not isinstance(row, dict) or set(row) != {'id', 'distractors'}
+                    or not isinstance(row.get('id'), str) or row['id'] not in expected_ids):
+                continue
+            if row['id'] in indexed:
+                duplicate_ids.add(row['id'])
+            indexed[row['id']] = row
+        for key in duplicate_ids:
+            del indexed[key]
         failed = []
         for source in remaining:
+            candidate = None
             try:
                 candidate = {'distractors': indexed[source['id']]['distractors']}
                 checks = adapter.validate(source, candidate) if adapter else validate_candidates(source, candidate)
                 accepted[source['id']] = {'source_sha256': digest(source), 'candidate': candidate,
                                           'checks': checks, 'request_key': key,
                                           'prompt_version': adapter.version if adapter else PROMPT_VERSION}
+                if on_accepted:
+                    on_accepted(source, accepted[source['id']])
             except (KeyError, ValueError, TypeError, ArithmeticError) as exc:
                 failed.append(source)
-                errors[source['id']] = str(exc)[:300] or type(exc).__name__
+                errors[source['id']] = (adapter.repair_details(source, candidate, exc)
+                    if adapter and hasattr(adapter, 'repair_details') else str(exc)[:300] or type(exc).__name__)
         remaining = failed
         if not remaining:
             return accepted

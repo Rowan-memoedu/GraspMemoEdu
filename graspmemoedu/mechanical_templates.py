@@ -24,12 +24,13 @@ def group_sources(sources):
     for members in groups.values():
         representative = deepcopy(members[0])
         bindings = [{} for _ in members]
-        columns, templates = {}, {}
+        columns, templates, roles = {}, {}, {}
         for field in FIELDS:
             numbers = [NUMBER.findall(s[field]) for s in members]
             if len({len(row) for row in numbers}) != 1:
                 raise ValueError('Mechanical source shape changed')
             replacements = []
+            matches = list(NUMBER.finditer(members[0][field]))
             for position in range(len(numbers[0])):
                 values = tuple(row[position] for row in numbers)
                 if len(set(values)) == 1:
@@ -40,6 +41,10 @@ def group_sources(sources):
                     columns[values] = name
                     for row, value in zip(bindings, values):
                         row[name] = value
+                parameter = columns[values]
+                match = matches[position]
+                roles.setdefault(parameter, []).append({'field': field,
+                    'context': members[0][field][max(0, match.start() - 50):match.end() + 50]})
                 replacements.append('[[' + columns[values] + ']]')
             replacement = iter(replacements)
             templates[field] = NUMBER.sub(lambda _: next(replacement), members[0][field])
@@ -51,6 +56,7 @@ def group_sources(sources):
             'representative_parameters': bindings[0],
             'parameter_sets': bindings,
         }
+        representative['parameter_roles'] = roles
         # Only one actual question and its images are sent to the provider.
         # These small member records are used solely for local expansion/checks.
         representative['_members'] = [
@@ -64,13 +70,20 @@ def expression_value(expression, parameters):
     """Small arithmetic AST, with no Python eval, attributes or arbitrary calls."""
     from sympy import Rational, sqrt, simplify
     from sympy.parsing.latex import parse_latex
-    tree = ast.parse(expression.strip(), mode='eval')
+    if not isinstance(expression, str) or len(expression) > 240:
+        raise ValueError('Arithmetic expression must be a short string')
+    try:
+        tree = ast.parse(expression.strip(), mode='eval')
+    except SyntaxError as exc:
+        raise ValueError('Invalid arithmetic expression syntax') from exc
     if len(list(ast.walk(tree))) > 60:
         raise ValueError('Mechanical expression is too large')
     def evaluate(node):
         if isinstance(node, ast.Constant) and type(node.value) in (int, float) and len(str(node.value)) <= 18:
             return Rational(str(node.value))
-        if isinstance(node, ast.Name) and node.id in parameters:
+        if isinstance(node, ast.Name):
+            if node.id not in parameters:
+                raise ValueError('Unknown arithmetic name: ' + node.id + '; available: ' + ', '.join(parameters))
             text = parameters[node.id]
             text = re.sub(r'\\sqrt([0-9A-Za-z])', r'\\sqrt{\1}', text)
             return parse_latex(text.replace(r'\dfrac', r'\frac').replace(r'\tfrac', r'\frac'), backend='lark') if node.id == 'answer' else Rational(text)
@@ -97,7 +110,30 @@ def expression_value(expression, parameters):
 
 def expand_candidate(candidate, parameters):
     from sympy import latex
+    def parts_value(parts):
+        if not parts or len(parts) > 100:
+            raise ValueError('A structured value needs 1-100 text/expression parts')
+        text = ''
+        has_prose = any(isinstance(p, str) and re.search(r'[\u3400-\u9fff]', p) for p in parts)
+        for index, part in enumerate(parts):
+            if isinstance(part, str):
+                if '[[' in part or ']]' in part:
+                    raise ValueError('Use expression objects, not inline slots, in structured values')
+                text += part
+            elif isinstance(part, dict) and set(part) == {'expr'}:
+                if (re.search(r'\d\s*$', text) or (index and isinstance(parts[index - 1], dict))
+                        or (index + 1 < len(parts) and isinstance(parts[index + 1], str)
+                            and re.match(r'\s*\d', parts[index + 1]))):
+                    raise ValueError('Put numeric multiplication in one expression object')
+                value = expression_value(part['expr'], parameters)
+                text += latex(value) if not has_prose or text.count('$') % 2 else str(value)
+            else:
+                raise ValueError('Each structured part must be text or an expr object')
+        return text
+
     def render(text):
+        if isinstance(text, list):
+            return parts_value(text)
         if not isinstance(text, str):
             raise ValueError('Template must be a string')
         if re.search(r'\d\s*\[\[|\]\]\s*\d|\]\]\s*\[\[', text):
@@ -112,4 +148,7 @@ def expand_candidate(candidate, parameters):
         return expanded
     if not isinstance(candidate, dict) or set(candidate) != {'distractors'} or not isinstance(candidate['distractors'], list):
         raise ValueError('Invalid mechanical candidate')
+    if any(not isinstance(row, dict) or set(row) != {'value', 'reason'}
+           or not isinstance(row['reason'], str) for row in candidate['distractors']):
+        raise ValueError('Each distractor needs a value and a text reason')
     return {'distractors': [{key: render(value) for key, value in row.items()} for row in candidate['distractors']]}

@@ -85,12 +85,16 @@ class CompatibleClient:
     def review_complete(self, messages):
         return self._complete(messages, thinking=True)
 
-    def complete_limited(self, messages, *, max_tokens, thinking):
-        if type(max_tokens) is not int or not 1 <= max_tokens <= 8192:
-            raise ValueError('Question conversion output limit must be 1–8192 tokens')
-        return self._complete(messages, thinking=thinking, max_tokens=max_tokens)
+    def complete_limited(self, messages, *, max_tokens, thinking, reasoning_effort=None, stream=False):
+        if type(max_tokens) is not int or not 1 <= max_tokens <= (32768 if thinking else 8192):
+            raise ValueError('Invalid question conversion output limit')
+        if reasoning_effort is not None and (not thinking or reasoning_effort not in ('low', 'high', 'max')):
+            raise ValueError('Invalid explicit reasoning effort')
+        if type(stream) is not bool:
+            raise ValueError('Invalid streaming configuration')
+        return self._complete(messages, thinking=thinking, max_tokens=max_tokens, reasoning_effort=reasoning_effort, stream=stream)
 
-    def _complete(self, messages, *, thinking, max_tokens=None):
+    def _complete(self, messages, *, thinking, max_tokens=None, reasoning_effort=None, stream=False):
         if any(isinstance(m.get('content'), list) and any(p.get('type') == 'image_url' for p in m['content']) for m in messages):
             if self.model != 'deepseek-flash':
                 raise ValueError('Image import requires the verified deepseek-flash vision model')
@@ -98,12 +102,14 @@ class CompatibleClient:
                    'response_format': {'type': 'json_object'}}
         if max_tokens is not None:
             payload['max_tokens'] = max_tokens
+        if stream:
+            payload.update(stream=True, stream_options={'include_usage': True})
         if not thinking:
             payload['temperature'] = 0
         if urlsplit(self.base_url).hostname == 'api.deepseek.com':
             payload['thinking'] = {'type': 'enabled' if thinking else 'disabled'}
             if thinking:
-                payload['reasoning_effort'] = 'high'
+                payload['reasoning_effort'] = reasoning_effort or 'high'
         body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
         if len(body) > 48 * 1024 * 1024:
             raise ValueError('Multimodal request exceeds the 48 MiB API limit')
@@ -112,6 +118,9 @@ class CompatibleClient:
             headers={'Authorization': 'Bearer ' + self._api_key, 'Content-Type': 'application/json'})
         # Dedicated credentials must never follow redirects to another host.
         with urllib.request.build_opener(_NoRedirect()).open(request, timeout=max(self.timeout, 300) if thinking else self.timeout) as response:
+            if stream:
+                from .completion_stream import read_completion_stream
+                return read_completion_stream(response)
             return json.loads(response.read().decode('utf-8'))
 
 

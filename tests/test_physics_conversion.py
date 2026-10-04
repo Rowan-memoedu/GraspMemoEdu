@@ -75,6 +75,8 @@ class PhysicsConversionTests(unittest.TestCase):
         groups = group_sources([*sources, changed])
         self.assertEqual(len(groups), 3)
         self.assertEqual(groups[0]['mechanical']['size'], 16)
+        self.assertTrue(any(role['field'] == 'question' for roles in groups[0]['parameter_roles'].values() for role in roles))
+        self.assertTrue(any(role['field'] == 'correct_option' for roles in groups[0]['parameter_roles'].values() for role in roles))
         content = PhysicsAdapter.messages(groups[:1])[1]['content'][0]['text']
         self.assertNotIn('"_members"', content)
         self.assertIn('parameter_sets', content)
