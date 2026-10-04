@@ -2,7 +2,7 @@
 
 本表从当前界面词库自动生成。修改以词库为准，随后重新生成并检查本表。术语约定见 [界面语言规范](ui-language.md)。
 
-共 562 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
+共 574 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
 
 不包括作者课程正文、题目、答案、解析或用户输入。首页的学科双语副标题按约定保留。
 
@@ -257,6 +257,18 @@
 
 | English | 中文 |
 |---|---|
+| Paused learning | 暂停管理 |
+| Refresh list | 刷新列表 |
+| Only pauses for your assigned students are shown. Unlocking follows the existing training rules and preserves completed work and review records. | 仅显示您负责学员的暂停。解除后，按原规则继续训练，已完成内容及复习记录保留。 |
+| No pauses to handle. | 暂无待处理的暂停。 |
+| Student paused learning | 学员主动暂停 |
+| Error limit reached | 错误次数达到上限 |
+| Topic reviews are paused | Topic 复习已暂停 |
+| Unlock learning | 解除暂停 |
+| Unlocking… | 正在解除暂停… |
+| Unlocked. The student can continue learning. | 暂停已解除，学员可继续学习。 |
+| Unlock {name} in {topic}? The unfinished module restarts under the existing rules; completed work and review records are preserved. | 解除“{name}”在“{topic}”的暂停？当前未完成模块将按原规则重新开始，已完成内容与复习记录保留。 |
+| This pause belongs to an older content version. Contact the maintainer. | 此暂停对应旧版内容，请联系维护者处理。 |
 | Low mastery review marker | 低熟练度复习标记 |
 | Group pending lessons by course hierarchy | 按课程层级展开待学习内容 |
 | Reviews stay first. Groups include every unfinished Topic, including paused and prerequisite-blocked lessons. | 复习任务保留在前列；层级中显示所有未完成的 Topic，包括暂停和前置受阻的内容。 |
