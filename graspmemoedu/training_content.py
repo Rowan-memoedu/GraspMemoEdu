@@ -1,5 +1,6 @@
 """Independent, immutable training banks. These never alter course Topics."""
 from copy import deepcopy
+from .idea_presentation import present_question
 import hashlib
 import json
 from pathlib import Path
@@ -97,7 +98,7 @@ class TrainingCatalog:
             if group['id'] == group_id:
                 for question in group.get('questions', []):
                     if question['id'] == question_id:
-                        return bank, group, deepcopy(question)
+                        return bank, group, present_question(deepcopy(question))
         raise DomainError('unknown_question', '未找到此习题。', 404)
 
     def archive_blobs(self):

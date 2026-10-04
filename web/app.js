@@ -1,10 +1,10 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=11ec884b4bbb99eb";
-import {questionInput, answerReady} from './question-input.js?v=11ec884b4bbb99eb';
-import {reportableContent} from './content-report.js?v=11ec884b4bbb99eb';
-import {createLearningCache} from './learning-cache.js?v=11ec884b4bbb99eb';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=7bf41f10b28e77b3";
+import {questionInput, answerReady} from './question-input.js?v=7bf41f10b28e77b3';
+import {reportableContent} from './content-report.js?v=7bf41f10b28e77b3';
+import {createLearningCache} from './learning-cache.js?v=7bf41f10b28e77b3';
 
-import {answerEditor} from './learning-ui.js?v=11ec884b4bbb99eb';
-import {enhanceTopicContent, mountTopicBacklinks, focusContentNode} from './topic-content.js?v=11ec884b4bbb99eb';
+import {answerEditor} from './learning-ui.js?v=7bf41f10b28e77b3';
+import {enhanceTopicContent, mountTopicBacklinks, focusContentNode} from './topic-content.js?v=7bf41f10b28e77b3';
 
 applyStaticTranslations();
 
@@ -116,7 +116,8 @@ const activeStep = () => state?.steps?.find((step) => step.id === state.active_s
 const readingStatus = () => state?.topic_kind === 'introduction' ? state.reading_status : state?.status;
 // Translate system names and structural heading prefixes; preserve authored title text.
 function readerStepTitle(step) {
-  if (step?.kind === "introduction") return state?.topic_format_version === 2 ? step.title : t("Introduction");
+  if (step?.kind === "introduction") return state?.topic_format_version === 2
+    ? step.title.replace(/^(?:Introduction|引论)(?=\s*[:：]|$)/i, t("Introduction")) : t("Introduction");
   if (step?.kind === "completion") return t("学习结果");
   return learningTitle(step?.title || "");
 }
@@ -1494,7 +1495,7 @@ async function openTopic(id, subjectId) {
   }
 }
 
-const { initPortal } = await import("./portal.js?v=11ec884b4bbb99eb");
+const { initPortal } = await import("./portal.js?v=7bf41f10b28e77b3");
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {
     try { return await fetchGuideAsset(url, subjectId); }

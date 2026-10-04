@@ -260,6 +260,7 @@ def normalize_document(value, *, markdown=False):
         else:
             found = EXAMPLE.fullmatch(node['text'])
             require(found and int(found[1]) == len(modules) + 1, 'Example numbers must be consecutive')
+            require(introductions, 'Every Example must follow its Introduction')
             require(node['id'] == f'example-{found[1]}', 'Example section ID must equal its module ID')
             modules.append(node)
     require(introductions, 'Topic needs at least one Introduction')
@@ -274,6 +275,35 @@ def parse_source(source):
     markdown = not raw.startswith('{')
     value = _markdown_document(source) if markdown else json.loads(raw)
     return normalize_document(value, markdown=markdown)
+
+
+def validate_field_placement(document):
+    """Validate new author output without changing immutable legacy source packages."""
+    destinations = {**{name: 'introduction' for name in ('定义', '定理', '性质', '识别特征', '范式')},
+                    '要求': 'question', '题源': 'question', '巧法': 'answer', 'idea': 'answer'}
+
+    def walk(node, area, in_idea=False):
+        text = node['text']
+        if INTRODUCTION.fullmatch(text):
+            area = 'introduction'
+        elif EXAMPLE.fullmatch(text) or PRACTICE.fullmatch(text):
+            area = 'question'
+        elif text.casefold() == 'explanation':
+            area = 'answer'
+        elif text.casefold() == 'interaction':
+            return
+        head = re.match(r'^\*\*([^*]+)\*\*\s*[:：]', text)
+        field = head[1].casefold() if head else None
+        field = {'requirement': '要求', 'source': '题源'}.get(node.get('callout'), field)
+        if REFERENCE.fullmatch(text.strip()) and not in_idea:
+            field = 'idea'
+        if field in destinations:
+            require(area == destinations[field], f"Field {field} belongs to {destinations[field]}: {node['id']}")
+        for child in node['children']:
+            walk(child, area, in_idea or field == 'idea')
+
+    for section in document['nodes']:
+        walk(section, None)
 
 
 def _metadata(node):
@@ -395,6 +425,8 @@ def dump_markdown(document):
 def main():
     payload = json.load(sys.stdin)
     document, ignored = parse_source(payload['source'])
+    if payload.get('validate_field_placement'):
+        validate_field_placement(document)
     result = {'document': document, 'outline': to_outline(document), 'ignored_nodes': ignored,
               'source_text': source_text(payload['source']),
               **content_metadata(document), 'semantic_payload': semantic_payload(document, payload.get('assets', [])),

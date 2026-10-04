@@ -1,5 +1,6 @@
 """Derived references over installed Topic snapshots; never writes learning state."""
 from collections import defaultdict
+from .idea_presentation import split_ideas
 
 
 class ContentReferenceIndex:
@@ -9,6 +10,12 @@ class ContentReferenceIndex:
         self.edges = []
         for topic_id, topic in topics.items():
             nodes = {node['id']: node for node in topic.get('content_nodes', [])}
+            for module in topic.get('modules', []):
+                for question in [module['example'], *module['practices']]:
+                    for node_id in split_ideas(question['html'])[2]:
+                        if node_id in nodes:
+                            node = nodes[node_id]
+                            nodes[node_id] = {**node, 'owner': {**node['owner'], 'field': 'explanation_html'}}
             self.nodes[topic_id] = nodes
             if topic.get('source_rem_id'):
                 self.targets[topic['source_rem_id']].append((topic_id, None))

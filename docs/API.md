@@ -49,13 +49,30 @@ No answer box before mastered; feedback never auto-advances. Unmastered requires
 
 ## Homepage, profile, feedback and Guide
 
+Fixed field ownership follows the shared Topic v2 contract: definitions, theorems,
+properties, recognition features and paradigms belong to Introduction; requirements
+and sources belong to the question; tricks and Idea belong to the same question's
+answer. A node containing only an internal RemNote reference is Idea.
+Public stems omit answer fields; they appear only when `explanation_html` is revealed. Existing
+imported HTML is projected without rewriting course versions, question-bank
+revisions or progress. Node links and backlinks use the same answer-side visibility.
+
 ### Ordered Topic v2
 
 The author/runtime format is defined in [Topic v2](topic-format-v2.md). Use
 `create_learning_service` to dispatch to the ordered reader. Legacy Topics retain
 their existing behavior. v2 returns `topic_format_version`, `topic_kind`,
 `content_version`, `reading_status`, `reread_pending` and `completed_at`.
-Introduction steps carry `introduction_id`; visited steps retain source order.
+Introduction steps carry `introduction_id`. Source order assigns each Example and
+its Practices to the closest preceding Introduction; it is not a mandatory reading
+sequence. Ordinary v2 Topics retain the existing Example mastery choice, direct
+answer and practice flow. Unmastered or incorrect Examples open their own unread
+guidance after Continue, then resume the Example explanation. Read guidance is not
+repeated for later Examples in that group. Pure Introduction Topics read their own
+guidance sections in source order. The Topic type is 引论; internal guidance is 指导.
+Unread standalone guidance steps from the initial v2 release resume at the Example
+choice, retaining their original attempt/step in private `flow_history`. Answered
+work and content versions are unchanged; paused states wait for the exact-event unlock.
 An Introduction is completed with the existing `continue` action and never
 creates a review card. Pure Introduction Topics have no module or answer input.
 

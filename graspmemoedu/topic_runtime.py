@@ -51,6 +51,8 @@ def validate_runtime(topic):
     actual = [(i['kind'], i['id']) for i in order]
     if len(actual) != len(expected) or set(actual) != expected:
         raise ValueError('Content order must cover every section once')
+    if order[0]['kind'] != 'introduction':
+        raise ValueError('Every Example must follow its Introduction')
     owners = {('introduction', i['id'], 'html'): i['id'] for i in items}
     for module in modules:
         for kind, question in [('example', module['example']), *[('practice', q) for q in module['practices']]]:

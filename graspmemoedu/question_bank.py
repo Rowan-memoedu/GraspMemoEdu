@@ -12,6 +12,7 @@ import re
 import uuid
 
 from .question_types import validate_interaction
+from .idea_presentation import present_question
 
 REVISION = re.compile(r'[0-9a-f]{64}\Z')
 
@@ -85,7 +86,7 @@ class QuestionBank:
             # presentation, without using the key or learner answer as a seed.
             question['interaction']['options'].sort(key=lambda item: hashlib.sha256(
                 (presentation_id + ':' + item['id']).encode()).digest())
-        return question
+        return present_question(question, self.originals[question_id])
 
     def css(self, revisions):
         return '\n'.join(self.load(revision)['math_css'] for revision in sorted(set(filter(None, revisions))))

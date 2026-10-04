@@ -1,10 +1,10 @@
-"""Public-service checks for source ordering and version-aware Introduction reading."""
+"""Example-first learning, Introduction ownership and pure Introduction reading."""
 from copy import deepcopy
 from contextlib import closing
 import unittest
 import uuid
 
-from graspmemoedu.service import create_learning_service, DomainError
+from graspmemoedu.service import create_learning_service, DomainError, encode
 from graspmemoedu.topic_runtime import validate_runtime
 from tests.fixtures import synthetic_course, temporary_test_directory, DeterministicJudge
 
@@ -47,14 +47,16 @@ class OrderedLearningTests(unittest.TestCase):
         while active(service.state())['kind'] == 'introduction':
             service.advance(payload(service))
 
-    def test_source_order_does_not_reveal_later_sections_and_module_rules_are_preserved(self):
+    def test_unmastered_opens_its_guidance_then_existing_example_and_practice_flow(self):
         service = self.service(ordered_topic())
         state = service.state()
-        self.assertEqual(active(state)['introduction_id'], 'intro-a')
-        self.assertEqual(len(state['steps']), 1)
-        state = service.advance(payload(service))
         self.assertEqual(active(state)['question_id'], 'module-1-example')
+        self.assertEqual(active(state)['actions'], ['mastered', 'unmastered'])
+        self.assertEqual(len(state['steps']), 1)
         service.choose(payload(service, choice='unmastered'))
+        state = service.advance(payload(service))
+        self.assertEqual(active(state)['introduction_id'], 'intro-a')
+        self.assertNotIn('intro-b', [s.get('introduction_id') for s in state['steps']])
         state = service.advance(payload(service))
         self.assertEqual(active(state)['kind'], 'example')
         self.assertIsNotNone(active(state)['explanation_html'])
@@ -64,11 +66,119 @@ class OrderedLearningTests(unittest.TestCase):
             service.process_submission(result['submission_id'])
             service.advance(payload(service))
         state = service.state()
-        self.assertEqual(active(state)['introduction_id'], 'intro-b')
+        self.assertEqual(active(state)['question_id'], 'module-2-example')
+        self.assertEqual(active(state)['actions'], ['mastered', 'unmastered'])
         self.assertEqual(state['modules'][0]['status'], 'completed')
-        self.assertEqual(state['modules'][1]['status'], 'locked')
-        self.assertNotIn('module-2-example', [s['question_id'] for s in state['steps']])
-        self.assertEqual(active(service.advance(payload(service)))['question_id'], 'module-2-example')
+        service.choose(payload(service, choice='unmastered'))
+        self.assertEqual(active(service.advance(payload(service)))['introduction_id'], 'intro-b')
+
+    def test_mastered_answers_directly_and_wrong_answer_returns_to_its_guidance(self):
+        service = self.service(ordered_topic())
+        service.choose(payload(service, choice='mastered'))
+        self.assertEqual(active(service.state())['phase'], 'answer')
+        self.assertFalse(any(s['kind'] == 'introduction' for s in service.state()['steps']))
+        result = service.submit(payload(service, answer='wrong'))
+        service.process_submission(result['submission_id'])
+        self.assertEqual(active(service.advance(payload(service)))['introduction_id'], 'intro-a')
+
+    def test_mastered_correct_advances_between_groups_without_mandatory_guidance(self):
+        service = self.service(ordered_topic())
+        for question_id in ('module-1-example', 'module-2-example'):
+            self.assertEqual(active(service.state())['question_id'], question_id)
+            service.choose(payload(service, choice='mastered'))
+            result = service.submit(payload(service, answer='correct'))
+            service.process_submission(result['submission_id'])
+            service.advance(payload(service))
+        self.assertEqual(service.state()['status'], 'completed')
+        self.assertFalse(any(s['kind'] == 'introduction' for s in service.state()['steps']))
+
+    def test_several_examples_share_preceding_guidance_without_repeating_it(self):
+        topic = ordered_topic()
+        # Two Examples belong to A; B has no Example and must not become a forced step.
+        topic['content_order'] = [topic['content_order'][i] for i in (0, 1, 3, 2)]
+        service = self.service(topic)
+        service.choose(payload(service, choice='unmastered'))
+        self.assertEqual(active(service.advance(payload(service)))['introduction_id'], 'intro-a')
+        service.advance(payload(service))
+        service.advance(payload(service))
+        for _ in range(2):
+            result = service.submit(payload(service, answer='correct'))
+            service.process_submission(result['submission_id'])
+            service.advance(payload(service))
+        service.choose(payload(service, choice='unmastered'))
+        state = service.advance(payload(service))
+        self.assertEqual(active(state)['kind'], 'example')
+        self.assertIsNotNone(active(state)['explanation_html'])
+        self.assertEqual([s.get('introduction_id') for s in state['steps'] if s['kind'] == 'introduction'], ['intro-a'])
+
+    def test_mastered_first_example_does_not_mark_its_shared_guidance_read(self):
+        topic = ordered_topic()
+        topic['content_order'] = [topic['content_order'][i] for i in (0, 1, 3, 2)]
+        service = self.service(topic)
+        service.choose(payload(service, choice='mastered'))
+        result = service.submit(payload(service, answer='correct'))
+        service.process_submission(result['submission_id'])
+        service.advance(payload(service))
+        service.choose(payload(service, choice='unmastered'))
+        self.assertEqual(active(service.advance(payload(service)))['introduction_id'], 'intro-a')
+
+    def legacy_reading(self, service, index=0):
+        # A persisted state produced by the released standalone-guidance reader.
+        with service._transaction() as con:
+            state = service._load(con)
+            state.update(attempts=[], steps=[], order_index=index, module_index=-1,
+                         attempt_id='old-intro-attempt', active_step_id='old-intro-step', current_step_id='old-intro-step')
+            state['attempts'] = [{'id':'old-intro-attempt', 'kind':'introduction', 'module_id':'intro-a',
+                'module_index':-1, 'status':'in_progress', 'mastery':None, 'learning_path':'reading',
+                'practice_error_count':0, 'practice_answered_count':0, 'practice_target_count':0,
+                'example_result':None, 'created_at':'old-created', 'completed_at':None,
+                'paused_at':None, 'pause_reason':None}]
+            state['steps'] = [{'id':'old-intro-step', 'kind':'introduction', 'phase':'reading',
+                'introduction_id':'intro-a', 'module_id':'intro-a', 'attempt_id':'old-intro-attempt',
+                'question_id':None, 'feedback':None, 'answer':None}]
+            service._save(con, state)
+        return state
+
+    def test_legacy_unread_guidance_returns_to_choice_and_keeps_audit_and_stale_guard(self):
+        topic = ordered_topic()
+        service = self.service(topic)
+        old = self.legacy_reading(service)
+        old_payload = payload(service)
+        service = self.service(topic)
+        state = service.state()
+        self.assertEqual(active(state)['phase'], 'choice')
+        self.assertEqual(len(state['steps']), 1)
+        with service._transaction() as con:
+            raw = service._load(con)
+        self.assertEqual(raw['flow_history'][0]['steps'], old['steps'])
+        self.assertEqual(raw['read_introductions'], [])
+        with self.assertRaises(DomainError):
+            service.advance(old_payload)
+        self.assertEqual(self.service(topic).state(), state)
+
+    def test_existing_answered_progress_is_byte_for_byte_unchanged_on_reopen(self):
+        topic = ordered_topic()
+        service = self.service(topic)
+        service.choose(payload(service, choice='mastered'))
+        result = service.submit(payload(service, answer='correct'))
+        service.process_submission(result['submission_id'])
+        with service._transaction() as con:
+            before = encode(service._load(con))
+        service = self.service(topic)
+        with service._transaction() as con:
+            self.assertEqual(encode(service._load(con)), before)
+
+    def test_legacy_pause_is_preserved_until_exact_event_unlock(self):
+        topic = ordered_topic()
+        service = self.service(topic)
+        self.legacy_reading(service)
+        service.pause({'request_id':str(uuid.uuid4())})
+        pause = service.state()['pause']
+        service = self.service(topic)
+        self.assertEqual(service.state()['pause'], pause)
+        service.unlock(topic['id'], pause['module_id'], pause['event_id'])
+        self.assertEqual(active(service.state())['phase'], 'choice')
+        self.assertFalse(any(s['kind'] == 'introduction' for s in service.state()['steps']))
 
     def test_introduction_has_completion_without_judging_or_review_cards(self):
         service = self.service(ordered_topic(True))
@@ -133,4 +243,10 @@ class OrderedLearningTests(unittest.TestCase):
             self.service(topic)
         topic['content_order'].append(topic['content_order'][0])
         with self.assertRaises(ValueError):
+            validate_runtime(topic)
+
+    def test_example_without_preceding_introduction_is_rejected(self):
+        topic = ordered_topic()
+        topic['content_order'][0:2] = reversed(topic['content_order'][0:2])
+        with self.assertRaisesRegex(ValueError, 'follow its Introduction'):
             validate_runtime(topic)

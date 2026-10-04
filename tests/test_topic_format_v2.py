@@ -3,11 +3,31 @@ import json
 import unittest
 
 from graspmemoedu.topic_format import (content_metadata, content_version, dump_json, dump_markdown,
-                                     normalize_document, parse_source, source_text)
+                                     normalize_document, parse_source, source_text, validate_field_placement)
 from tests.topic_format_fixtures import introduction_document, lesson_document, node
 
 
 class TopicFormatTests(unittest.TestCase):
+    def test_new_author_field_validation_rejects_wrong_owners(self):
+        document = {'nodes':[node('i','Introduction',[node('d','**定义**：定义正文')]),
+            node('example-1','Example 1',[node('q','**要求**：完整作答'),
+                node('a','Explanation',[node('idea','**idea**：[[id:Method|原方法]]'),node('trick','**巧法**：原文')])])]}
+        validate_field_placement(document)
+        for field, parent in [('**性质**：性质正文', document['nodes'][1]),
+                              ('**题源**：已有来源', document['nodes'][1]['children'][1]),
+                              ('[[id:Method|原方法]]', document['nodes'][0])]:
+            misplaced = node('wrong', field)
+            parent['children'].append(misplaced)
+            with self.assertRaisesRegex(ValueError, 'belongs to .*wrong'):
+                validate_field_placement(document)
+            parent['children'].pop()
+
+    def test_example_requires_a_preceding_introduction(self):
+        document = lesson_document()
+        document['nodes'][0:2] = reversed(document['nodes'][0:2])
+        with self.assertRaisesRegex(ValueError, 'follow its Introduction'):
+            normalize_document(document)
+
     def test_separator_whitespace_normalizes_equally_without_losing_internal_linebreaks(self):
         value = introduction_document()
         value['title'] = '  Synthetic whitespace  '

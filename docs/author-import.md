@@ -26,7 +26,7 @@ pwsh -NoProfile -File 'D:/Projects/GraspMemoEdu/Start-PublicLearning.ps1' -Resta
 
 新格式见 [Topic v2 共享规范](topic-format-v2.md) 和 [JSON Schema](topic-format-v2.schema.json)。文件可以为 `.md` 或 `.json`，两个入口经过同一个纯 Python 归一器，再进入既有题目、图片和渲染流程；传入的 `TopicId` 必须与 v2 源文件的 `id` 相同。v2 只允许机械导入。
 
-v2 支持多段 Introduction、与 Example 穿插的原稿顺序及纯引论 Topic；`content_order` 是展示顺序，Example 和 Practice 的既有 ID、题型、练习分组均保留。Callout、实际 RemNote 标签、题源字段、Mermaid 和精确 Rem ID 引用按共享规范保存。题源缺失字段省略，不输出占位语；难度仅留元数据。独立外链排除，混有正文的链接节点拒绝自动导入，待讨论后重新提供原稿。
+v2 支持多段 Introduction、与 Example 穿插的原稿顺序及纯引论 Topic；`content_order` 表达指导与例题的归属，普通 Topic 仍先选择例题是否掌握。Example 和 Practice 的既有 ID、题型、练习分组均保留。字段按共享规范固定归属：定义、定理、性质、识别特征、范式在 Introduction；要求、题源在题目正面；巧法、idea 在同题 Explanation，纯内部引用节点识别为 idea。新作者稿须先通过 `topic_format.validate_field_placement`，不能用保留原位置跳过归属整理。Callout、真实 RemNote 标签、Mermaid 和精确 Rem ID 引用保持；题源缺失字段省略，不输出占位语，难度仅留元数据。独立外链排除，混有正文的链接节点拒绝自动导入，待讨论后重新提供原稿。
 
 未标记 v2 的旧 Markdown 沿用原有格式：两空格缩进的列表，一份文件恰好一个根 Topic、一个 Introduction、连续编号的 Example；每个 Example 与 Practice 各有一个非空 Explanation。每个 Example 至少 7 道 Practice，以满足现行练习补题机制。题量可因模块而异。
 

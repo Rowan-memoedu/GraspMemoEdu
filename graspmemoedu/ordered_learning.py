@@ -1,4 +1,4 @@
-"""Ordered Introduction/Example reading over the existing transactional engine."""
+"""Introduction ownership over the existing Example-first learning engine."""
 from copy import deepcopy
 import json
 import uuid
@@ -8,6 +8,17 @@ from .topic_runtime import is_introduction, reread_pending
 
 
 class OrderedLearningService(LearningService):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not is_introduction(self.course):
+            with self._transaction() as con:
+                state = self._load(con)
+                # The first v2 reader created mandatory standalone guidance steps.
+                # Resume those at the Example choice without changing answered work.
+                if state['status'] == 'in_progress' and self._attempt(state).get('kind') == 'introduction':
+                    self._start_order(state, state['order_index'])
+                    self._save(con, state)
+
     def _reconcile_version(self, con, row):
         if not is_introduction(self.course):
             return super()._reconcile_version(con, row)
@@ -42,6 +53,17 @@ class OrderedLearningService(LearningService):
 
     def _start_order(self, state, index):
         order = self.course['content_order']
+        if not is_introduction(self.course):
+            if state.get('attempts'):
+                previous = self._attempt(state)
+                if previous.get('kind') == 'introduction' and previous['status'] != 'completed':
+                    obsolete = [s for s in state['steps'] if s['attempt_id'] == previous['id']]
+                    state.setdefault('flow_history', []).append(
+                        {'reason': 'restore_example_first', 'attempt': deepcopy(previous), 'steps': deepcopy(obsolete)})
+                    previous['status'] = 'superseded'
+                    state['steps'] = [s for s in state['steps'] if s['attempt_id'] != previous['id']]
+            while index < len(order) and order[index]['kind'] == 'introduction':
+                index += 1
         if index >= len(order):
             state.update(status='completed', reading_status='completed', reread_pending=False,
                          read_content_version=self.course['content_version'])
@@ -64,10 +86,20 @@ class OrderedLearningService(LearningService):
         self._add_step(state, kind='introduction')['introduction_id'] = section['id']
 
     def _learn(self, state):
-        # Introductions already occur at their author-specified positions.
         example = next(s for s in state['steps'] if s['attempt_id'] == state['attempt_id'] and s['kind'] == 'example')
-        example['phase'] = 'reading'
-        state['active_step_id'] = state['current_step_id'] = example['id']
+        introduction_id = next(section['id'] for section in
+                               reversed(self.course['content_order'][:state['order_index']])
+                               if section['kind'] == 'introduction')
+        if introduction_id not in state['read_introductions']:
+            prior = next((s for s in state['steps'] if s.get('introduction_id') == introduction_id), None)
+            if prior:
+                prior.update(phase='reading', module_id=self._attempt(state)['module_id'])
+                state['active_step_id'] = state['current_step_id'] = prior['id']
+            else:
+                self._add_step(state, kind='introduction')['introduction_id'] = introduction_id
+        else:
+            example['phase'] = 'reading'
+            state['active_step_id'] = state['current_step_id'] = example['id']
 
     def _next_module(self, state):
         self._start_order(state, state['order_index'] + 1)
@@ -94,9 +126,12 @@ class OrderedLearningService(LearningService):
                         state['read_introductions'].append(step['introduction_id'])
                     state['introduction_read'] = len(state['read_introductions']) == len(self.course['introductions'])
                     state.setdefault('started_at', now())
-                    self._attempt(state).update(status='completed', completed_at=now())
                     self._event(con, state, 'introduction_read', introduction_id=step['introduction_id'])
-                    self._start_order(state, state['order_index'] + 1)
+                    if is_introduction(self.course):
+                        self._attempt(state).update(status='completed', completed_at=now())
+                        self._start_order(state, state['order_index'] + 1)
+                    else:
+                        self._learn(state)
                     self._record_action(con, 'continue', payload, fingerprint)
                     self._save(con, state)
         if ordinary:

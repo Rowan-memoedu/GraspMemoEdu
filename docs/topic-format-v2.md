@@ -6,9 +6,10 @@
 
 - `id` 是稳定 Topic ID，显示编号（如 2.1）、标题、文件名变化不重编 ID。根 `source_rem_id` 保存原 RemNote Document 身份，可省略，不能按同名标题匹配。
 - `topic_kind` 为 `lesson` 或 `introduction`，不替换既有 `training_mode`。
-- 至少一个非空 Introduction。Introduction 可有多个，可与 Example 穿插；严格保留源顺序，不合并、不前移。
+- 至少一个非空 Introduction（网站显示为“指导”）。Introduction 可有多个，可与 Example 穿插；严格保留源顺序，不合并、不前移。每个 Example 及其 Practice 归属前面最近的 Introduction。
+- 内容顺序描述归属，不替换原有学习流程：普通 Topic 先显示 Example 的掌握选择；已掌握直接作答，未掌握或答错后沿用“继续学习 → 对应指导 → 例题解析 → 练习”。同一指导已读后按原机制跳过重复阅读。
 - 普通 Topic 保留连续 Example、Explanation、Interaction 和 Practice 规则。每个 Example 至少七道 Practice；5×3 编号仍展平显示，`source_practice` 保留原分组。
-- 引论只能含 Introduction，`modules=[]`。母节点下、子 Topic 前的 intro 导出为该母节点的独立引论；编号由上游安排，不由导入器重排其他 Topic。
+- 引论是特殊 Topic，只能含自己的 Introduction，`modules=[]`，没有 Example；点开后阅读内部“指导”。“引论”是 Topic 类型，不是 Introduction 的通用名称。母节点下、子 Topic 前的 intro 导出为该母节点的独立引论；编号由上游安排，不由导入器重排其他 Topic。
 - 引论保留在课程目录中，但不属于课程知识图谱，不接受或产生前置边。导入遇到旧图谱冲突时报错，不修改图谱、账号或学习记录。
 - 网站负责首次学习、完成记录及重读推送：完成后保留进度；已学过且教学内容版本变化时推送重读；未学过时更新首次内容；不产生定时复习或 FSRS 排期。
 
@@ -37,7 +38,7 @@ JSON 是作者源文件，不是已编译的 `topic.json`。结构定义见 [JSO
 }
 ```
 
-`nodes` 与每个 `children` 都是有序数组。节点有稳定 `id`、原正文 `text`、可选 `source_rem_id`、真实 `source_tags`、`callout`、`source`，不接受未知字段后静默丢弃。正文换行使用 LF；仅统一标题外侧与节点末尾的空白分隔，保留内部换行、文本、父子关系与顺序，原稿字节仍完整保存。节点 ID 在一个 Topic 内唯一；全局定位用 `(topic_id, node_id)`。重复来源 Rem ID 或无法确定的映射报冲突。
+`nodes` 与每个 `children` 都是有序数组。节点有稳定 `id`、原正文 `text`、可选 `source_rem_id`、真实 `source_tags`、`callout`、`source`，不接受未知字段后静默丢弃。正文换行使用 LF；统一标题外侧与节点末尾的空白分隔。字段按下文固定归属整理，保留文字、身份、引用、字段内部层级与顺序；其他正文保持原层级与顺序，原稿字节完整保存。节点 ID 在一个 Topic 内唯一；全局定位用 `(topic_id, node_id)`。重复来源 Rem ID 或无法确定的映射报冲突。
 
 顶层节点文字为 `Introduction`（可加 `: 标题`）或 `Example N`（可加标题）。Example 节点 ID 必须是 `example-N`，其题目 ID 仍为 `example-N-question`，Practice 仍为 `example-N-practice-M`。Introduction、正文、Explanation、Practice 及 Interaction 节点的来源身份由显式节点元数据保存，不能用当前行号推测身份。
 
@@ -59,8 +60,11 @@ JSON 是作者源文件，不是已编译的 `topic.json`。结构定义见 [JSO
 - 类型固定为 `hint`、`aside`、`requirement`、`source`，显示标签为 hint、题外话、要求、题源。
 - 来源是 RemNote 时，以 `source_tags: [{"tag_rem_id":"ExactTagId","name":"题源"}]` 中真实标签识别，不凭正文出现同名词语判断。冲突标签、类型和标签不一致均报错，不套用 Blog 的首标签优先规则丢掉其他含义。
 - JSON 节点的 `callout` 声明类型；Markdown 对应 `> [!type]`，后续本节点正文用 `> ` 续行，子节点维持原层级。四类框体由网站提供的 Blog 适配模块封装。
-- 定义、定理、性质、识别特征、范式、巧法、idea 仍在所属 Introduction／题面／Explanation／Practice 正文中，格式为 `**字段名称**：内容`。不把它们提升为并列章节。
-- Explanation 中节点自身只含一个内部引用时，机械标为 `**idea**：引用`，保留目标、子节点和顺序；其他正文中的引用不自动变成 idea。
+- 字段具有固定结构归属，普通字段同样适用，不采用“保留原位置”规则：定义、定理、性质、识别特征、范式属于 Introduction；要求、题源属于题目正面；巧法、idea 属于同题背面的 Explanation。Example 与 Practice 遵循同一规则。
+- 普通字段显示为 `**字段名称**：内容`，不提升为并列章节。Callout 是显示形式，真实标签决定其样式，不改变上述归属；没有真实标签的明确字段标题也须放到对应结构，但不能伪造标签。没有相应信息的字段直接省略，不补占位。
+- 转换时连同字段内容归入对应结构，保留原节点 ID、文字、引用目标和内部顺序；题目中的指导字段归入前面最近的 Introduction。答案和题目字段只能在所属同题范围调整，无法确定题目归属或没有唯一 Explanation 时报告具体节点，不能猜测下一道题或迁往其他题目。原始 RemNote 保持只读。
+- 节点自身只含一个 RemNote 内部引用就是 idea，不受其原位置限制；已在 idea 内的引用不再套一层。保留精确引用，不复制目标正文。普通正文中夹带的引用不因此变成 idea。
+- 新转换稿必须通过 `topic_format.validate_field_placement`；stdin 接口使用 `validate_field_placement: true`。旧来源包仍可按原确定性协议重转换、恢复，不改写其版本或学习记录。已导入题目正面的巧法、Idea 和纯引用由显示层移到答案侧，其引用与反链也随答案解锁。
 - 题源节点用 `source` 对象提供已有信息：`name`、`year`、`edition`、`volume`、`page`、`item`、`location`、`adaptation`，均为可选文字。按此顺序用 `｜` 拼接非空项；缺项省略，不补作者、书名、年份、页码，也不输出“未知”“缺乏信息”等占位。
 - `difficulty` 仅留来源元数据；`url` 仅作为原始外部参考，不显示、不生成网站链接，也不进入教学内容哈希。原材料与来源包保留。
 - 题源可省略 `text`，由上述显式字段机械排版；若同时提供文字，必须等于字段排版结果，冲突时停止。只有 URL／难度且无可显示信息的空题源不生成 Callout；若还带其他正文或子节点，报告冲突。

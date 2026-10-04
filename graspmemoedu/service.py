@@ -15,6 +15,7 @@ from .practice import LESSON_POLICY, apply_practice_result
 from .practice_queue import PersistentPracticeQueue
 from .question_types import validate_interaction, public_interaction, parse_answer, display_answer
 from .question_bank import QuestionBank
+from .idea_presentation import present_question
 
 
 def now():
@@ -133,7 +134,7 @@ class LearningService:
                         or any(not isinstance(question.get(k), str) or not question[k].strip() for k in
                                ['question', 'reference_answer', 'html', 'explanation_html', 'answer_type', 'constraints'])):
                     raise DomainError('invalid_course', '题目缺少独立标准答案、题型、约束或解析。', 422)
-                self.questions[question['id']] = question
+                self.questions[question['id']] = present_question(question)
                 try:
                     validate_interaction(question.get('interaction'), question['question'])
                 except (ValueError, TypeError, KeyError, TimeoutError) as exc:
