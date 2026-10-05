@@ -120,7 +120,7 @@ class TrainingService:
                     'initial' if not memory or not memory['mastered'] else
                     'review' if utc_time(memory['due_at']) <= now else 'practice')
             spec = question.get('interaction', {})
-            if spec.get('type') == 'choice':
+            if spec.get('type') == 'choice' and spec.get('shuffle', True):
                 # Stable for this attempt, and independent of the answer key.
                 random.Random(hashlib.sha256(request_id.encode()).hexdigest()).shuffle(spec['options'])
             con.execute('''INSERT INTO training_attempts

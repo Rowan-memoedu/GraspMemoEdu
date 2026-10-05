@@ -32,6 +32,22 @@ def write_json(path, value):
 
 
 class SiteBackupAcceptanceTests(unittest.TestCase):
+    def test_training_format_survives_portable_restore(self):
+        from training_fixtures import training_bank
+        from test_training_format import format_fixture
+        from graspmemoedu.training_content import TrainingCatalog
+        bank = training_bank()
+        write_json(self.data / 'training-banks' / (bank['id'] + '.json'), bank)
+        write_json(self.data / 'training-formats' / (bank['id'] + '.json'), format_fixture(bank))
+        before = TrainingCatalog(self.data).bank(bank['id'])
+        archive = self.root / 'with-training-format.zip'
+        backup_site(self.settings, archive)
+        destination = self.root / 'with-training-format-restored'
+        restore_site(archive, destination)
+        after = TrainingCatalog(destination)
+        self.assertEqual(after.banks[bank['id']], bank)
+        self.assertEqual(after.bank(bank['id']), before)
+
     def test_backup_and_restore_share_total_limit_including_manifest(self):
         archive = self._backup()
         with zipfile.ZipFile(archive) as saved:

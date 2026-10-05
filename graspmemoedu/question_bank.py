@@ -80,7 +80,7 @@ class QuestionBank:
             if variant:
                 question = {**question, **{k: v for k, v in variant.items() if k != 'source_sha256'}}
         spec = question.get('interaction')
-        if spec and spec['type'] == 'choice':
+        if spec and spec['type'] == 'choice' and spec.get('shuffle', True):
             question = deepcopy(question)
             # Stable across reload, draft restore and retry; varies by actual
             # presentation, without using the key or learner answer as a seed.

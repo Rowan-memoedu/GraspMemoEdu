@@ -42,9 +42,19 @@ Example 与 Practice 共用可选 `interaction`（version 1）。不填时保留
 {"version":1,"type":"choice","options":[{"id":"oa","text":"$3$"},{"id":"ob","text":"$4$"},{"id":"oc","text":"$5$"},{"id":"od","text":"$6$"},{"id":"oe","text":"$7$"},{"id":"of","text":"$8$"}],"correct_id":"ob"}
 ```
 
-通用结构支持 2–12 个选项、唯一正确项；本轮题型转换固定六选一。ID 必须唯一，不能携带正确性含义。提交为 `{"selected":"ob"}`，空选、多选、未知 ID 和额外字段均拒绝，不计错。公共元数据不含 `correct_id`。
+通用结构支持 2–12 个选项、唯一正确项；课程生成式转换默认六选一，书籍机械清理按原选项数量。ID 必须唯一，不能携带正确性含义。提交为 `{"selected":"ob"}`，空选、多选、未知 ID 和额外字段均拒绝，不计错。公共元数据不含 `correct_id`。
 
 选项文本复用安全 Markdown 和离线 MathJax。Lesson 与 Review 按呈现标识确定选项顺序，刷新、恢复草稿和重试保持不变；后续呈现重新排列。鼠标、触屏和方向键均可选择，Ctrl + Enter 提交。转换旧题与保留旧记录的版本规则见 [题库转换工作流](question-bank-workflow.md)。
+
+可选 `shuffle:false` 保持原选项顺序，适用于原书解析按 A/B/C/D 指代的题目；省略时沿用原随机顺序。
+
+## 多项选择题
+
+```json
+{"version":1,"type":"choice","multiple":true,"shuffle":false,"options":[{"id":"oa","text":"甲"},{"id":"ob","text":"乙"},{"id":"oc","text":"丙"}],"correct_ids":["oa","oc"]}
+```
+
+复用 choice 控件并显示复选框。提交 `{"selected":["oc","oa"]}`，集合完全一致才判整题正确；少选、多选、错选均判错。空数组、重复或未知 ID 视为无效作答。原单选 schema 与字符串提交保持兼容。`correct_ids` 留在服务端，不进入公共元数据；单选和多选均由脚本判分。
 
 ## 判断题
 
@@ -55,6 +65,8 @@ Example 与 Practice 共用可选 `interaction`（version 1）。不填时保留
 1–20 个判断项。每项使用真正的 JSON 布尔值。前端呈现逐项正确/错误选项；服务端记录逐项反馈。提交 JSON 形如 `{"a":true,"b":false}`。
 
 ## 填空题
+
+数学等价式或答案不唯一的填空使用 `grading:"semantic"`。判题同时收到按空位整理的参考表达和原参考答案/解析；清洗阶段不重新解题。
 
 ```json
 {"version":1,"type":"fill_blank","grading":"exact","blanks":[{"id":"a","label":"升起方向","answers":["东"]},{"id":"b","label":"落下方向","answers":["西"]}]}

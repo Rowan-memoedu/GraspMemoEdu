@@ -67,11 +67,19 @@ def validate_interaction(spec, stem=''):
             if 'answers' in spec:
                 _answer_spec(spec)
     elif kind == 'choice':
-        _keys(spec, common | {'options', 'correct_id'})
+        key = 'correct_ids' if spec.get('multiple') is True else 'correct_id'
+        _keys(spec, common | {'options', key}, {'multiple', 'shuffle'})
+        _require(all(type(spec[k]) is bool for k in ('multiple', 'shuffle') if k in spec))
         ids = _items(spec['options'], {'text'}, {'html'}, maximum=12)
         _require(len(ids) >= 2 and all(_string(s['text'], 2000) for s in spec['options']))
         _require(len({s['text'].strip() for s in spec['options']}) == len(ids), 'Choice options must differ')
-        _require(isinstance(spec['correct_id'], str) and spec['correct_id'] in ids)
+        if key == 'correct_ids':
+            answers = spec[key]
+            _require(isinstance(answers, list) and 1 <= len(answers) <= len(ids)
+                     and all(isinstance(a, str) and a in ids for a in answers)
+                     and len(set(answers)) == len(answers))
+        else:
+            _require(isinstance(spec[key], str) and spec[key] in ids)
     elif kind == 'true_false':
         _keys(spec, common | {'statements'})
         _items(spec['statements'], {'text', 'correct'}, {'html'})
@@ -114,6 +122,8 @@ def public_interaction(question):
     result = {k: spec[k] for k in ('version', 'type', 'grading') if k in spec}
     if spec['type'] == 'choice':
         result['options'] = [{k: row[k] for k in ('id', 'text', 'html') if k in row} for row in spec['options']]
+        if spec.get('multiple'):
+            result['multiple'] = True
     elif spec['type'] == 'true_false':
         result['statements'] = [{k: row[k] for k in ('id', 'text', 'html') if k in row} for row in spec['statements']]
     elif spec['type'] == 'fill_blank':
@@ -145,7 +155,14 @@ def parse_answer(question, answer):
     kind = spec['type']
     if kind == 'choice':
         _keys(result, {'selected'})
-        _require(isinstance(result['selected'], str) and result['selected'] in {s['id'] for s in spec['options']})
+        ids = {s['id'] for s in spec['options']}
+        selected = result['selected']
+        if spec.get('multiple'):
+            _require(isinstance(selected, list) and 1 <= len(selected) <= len(ids)
+                     and all(isinstance(s, str) and s in ids for s in selected)
+                     and len(set(selected)) == len(selected))
+        else:
+            _require(isinstance(selected, str) and selected in ids)
     elif kind in ('true_false', 'fill_blank'):
         rows = spec['statements'] if kind == 'true_false' else spec['blanks']
         _require(isinstance(result, dict) and set(result) == {s['id'] for s in rows})
@@ -196,7 +213,8 @@ def deterministic_verdict(question, answer):
         result = exact(spec, value)
         return result, '✓' if result else '✗'
     if kind == 'choice':
-        result = value['selected'] == spec['correct_id']
+        result = (set(value['selected']) == set(spec['correct_ids']) if spec.get('multiple')
+                  else value['selected'] == spec['correct_id'])
         return result, '✓' if result else '✗'
     if kind == 'true_false':
         results = [value[s['id']] == s['correct'] for s in spec['statements']]
@@ -217,6 +235,9 @@ def semantic_arguments(question, answer):
         reference = json.dumps({b['id']: b['answers'] for b in spec['blanks']}, ensure_ascii=False)
         answer = json.dumps(values, ensure_ascii=False)
         stem += '\n这是题干挖空题。JSON 键对应题干中的 blank 标记。所有空都语义正确才判整题正确；请在原因中逐空标明对错。答案列表表示允许的参考表达。'
+        # Authored examples may be non-unique. Keep their original explanation
+        # available to the semantic judge without changing the per-blank keys.
+        stem += '\n原参考答案与解析：\n' + question['reference_answer']
     elif spec and spec.get('answers'):
         reference = '\n'.join(spec['answers'])
     return stem, reference, answer
@@ -235,7 +256,7 @@ def demo_answer(question):
             return next((a for a in candidates if exact(spec, a)), '')
         return candidates[0]
     if kind == 'choice':
-        answer = {'selected': spec['correct_id']}
+        answer = {'selected': spec['correct_ids'] if spec.get('multiple') else spec['correct_id']}
     elif kind == 'true_false':
         answer = {s['id']: s['correct'] for s in spec['statements']}
     elif kind == 'fill_blank':
@@ -253,7 +274,8 @@ def display_answer(question, answer):
     try:
         value, spec = parse_answer(question, answer), question['interaction']
         if spec['type'] == 'choice':
-            return next(s['text'] for s in spec['options'] if s['id'] == value['selected'])
+            ids = set(value['selected']) if spec.get('multiple') else {value['selected']}
+            return '\n'.join(s['text'] for s in spec['options'] if s['id'] in ids)
         if spec['type'] == 'matching':
             labels = {side: {x['id']: x['text'] for x in spec[side]} for side in ('left', 'right')}
             arrow = '↔' if spec.get('direction') == 'both' else '→'

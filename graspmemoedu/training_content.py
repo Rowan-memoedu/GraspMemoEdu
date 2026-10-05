@@ -83,6 +83,9 @@ class TrainingCatalog:
             if path.name != bank['id'] + '.json' or bank['id'] in self.banks:
                 raise ValueError('Training bank filename differs from its ID')
             self.banks[bank['id']] = bank
+        from .training_format import read_formats, present
+        self.formats = read_formats(data_dir, self.banks)
+        self.presented = {ident: present(self.banks[ident], value) for ident, value in self.formats.items()}
 
     def permissions(self, existing=()):
         result = [{'id': permission_id(b['id']), 'title': b['title']} for b in self.banks.values()]
@@ -93,7 +96,7 @@ class TrainingCatalog:
     def bank(self, bank_id):
         if bank_id not in self.banks:
             raise DomainError('unknown_bank', '未找到此题库。', 404)
-        return self.banks[bank_id]
+        return self.presented.get(bank_id, self.banks[bank_id])
 
     def question(self, bank_id, group_id, question_id):
         bank = self.bank(bank_id)
@@ -105,18 +108,24 @@ class TrainingCatalog:
         raise DomainError('unknown_question', '未找到此习题。', 404)
 
     def archive_blobs(self):
-        return {f'{DIRECTORY}/{b["id"]}.json': json.dumps(b, ensure_ascii=False, indent=2).encode()
-                for b in self.banks.values()}
+        from .training_format import DIRECTORY as FORMAT_DIRECTORY
+        return {**{f'{DIRECTORY}/{b["id"]}.json': json.dumps(b, ensure_ascii=False, indent=2).encode()
+                   for b in self.banks.values()},
+                **{f'{FORMAT_DIRECTORY}/{ident}.json': json.dumps(v, ensure_ascii=False, indent=2).encode()
+                   for ident, v in self.formats.items()}}
 
 
 def validate_archive(blobs):
-    names = set()
+    names, banks = set(), {}
     for name, blob in blobs.items():
         if name.startswith(DIRECTORY + '/'):
             bank = validate(json.loads(blob))
             if name != f'{DIRECTORY}/{bank["id"]}.json':
                 raise ValueError('Invalid training bank archive path')
             names.add(name)
+            banks[bank['id']] = bank
+    from .training_format import validate_archive as validate_formats
+    names.update(validate_formats(blobs, banks))
     return names
 
 

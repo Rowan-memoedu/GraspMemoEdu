@@ -1,4 +1,4 @@
-import {t} from './i18n.js?v=9c53a53dce245c82';
+import {t} from './i18n.js?v=0f630bf2e4367917';
 
 const node = (tag, cls, text) => {
   const element = document.createElement(tag); element.className = cls;
@@ -38,7 +38,9 @@ export function questionInput(spec, {id, value = '', stem, disabled = false, for
         return [side, valid ? candidate : null];
       })));
     } else if (spec.type === 'choice') {
-      values = {selected: spec.options.some(item => item.id === values?.selected) ? values.selected : null};
+      values = {selected: spec.multiple
+        ? spec.options.filter(item => Array.isArray(values?.selected) && values.selected.includes(item.id)).map(item => item.id)
+        : (spec.options.some(item => item.id === values?.selected) ? values.selected : null)};
     } else {
       const previous = values && !Array.isArray(values) && typeof values === 'object' ? values : {};
       const rows = spec.type === 'true_false' ? spec.statements : spec.blanks;
@@ -49,7 +51,7 @@ export function questionInput(spec, {id, value = '', stem, disabled = false, for
   };
   const complete = () => input.value.length <= 2000 && (spec.type === 'matching'
     ? values.every(pair => pair.left && pair.right)
-    : spec.type === 'choice' ? spec.options.some(item => item.id === values.selected)
+    : spec.type === 'choice' ? (spec.multiple ? values.selected.length > 0 : spec.options.some(item => item.id === values.selected))
     : Object.values(values).every(v => spec.type === 'true_false' ? typeof v === 'boolean' : Boolean(v.trim())));
   function emit() {
     input.value = JSON.stringify(values); emitting = true;
@@ -151,14 +153,19 @@ export function questionInput(spec, {id, value = '', stem, disabled = false, for
   }
   function renderChoices() {
     root.querySelector('.choiceList')?.remove();
-    const list = node('div', 'choiceList'); list.setAttribute('role', 'radiogroup');
+    const list = node('div', 'choiceList'); list.setAttribute('role', spec.multiple ? 'group' : 'radiogroup');
     spec.options.forEach((option, index) => {
       const label = node('label', 'choiceOption'), radio = node('input', '');
-      radio.type = 'radio'; radio.name = `${id}-choice`; radio.value = option.id;
-      radio.disabled = disabled; radio.checked = values.selected === option.id;
+      radio.type = spec.multiple ? 'checkbox' : 'radio'; radio.name = `${id}-choice`; radio.value = option.id;
+      radio.disabled = disabled; radio.checked = spec.multiple ? values.selected.includes(option.id) : values.selected === option.id;
       if (formId) radio.setAttribute('form', formId);
       const body = node('span', 'choiceBody'); optionContent(body, option);
-      radio.addEventListener('change', () => { values.selected = option.id; emit(); });
+      radio.addEventListener('change', () => {
+        values.selected = spec.multiple
+          ? spec.options.filter(item => item.id === option.id ? radio.checked : values.selected.includes(item.id)).map(item => item.id)
+          : option.id;
+        emit();
+      });
       label.append(radio, node('span', 'choiceLetter', String.fromCharCode(65 + index)), body);
       list.append(label);
     });

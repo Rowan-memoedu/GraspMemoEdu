@@ -8,6 +8,10 @@
 
 题库数据位于私密数据目录的 `training-banks/<bank-id>.json`。它与用于现有课程题型转换的 `question-banks/<topic-id>/<revision>.json` 不同，二者不互相收集内容。书籍来源、OCR 和清洗流程由独立的 GraspMemoEduSourcePrep 项目维护，网站只接收经过来源校验的编译产物。
 
+已安装书籍的机械格式修正保存在 `training-formats/<bank-id>.json`，绑定原题库版本和每题原内容哈希。只允许替换题目正面及 `interaction`、去掉指定的无题目单子节点包装层；原题库、答案、解析、题目/小节 ID、版本与学习进度均保持。`TrainingCatalog.bank()` 返回格式化视图，`banks` 保存原始内容；开始作答时冻结当前视图，已开始轮次继续原快照。原库和格式文件一同备份、恢复校验。格式安装为新增/相同内容幂等，拒绝静默覆盖不同格式。
+
+书籍单选/多选按原选项排序（`shuffle:false`），由脚本判分。多选用复选框，少选、多选或错选均为整题错误；填空使用已有行内输入框和语义判分；大题保持文字作答与原答案模式。单选和多选不调用判题模型。
+
 SQLite 使用 `training_attempts`、`training_submissions`、`training_memory`、`training_ratings`、`training_preferences` 和 `training_suspensions`。每个身份、题库版本、题目只有一张记忆卡；不限作答次数。题目内容和选项顺序在开始本次作答时冻结。客户端刷新恢复同一次作答；请求重试不会再判题或重复排期。两次并发作答只有匹配记忆卡版本的一次能更新排期，另一次保存为额外训练。
 
 ## 评分
