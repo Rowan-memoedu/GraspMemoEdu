@@ -91,7 +91,9 @@ class DailyJudgeQuota:
         return sqlite3.connect(self.path, timeout=10, isolation_level=None)
 
     @contextmanager
-    def reserve(self, learner_id, role):
+    def reserve(self, learner_id, role, *, count=1):
+        if type(count) is not int or not 1 <= count <= 60:
+            raise ValueError('Invalid reservation count')
         if role not in ('guest', 'account'):
             raise ValueError('Unknown learner role')
         now = self.now().astimezone(self.zone)
@@ -105,13 +107,13 @@ class DailyJudgeQuota:
             try:
                 for scope, limit in (('global', self.global_limit), (own_scope, own_limit)):
                     used = con.execute('SELECT count FROM usage WHERE day=? AND scope=?', (day, scope)).fetchone()
-                    if limit is not None and used and used[0] >= limit:
+                    if limit is not None and (used[0] if used else 0) + count > limit:
                         raise PublicLimitError('daily_judge_quota',
                                                '今日判题额度已用完，请明日再试；本次未计入作答。', retry_after)
                 yield
                 for scope in ('global', own_scope):
-                    con.execute('''INSERT INTO usage(day,scope,count) VALUES (?,?,1)
-                        ON CONFLICT(day,scope) DO UPDATE SET count=count+1''', (day, scope))
+                    con.execute('''INSERT INTO usage(day,scope,count) VALUES (?,?,?)
+                        ON CONFLICT(day,scope) DO UPDATE SET count=count+excluded.count''', (day, scope, count))
                 con.commit()
             except BaseException:
                 con.rollback()

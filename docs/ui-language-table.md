@@ -2,7 +2,7 @@
 
 本表从当前界面词库自动生成。修改以词库为准，随后重新生成并检查本表。术语约定见 [界面语言规范](ui-language.md)。
 
-共 665 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
+共 725 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
 
 不包括作者课程正文、题目、答案、解析或用户输入。首页的学科双语副标题按约定保留。
 
@@ -621,18 +621,83 @@
 | Loading question bank… | 正在读取题库… |
 | Retry | 重试 |
 | Answer saved | 已保存作答 |
-| Question bank cards | 题库卡片 |
-| No question bank cards are due. | 暂无到期的题库卡片。 |
+| My error notebook | 我的错题本 |
+| No questions in your error notebook are due. | 错题本中暂无到期题目。 |
 | Review question | 复习此题 |
 | Answer revealed; awaiting rating | 已显示答案，等待选择熟练度 |
 | Resume answering | 继续作答 |
 | This account cannot submit answers. | 当前账号没有提交答案的权限。 |
 | Atomic cards | 原子化卡片 |
 
+## 组卷复习
+
+| English | 中文 |
+|---|---|
+| Review | 复习 |
+| Courses | 课程 |
+| Atomic cards | 原子卡片 |
+| Paper {number} | 卷{number} |
+| Review paper time limit | 组卷超时处理 |
+| Submit automatically when time runs out | 到时自动交卷 |
+| Mark overdue and continue answering | 超时仅标记，继续作答 |
+| Advanced learners may continue after time runs out. Changes apply to new papers; the timer continues in the background. | 仅高阶学习者可选择不中断。修改只影响新开始的组卷；刷新和切换后台继续计时。 |
+| {time} remaining | 剩余 {time} |
+| Time limit exceeded | 已超时 |
+| Time is up. Submitting saved answers; unfinished questions count as incorrect. | 限时已到，正在自动交卷；未答部分计错。 |
+| Time is up. You may continue answering. | 已超时，可以继续作答。 |
+| This question was unfinished when time ran out. | 限时已到，本题未完成作答。 |
+| {minutes}-minute paper · {action} | 整卷限时 {minutes} 分钟 · {action} |
+| The time limit has passed; answers saved before the deadline are used. | 限时已到，采用截止前已同步的答案。 |
+| {count} memory points due | {count} 个记忆点待复习 |
+| {count} cards | 共 {count} 张卡片 |
+| Papers may overlap. Starting one updates the other available choices. | 不同试卷可以包含相同记忆点。开始其中一份后，其他选择会相应更新。 |
+| Review papers | 组卷复习 |
+| Individual cards | 单卡复习 |
+| Resume review | 继续复习 |
+| Start review | 开始复习 |
+| {count} questions · {points} points | {count} 道题 · {points} 个记忆点 |
+| Nothing is due right now. | 目前没有到期内容。 |
+| The due cards do not fill a paper yet. Individual review remains available. | 到期题型和数量尚不足以组成这些卷型，可以先进行单卡复习。 |
+| Submit the whole paper | 整卷提交 |
+| Submit one question at a time | 逐题提交 |
+| Review submission mode | 复习提交方式 |
+| Results appear after the whole paper by default. Advanced learners may submit individually. Changes apply to new reviews. | 默认整卷完成后显示结果。高阶学习者可选择逐题提交；修改仅影响新开始的复习。 |
+| Complete every question before submitting. Results and explanations follow submission. Drafts save automatically. | 完成全部题目后交卷，随后逐题显示结果与解析。草稿会自动保存。 |
+| Each submission reveals its result and updates its memory points. | 每题提交后显示结果，并更新对应记忆点。 |
+| Draft saved | 草稿已保存 |
+| Saving draft… | 正在保存草稿… |
+| Draft saved on this device. Retry synchronization. | 草稿已保存在此设备，请重试同步。 |
+| Submit paper | 交卷 |
+| Submit question | 提交本题 |
+| Next question | 下一题 |
+| Previous question | 上一题 |
+| Back to review | 返回复习 |
+| End this review | 结束本次复习 |
+| Release unfinished questions and retain completed results. End this review? | 结束后释放未完成题目，已提交的结果保留。确定结束？ |
+| Drafted | 已填写 |
+| Empty | 未填写 |
+| Review complete | 本次复习已完成 |
+| This review has ended. Return to choose another. | 本次复习已结束，请返回选择新的复习。 |
+| {correct} / {count} correct | 正确 {correct} / {count} 题 |
+| Checking answers. Results will appear when complete… | 正在判题，完成后显示结果… |
+| Refresh | 刷新 |
+
 ## 操作与服务提示
 
 | English | 中文 |
 |---|---|
+| Only advanced learners may submit individual questions. | 逐题提交仅对高阶学习者开放。 |
+| Only advanced learners may continue after the time limit. | 超时不中断仅对高阶学习者开放。 |
+| This review could not be found. | 未找到这份复习。 |
+| This review does not belong to the current subject. | 此复习不属于当前学科。 |
+| This review is not enabled for your account. | 当前账号没有访问这份复习的权限。 |
+| The due content changed. Refresh and choose a review again. | 到期内容已变化，请刷新后选择复习。 |
+| Time is up. Submitting answers saved before the deadline. | 限时已到，正在提交截止前保存的答案。 |
+| The review state changed. Synchronize again; your drafts are retained. | 复习状态已变化，请重新同步；草稿仍保留。 |
+| Complete the whole paper before submitting in this mode. | 当前模式需要完成整卷后交卷。 |
+| Time is up. Wait for automatic submission to finish. | 限时已到，请先等待自动交卷。 |
+| Answers are being checked. Wait for the results before ending this review. | 正在判题，请等待结果后再结束复习。 |
+| Submission permissions changed. Open the review again. | 提交权限已变化，请重新进入复习。 |
 | Complete the prerequisite topics and their pending reviews, and resolve any paused prerequisites first. | 请先完成前置知识的学习和待复习内容，并解除前置知识的暂停状态。 |
 | This subject could not be found. | 未找到此学科。 |
 | This course does not belong to the current subject. | 此课程不属于当前学科。 |

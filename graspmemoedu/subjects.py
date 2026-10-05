@@ -20,6 +20,8 @@ PUBLIC_FIELDS = ('id', 'title', 'title_en', 'description', 'description_en', 'ac
 class Subjects:
     def __init__(self, settings, catalog, raw=None):
         self.settings, self.catalog = settings, catalog
+        from .test_materials import TestMaterials
+        self.test_materials = TestMaterials(settings.data_dir, catalog)
         self.subjects = {row[0]: dict(zip(PUBLIC_FIELDS, row)) for row in DEFAULTS}
         self.guide_paths = {'math': settings.guide_path}
         self.course_subjects = {}
@@ -112,7 +114,8 @@ class Subjects:
         self.require(subject_id)
 
     def public(self, access=None):
-        return {'subjects': [{**subject, 'course_count': len(self.course_ids(subject_id)),
+        return {'subjects': [{**subject, 'course_count': sum(self.test_materials.course_visible(self.catalog.courses[cid], access)
+                                                            for cid in self.course_ids(subject_id)),
                              'available': True,
                              'requires_account': False}
                              for subject_id, subject in self.subjects.items()],

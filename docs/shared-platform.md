@@ -2,6 +2,8 @@
 
 当前共用层由本仓库统一维护；六个学科共用一个应用、账号系统、Lesson/Review 流程与判题入口。学科任务负责自身课程与教学内容，通用功能不复制成六套。
 
+测试材料通过独立标记保留并限制为仅管理员可见，课程、题库、复习和指南共用同一策略；配置与恢复边界见 [测试材料机制](test-materials.md)。
+
 | 层 | 入口 | 职责 |
 | --- | --- | --- |
 | 学科外观与路由 | `web/subjects.js`、`graspmemoedu/subjects.py` | 六科学科主题、路由、课程归属；旧数学路径继续兼容 |
@@ -10,6 +12,7 @@
 | 复习 | `review.py`、`review_api.py`、`web/review.js` | FSRS、到期任务、持久练习队列；沿用原评分政策 |
 | 原子训练 | `atomic.py`、`atomic_content.py`、`atomic_api.py`、`web/atomic.js` | 记忆组块与点级状态、交错、可变设问、打包复习 |
 | 独立题库 | `training_content.py`、`training.py`、`training_api.py`、`web/training.js` | 独立内容树、自由选题、单题卡片、自评与统一复习入口，见 [题库架构](training-banks.md) |
+| 统一复习 | `review_cards.py`、`review_sources.py`、`review_papers.py`、`review_paper_api.py`、`web/review-papers.js` | 原子点与题库共用选卡、MD 卷型、重叠候选和双提交模式；评分仍由来源服务负责，见 [统一复习](unified-review.md) |
 | 题型 | `question_types.py`、`judging.py`、`web/question-input.js` | 统一 schema、公共字段投影、作答控件、确定性/语义判题 |
 | 导航与反馈 | `web/portal.js`、`web/catalog-picker.js`、`web/content-report.js`、`dashboard.py` | 顶部学科/课程切换、普通反馈、精确文字纠错 |
 | 鉴权与运行 | `api.py`、`access.py`、`public_limits.py` | 学习者隔离、动态默认权限和显式覆盖、并发、公开接口限制 |

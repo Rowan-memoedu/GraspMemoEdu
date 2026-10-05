@@ -17,7 +17,8 @@ from .service import DomainError
 FEATURE_REQUIREMENTS = {'learn': {}, 'submit_answer': {}, 'review_history': {}, 'pause_topic': {},
                         'request_help': {'student': True},
                         'course_hierarchy': {'advanced_learner': True},
-                        'training_self_rating': {'advanced_learner': True}}
+                        'training_self_rating': {'advanced_learner': True},
+                        'review_question_mode': {'advanced_learner': True}}
 FEATURES = tuple(FEATURE_REQUIREMENTS)
 STANDARD_FEATURES = tuple(feature for feature, requirements in FEATURE_REQUIREMENTS.items() if not requirements)
 GUEST_FEATURES = FEATURES[:3]
@@ -53,8 +54,10 @@ def credential_digest(kind, value):
 class AccessStore:
     """Identity tables share the learning DB so backups preserve their mapping."""
 
-    def __init__(self, data_dir: Path, topics: list[dict], *, guest_topic_ids=None):
+    def __init__(self, data_dir: Path, topics: list[dict], *, guest_topic_ids=None, test_materials=None):
         self.data_dir = Path(data_dir)
+        from .test_materials import TestMaterials
+        self.test_materials = test_materials or TestMaterials(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.db_path = self.data_dir / 'learning.sqlite3'
         self.topics = {topic['id']: {'id': topic['id'], 'title': topic['title']} for topic in topics}
@@ -149,7 +152,8 @@ class AccessStore:
             'is_advanced_learner': not guest and bool(row['is_advanced_learner']),
             'is_student': not guest and bool(row['is_student']),
             'features': [],
-            'topics': [self.topics[topic_id] for topic_id in topic_ids if topic_id in self.topics],
+            'topics': [self.topics[topic_id] for topic_id in topic_ids if topic_id in self.topics
+                       and (admin or topic_id not in self.test_materials.permission_ids)],
         }
         if not guest:
             result.update(purpose=row['purpose'], enabled=bool(row['enabled']), batch_id=row['batch_id'],

@@ -204,6 +204,7 @@ class GraphStore:
         nodes = [{'topic_id': node['topic_id'], 'title': node['title'],
                   'content_status': 'available' if node['topic_id'] in self.catalog.topics else 'not_imported'}
                  for node in graph['nodes'] if (inherit or node['topic_id'] in allowed)
+                 and self.subjects.test_materials.graph_topic_visible(graph['course_id'], node['topic_id'], access)
                  and not (node['topic_id'] in self.catalog.topics and is_introduction(self.catalog.topic(node['topic_id'])))]
         visible = {node['topic_id'] for node in nodes}
         return {'schema_version': 1, 'course_id': graph['course_id'], 'subject_id': graph['subject_id'],

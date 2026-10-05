@@ -1,8 +1,10 @@
 // UI strings only. Course HTML, names, answers and explanations never enter this module.
-import {trainingMessages} from './training-messages.js?v=2d6c02580e707007';
-import {readerMessages} from './reader-messages.js?v=2d6c02580e707007';
-import {portalMessages} from './portal-messages.js?v=2d6c02580e707007';
-import {staticMessages} from './static-messages.js?v=2d6c02580e707007';
+import {trainingMessages} from './training-messages.js?v=0f4775ecbf9f06f3';
+import {readerMessages} from './reader-messages.js?v=0f4775ecbf9f06f3';
+import {portalMessages} from './portal-messages.js?v=0f4775ecbf9f06f3';
+import {staticMessages} from './static-messages.js?v=0f4775ecbf9f06f3';
+
+import {paperMessages} from './review-paper-messages.js?v=0f4775ecbf9f06f3';
 
 export const LANGUAGE_KEY = 'graspmemoedu:ui-language';
 // Read the previous namespace once on the same origin. Renaming the public
@@ -27,7 +29,7 @@ export function migrateLegacyStorage(storage) {
 for (const name of ['localStorage', 'sessionStorage']) {
   try { migrateLegacyStorage(globalThis[name]); } catch { /* Storage may be disabled. */ }
 }
-export const messages = {...staticMessages, ...readerMessages, ...portalMessages, ...trainingMessages};
+export const messages = {...staticMessages, ...readerMessages, ...portalMessages, ...trainingMessages, ...paperMessages};
 const translatedMessages = new Map(Object.values(messages).flatMap(pair => pair.map(value => [value, pair])));
 const validLanguage = value => value === 'en' ? 'en' : 'zh-CN';
 let language = 'zh-CN';
@@ -55,6 +57,18 @@ export function t(key, params = {}) {
 
 // Only API operational errors belong here. A judge's explanation is course content.
 const errors = {
+  '逐题提交仅对高阶学习者开放。': 'Only advanced learners may submit individual questions.',
+  '超时不中断仅对高阶学习者开放。': 'Only advanced learners may continue after the time limit.',
+  '未找到这份复习。': 'This review could not be found.',
+  '此复习不属于当前学科。': 'This review does not belong to the current subject.',
+  '当前账号没有访问这份复习的权限。': 'This review is not enabled for your account.',
+  '到期内容已变化，请刷新后选择复习。': 'The due content changed. Refresh and choose a review again.',
+  '限时已到，正在提交截止前保存的答案。': 'Time is up. Submitting answers saved before the deadline.',
+  '复习状态已变化，请重新同步；草稿仍保留。': 'The review state changed. Synchronize again; your drafts are retained.',
+  '当前模式需要完成整卷后交卷。': 'Complete the whole paper before submitting in this mode.',
+  '限时已到，请先等待自动交卷。': 'Time is up. Wait for automatic submission to finish.',
+  '正在判题，请等待结果后再结束复习。': 'Answers are being checked. Wait for the results before ending this review.',
+  '提交权限已变化，请重新进入复习。': 'Submission permissions changed. Open the review again.',
   '请先完成前置知识的学习和待复习内容，并解除前置知识的暂停状态。': 'Complete the prerequisite topics and their pending reviews, and resolve any paused prerequisites first.',
   '未找到此学科。': 'This subject could not be found.',
   '此课程不属于当前学科。': 'This course does not belong to the current subject.',

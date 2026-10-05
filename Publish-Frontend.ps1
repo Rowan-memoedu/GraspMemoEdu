@@ -10,6 +10,8 @@ if ($Repository -notmatch '^[A-Za-z0-9-]+/[A-Za-z0-9_.-]+$') { throw 'Invalid re
 $expected = @('.nojekyll','app.js','deployment.json','favicon.svg','index.html','portal.js','review.js','atomic.js','learning-cache.js','question-input.js','content-report.js','catalog-picker.js','portal.css','subjects.js','subjects.css','styles.css','i18n.js','reader-messages.js','portal-messages.js','static-messages.js','course-graph.js','course-graph.css')
 $files = @(Get-ChildItem -LiteralPath $ExportDirectory -File -Force -Recurse)
 $expected += @('training.js','training.css','training-messages.js','learning-ui.js')
+$expected += @('review-papers.js','review-paper-messages.js')
+$expected += @('review-directory.js','task-tree.js','content-timer.js')
 $expected += @('topic-content.js','topic-content.css','topic-callouts.css')
 $vendor = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'scripts/topic-presentation-assets.json') -Raw | ConvertFrom-Json -AsHashtable
 foreach ($name in $vendor.files.Keys) {

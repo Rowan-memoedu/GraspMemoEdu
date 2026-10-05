@@ -1,13 +1,17 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=2d6c02580e707007";
-import { createReviewView } from "./review.js?v=2d6c02580e707007";
-import { renderCourseGraph } from "./course-graph.js?v=2d6c02580e707007";
-import {questionInput} from './question-input.js?v=2d6c02580e707007';
-import {enhanceTopicContent} from './topic-content.js?v=2d6c02580e707007';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=2d6c02580e707007';
-import {createCatalogPicker} from './catalog-picker.js?v=2d6c02580e707007';
-import {createAtomicView} from './atomic.js?v=2d6c02580e707007';
-import {createTrainingView} from './training.js?v=2d6c02580e707007';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=2d6c02580e707007";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=0f4775ecbf9f06f3";
+import { createReviewView } from "./review.js?v=0f4775ecbf9f06f3";
+import { renderCourseGraph } from "./course-graph.js?v=0f4775ecbf9f06f3";
+import {questionInput} from './question-input.js?v=0f4775ecbf9f06f3';
+import {enhanceTopicContent} from './topic-content.js?v=0f4775ecbf9f06f3';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=0f4775ecbf9f06f3';
+import {createCatalogPicker} from './catalog-picker.js?v=0f4775ecbf9f06f3';
+import {createAtomicView} from './atomic.js?v=0f4775ecbf9f06f3';
+import {createTrainingView} from './training.js?v=0f4775ecbf9f06f3';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=0f4775ecbf9f06f3";
+
+import {createPaperView} from './review-papers.js?v=0f4775ecbf9f06f3';
+
+import {renderTaskTree} from './task-tree.js?v=0f4775ecbf9f06f3';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -61,6 +65,8 @@ export function initPortal(bridge) {
     button: $('catalogToggle'), panel: $('catalogPanel'),
     readSubjects: () => subjects ? Promise.resolve({subjects}) : bridge.request('subjects'),
     readCatalog: subjectId => scopedRequest('catalog', undefined, subjectId),
+    readBanks: subjectId => scopedRequest('training/catalog', undefined, subjectId),
+    onBankSelected: (bankId, subjectId) => { location.hash = subjectHref(subjectId, `/banks/${encode(bankId)}`); },
     selectCourse: saveCourseSelection, getSubject: () => currentRoute?.subjectId,
     onSelected: (courseId, subjectId) => {
       catalog = null; selectedCourse = courseId; dashboards.clear();
@@ -71,7 +77,7 @@ export function initPortal(bridge) {
   const learnHref = () => subjectHref(currentRoute?.subjectId || "math", "/learn");
   const localHref = (path) => {
     const raw = path.replace(/^#/, "");
-    return /^\/(learn|courses|banks|guide|topic|review)(\/|\?|$)/.test(raw)
+    return /^\/(learn|courses|banks|guide|topic|review|reviews)(\/|\?|$)/.test(raw)
       ? subjectHref(currentRoute?.subjectId || "math", raw) : `#${raw}`;
   };
   const link = (text, href, className = "") => { const item = node("a", className, text); item.href = localHref(href); return item; };
@@ -95,6 +101,9 @@ export function initPortal(bridge) {
     progressChanged: () => { dashboards.clear(); answerCache.clear(); }});
   const training = createTrainingView({...bridge, request: call, root, href: localHref,
     formatDate: value => apiDate(value, true), courseSidebar, taskTree});
+  const papers = createPaperView({...bridge, request: call, root, href: localHref,
+    formatDate: value => apiDate(value, true), courseSidebar, taskTree,
+    progressChanged: () => { dashboards.clear(); answerCache.clear(); }});
 
   function navigate(path, replace = false) {
     const hash = localHref(path);
@@ -260,7 +269,7 @@ export function initPortal(bridge) {
     dashboards.set(id, merged); return merged;
   }
   function releaseGuideAssets() { for (const url of guideObjectUrls) URL.revokeObjectURL(url); guideObjectUrls = []; }
-  function stopPageWork() { clearTimeout(refreshTimer); clearTimeout(pageTimer); releaseGuideAssets(); review.stop(); atomic.stop(); training.stop(); hidePopovers(); helpFeedRefresh = null; helpReadObserver?.disconnect(); helpReadObserver = null; }
+  function stopPageWork() { clearTimeout(refreshTimer); clearTimeout(pageTimer); releaseGuideAssets(); review.stop(); atomic.stop(); training.stop(); papers.stop(); hidePopovers(); helpFeedRefresh = null; helpReadObserver?.disconnect(); helpReadObserver = null; }
   async function route() {
     if (currentHash) scrolls.set(currentHash, window.scrollY);
     currentRoute = parseRoute();
@@ -277,7 +286,7 @@ export function initPortal(bridge) {
     root.classList.toggle("reviewShell", currentRoute.path.startsWith("/review/"));
     if (bridge.getIdentityProblem()) { root.hidden = true; root.replaceChildren(); return; }
     updateSubjectContext(subjects?.find(subject => subject.id === currentRoute.subjectId) || null);
-    setNavigation(currentRoute.path.startsWith('/qa') ? 'qa' : !currentRoute.subjectId ? "subjects" : currentRoute.path.startsWith('/banks') ? 'banks' : currentRoute.path.startsWith("/courses") ? "courses" : currentRoute.path === "/guide" ? "guide" : currentRoute.path === '/reviews' ? 'reviews' : "learn");
+    setNavigation(currentRoute.path.startsWith('/qa') ? 'qa' : !currentRoute.subjectId ? "subjects" : currentRoute.path.startsWith('/banks') ? 'banks' : currentRoute.path.startsWith("/courses") ? "courses" : currentRoute.path === "/guide" ? "guide" : currentRoute.path.startsWith('/reviews') ? 'reviews' : "learn");
     root.replaceChildren(loading()); window.scrollTo(0, 0);
     try {
       if (profile) await bridge.refreshAccess();
@@ -308,32 +317,10 @@ export function initPortal(bridge) {
         document.title = pageTitle(t("nav.courses")); await renderCourses();
       } else if (path === '/banks' || path.startsWith('/banks/')) {
         document.title = pageTitle(t('training.banks')); await training.open(path, params);
-      } else if (path === '/reviews') {
-        const [data, bankReviews] = await Promise.all([call('atomic/reviews'), call('training/reviews')]);
-        if (ticket !== sequence) return;
-        document.title = pageTitle(t('atomic.reviewTitle'));
-        const list = node('section', 'atomicReviewList');
-        root.replaceChildren(node('h1', 'portalPageTitle', t('atomic.reviewTitle')), list);
-        if (['english', 'chinese', 'biology', 'chemistry'].includes(subjectId))
-          list.before(node('h2', 'trainingSectionTitle', t('training.atomCards')));
-        if (data.all_materials) list.append(node('p', 'inputHint', t('admin.allCards')));
-        for (const item of data.items) {
-          const card = node('article', 'courseChoice');
-          if (item.kind === 'atomic_card') {
-            card.append(node('h2', '', item.title), node('p', '', `${item.course_title} · ${item.topic_title}`),
-              link(t('admin.enterCard'), subjectHref(currentRoute?.subjectId, `/review/${encode(item.topic_id)}/atomic?card=${encode(item.id)}`), 'primaryButton'));
-            list.append(card); continue;
-          }
-          card.append(node('h2', '', item.title), node('p', '', t('atomic.dueCount', {count: item.due_count})));
-          if (item.paused) card.append(node('p', 'atomicPaused', t('atomic.paused')));
-          else if (!item.dependency_ready) card.append(node('p', '', t('portal.prerequisitesRequired')));
-          else card.append(link(t(item.active ? 'atomic.resumeReview' : 'atomic.startReview'), subjectHref(currentRoute?.subjectId, `/review/${encode(item.topic_id)}/atomic`), 'primaryButton'));
-          list.append(card);
-        }
-        if (!data.items.length && ['english', 'chinese', 'biology', 'chemistry'].includes(subjectId)) list.append(emptyBox(t('atomic.noDue')));
-        if (data.next_due_at) list.append(node('p', '', t('atomic.availableAt', {time: apiDate(data.next_due_at, true)})));
-        root.append(training.renderReviews(bankReviews));
-        refreshTimer = setTimeout(() => { if (ticket === sequence && !document.hidden) void route(); }, 15000);
+      } else if (path === '/reviews' || path.startsWith('/reviews/')) {
+        document.title = pageTitle(t('paper.title'));
+        if (path === '/reviews') await papers.inbox(bridge.getAccess()?.is_admin && params.get('materials') === '1');
+        else await papers.open(decodeURIComponent(path.slice('/reviews/'.length)));
       } else if (path === "/guide") {
         document.title = pageTitle(t("nav.guide")); await renderGuide(ticket);
       } else if (path === "/help") {
@@ -492,9 +479,10 @@ export function initPortal(bridge) {
     const name = link(data.course.title, view.href || `#/courses/${encode(data.course.id)}/progress`, "courseNameLink");
     const circle = control(percentLabel(data.course.progress), "coursePercent", () => view.onProgress ? view.onProgress() : openGraph(data)); circle.setAttribute("aria-label", view.training ? t('portal.progress.36') : t("portal.graphProgress", { progress: percentLabel(data.course.progress) }));
     if (view.training) {
+      if (view.review) { circle.textContent = String(view.questionCount); circle.setAttribute('aria-label', t(view.allMaterials ? 'paper.materialCount' : 'paper.due', {count: view.questionCount})); }
       top.append(name, circle);
       const count = node('div', 'estimatedCompletion');
-      count.append(node('span', '', t('training.groups')), node('span', '', t('training.count', {count: view.questionCount})));
+      count.append(node('span', '', t(view.review ? 'paper.title' : 'training.groups')), node('span', '', t(view.allMaterials ? 'paper.materialCount' : view.review ? 'paper.due' : 'training.count', {count: view.questionCount})));
       frame.append(top, count); side.append(frame); return side;
     }
     const unitsPopup = node("div", "coursePopover sequenceUnits"), detailsPopup = node("div", "coursePopover progressDetails");
@@ -572,9 +560,11 @@ export function initPortal(bridge) {
     toggle.append(taskSummary(task, false, view)); toggle.setAttribute("aria-expanded", "false");
     const details = node("div", "taskDetails"); details.hidden = true;
     if (task.status === "paused") details.append(node("p", "taskStatusNote", t("portal.learning.is.paused.you.can.review.previously.studied.content.47")));
-    if (view.training) {
+    if (view.training || view.review) {
       const info = node('div', 'taskPrerequisites');
-      info.append(infoRow(t('portal.questions.49'), Number(task.question_count).toLocaleString(locale()))); details.append(info);
+      if (task.question_count != null) info.append(infoRow(t('portal.questions.49'), Number(task.question_count).toLocaleString(locale())));
+      if (task.time_limit_minutes != null) info.append(infoRow(t('portal.time.limit.48'), t('portal.minutes', {count: task.time_limit_minutes})));
+      details.append(info);
     } else if (["Quiz", "Exam"].includes(task.type)) {
       const info = node("div", "taskPrerequisites"); info.append(infoRow(t("portal.time.limit.48"), task.time_limit_minutes != null ? t("portal.minutes", { count: Number(task.time_limit_minutes).toLocaleString(locale()) }) : task.time_limit_seconds != null ? t("portal.minutes", { count: Math.round(task.time_limit_seconds / 60).toLocaleString(locale()) }) : "—"), infoRow(t("portal.questions.49"), task.question_count == null ? "—" : Number(task.question_count).toLocaleString(locale()))); details.append(info);
     } else {
@@ -594,6 +584,15 @@ export function initPortal(bridge) {
       const target = view.target ? view.target(task) : (task.type === "Lesson" || !task.type) && task.topic_id ? `#/topic/${encode(task.topic_id)}` : typeof explicit === "string" && /^#\/(topic|review|learn|courses)\//.test(explicit) ? explicit : null;
       if (task.dependency_ready === false) {
         const blocked = roundButton(t("portal.prerequisitesRequired"), () => {}); blocked.disabled = true; blocked.classList.add("prerequisiteBlocked"); actions.append(blocked);
+      } else if (view.start && allowed('learn')) {
+        const start = roundButton(task.started ? t('paper.active') : view.startLabel || t('paper.start'), async () => {
+          if (start.disabled) return; start.disabled = true;
+          actions.querySelector('.fieldError')?.remove();
+          try { await view.start(task); }
+          catch (error) { actions.append(node('p', 'fieldError', translateMessage(error.message))); }
+          finally { start.disabled = false; }
+        });
+        actions.append(start);
       } else if (target && allowed("learn")) actions.append(roundButton(view.startLabel || (percent(task.progress) > 0 || task.started ? t("portal.resume.52") : t("portal.start.53")), () => navigate(target)));
       else if (target && task.started && allowed("review_history")) actions.append(roundButton(t("portal.review.54"), () => navigate(target)));
       else if (target) actions.append(node("p", "", t("portal.learning.is.not.enabled.for.your.account.please.contact.your.admi.55")));
@@ -652,33 +651,11 @@ export function initPortal(bridge) {
     }
   }
   function taskTree(pending, data, view = {}) {
-    const lessonTasks = new Map(data.tasks.filter(task => task.type === 'Lesson').map(task => [task.topic_id, task]));
-    const containers = new Map(), rendered = new Set();
-    for (const unit of data.pending_hierarchy || []) {
-      const group = node('details', 'courseUnitGroup'), summary = node('summary', 'courseUnitHeading', unit.title);
-      const body = node('div', 'courseUnitBody');
-      const key = `${bridge.getAccess()?.learner_id}:${view.training ? 'training:' : ''}${data.course.id}:${unit.id}`;
-      group.dataset.unitId = unit.id;
-      group.open = expandedUnits.get(key) ?? !unit.parent_id;
-      group.addEventListener('toggle', () => expandedUnits.set(key, group.open));
-      group.append(summary, body); containers.set(unit.id, {group, body});
-      for (const id of unit.topic_ids) {
-        if (lessonTasks.has(id)) { body.append(incompleteTask(lessonTasks.get(id), data, view)); rendered.add(id); }
-      }
-    }
-    for (const unit of data.pending_hierarchy || []) {
-      const parent = containers.get(unit.parent_id)?.body || pending;
-      parent.append(containers.get(unit.id).group);
-    }
-    // A rolling deployment can briefly serve an older dashboard response.
-    for (const [id, task] of lessonTasks) if (!rendered.has(id)) pending.append(incompleteTask(task, data, view));
-    const sourceOrder = new Map((view.sourceOrder || []).map((id, index) => [id, index]));
-    if (sourceOrder.size) {
-      const position = element => sourceOrder.get(element.dataset.unitId || element.dataset.taskId) ?? Number.MAX_SAFE_INTEGER;
-      for (const body of [pending, ...[...containers.values()].map(item => item.body)]) {
-        body.append(...[...body.children].sort((a, b) => position(a) - position(b)));
-      }
-    }
+    renderTaskTree(pending, {...data, tasks: view.review ? data.tasks : data.tasks.filter(task => task.type === 'Lesson')}, {
+      renderTask: task => incompleteTask(task, data, view), expanded: expandedUnits,
+      keyPrefix: `${bridge.getAccess()?.learner_id}:${view.review ? 'review' : view.training ? 'training' : ''}`,
+      sourceOrder: view.sourceOrder || [],
+    });
   }
   function renderLearn(data, taskId, ticket) {
     historyError = null;
@@ -868,7 +845,7 @@ export function initPortal(bridge) {
     const template = document.createElement('template'); template.innerHTML = html || '';
     const urls = [], assets = new Map();
     try {
-      if (subjectId && subjectId !== 'math') {
+      if (subjectId) {
         const origin = new URL(bridge.getApiOrigin()).origin;
         const prefix = `/subject-guide-assets/${encode(subjectId)}/`;
         await Promise.all([...template.content.querySelectorAll('img[src],a[href]')].map(async item => {
@@ -925,6 +902,7 @@ export function initPortal(bridge) {
   async function renderSettings() {
     const ticket = sequence;
     const trainingPreferences = allowed('training_self_rating') ? await call('training/preferences') : null;
+    const paperPreferences = await call('review-papers/preferences');
     if (ticket !== sequence) return;
     const page = node("section", "settingsPage"), form = node("form", "profileForm");
     page.append(node("h1", "portalPageTitle", t("portal.settings.115")));
@@ -958,11 +936,35 @@ export function initPortal(bridge) {
       label.append(selfRating, document.createTextNode(t('training.selfSetting')));
       form.insertBefore(label, status); form.insertBefore(node('p', 'fieldHint', t('training.selfHint')), status);
     }
+    const paperMode = node('select'); paperMode.id = 'reviewPaperMode';
+    if (paperPreferences.can_choose) {
+      const label = node('label', '', t('paper.setting')); label.htmlFor = paperMode.id;
+      for (const [value, key] of [['paper', 'paper.paperMode'], ['question', 'paper.questionMode']]) {
+        const option = node('option', '', t(key)); option.value = value; paperMode.append(option);
+      }
+      paperMode.value = paperPreferences.mode;
+      form.insertBefore(label, status); form.insertBefore(paperMode, status);
+      form.insertBefore(node('p', 'fieldHint', t('paper.settingHint')), status);
+    }
+    const timeoutMode = node('select'); timeoutMode.id = 'reviewTimeoutAction';
+    if (paperPreferences.can_choose_timeout) {
+      const label = node('label', '', t('paper.timeoutSetting')); label.htmlFor = timeoutMode.id;
+      for (const [value, key] of [['submit', 'paper.timeoutSubmit'], ['mark', 'paper.timeoutMark']]) {
+        const option = node('option', '', t(key)); option.value = value; timeoutMode.append(option);
+      }
+      timeoutMode.value = paperPreferences.timeout_action;
+      form.insertBefore(label, status); form.insertBefore(timeoutMode, status);
+      form.insertBefore(node('p', 'fieldHint', t('paper.timeoutSettingHint')), status);
+    }
     form.addEventListener("submit", async (event) => {
       event.preventDefault(); if (submit.disabled) return; submit.disabled = true; status.textContent = t("portal.saving.120");
       try {
         profile = await call("profile", { method: "POST", body: { display_name: defaultGuestName && display.value.trim() === t("portal.guest.12") ? profile.display_name || "游客" : display.value.trim(), timezone: zone.value.trim(), ...(allowed("course_hierarchy") ? {course_hierarchy_enabled: hierarchy.checked} : {}) } });
         if (trainingPreferences?.eligible) await call('training/preferences', {method: 'POST', body: {self_rating_enabled: selfRating.checked}});
+        if (paperPreferences.can_choose || paperPreferences.can_choose_timeout) await call('review-papers/preferences', {method: 'POST', body: {
+          ...(paperPreferences.can_choose ? {mode: paperMode.value} : {}),
+          ...(paperPreferences.can_choose_timeout ? {timeout_action: timeoutMode.value} : {}),
+        }});
         dashboards.clear(); updateUser(); status.textContent = t("portal.settings.saved.121");
       }
       catch (error) { status.textContent = translateMessage(error.message); }

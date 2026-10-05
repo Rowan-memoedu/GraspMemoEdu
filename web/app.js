@@ -1,10 +1,10 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=2d6c02580e707007";
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=2d6c02580e707007';
-import {reportableContent} from './content-report.js?v=2d6c02580e707007';
-import {createLearningCache} from './learning-cache.js?v=2d6c02580e707007';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=0f4775ecbf9f06f3";
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=0f4775ecbf9f06f3';
+import {reportableContent} from './content-report.js?v=0f4775ecbf9f06f3';
+import {createLearningCache} from './learning-cache.js?v=0f4775ecbf9f06f3';
 
-import {answerEditor} from './learning-ui.js?v=2d6c02580e707007';
-import {enhanceTopicContent, mountTopicBacklinks, focusContentNode} from './topic-content.js?v=2d6c02580e707007';
+import {answerEditor} from './learning-ui.js?v=0f4775ecbf9f06f3';
+import {enhanceTopicContent, mountTopicBacklinks, focusContentNode} from './topic-content.js?v=0f4775ecbf9f06f3';
 
 applyStaticTranslations();
 
@@ -300,7 +300,7 @@ async function fetchGuideAsset(value, subjectId, retried = false) {
   const base = new URL(apiBase || window.location.origin);
   const url = new URL(value, base);
   const prefix = `/subject-guide-assets/${encodeURIComponent(subjectId)}/`;
-  if (!/^[a-z][a-z0-9-]*$/.test(subjectId) || subjectId === 'math' || url.origin !== base.origin
+  if (!/^[a-z][a-z0-9-]*$/.test(subjectId) || url.origin !== base.origin
       || url.username || url.password || !url.pathname.startsWith(prefix)
       || url.pathname.slice(prefix.length).split('/').some(part => {
         try { const decoded = decodeURIComponent(part); return !decoded || ['.', '..'].includes(decoded) || /[\\/\u0000]/.test(decoded); }
@@ -1496,7 +1496,7 @@ async function openTopic(id, subjectId) {
   }
 }
 
-const { initPortal } = await import("./portal.js?v=2d6c02580e707007");
+const { initPortal } = await import("./portal.js?v=0f4775ecbf9f06f3");
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {
     try { return await fetchGuideAsset(url, subjectId); }

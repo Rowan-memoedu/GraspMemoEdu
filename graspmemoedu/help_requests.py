@@ -283,13 +283,21 @@ class HelpRequestStore:
     def center(self, access, limit=10, offset=0, summary=False, report_id=None):
         viewer = self._viewer(access)
         scope = self._center_scope(viewer)
+        parameters = (access['learner_id'],)
+        restricted = self.access_store.test_materials.permission_ids
+        if viewer == 'student' and restricted:
+            # Saved question snapshots obey the same test-material boundary as
+            # their current sources, including counts and pagination.
+            scope += ''' AND NOT EXISTS (SELECT 1 FROM json_each(?) blocked
+                WHERE blocked.value=json_extract(r.body,'$.request.topic_id'))'''
+            parameters += (json.dumps(sorted(restricted)),)
         with closing(self.access_store._connect()) as con:
             con.execute('BEGIN')
             counts = con.execute('''SELECT COUNT(*) total,
                 COALESCE(SUM(reply.revision IS NULL),0) pending_count,
                 COALESCE(SUM(reply.revision>COALESCE(seen.revision,0)),0) unread_count,
                 MAX(reply.created_at) latest_reply_at ''' + scope,
-                (access['learner_id'],)).fetchone()
+                parameters).fetchone()
             result = {'viewer': viewer, **dict(counts)}
             if viewer == 'admin':
                 result['unread_count'] = 0
@@ -298,13 +306,13 @@ class HelpRequestStore:
             fields = '''SELECT r.id,r.learner_id,r.body,r.created_at,reply.message reply_message,
                 reply.revision,reply.created_at replied_at,COALESCE(seen.revision,0) seen_revision '''
             if report_id:
-                rows = con.execute(fields + scope + ' AND r.id=?', (access['learner_id'], report_id)).fetchall()
+                rows = con.execute(fields + scope + ' AND r.id=?', (*parameters, report_id)).fetchall()
                 if not rows:
                     raise DomainError('unknown_help_request', '未找到此提交记录。', 404)
             else:
                 rows = con.execute(fields + scope +
                     ' ORDER BY COALESCE(reply.created_at,r.created_at) DESC,r.id DESC LIMIT ? OFFSET ?',
-                    (access['learner_id'], limit + 1, offset)).fetchall()
+                    (*parameters, limit + 1, offset)).fetchall()
         items = []
         for row in rows[:limit]:
             reply = ({'message': row['reply_message'], 'revision': row['revision'], 'created_at': row['replied_at']}
@@ -346,11 +354,11 @@ class HelpRequestStore:
             raise DomainError('feature_forbidden', '仅学员可以标记自己的答疑回复。', 403)
         values = HelpReplyRead.model_validate(values).model_dump()
         with self.access_store._transaction() as con:
-            row = con.execute('''SELECT reply.revision FROM help_replies reply
+            row = con.execute('''SELECT reply.revision,r.body FROM help_replies reply
                 JOIN help_requests r ON r.id=reply.report_id
                 WHERE r.id=? AND r.learner_id=? AND reply.revision=?''',
                 (values['report_id'], access['learner_id'], values['revision'])).fetchone()
-            if not row:
+            if not row or not self.access_store.test_materials.topic_visible(json.loads(row['body'])['request']['topic_id'], access):
                 raise DomainError('unknown_help_request', '未找到此答疑回复。', 404)
             con.execute('''INSERT INTO help_reply_reads VALUES (?,?,?,?) ON CONFLICT(report_id) DO UPDATE SET
                 revision=MAX(help_reply_reads.revision,excluded.revision),read_at=excluded.read_at''',

@@ -15,6 +15,7 @@ from .fsrs_engine import FSRSEngine, utc_time
 from .judging import judge_answer
 from .question_types import public_interaction, parse_answer, display_answer
 from .service import DomainError, LearningService, encode
+from .review_cards import eligible_presentations, register_point, reserved_points, point_id as global_point_id
 
 
 class AtomicLearningService(LearningService):
@@ -60,7 +61,11 @@ class AtomicLearningService(LearningService):
     def _eligible(self, state):
         current = self._time()
         candidates, wakeups = set(), []
+        with closing(self._connect()) as con:
+            reserved = reserved_points(con, self.learner_id, current.isoformat())
         for point_id, memory in state['points'].items():
+            if global_point_id('atomic', self.topic_id, self.course['version'], point_id) in reserved:
+                continue
             if (state['mode'] == 'learn') == memory['mastered']:
                 continue
             due = utc_time(memory['due_at']) if memory['due_at'] else current
@@ -83,14 +88,14 @@ class AtomicLearningService(LearningService):
             state.update(status='completed', phase='completed', completed_at=self._time().isoformat())
             return
         eligible, _ = self._eligible(state)
-        cards = [q for q in self.questions.values() if set(q['point_ids']) <= eligible
-                 and (state['mode'] == 'review' or len(q['point_ids']) == 1)]
+        cards = eligible_presentations(self.questions.values(), eligible, state['card_uses'],
+                                       singles=state['mode'] != 'review')
         if not cards:
             state['phase'] = 'waiting'
             return
         # Prefer an available bundle; otherwise rotate least-used variants.
         # The stable author order also preserves the order of new chunks.
-        card = min(cards, key=lambda q: (-len(q['point_ids']), state['card_uses'].get(q['id'], 0)))
+        card = cards[0]
         chunk_ids = list(dict.fromkeys(self.point_chunks[p] for p in card['point_ids']))
         unseen = next((c for c in chunk_ids if c not in state['seen_chunks']), None)
         if state['mode'] == 'learn' and unseen:
@@ -105,7 +110,7 @@ class AtomicLearningService(LearningService):
         state['card_uses'][card['id']] = state['card_uses'].get(card['id'], 0) + 1
 
     def _question(self, active, *, feedback=False):
-        card = self.questions[active['card_id']]
+        card = active.get('snapshot') or self.questions[active['card_id']]
         result = {'id': active['id'], 'card_id': card['id'], 'title': card['title'], 'html': card['html'],
                   'point_ids': card['point_ids'], 'phase': active['phase'], 'shown_at': active['shown_at'],
                   'interaction': public_interaction(card)}
@@ -212,6 +217,8 @@ class AtomicLearningService(LearningService):
         active, when = state['active'], self._time()
         ratings = {}
         for point_id in active['point_ids']:
+            register_point(con, 'atomic', self.topic_id, self.course['version'], point_id,
+                           self.course['subject_id'], when.isoformat())
             memory = state['points'][point_id]
             rating = (None if correct else 1) if state['mode'] == 'learn' else (state['policy']['correct_rating'] if correct else 1)
             ratings[point_id] = rating

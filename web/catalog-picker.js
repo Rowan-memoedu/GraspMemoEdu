@@ -1,12 +1,13 @@
-import {t, translateMessage} from './i18n.js?v=2d6c02580e707007';
-import {subjectLabel, subjectPalette} from './subjects.js?v=2d6c02580e707007';
+import {t, translateMessage} from './i18n.js?v=0f4775ecbf9f06f3';
+import {subjectLabel, subjectPalette} from './subjects.js?v=0f4775ecbf9f06f3';
 
 const node = (tag, cls, text) => {
   const item = document.createElement(tag); item.className = cls;
   if (text !== undefined) item.textContent = text;
   return item;
 };
-export function createCatalogPicker({button, panel, readSubjects, readCatalog, selectCourse, getSubject, onSelected}) {
+export function createCatalogPicker({button, panel, readSubjects, readCatalog, selectCourse, getSubject, onSelected,
+  readBanks = async () => ({banks: []}), onBankSelected}) {
   let sequence = 0, subjects = [], browsing = null, catalog = null, saving = false;
   const open = () => !panel.hidden;
   const current = ticket => ticket === sequence && open();
@@ -38,6 +39,7 @@ export function createCatalogPicker({button, panel, readSubjects, readCatalog, s
       const retry = node('button', 'catalogRetry', t('portal.retry.10')); retry.type = 'button';
       retry.addEventListener('click', () => subjects.length ? browse(browsing) : show()); content.append(retry);
     } else if (catalog) {
+      content.append(node('h3', '', t('paper.courses')));
       if (!catalog.courses.length) content.append(node('p', 'catalogStatus', t('catalog.empty')));
       const grid = node('div', 'catalogCourseGrid');
       for (const course of catalog.courses) {
@@ -62,6 +64,17 @@ export function createCatalogPicker({button, panel, readSubjects, readCatalog, s
         }); grid.append(card);
       }
       content.append(grid, node('p', 'catalogDraftHint', t('catalog.draftHint')));
+      content.append(node('h3', '', t('training.banks')));
+      const banks = node('div', 'catalogCourseGrid');
+      for (const bank of catalog.banks) {
+        const card = node('button', 'catalogCourse'); card.type = 'button'; card.dataset.bankId = bank.id;
+        card.append(node('strong', '', bank.title));
+        if (bank.description) card.append(node('span', '', bank.description));
+        card.addEventListener('click', () => { const subjectId = browsing; close(); onBankSelected?.(bank.id, subjectId); });
+        banks.append(card);
+      }
+      if (!catalog.banks.length) banks.append(node('p', 'catalogStatus', t('training.empty')));
+      content.append(banks);
     }
     container.append(navigation, content); panel.append(container);
   }
@@ -69,10 +82,11 @@ export function createCatalogPicker({button, panel, readSubjects, readCatalog, s
     if (saving) return;
     browsing = subjectId; catalog = null; const ticket = ++sequence; render(null, true);
     try {
-      const next = await readCatalog(subjectId);
+      const [next, bankData] = await Promise.all([readCatalog(subjectId), readBanks(subjectId)]);
       if (!current(ticket)) return;
       if (!Array.isArray(next.courses)) throw new Error(t('portal.the.course.catalog.is.temporarily.unavailable.17'));
-      catalog = next; render();
+      if (!Array.isArray(bankData.banks)) throw new Error(t('training.empty'));
+      catalog = {...next, banks: bankData.banks}; render();
     } catch (error) { if (current(ticket)) render(error); }
   }
   async function show() {

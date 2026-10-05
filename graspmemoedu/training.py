@@ -11,6 +11,7 @@ from .judging import judge_answer
 from .question_types import parse_answer, public_interaction, display_answer, present_choice
 from .service import DomainError
 from .learning_storage import administrator
+from .review_cards import register_point, require_unreserved
 
 
 def packed(value):
@@ -114,6 +115,7 @@ class TrainingService:
                     raise DomainError('request_conflict', '请求标识已用于另一项操作。', 409)
                 return request_id
             memory = self._memory(con, bank_id, question_id, bank['version'])
+            require_unreserved(con, self.learner_id, 'training', bank_id, bank['version'], question_id, now=utc_time(self.clock()).isoformat())
             now = utc_time(self.clock())
             mode = ('practice' if self._stopped(con, bank_id, question_id, bank['version']) else
                     'initial' if not memory or not memory['mastered'] else
@@ -163,6 +165,8 @@ class TrainingService:
     def submit(self, data):
         with self.transaction() as con:
             row = self._attempt(con, data['attempt_id'])
+            if row['phase'] != 'done':
+                require_unreserved(con, self.learner_id, 'training', row['bank'], row['version'], row['question'], now=utc_time(self.clock()).isoformat())
             question = json.loads(row['snapshot'])
             answer = data['answer']
             try:
@@ -203,6 +207,8 @@ class TrainingService:
                 ON CONFLICT(learner,bank,question,version) DO NOTHING''',
                 (self.learner_id, row['bank'], row['question'], row['version'], now.isoformat()))
         stopped = self._stopped(con, row['bank'], row['question'], row['version'])
+        register_point(con, 'training', row['bank'], row['version'], row['question'],
+                       self.catalog.bank(row['bank'])['subject_id'], now.isoformat())
         eligible = not stopped and row['mode'] != 'practice' and row['memory_revision'] == revision
         scheduled, fsrs, mastery = False, None, None
         due = memory['due_at'] if memory else None
@@ -279,6 +285,7 @@ class TrainingService:
                 return
             if row['phase'] != 'shown' or type(rating) is not int or rating not in (1, 2, 3, 4):
                 raise DomainError('invalid_rating', '请先显示答案，再选择熟练度。', 422)
+            require_unreserved(con, self.learner_id, 'training', row['bank'], row['version'], row['question'], now=utc_time(self.clock()).isoformat())
             self._complete(con, row, rating=rating, elapsed_ms=elapsed_ms)
 
     def stop_reviews(self, attempt_id):
@@ -290,6 +297,7 @@ class TrainingService:
                 return
             if row['phase'] != 'shown':
                 raise DomainError('invalid_rating', '请先显示答案，再选择熟练度。', 422)
+            require_unreserved(con, self.learner_id, 'training', row['bank'], row['version'], row['question'], now=utc_time(self.clock()).isoformat())
             self._complete(con, row, stop=True)
 
     def bank(self, bank_id, *, history=True):

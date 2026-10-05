@@ -136,7 +136,9 @@ class DashboardStore:
         ids = self.subjects.course_ids(scope) if scope is not None and self.subjects else set(self.catalog.courses)
         return {'courses': [{'id': course['id'], 'title': course['title'], 'description': course['description'],
                              'available': bool(allowed.intersection(topic['id'] for topic in course['topics'])),
-                             'topic_count': len(course['topics'])} for course in self.catalog.courses.values() if course['id'] in ids],
+                             'topic_count': sum(self.access_store.test_materials.topic_visible(t['id'], access) for t in course['topics'])}
+                            for course in self.catalog.courses.values() if course['id'] in ids
+                            and self.access_store.test_materials.course_visible(course, access)],
                 'selected_course_id': self._selection(access, subject_id)}
 
     def select_course(self, access, course_id, subject_id=None):
@@ -343,12 +345,13 @@ class DashboardStore:
         def topic_units(topic_id):
             topic = self.catalog.topic(topic_id)
             return learning_units(topic)
-        total = sum(topic_units(topic['id']) for topic in course['topics'])
+        counted = [t for t in course['topics'] if self.access_store.test_materials.topic_visible(t['id'], access)]
+        total = sum(topic_units(topic['id']) for topic in counted)
         completed = sum(item['completed_modules'] for item in snapshots.values())
         progress = round(100 * completed / total, 2) if total else 0
         started = [item['started_at'] for item in snapshots.values() if item['started_at']]
         finished = [item['completed_at'] for item in snapshots.values() if item['completed_at']]
-        all_complete = bool(visible) and len(finished) == len(course['topics'])
+        all_complete = bool(visible) and len(finished) == len(counted)
         overview = {'id': course['id'], 'title': course['title'], 'description': course['description'],
                     'progress': progress, 'start_date': min(started) if started else None,
                     'end_date': max(finished) if all_complete else None, 'estimated_completion': None}

@@ -161,6 +161,12 @@ def _validate_payload(manifest, blobs):
     topics, expected_files = {}, {'catalog.json', 'learning.sqlite3'}
     if 'judge-daily-quota.sqlite3' in blobs:
         expected_files.add('judge-daily-quota.sqlite3')
+    from .test_materials import FILENAME as TEST_MATERIALS, MAX_BYTES as TEST_POLICY_MAX, validate as validate_test_materials
+    if TEST_MATERIALS in blobs:
+        if len(blobs[TEST_MATERIALS]) > TEST_POLICY_MAX:
+            raise ValueError('Test material policy too large')
+        validate_test_materials(json.loads(blobs[TEST_MATERIALS]))
+        expected_files.add(TEST_MATERIALS)
     for course in portable['courses']:
         for declaration in course['topics']:
             topic_id = Catalog._identifier(declaration['id'])
@@ -288,6 +294,10 @@ def backup_site(settings, destination=None):
                         raise DomainError('backup_failed', '判题用量数据库校验失败，未创建备份。', 500)
             blobs['judge-daily-quota.sqlite3'] = quota_snapshot.read_bytes()
     blobs.update(training_catalog.archive_blobs())
+    from .test_materials import FILENAME as TEST_MATERIALS
+    test_policy_path = settings.data_dir / TEST_MATERIALS
+    if test_policy_path.is_file():
+        blobs[TEST_MATERIALS] = test_policy_path.read_bytes()
     sources_index = {}
     for topic_id in catalog.topics:
         bank_root = settings.data_dir / 'question-banks' / topic_id
@@ -460,6 +470,10 @@ def restore_site(backup, destination):
                 create_learning_service(catalog.topic(topic_id), staged, learner_id=learner_id).recover_interrupted()
             from .training import TrainingService
             TrainingService(training_catalog, staged, 'recovery').recover_interrupted()
+            from .review_papers import PaperService
+            with closing(sqlite3.connect(staged / 'learning.sqlite3')) as recovered_papers:
+                PaperService.recover(recovered_papers)
+                recovered_papers.commit()
             for topic_id, sources in manifest['sources'].items():
                 if not sources:
                     continue

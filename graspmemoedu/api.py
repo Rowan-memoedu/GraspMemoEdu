@@ -39,6 +39,8 @@ from .public_limits import BodyLimitMiddleware, PublicLimits, PublicLimitError
 from .training_content import TrainingCatalog
 from .training_api import register_training_routes, PUBLIC_PATHS as TRAINING_PATHS
 from .training import TrainingService
+from .review_paper_api import register_paper_routes, PUBLIC_PATHS as PAPER_PATHS
+from .review_papers import PaperService
 from .content_references import ContentReferenceIndex
 
 
@@ -139,7 +141,8 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='answer-judge')
     subjects = Subjects(settings, catalog)
     training = TrainingCatalog(settings.data_dir)
-    access_store = AccessStore(settings.data_dir, [{'id': topic['id'], 'title': topic['title']} for topic in catalog.topics.values()] + training.permissions(catalog.topics))
+    access_store = AccessStore(settings.data_dir, [{'id': topic['id'], 'title': topic['title']} for topic in catalog.topics.values()] + training.permissions(catalog.topics),
+                               test_materials=subjects.test_materials)
     dashboard_store = DashboardStore(catalog, access_store, subjects, atomic_clock=atomic_clock)
     content_references = ContentReferenceIndex(catalog.topics)
     from .help_requests import register_help_routes
@@ -271,7 +274,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     def outstanding_count(con):
         tables = {row[0] for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         return max(len(scheduled_submissions), sum(con.execute(f"SELECT COUNT(*) FROM {table} WHERE status IN ('pending','running')").fetchone()[0]
-                   for table in ('submissions', 'review_submissions', 'training_submissions') if table in tables))
+                   for table in ('submissions', 'review_submissions', 'training_submissions', 'paper_submissions') if table in tables))
 
     def schedule(learner, submission_id, review=False):
         # Called under admission_lock. A transport retry never adds another queue item.
@@ -320,6 +323,8 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     async def lifespan(app):
         TrainingService(training, settings.data_dir, 'recovery').recover_interrupted()
         with closing(sqlite3.connect(service.db_path)) as con:
+            PaperService.recover(con)
+            con.commit()
             pairs = con.execute('SELECT learner,topic FROM topics').fetchall()
         for learner, topic_id in pairs:
             if topic_id in catalog.topics:
@@ -410,6 +415,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                         '/api/state', '/api/demo-answer', '/api/guest/reset', '/api/choose', '/api/continue', '/api/select', '/api/pause', '/api/submit',
                         '/api/subjects', '/api/catalog', '/api/catalog/select', '/api/dashboard', '/api/profile', '/api/feedback', '/api/help-requests', '/api/guide', '/api/atomic/reviews'}
         public_paths.update(TRAINING_PATHS)
+        public_paths.update(PAPER_PATHS)
         public_paths.update(ADMIN_PAUSE_PATHS)
         student_read = admin_student_route(path)
         task_answers_path = path.startswith('/api/tasks/') and path.endswith('/answers') and path.count('/') == 4
@@ -710,6 +716,8 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     register_atomic_routes(app, catalog, access_store, subjects, dependency_policy, clock=atomic_clock)
     register_training_routes(app, training, access_store, subjects, service_for,
                              admission_lock, public_limits, schedule, outstanding_count, clock=atomic_clock)
+    register_paper_routes(app, training, catalog, dependency_policy, access_store, subjects, service_for,
+                         admission_lock, public_limits, schedule, outstanding_count, clock=atomic_clock)
     register_guide_routes(app, settings, access_store, subjects)
     register_guest_reset_routes(app, identity, public_state, Action)
     register_review_routes(app, identity, admission_lock, public_limits, schedule, outstanding_count, dependency_policy, references_for)

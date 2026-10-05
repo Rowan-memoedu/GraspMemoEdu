@@ -110,6 +110,18 @@ def register_guide_routes(app, settings, access_store, subjects=None):
     app.state.guide = reader
     subject_readers = {subject_id: GuideReader(path) for subject_id, path in subjects.guide_paths.items()} if subjects else {}
 
+    def authorize_test_guide(request, subject_id, selected):
+        protected = set()
+        if subjects:
+            protected = {sid for sid in subjects.test_materials.guides
+                         if sid == subject_id or (selected and sid in subject_readers
+                             and subject_readers[sid].source.resolve() == selected.source.resolve())}
+            if selected and 'math' in subjects.test_materials.guides and selected.source.resolve() == reader.source.resolve():
+                protected.add('math')
+        if protected:
+            access = access_store.resolve(request.headers.get('x-learning-identity'))
+            subjects.test_materials.require_guide(next(iter(protected)), access)
+
     def subject_reader(subject_id):
         subjects.require(subject_id)
         configured = subjects.guide_paths.get(subject_id)
@@ -128,10 +140,12 @@ def register_guide_routes(app, settings, access_store, subjects=None):
         if subject_id is not None and subjects:
             subjects.authorize_subject(access, subject_id)
             selected = subject_reader(subject_id)
+            authorize_test_guide(request, subject_id, selected)
             if selected is None or not selected.source.is_file():
                 return {'status': 'empty', 'html': '', 'math_css': '', 'version': None,
                         'modified_at': None, 'message': '该学科指南暂未填写。'}
             return selected.read(origin + '/subject-guide-assets/' + subject_id)
+        authorize_test_guide(request, 'math', reader)
         return reader.read(origin + '/guide-assets')
 
     @app.get('/subject-guide-assets/{subject_id}/{relative:path}')
@@ -142,6 +156,7 @@ def register_guide_routes(app, settings, access_store, subjects=None):
                 access = access_store.resolve(request.headers.get('x-learning-identity'))
                 subjects.authorize_subject(access, subject_id)
         selected = subject_reader(subject_id) if subjects else None
+        authorize_test_guide(request, subject_id, selected)
         if selected is None:
             raise DomainError('guide_asset_not_found', '未找到指南资源。', 404)
         return asset_response(selected.asset(relative))
@@ -154,6 +169,7 @@ def register_guide_routes(app, settings, access_store, subjects=None):
                                      'Content-Disposition': f"{disposition}; filename*=UTF-8''{quote(resource.name)}"})
 
     @app.get('/guide-assets/{relative:path}')
-    def guide_asset(relative: str):
+    def guide_asset(relative: str, request: Request):
+        authorize_test_guide(request, 'math', reader)
         resource = reader.asset(relative)
         return asset_response(resource)

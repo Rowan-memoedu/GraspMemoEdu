@@ -1,10 +1,12 @@
 # GraspMemoEdu
 
-管理员邀请码可进入全部已制作内容，使用正常学习流程但不保存学习记录；原子复习页列出所有卡片。共享权限、内存存储与扩展契约见 [管理员内容访问](docs/administrator-access.md)。
+管理员邀请码可进入全部已制作内容，使用正常学习流程但不保存学习记录；复习页保留管理员全部卡片预览入口。共享权限、内存存储与扩展契约见 [管理员内容访问](docs/administrator-access.md)。
 
 通用架构的职责与学科开发边界见 [共用平台](docs/shared-platform.md)。题型支持单项选择、判断、多空填空、配对及复刻/复现判题，作者配置见 [题型规范](docs/question-types.md)；旧问答题转换、LLM 干扰项筛选与保留历史版本见 [题库工作流](docs/question-bank-workflow.md)。顶部学科/课程目录与选中文字纠错见 [导航与反馈](docs/content-navigation.md)。
 
 Topic 支持既有综合范式训练，以及面向英语、语文、生物、化学的原子化提取训练。原子模式采用组块与记忆点结构，初学答对 6 小时后首次复习、仅主动暂停，支持变式卡和多点打包复习，见 [两套 Topic 架构](docs/topic-training-modes.md)。
+
+顶部复习页共用原子点、可变设问和组卷机制，覆盖原子提取训练与独立题库；两类初学评分保持原规则，综合范式的课程 Review 不变。默认整卷完成后交卷，高阶学习者可在设置中改为逐题提交。数学五种初始卷型及后续学科卷型在 [卷型配置](config/review-paper-types.md) 维护；点归属、重叠集合、草稿和异常恢复见 [统一复习设计](docs/unified-review.md)。
 
 当前正式后端位于腾讯云 `https://124.221.144.155`，GitHub Pages 前端为 `https://rowan-memoedu.github.io/GraspMemoEdu-Pages/`。部署、证书续期、备份和回滚边界见 [腾讯云部署](docs/tencent-deployment.md)。下文 Windows 命令仅作隔离开发示例，必须显式指定隔离数据目录；正式管理在服务器执行，不要对本机回滚快照或旧维护任务执行它们。
 

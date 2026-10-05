@@ -10,12 +10,12 @@ for (const [key,pair] of Object.entries(messages)) {
   assert.ok(pair.every(value=>typeof value === 'string' && value.trim()),key);
   assert.deepEqual(placeholders(pair[0]),placeholders(pair[1]),`Interpolation mismatch: ${key}`);
 }
-for (const file of ['app.js','portal.js','review.js','atomic.js','training.js','learning-ui.js','subjects.js','course-graph.js','question-input.js','content-report.js','catalog-picker.js']) {
+for (const file of ['app.js','portal.js','review.js','atomic.js','training.js','learning-ui.js','subjects.js','course-graph.js','question-input.js','content-report.js','catalog-picker.js','review-papers.js','review-directory.js']) {
   const source = await fs.readFile(new URL(`../web/${file}`,import.meta.url),'utf8');
-  for (const match of source.matchAll(/\bt\("([^"\\]*(?:\\.[^"\\]*)*)"/g)) {
+  for (const match of source.matchAll(/\bt\("([^"\\]*(?:\\.[^"\\]*)*)"\s*(?=[,)])/g)) {
     const key=JSON.parse(`"${match[1]}"`); assert.ok(key in messages,`Missing UI key in ${file}: ${key}`);
   }
-  for (const match of source.matchAll(/\bt\('([^'\\]*)'/g)) assert.ok(match[1] in messages, `Missing UI key in ${file}: ${match[1]}`);
+  for (const match of source.matchAll(/\bt\('([^'\\]*)'\s*(?=[,)])/g)) assert.ok(match[1] in messages, `Missing UI key in ${file}: ${match[1]}`);
 }
 const html=await fs.readFile(new URL('../web/index.html',import.meta.url),'utf8');
 for(const match of html.matchAll(/data-i18n(?:-(?:aria-label|title|placeholder|content))?="([^"]+)"/g)) assert.ok(match[1] in messages,`Missing static key: ${match[1]}`);
