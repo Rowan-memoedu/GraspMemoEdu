@@ -1,17 +1,18 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=0f4775ecbf9f06f3";
-import { createReviewView } from "./review.js?v=0f4775ecbf9f06f3";
-import { renderCourseGraph } from "./course-graph.js?v=0f4775ecbf9f06f3";
-import {questionInput} from './question-input.js?v=0f4775ecbf9f06f3';
-import {enhanceTopicContent} from './topic-content.js?v=0f4775ecbf9f06f3';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=0f4775ecbf9f06f3';
-import {createCatalogPicker} from './catalog-picker.js?v=0f4775ecbf9f06f3';
-import {createAtomicView} from './atomic.js?v=0f4775ecbf9f06f3';
-import {createTrainingView} from './training.js?v=0f4775ecbf9f06f3';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=0f4775ecbf9f06f3";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=1ac6f8835f4d45ce";
+import { createReviewView } from "./review.js?v=1ac6f8835f4d45ce";
+import { renderCourseGraph } from "./course-graph.js?v=1ac6f8835f4d45ce";
+import {questionInput, choiceTypeField} from './question-input.js?v=1ac6f8835f4d45ce';
+import {enhanceTopicContent} from './topic-content.js?v=1ac6f8835f4d45ce';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=1ac6f8835f4d45ce';
+import {createCatalogPicker} from './catalog-picker.js?v=1ac6f8835f4d45ce';
+import {createAtomicView} from './atomic.js?v=1ac6f8835f4d45ce';
+import {createTrainingView} from './training.js?v=1ac6f8835f4d45ce';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=1ac6f8835f4d45ce";
 
-import {createPaperView} from './review-papers.js?v=0f4775ecbf9f06f3';
+import {createPaperView} from './review-papers.js?v=1ac6f8835f4d45ce';
 
-import {renderTaskTree} from './task-tree.js?v=0f4775ecbf9f06f3';
+import {renderTaskTree} from './task-tree.js?v=1ac6f8835f4d45ce';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=1ac6f8835f4d45ce';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -279,6 +280,7 @@ export function initPortal(bridge) {
     }
     if (currentRoute.canonicalHash && currentRoute.canonicalHash !== location.hash) history.replaceState(null, "", currentRoute.canonicalHash);
     currentHash = routeKey();
+    $('adminLearningNotice').querySelector('.adminAllBlocksLink')?.remove();
     const ticket = ++sequence;
     stopPageWork(); showMenu(false); collapseTasks();
     if (graphDialog.open) graphDialog.close();
@@ -344,8 +346,11 @@ export function initPortal(bridge) {
         const data = await dashboard(id);
         if (ticket !== sequence) return;
         dashboards.set(id, data); renderCourseProgress(data, params);
+      } else if (/^\/topic\/[^/]+\/content$/.test(path)) {
+        await renderAllContent(ticket, decodeURIComponent(path.split('/')[2]), params);
       } else if (/^\/topic\/[^/]+$/.test(path)) {
         const topicId = decodeURIComponent(path.split('/')[2]);
+        if (bridge.getAccess()?.is_admin) $('adminLearningNotice').append(link(t('admin.allBlocks'), `/topic/${encode(topicId)}/content`, 'textButton adminAllBlocksLink'));
         const state = await call(`state?topic_id=${encode(topicId)}`);
         if (ticket !== sequence) return;
         if (state.training_mode === 'atomic_retrieval') await atomic.open(topicId, 'learn', state);
@@ -358,7 +363,7 @@ export function initPortal(bridge) {
       const target = params.get("unitId") || params.get("topicId");
       requestAnimationFrame(() => {
         if (ticket !== sequence) return;
-        const reportBlock = root.querySelector('.helpContentBlock');
+        const reportBlock = root.querySelector('.materialBlock.targetBlock') || root.querySelector('.helpContentBlock');
         if (reportBlock) { reportBlock.focus({preventScroll: true}); reportBlock.scrollIntoView({block: 'start'}); }
         else if (target) root.querySelector(`[data-progress-id="${CSS.escape(target)}"]`)?.scrollIntoView({ block: "start" });
         else window.scrollTo(0, scrolls.get(currentHash) || 0);
@@ -598,6 +603,7 @@ export function initPortal(bridge) {
       else if (target) actions.append(node("p", "", t("portal.learning.is.not.enabled.for.your.account.please.contact.your.admi.55")));
       else actions.append(node("p", "", t("portal.this.task.is.not.available.to.start.yet.56")));
       if (!view.training) appendGuestReset(actions, task);
+      if (!view.training && task.topic_id && bridge.getAccess()?.is_admin) actions.append(link(t('admin.allBlocks'), `/topic/${encode(task.topic_id)}/content`, 'textButton'));
       details.append(actions);
     }
     card.append(toggle, details); return card;
@@ -794,6 +800,7 @@ export function initPortal(bridge) {
       for (const topic of (data.topics || []).filter((topic) => topic.unit_id === unit.id || unit.topic_ids?.includes(topic.id))) {
         const row = node("div", "progressTopic"); row.dataset.progressId = topic.id;
         row.append(node("span", "", topic.title), node("span", "", statusNames[topic.status] || "—"), node("span", "", percentLabel(topic.progress)));
+        if (bridge.getAccess()?.is_admin) row.append(link(t('admin.allBlocks'), `/topic/${encode(topic.id)}/content`, 'textButton'));
         if (topic.id === params.get("topicId")) row.classList.add("highlighted"); section.append(row);
       }
       root.append(section);
@@ -1012,13 +1019,16 @@ export function initPortal(bridge) {
       node('p', 'inputHint', item.content_block_title || item.request.content_block_id),
       node('p', 'inputHint', apiDate(item.created_at, true)),
       node('strong', item.request.kind === 'quality' ? 'contentQualityButton' : 'requestHelpButton', t(item.request.kind === 'quality' ? 'help.quality' : 'help.request')),
-      node('h3', '', t('help.context')));
+      feedbackDetails(item.request), node('h3', '', t('help.context')));
     if (item.content_fidelity === 'text_snapshot') context.append(node('p', 'inputHint', t('help.legacySnapshot')));
-    const content = item.content_fidelity === 'text_snapshot' ? node('div', 'courseContent helpContentText', item.content_text) : trustedContent(item.content_html);
+    const content = item.content_fidelity === 'text_snapshot' ? node('div', 'courseContent helpContentText', item.content_text) : trustedContent(item.highlighted_html || item.content_html);
     content.dataset.contentBlock = item.request.content_block_id; content.dataset.contentVersion = item.request.content_version;
     context.append(content, node('h3', '', t(viewer === 'admin' ? 'help.questionLabel' : 'help.myQuestion')),
       node('p', 'helpRequestMessage', item.request.message || t('help.noMessage')));
-    if (!detail) context.append(link(t('help.openContent'), subjectHref(item.subject_id, '/qa/' + encode(item.id)), 'textButton'));
+    if (viewer === 'admin') context.append(link(t('help.openContent'), subjectHref(item.subject_id,
+      `/topic/${encode(item.request.topic_id)}/content?${query({block: item.request.content_block_id,
+        version: item.request.content_version, bank_id: item.request.bank_id, group_id: item.request.group_id, report: item.id})}`), 'textButton'));
+    else if (!detail) context.append(link(t('help.openContent'), subjectHref(item.subject_id, '/qa/' + encode(item.id)), 'textButton'));
     answer.append(node('h3', '', t('help.answerLabel')));
     const status = node('p', 'helpReplyStatus', t(item.unread ? 'help.replyUnread' : item.reply ? 'help.replyReceived' : 'help.replyPending'));
     const date = node('p', 'inputHint', item.reply ? apiDate(item.reply.created_at, true) : '');
@@ -1091,6 +1101,38 @@ export function initPortal(bridge) {
     page.append(block); root.replaceChildren(page);
     helpFeedRefresh = () => { void renderHelpContent(ticket, reportId); };
     requestAnimationFrame(() => { if (ticket === sequence) block.focus({preventScroll: true}); });
+  }
+  async function renderAllContent(ticket, topicId, params) {
+    const data = await call('materials/content?' + query({topic_id: topicId, block: params.get('block'),
+      version: params.get('version'), bank_id: params.get('bank_id'), group_id: params.get('group_id')}));
+    if (ticket !== sequence) return;
+    document.title = pageTitle(data.title); mathStyle(data.math_css);
+    const page = node('section', 'materialBrowser');
+    page.append(link(t(params.has('report') ? 'help.pageTitle' : 'nav.backHome'),
+      params.has('report') ? '/qa' : learnHref(), 'textButton'), node('p', 'inputHint', data.course_title),
+      node('h1', 'portalPageTitle', data.title), node('p', 'inputHint', t('admin.allBlocksHint')));
+    if (data.version_changed) page.append(node('p', 'fieldError', t('admin.blockVersionChanged')));
+    const directory = node('nav', 'materialDirectory'); directory.setAttribute('aria-label', t('admin.allBlocks'));
+    const blocks = node('div', 'materialBlocks');
+    for (const item of data.blocks) {
+      const block = node('article', 'courseChoice materialBlock'); block.dataset.contentBlock = item.id; block.tabIndex = -1;
+      const label = `${item.title || data.title} · ${t('help.block.' + item.kind)}`;
+      const stem = trustedContent(item.html); block.append(node('h2', '', label), stem);
+      if (item.interaction && item.interaction.type !== 'text') {
+        const typeLabel = choiceTypeField(item.interaction); if (typeLabel) stem.before(typeLabel);
+        block.append(questionInput(item.interaction, {id: `material-answer-${blocks.childElementCount}`, stem, disabled: true}).element);
+      }
+      blocks.append(block);
+      const jump = control(label, 'textButton', () => {
+        blocks.querySelector('.targetBlock')?.classList.remove('targetBlock'); block.classList.add('targetBlock');
+        const next = new URLSearchParams(params); next.set('block', item.id);
+        history.replaceState(null, '', `${location.hash.split('?')[0]}?${next}`);
+        block.focus({preventScroll: true}); block.scrollIntoView({block: 'start'});
+      }); directory.append(jump);
+      if (item.id === params.get('block')) block.classList.add('targetBlock');
+    }
+    if (params.has('block') && !data.blocks.some(item => item.id === params.get('block'))) page.append(node('p', 'fieldError', t('admin.blockMissing')));
+    page.append(directory, blocks); root.replaceChildren(page);
   }
   async function renderPauseInbox(ticket) {
     const page = node('section', 'helpInbox'); page.append(node('h1', 'portalPageTitle', t('pause.inbox')));
@@ -1268,6 +1310,7 @@ export function initPortal(bridge) {
   const feedbackClose = control("×", "iconButton", () => feedbackDialog.close()); feedbackClose.setAttribute("aria-label", t("portal.close.feedback.123")); feedbackHeading.append(feedbackTitle, feedbackClose);
   const feedbackLabel = node("label", "", t("portal.describe.the.issue.you.encountered.124")), feedbackInput = node("textarea"); feedbackInput.id = "feedbackMessage"; feedbackLabel.htmlFor = feedbackInput.id; feedbackInput.maxLength = 4000; feedbackInput.required = true; feedbackInput.rows = 7;
   const feedbackStatus = node("p", "feedbackStatus"); feedbackStatus.setAttribute("role", "status");
+  const helpFeedback = createHelpFeedback(call);
   const correctionFields = node('div', 'correctionFields'); correctionFields.hidden = true;
   const originalPreview = node('p', 'correctionPreview'), replacementPreview = node('p', 'correctionPreview');
   const replacementLabel = node('label', '', t('correction.replacement')), replacementInput = node('textarea');
@@ -1284,12 +1327,13 @@ export function initPortal(bridge) {
   }
   replacementInput.addEventListener('input', previewCorrection);
   const feedbackActions = node("div", "dialogActions"), feedbackCancel = control(t("portal.cancel.125"), "secondaryButton", () => feedbackDialog.close()), feedbackSubmit = node("button", "primaryButton", t("portal.submit.126")); feedbackSubmit.type = "submit";
-  feedbackActions.append(feedbackCancel, feedbackSubmit); feedbackForm.append(feedbackHeading, correctionFields, feedbackLabel, feedbackInput, feedbackStatus, feedbackActions); feedbackDialog.append(feedbackForm); document.body.append(feedbackDialog);
+  feedbackActions.append(feedbackCancel, feedbackSubmit); feedbackForm.append(feedbackHeading, correctionFields, feedbackLabel, helpFeedback.element, feedbackInput, feedbackStatus, feedbackActions); feedbackDialog.append(feedbackForm); document.body.append(feedbackDialog);
   function showFeedback(context = {}) {
     if (feedbackBusy || feedbackDialog.open) return;
     const matchesSelected = !context.topic_id || selectedDashboard()?.topics?.some((topic) => topic.id === context.topic_id);
     feedbackContext = { ...(selectedCourse && matchesSelected ? { course_id: selectedCourse } : {}), ...context };
     const correction = Boolean(context.correction);
+    helpFeedback.open(context);
     feedbackTitle.textContent = context.help_request ? t(context.kind === 'quality' ? 'help.quality' : 'help.request') : correction ? t('correction.title') : context.question_id ? t("portal.report.a.content.error.127") : t("portal.feedback.122");
     correctionFields.hidden = !correction; replacementInput.value = ''; replacementInput.disabled = false;
     feedbackLabel.textContent = t(context.help_request ? context.kind === 'quality' ? 'help.qualityPrompt' : 'help.prompt' : correction ? 'correction.comment' : 'portal.describe.the.issue.you.encountered.124');
@@ -1303,20 +1347,21 @@ export function initPortal(bridge) {
     event.preventDefault(); if (feedbackBusy || (!feedbackContext.correction && !feedbackContext.help_request && !feedbackInput.value.trim())) return;
     feedbackBusy = true; feedbackSubmit.disabled = true; feedbackClose.disabled = true; feedbackCancel.disabled = true; feedbackStatus.textContent = t(feedbackContext.help_request ? feedbackContext.kind === 'quality' ? 'help.qualitySaving' : 'help.saving' : "portal.saving.feedback.128");
     try {
-      feedbackInput.disabled = true; replacementInput.disabled = true;
+      feedbackInput.disabled = true; replacementInput.disabled = true; helpFeedback.disable(true);
       const correction = feedbackContext.correction ? {...feedbackContext.correction,
         operation: replacementInput.value === '' ? 'delete' : 'replace', replacement: replacementInput.value, comment: feedbackInput.value.trim()} : null;
       const {topic_id, question_id, content_block_id, content_version, request_id, kind, bank_id, group_id} = feedbackContext;
       const result = await call(feedbackContext.help_request ? 'help-requests' : 'feedback', {method: 'POST', body:
-        feedbackContext.help_request ? {topic_id, question_id, content_block_id, content_version, request_id, kind, bank_id, group_id, message: feedbackInput.value.trim()}
+        feedbackContext.help_request ? {topic_id, question_id, content_block_id, content_version, request_id, kind, bank_id, group_id, message: feedbackInput.value.trim(), ...helpFeedback.value()}
           : { message: feedbackInput.value.trim() || t('correction.title'), ...feedbackContext, ...(correction ? {correction} : {}) }});
       if (result.status !== "saved") throw new Error(t("portal.feedback.was.not.confirmed.as.saved.please.try.again.129"));
+      helpFeedback.element.hidden = true;
       feedbackStatus.textContent = t(feedbackContext.help_request ? feedbackContext.kind === 'quality' ? 'help.qualitySaved' : 'help.saved' : "portal.feedback.saved.thank.you.130"); correctionFields.hidden = true; feedbackInput.hidden = true; feedbackLabel.hidden = true; feedbackSubmit.hidden = true; feedbackCancel.textContent = t("portal.close.131");
     } catch (error) { feedbackStatus.textContent = translateMessage(error.message); }
-    finally { feedbackBusy = false; feedbackSubmit.disabled = false; feedbackClose.disabled = false; feedbackCancel.disabled = false; feedbackInput.disabled = false; replacementInput.disabled = false; }
+    finally { feedbackBusy = false; feedbackSubmit.disabled = false; feedbackClose.disabled = false; feedbackCancel.disabled = false; feedbackInput.disabled = false; replacementInput.disabled = false; helpFeedback.disable(false); }
   });
   feedbackDialog.addEventListener("cancel", (event) => { if (feedbackBusy) event.preventDefault(); });
-  feedbackDialog.addEventListener('close', () => { feedbackContext = {}; feedbackInput.value = ''; replacementInput.value = ''; });
+  feedbackDialog.addEventListener('close', () => { feedbackContext = {}; feedbackInput.value = ''; replacementInput.value = ''; helpFeedback.reset(); });
   const contentReporting = installContentReporting(showFeedback);
   helpReporting = installHelpRequests(bridge.getAccess, context => showFeedback({...context, help_request: true, request_id: crypto.randomUUID()}));
 

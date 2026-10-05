@@ -1,10 +1,10 @@
 // UI strings only. Course HTML, names, answers and explanations never enter this module.
-import {trainingMessages} from './training-messages.js?v=0f4775ecbf9f06f3';
-import {readerMessages} from './reader-messages.js?v=0f4775ecbf9f06f3';
-import {portalMessages} from './portal-messages.js?v=0f4775ecbf9f06f3';
-import {staticMessages} from './static-messages.js?v=0f4775ecbf9f06f3';
+import {trainingMessages} from './training-messages.js?v=1ac6f8835f4d45ce';
+import {readerMessages} from './reader-messages.js?v=1ac6f8835f4d45ce';
+import {portalMessages} from './portal-messages.js?v=1ac6f8835f4d45ce';
+import {staticMessages} from './static-messages.js?v=1ac6f8835f4d45ce';
 
-import {paperMessages} from './review-paper-messages.js?v=0f4775ecbf9f06f3';
+import {paperMessages} from './review-paper-messages.js?v=1ac6f8835f4d45ce';
 
 export const LANGUAGE_KEY = 'graspmemoedu:ui-language';
 // Read the previous namespace once on the same origin. Renaming the public
@@ -57,6 +57,8 @@ export function t(key, params = {}) {
 
 // Only API operational errors belong here. A judge's explanation is course content.
 const errors = {
+  '标注的内容已变化，请重新打开预览后选择。': 'The selected content has changed. Reopen the preview and select it again.',
+  '所选内容位置无效，请重新选择。': 'The selected content positions are invalid. Please select them again.',
   '逐题提交仅对高阶学习者开放。': 'Only advanced learners may submit individual questions.',
   '超时不中断仅对高阶学习者开放。': 'Only advanced learners may continue after the time limit.',
   '未找到这份复习。': 'This review could not be found.',

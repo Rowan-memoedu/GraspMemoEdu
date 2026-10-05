@@ -3,20 +3,19 @@ from contextlib import closing
 from datetime import datetime, timedelta
 import json
 import uuid
-from typing import Literal
+from typing import Annotated, Literal
 from fastapi import Request, Query
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 from .service import DomainError, now
 from .public_limits import PublicLimitError
 from .content_reports import ContentText
 from .question_bank import QuestionBank
 from .training_content import TrainingCatalog, permission_id
+from .feedback_selection import FeedbackContent, content_hash, normalize_selection, validate_selection
 
 
-class HelpRequest(BaseModel):
+class HelpContext(BaseModel):
     model_config = ConfigDict(extra='forbid')
-    request_id: str = Field(min_length=1, max_length=128)
-    message: str = Field(default='', max_length=4000)
     topic_id: str = Field(min_length=1, max_length=128)
     question_id: str | None = Field(default=None, max_length=256)
     content_block_id: str = Field(min_length=1, max_length=300)
@@ -24,6 +23,38 @@ class HelpRequest(BaseModel):
     kind: Literal['help', 'quality'] = 'help'
     bank_id: str | None = Field(default=None, min_length=1, max_length=64)
     group_id: str | None = Field(default=None, min_length=1, max_length=64)
+
+
+PREVIEW_CATEGORIES = {'factual_error', 'unnatural', 'derivation_steps', 'motivation'}
+CATEGORIES = {'quality': {'formatting', 'factual_error', 'unnatural', 'other'},
+              'help': {'missing_prerequisite', 'derivation_steps', 'motivation', 'other'}}
+Offset = Annotated[StrictInt, Field(ge=0, le=10000000)]
+
+
+class HelpRequest(HelpContext):
+    request_id: str = Field(min_length=1, max_length=128)
+    message: str = Field(default='', max_length=4000)
+    categories: list[str] = Field(default_factory=list, max_length=4)
+    prerequisite: str = Field(default='', max_length=1000)
+    selection: list[tuple[Offset, Offset, Offset]] = Field(default_factory=list, max_length=256)
+    selection_hash: str = Field(default='', max_length=64, pattern=r'^(?:[0-9a-f]{64})?$')
+    selection_version: Literal[1] = 1
+
+    @model_validator(mode='after')
+    def validate_details(self):
+        if len(set(self.categories)) != len(self.categories) or set(self.categories) - CATEGORIES[self.kind]:
+            raise ValueError('Invalid feedback categories')
+        self.prerequisite = self.prerequisite.strip()
+        if '\x00' in self.prerequisite or (self.prerequisite and 'missing_prerequisite' not in self.categories):
+            raise ValueError('Invalid prerequisite detail')
+        if self.selection and (not self.selection_hash or not set(self.categories) & PREVIEW_CATEGORIES):
+            raise ValueError('Selections require a preview category and content hash')
+        if any(end <= start for _, start, end in self.selection):
+            raise ValueError('Invalid selection interval')
+        self.selection = [tuple(value) for value in normalize_selection(self.selection)]
+        if not self.selection:
+            self.selection_hash = ''
+        return self
 
 
 class HelpReply(BaseModel):
@@ -110,8 +141,7 @@ class HelpRequestStore:
         return {'default_admin_id': default[0] if default else None,
                 'items': [{**dict(row), 'uses_default': bool(row['uses_default'])} for row in rows]}
 
-    def save(self, access, values, subject_id=None):
-        values = HelpRequest.model_validate(values).model_dump()
+    def _authorize_context(self, access, values, subject_id):
         topic_id = values['topic_id']
         bank_id = values['bank_id']
         if bank_id:
@@ -125,6 +155,17 @@ class HelpRequestStore:
         self.access_store.authorize(access, topic_id, 'request_help')
         if not bank_id:
             self.subjects.authorize_topic(subject_id, topic_id)
+
+    def preview(self, access, values, subject_id=None):
+        payload = HelpContext.model_validate(values).model_dump()
+        self._authorize_context(access, payload, subject_id)
+        html, context = self._content(payload)
+        return {'content_html': FeedbackContent(html, annotate=True).html,
+                'content_hash': content_hash(html), 'math_css': context.get('math_css', '')}
+
+    def save(self, access, values, subject_id=None):
+        values = HelpRequest.model_validate(values).model_dump()
+        self._authorize_context(access, values, subject_id)
         message = values['message'].strip()
         if '\x00' in message:
             raise DomainError('invalid_help_request', '请求字段不完整或格式错误，请刷新后重试。', 422)
@@ -144,6 +185,7 @@ class HelpRequestStore:
             except DomainError:
                 raise DomainError('help_admin_unavailable', '答疑管理员暂不可用，请稍后重试。', 503) from None
             html, context = self._content(payload)
+            validate_selection(html, payload['selection'], payload['selection_hash'])
             created = now()
             cutoff = (datetime.fromisoformat(created) - timedelta(seconds=60)).isoformat()
             if con.execute('SELECT COUNT(*) FROM help_requests WHERE learner_id=? AND created_at>?', (access['learner_id'], cutoff)).fetchone()[0] >= 3:
@@ -259,6 +301,8 @@ class HelpRequestStore:
                     fidelity = 'verified_source'
             except (DomainError, ValueError, KeyError, OSError):
                 pass
+        if body.get('content_html') and body['request'].get('selection'):
+            body['highlighted_html'] = FeedbackContent(body['content_html'], selection=body['request']['selection']).html
         return {**body, 'id': row['id'], 'learner_id': row['learner_id'],
                 'created_at': row['created_at'], 'content_fidelity': fidelity}
 
@@ -369,6 +413,11 @@ class HelpRequestStore:
 def register_help_routes(app, catalog, access_store, subjects):
     store = HelpRequestStore(catalog, access_store, subjects)
     app.state.help_requests = store
+    @app.post('/api/help-requests/preview')
+    def preview_help(payload: HelpContext, request: Request):
+        return store.preview(access_store.resolve(request.headers.get('x-learning-identity')),
+                             payload.model_dump(), request.query_params.get('subject_id'))
+
     @app.post('/api/help-requests')
     def submit_help(payload: HelpRequest, request: Request):
         access = access_store.resolve(request.headers.get('x-learning-identity'))

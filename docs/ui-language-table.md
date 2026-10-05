@@ -2,7 +2,7 @@
 
 本表从当前界面词库自动生成。修改以词库为准，随后重新生成并检查本表。术语约定见 [界面语言规范](ui-language.md)。
 
-共 725 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
+共 747 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
 
 不包括作者课程正文、题目、答案、解析或用户输入。首页的学科双语副标题按约定保留。
 
@@ -370,6 +370,26 @@
 | Open the Topic | 查看对应 Topic |
 | Content context | 对应内容 |
 | Load more | 加载更多 |
+| Choose issue types (optional; select one or more) | 可选择问题类型（可多选，也可不选） |
+| Poor formatting | 排版格式不佳 |
+| Factual errors | 内容有事实性错误 |
+| Too much unnatural or seemingly AI-generated content makes reading difficult | 疑似 AIGC 等不自然内容过多，阅读体验不佳 |
+| Other issues | 其他问题 |
+| Missing prerequisite knowledge | 缺少前置知识 |
+| Skipped derivation steps | 推导跳步 |
+| Unclear origin and motivation of the overall approach | 无法理解整体思路来源与动机 |
+| Optionally describe the prerequisite knowledge you think is missing | 可输入你认为缺失的前置知识 |
+| Missing prerequisite knowledge:  | 缺失的前置知识： |
+| Click lines or drag a rectangle to select multiple lines. Selection is optional; click again to deselect. | 可点击逐行选中，或拖动框选多行；也可不选。再次点击可取消选中。 |
+| Loading content preview… | 正在载入内容预览… |
+| Select line {number} | 选择第 {number} 行 |
+| {count} lines selected | 已选择 {count} 行 |
+| Clear selection | 清除选中 |
+| Highlighted passages were selected by the student at submission. | 高亮部分为学员提交时标注的内容。 |
+| Browse all content | 浏览全部内容 |
+| Administrators can browse every introduction, question and explanation, including spare practices, without creating learning records. | 管理员可直接浏览全部指导、题目和解析，包括备用练习；浏览不产生学习记录。 |
+| The content has changed. This page shows the current version; the submitted original remains in the Q&A record. | 内容版本已更新，此处显示当前版本；提交时的原文仍保留在答疑记录中。 |
+| This block is absent from the current version. The submitted original remains in the Q&A record. | 当前版本未找到该内容块，提交时的原文仍保留在答疑记录中。 |
 | Administrator mode: normal learning flow, without saved learning records or scheduled reviews. | 管理员模式：正常学习流程；学习记录不保存，也不生成后续推送。 |
 | All atomic flashcards are available. Learning is not saved and does not schedule future reviews. | 全部原子卡片，可直接进入；本次学习不保存记录，也不会生成后续推送。 |
 | Open flashcard | 进入卡片 |
@@ -686,6 +706,8 @@
 
 | English | 中文 |
 |---|---|
+| The selected content has changed. Reopen the preview and select it again. | 标注的内容已变化，请重新打开预览后选择。 |
+| The selected content positions are invalid. Please select them again. | 所选内容位置无效，请重新选择。 |
 | Only advanced learners may submit individual questions. | 逐题提交仅对高阶学习者开放。 |
 | Only advanced learners may continue after the time limit. | 超时不中断仅对高阶学习者开放。 |
 | This review could not be found. | 未找到这份复习。 |

@@ -171,21 +171,23 @@ class BodyLimitMiddleware:
     receive the normal scoped CORS and cache headers. Content-Length is not trusted.
     """
 
-    def __init__(self, app, maximum=16384):
+    def __init__(self, app, maximum=16384, path_limits=None):
         self.app = app
         self.maximum = maximum
+        self.path_limits = path_limits or {}
 
     async def __call__(self, scope, receive, send):
         if scope['type'] != 'http' or scope.get('method') != 'POST':
             await self.app(scope, receive, send)
             return
         body = bytearray()
+        maximum = self.path_limits.get(scope.get('path'), self.maximum)
         while True:
             message = await receive()
             if message['type'] == 'http.disconnect':
                 return
             chunk = message.get('body', b'')
-            if len(body) + len(chunk) > self.maximum:
+            if len(body) + len(chunk) > maximum:
                 response = JSONResponse({'detail': {'code': 'request_too_large', 'message': '请求过大。'}}, status_code=413)
                 await response(scope, receive, send)
                 return
