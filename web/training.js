@@ -1,6 +1,7 @@
-import {t, translateMessage} from './i18n.js?v=07e4a73eada2a6e9';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=07e4a73eada2a6e9';
-import {createLearningCache} from './learning-cache.js?v=07e4a73eada2a6e9';
+import {t, translateMessage} from './i18n.js?v=8df0ff5e5cff42da';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=8df0ff5e5cff42da';
+import {createLearningCache} from './learning-cache.js?v=8df0ff5e5cff42da';
+import {helpableContent} from './content-report.js?v=8df0ff5e5cff42da';
 
 const node = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const button = (text, cls, action) => { const n = node('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
@@ -8,7 +9,7 @@ const encode = encodeURIComponent;
 const query = fields => new URLSearchParams(fields).toString();
 const html = (content, cls = 'courseContent') => { const n = node('div', cls); n.innerHTML = content || ''; return n; };
 const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy', 'training.retire'];
-import {answerEditor, readerFrame} from './learning-ui.js?v=07e4a73eada2a6e9';
+import {answerEditor, readerFrame} from './learning-ui.js?v=8df0ff5e5cff42da';
 
 export function createTrainingView(bridge) {
   const {root, request, href, formatDate, getAccess} = bridge;
@@ -160,7 +161,10 @@ export function createTrainingView(bridge) {
     const heading = node('div', 'stepHeader'), title = node('h2', 'stepTitle', t('training.exercise', {number: index + 1}));
     title.id = 'trainingStepTitle'; title.tabIndex = -1; main.setAttribute('aria-labelledby', title.id);
     heading.append(title, node('span', 'stepCounter', t('reader.modulePosition', {current: index + 1, total: group.questions.length})));
-    const stem = html(state.question.html); main.replaceChildren(heading, stem);
+    const reportContext = {topic_id: 'training.' + state.bank_id, bank_id: state.bank_id,
+      group_id: state.group_id, question_id: state.question_id};
+    const stem = helpableContent(html(state.question.html), reportContext, `question:${state.question_id}`, state.version);
+    main.replaceChildren(heading, stem);
     const typeField = choiceTypeField(state.question.interaction); if (typeField) heading.after(typeField);
     reader.refs.footerPosition.textContent = t('reader.modulePosition', {current: index + 1, total: group.questions.length});
     reader.refs.saveStatus.textContent = t(state.submission_status === 'pending' || state.submission_status === 'running' ? '答案已提交，正在判题' : '学习进度已保存');
@@ -235,7 +239,8 @@ export function createTrainingView(bridge) {
       verdict.append(node('span', 'feedbackIcon', correct ? '✓' : '!'), body); main.append(verdict);
     }
     if (state.explanation_html)
-      main.append(node('h3', 'exampleExplanationHeader', t('Explanation · 解析')), html(state.explanation_html, 'courseContent trainingExplanation'));
+      main.append(node('h3', 'exampleExplanationHeader', t('Explanation · 解析')),
+        helpableContent(html(state.explanation_html, 'courseContent trainingExplanation'), reportContext, `explanation:${state.question_id}`, state.version));
     if (state.phase === 'shown' || state.phase === 'done' && (state.result.self_rating || state.result.stop_requested)) {
       const ratings = node('div', 'trainingRatings');
       for (let rating = 1; rating <= 5; rating++) {

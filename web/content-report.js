@@ -1,4 +1,4 @@
-import {t} from './i18n.js?v=07e4a73eada2a6e9';
+import {t} from './i18n.js?v=8df0ff5e5cff42da';
 
 const blocks = new WeakMap();
 const helpBlocks = new WeakMap();
@@ -11,13 +11,18 @@ export function helpableContent(element, context, contentBlockId, contentVersion
   return element;
 }
 function updateHelpButton(element) {
-  let action = element.querySelector(':scope > [data-help-action]');
-  if (!helpPolicy?.()?.features?.includes('request_help')) { action?.remove(); return; }
-  if (action) return;
-  action = document.createElement('button'); action.type = 'button'; action.className = 'textButton requestHelpButton';
-  action.dataset.helpAction = 'true'; action.textContent = t('help.request');
-  action.addEventListener('click', () => showHelp?.(helpBlocks.get(element)));
-  element.prepend(action);
+  let actions = element.querySelector(':scope > [data-content-actions]');
+  if (!helpPolicy?.()?.features?.includes('request_help')) { actions?.remove(); return; }
+  if (actions) return;
+  actions = document.createElement('div'); actions.className = 'contentReportActions'; actions.dataset.contentActions = 'true';
+  for (const kind of ['quality', 'help']) {
+    const action = document.createElement('button'); action.type = 'button';
+    action.className = `textButton ${kind === 'quality' ? 'contentQualityButton' : 'requestHelpButton'}`;
+    action.dataset.helpAction = kind; action.textContent = t(kind === 'quality' ? 'help.quality' : 'help.request');
+    action.addEventListener('click', () => showHelp?.({...helpBlocks.get(element), kind}));
+    actions.append(action);
+  }
+  element.prepend(actions);
 }
 export function installHelpRequests(getAccess, open) {
   helpPolicy = getAccess; showHelp = open;
@@ -34,7 +39,7 @@ export function reportableContent(element, context, contentBlockId, contentVersi
 // detached range clone so the reported character offsets match stored HTML.
 function rangeText(range) {
   const fragment = range.cloneContents();
-  fragment.querySelectorAll('[data-help-action]').forEach(action => action.remove());
+  fragment.querySelectorAll('[data-content-actions], [data-help-action]').forEach(action => action.remove());
   for (const input of fragment.querySelectorAll('[data-blank-id]')) input.replaceWith(document.createTextNode(`{{blank:${input.dataset.blankId}}}`));
   return fragment.textContent;
 }

@@ -19,6 +19,8 @@ from tests.fixtures import synthetic_course, DeterministicJudge, temporary_test_
 from tests.atomic_fixtures import atomic_topic
 from graspmemoedu.question_bank import install_bank
 from tests.test_question_bank import bank_fixture
+from tests.training_fixtures import training_bank
+from graspmemoedu.training_content import permission_id
 
 
 class HelpRequestTests(unittest.TestCase):
@@ -173,6 +175,79 @@ class HelpRequestTests(unittest.TestCase):
             self.assertEqual(item['request']['content_version'], self.course['version'])
             self.assertIn('INTRODUCTION_ONLY', item['content_text'])
             self.assertEqual(item['learner_id'], self.student)
+
+    def test_quality_and_help_share_optional_message_storage_and_owner_boundary(self):
+        _, other_admin = self.identity(is_admin=True)
+        for message in ('', '  Improve this explanation.  '):
+            payload = self.payload(kind='quality', message=message)
+            response = self.send(payload)
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(self.send(payload).json(), response.json())
+            self.assertEqual(self.send({**payload, 'kind': 'help'}).status_code, 409)
+        items = self.client.get('/api/help-requests', headers=self.admin_headers).json()['items']
+        self.assertEqual({item['request']['kind'] for item in items}, {'quality'})
+        self.assertEqual({item['request']['message'] for item in items}, {'', 'Improve this explanation.'})
+        self.assertTrue(all(item['content_block_type'] == 'introduction' for item in items))
+        self.assertTrue(all('INTRODUCTION_ONLY' in item['content_text'] for item in items))
+        self.assertEqual(self.client.get('/api/help-requests', headers=other_admin).json()['total'], 0)
+        self.store.set_permissions(self.student, is_student=False)
+        self.assertEqual(self.send(self.payload(kind='quality')).status_code, 403)
+
+    def test_old_help_requests_remain_idempotent_after_default_fields_are_added(self):
+        payload = self.payload(message='')
+        response = self.send(payload)
+        with self.store._transaction() as con:
+            row = con.execute('SELECT id,body FROM help_requests').fetchone()
+            body = json.loads(row['body'])
+            for key in ('kind', 'bank_id', 'group_id'): body['request'].pop(key, None)
+            con.execute('UPDATE help_requests SET body=? WHERE id=?', (json.dumps(body), row['id']))
+        self.assertEqual(self.send(payload).json(), response.json())
+        self.assertEqual(self.send({**payload, 'kind': 'quality'}).status_code, 409)
+
+    def test_training_stems_and_explanations_validate_bank_permissions_and_snapshot(self):
+        bank = training_bank()
+        directory = self.root / 'training-banks'; directory.mkdir()
+        (directory / 'isolated-bank.json').write_text(json.dumps(bank), encoding='utf-8')
+        # Reload the application exactly as after a private bank installation.
+        app = create_app(self.settings, LearningService(self.course, self.root, DeterministicJudge()))
+        with TestClient(app, base_url='http://127.0.0.1:8767') as client:
+            headers = {**self.headers, 'X-Learning-Session': client.get('/api/session', headers=self.headers).json()['session_token']}
+            admin_headers = {**self.admin_headers, 'X-Learning-Session': headers['X-Learning-Session']}
+            payload = self.payload(kind='quality', message='', topic_id=permission_id(bank['id']),
+                bank_id=bank['id'], group_id='group-a', question_id='essay',
+                content_block_id='question:essay', content_version=bank['version'])
+            send = lambda values, suffix='': client.post('/api/help-requests' + suffix, headers=headers, json=values)
+            before = client.get('/api/training/history?bank_id=isolated-bank&question_id=essay', headers=headers).json()
+            for block in ('question', 'explanation'):
+                response = send({**payload, 'request_id': str(uuid.uuid4()), 'content_block_id': block + ':essay'})
+                self.assertEqual(response.status_code, 200, response.text)
+            items = client.get('/api/help-requests', headers=admin_headers).json()['items']
+            self.assertEqual({item['content_block_type'] for item in items}, {'question', 'explanation'})
+            self.assertTrue(all(item['course_title'] == bank['title'] and item['topic_title'] == '第一题组' for item in items))
+            self.assertTrue(all(item['content_block_title'] == '隔离习题 essay' for item in items))
+            self.assertIn('一加一等于二', next(item['content_text'] for item in items if item['content_block_type'] == 'explanation'))
+            for update, status in [({'content_version': 'old'}, 409), ({'topic_id': self.course['id']}, 422),
+                    ({'content_block_id': 'introduction'}, 422), ({'group_id': 'group-b'}, 404),
+                    ({'bank_id': None}, 422)]:
+                self.assertEqual(send({**payload, 'request_id': str(uuid.uuid4()), **update}).status_code, status)
+            self.assertEqual(send({**payload, 'request_id': str(uuid.uuid4())}, '?subject_id=english').status_code, 403)
+            app.state.access_store.set_permissions(self.student, topic_ids=[self.course['id']])
+            self.assertEqual(send({**payload, 'request_id': str(uuid.uuid4())}).status_code, 403)
+            self.assertEqual(client.get('/api/training/history?bank_id=isolated-bank&question_id=essay', headers=headers).status_code, 403)
+            app.state.access_store.set_permissions(self.student, reset_topics=True)
+            self.assertEqual(client.get('/api/training/history?bank_id=isolated-bank&question_id=essay', headers=headers).json(), before)
+
+    def test_v2_introduction_reports_point_to_one_section_only(self):
+        topic = self.app.state.catalog.topic(self.course['id'])
+        topic['topic_format_version'] = 2
+        topic['introductions'] = [{'id': 'first', 'title': 'First section', 'html': '<p>FIRST_SECTION</p>'},
+                                  {'id': 'second', 'title': 'Second section', 'html': '<p>SECOND_SECTION</p>'}]
+        payload = self.payload(kind='quality', message='', content_block_id='introduction:second')
+        self.assertEqual(self.send(payload).status_code, 200)
+        item = self.client.get('/api/help-requests', headers=self.admin_headers).json()['items'][0]
+        self.assertEqual(item['content_text'], 'SECOND_SECTION')
+        self.assertEqual(item['content_block_title'], 'Second section')
+        self.assertEqual(self.send(self.payload(content_block_id='introduction:missing')).status_code, 422)
 
     def test_rate_limit_does_not_block_replays_and_pagination_and_backup_survive(self):
         payloads = [self.payload(message='Synthetic ' + str(index)) for index in range(3)]

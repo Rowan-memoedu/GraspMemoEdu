@@ -1,13 +1,13 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=07e4a73eada2a6e9";
-import { createReviewView } from "./review.js?v=07e4a73eada2a6e9";
-import { renderCourseGraph } from "./course-graph.js?v=07e4a73eada2a6e9";
-import {questionInput} from './question-input.js?v=07e4a73eada2a6e9';
-import {enhanceTopicContent} from './topic-content.js?v=07e4a73eada2a6e9';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=07e4a73eada2a6e9';
-import {createCatalogPicker} from './catalog-picker.js?v=07e4a73eada2a6e9';
-import {createAtomicView} from './atomic.js?v=07e4a73eada2a6e9';
-import {createTrainingView} from './training.js?v=07e4a73eada2a6e9';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=07e4a73eada2a6e9";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=8df0ff5e5cff42da";
+import { createReviewView } from "./review.js?v=8df0ff5e5cff42da";
+import { renderCourseGraph } from "./course-graph.js?v=8df0ff5e5cff42da";
+import {questionInput} from './question-input.js?v=8df0ff5e5cff42da';
+import {enhanceTopicContent} from './topic-content.js?v=8df0ff5e5cff42da';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=8df0ff5e5cff42da';
+import {createCatalogPicker} from './catalog-picker.js?v=8df0ff5e5cff42da';
+import {createAtomicView} from './atomic.js?v=8df0ff5e5cff42da';
+import {createTrainingView} from './training.js?v=8df0ff5e5cff42da';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=8df0ff5e5cff42da";
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -950,10 +950,13 @@ export function initPortal(bridge) {
         for (const item of result.items) {
           const card = node('article', 'courseChoice helpRequest');
           card.append(node('h2', '', item.display_name), node('p', '', apiDate(item.created_at, true)),
+            node('strong', item.request.kind === 'quality' ? 'contentQualityButton' : 'requestHelpButton', t(item.request.kind === 'quality' ? 'help.quality' : 'help.request')),
             node('p', '', `${item.course_title} · ${item.topic_title} · ${item.request.content_block_id}`),
+            node('p', '', `${t('help.block.' + (item.content_block_type || item.request.content_block_id.split(':')[0]))}${item.content_block_title ? ' · ' + item.content_block_title : ''}`),
             node('p', 'helpRequestMessage', item.request.message || t('help.noMessage')));
-          const context = node('details'); context.append(node('summary', '', t('help.context')), node('p', 'helpRequestContext', item.content_text));
-          card.append(context, link(t('help.location'), subjectHref(item.subject_id, '/topic/' + encode(item.request.topic_id)), 'textButton'));
+          const path = item.request.bank_id ? `/banks/${encode(item.request.bank_id)}/${encode(item.request.group_id)}?question=${encode(item.request.question_id)}`
+            : '/topic/' + encode(item.request.topic_id);
+          card.append(node('p', 'helpRequestContext', item.content_text), link(t('help.openContent'), subjectHref(item.subject_id, path), 'textButton'));
           list.append(card);
         }
         offset = result.next_offset; more.hidden = offset === null;
@@ -1160,9 +1163,9 @@ export function initPortal(bridge) {
     const matchesSelected = !context.topic_id || selectedDashboard()?.topics?.some((topic) => topic.id === context.topic_id);
     feedbackContext = { ...(selectedCourse && matchesSelected ? { course_id: selectedCourse } : {}), ...context };
     const correction = Boolean(context.correction);
-    feedbackTitle.textContent = context.help_request ? t('help.request') : correction ? t('correction.title') : context.question_id ? t("portal.report.a.content.error.127") : t("portal.feedback.122");
+    feedbackTitle.textContent = context.help_request ? t(context.kind === 'quality' ? 'help.quality' : 'help.request') : correction ? t('correction.title') : context.question_id ? t("portal.report.a.content.error.127") : t("portal.feedback.122");
     correctionFields.hidden = !correction; replacementInput.value = ''; replacementInput.disabled = false;
-    feedbackLabel.textContent = t(context.help_request ? 'help.prompt' : correction ? 'correction.comment' : 'portal.describe.the.issue.you.encountered.124');
+    feedbackLabel.textContent = t(context.help_request ? context.kind === 'quality' ? 'help.qualityPrompt' : 'help.prompt' : correction ? 'correction.comment' : 'portal.describe.the.issue.you.encountered.124');
     feedbackInput.required = !correction && !context.help_request; feedbackInput.rows = correction ? 2 : 7; feedbackInput.maxLength = correction ? 2000 : 4000;
     previewCorrection();
     feedbackStatus.textContent = ""; feedbackInput.value = ""; feedbackInput.hidden = false; feedbackLabel.hidden = false; feedbackSubmit.hidden = false; feedbackCancel.textContent = t("portal.cancel.125");
@@ -1171,17 +1174,17 @@ export function initPortal(bridge) {
   }
   feedbackForm.addEventListener("submit", async (event) => {
     event.preventDefault(); if (feedbackBusy || (!feedbackContext.correction && !feedbackContext.help_request && !feedbackInput.value.trim())) return;
-    feedbackBusy = true; feedbackSubmit.disabled = true; feedbackClose.disabled = true; feedbackCancel.disabled = true; feedbackStatus.textContent = t(feedbackContext.help_request ? 'help.saving' : "portal.saving.feedback.128");
+    feedbackBusy = true; feedbackSubmit.disabled = true; feedbackClose.disabled = true; feedbackCancel.disabled = true; feedbackStatus.textContent = t(feedbackContext.help_request ? feedbackContext.kind === 'quality' ? 'help.qualitySaving' : 'help.saving' : "portal.saving.feedback.128");
     try {
       feedbackInput.disabled = true; replacementInput.disabled = true;
       const correction = feedbackContext.correction ? {...feedbackContext.correction,
         operation: replacementInput.value === '' ? 'delete' : 'replace', replacement: replacementInput.value, comment: feedbackInput.value.trim()} : null;
-      const {topic_id, question_id, content_block_id, content_version, request_id} = feedbackContext;
+      const {topic_id, question_id, content_block_id, content_version, request_id, kind, bank_id, group_id} = feedbackContext;
       const result = await call(feedbackContext.help_request ? 'help-requests' : 'feedback', {method: 'POST', body:
-        feedbackContext.help_request ? {topic_id, question_id, content_block_id, content_version, request_id, message: feedbackInput.value.trim()}
+        feedbackContext.help_request ? {topic_id, question_id, content_block_id, content_version, request_id, kind, bank_id, group_id, message: feedbackInput.value.trim()}
           : { message: feedbackInput.value.trim() || t('correction.title'), ...feedbackContext, ...(correction ? {correction} : {}) }});
       if (result.status !== "saved") throw new Error(t("portal.feedback.was.not.confirmed.as.saved.please.try.again.129"));
-      feedbackStatus.textContent = t(feedbackContext.help_request ? 'help.saved' : "portal.feedback.saved.thank.you.130"); correctionFields.hidden = true; feedbackInput.hidden = true; feedbackLabel.hidden = true; feedbackSubmit.hidden = true; feedbackCancel.textContent = t("portal.close.131");
+      feedbackStatus.textContent = t(feedbackContext.help_request ? feedbackContext.kind === 'quality' ? 'help.qualitySaved' : 'help.saved' : "portal.feedback.saved.thank.you.130"); correctionFields.hidden = true; feedbackInput.hidden = true; feedbackLabel.hidden = true; feedbackSubmit.hidden = true; feedbackCancel.textContent = t("portal.close.131");
     } catch (error) { feedbackStatus.textContent = translateMessage(error.message); }
     finally { feedbackBusy = false; feedbackSubmit.disabled = false; feedbackClose.disabled = false; feedbackCancel.disabled = false; feedbackInput.disabled = false; replacementInput.disabled = false; }
   });

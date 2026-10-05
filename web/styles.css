@@ -112,6 +112,10 @@ button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke
 .step ul ul { list-style-type: circle; }
 .step ul ul ul { list-style-type: square; }
 .courseContent { line-height: 1.75; }
+.contentReportActions { display: flex; flex-direction: column; align-items: flex-end; gap: 1.5em; font-size: 13px; line-height: 1.5; margin-bottom: 12px; }
+.contentReportActions > button { position: static; font-size: inherit; line-height: inherit; padding: 0; }
+.contentReportActions > .requestHelpButton { color: #0874b9; }
+.contentReportActions > .contentQualityButton { color: #c62828; }
 .courseContent h1, .courseContent h2, .courseContent h3, .courseContent h4 { color: var(--ma-navy); line-height: 1.5; }
 .courseContent h1, .courseContent h2 { font-size: 19px; margin: 28px 0 14px; }
 .courseContent h3, .courseContent h4 { font-size: 16px; margin: 22px 0 12px; }

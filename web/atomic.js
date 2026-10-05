@@ -1,7 +1,7 @@
-import {t, translateMessage} from './i18n.js?v=07e4a73eada2a6e9';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=07e4a73eada2a6e9';
-import {reportableContent, helpableContent} from './content-report.js?v=07e4a73eada2a6e9';
-import {createLearningCache} from './learning-cache.js?v=07e4a73eada2a6e9';
+import {t, translateMessage} from './i18n.js?v=8df0ff5e5cff42da';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=8df0ff5e5cff42da';
+import {reportableContent, helpableContent} from './content-report.js?v=8df0ff5e5cff42da';
+import {createLearningCache} from './learning-cache.js?v=8df0ff5e5cff42da';
 
 const node = (tag, cls = '', text) => {
   const el = document.createElement(tag); el.className = cls;
@@ -198,7 +198,7 @@ export function createAtomicView(bridge) {
     if (state.pause) main.append(node('p', 'atomicPaused', t('atomic.paused')));
     else if (can('pause_topic') && state.phase !== 'completed') main.append(button(t('atomic.pause'), () => mutate('pause'), 'textButton atomicPause'));
     for (const control of main.querySelectorAll('button')) {
-      if (control.dataset.readOnly) continue;
+      if (control.dataset.readOnly || control.dataset.helpAction) continue;
       const pause = control.classList.contains('atomicPause');
       if (busy || state.pause || (!pause && (state.pending_submission_id || !state.can_learn))) control.disabled = true;
     }

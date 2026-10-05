@@ -3,12 +3,14 @@ from contextlib import closing
 from datetime import datetime, timedelta
 import json
 import uuid
+from typing import Literal
 from fastapi import Request, Query
 from pydantic import BaseModel, ConfigDict, Field
 from .service import DomainError, now
 from .public_limits import PublicLimitError
 from .content_reports import ContentText
 from .question_bank import QuestionBank
+from .training_content import TrainingCatalog, permission_id
 
 
 class HelpRequest(BaseModel):
@@ -19,11 +21,15 @@ class HelpRequest(BaseModel):
     question_id: str | None = Field(default=None, max_length=256)
     content_block_id: str = Field(min_length=1, max_length=300)
     content_version: str = Field(min_length=1, max_length=128)
+    kind: Literal['help', 'quality'] = 'help'
+    bank_id: str | None = Field(default=None, min_length=1, max_length=64)
+    group_id: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class HelpRequestStore:
     def __init__(self, catalog, access_store, subjects):
         self.catalog, self.access_store, self.subjects = catalog, access_store, subjects
+        self.training = TrainingCatalog(access_store.data_dir)
         with closing(access_store._connect()) as con:
             con.executescript('''CREATE TABLE IF NOT EXISTS help_requests (
                 id TEXT PRIMARY KEY, learner_id TEXT NOT NULL REFERENCES access_principals(learner_id),
@@ -81,9 +87,20 @@ class HelpRequestStore:
                 'items': [{**dict(row), 'uses_default': bool(row['uses_default'])} for row in rows]}
 
     def save(self, access, values, subject_id=None):
+        values = HelpRequest.model_validate(values).model_dump()
         topic_id = values['topic_id']
+        bank_id = values['bank_id']
+        if bank_id:
+            if topic_id != permission_id(bank_id) or not values['group_id'] or not values['question_id']:
+                raise DomainError('invalid_help_context', '未找到此答疑请求对应的内容。', 422)
+            bank = self.training.bank(bank_id)
+            if subject_id is not None and subject_id != bank['subject_id']:
+                raise DomainError('subject_bank_mismatch', '此题库不属于当前学科。', 403)
+        elif values['group_id'] or topic_id not in self.catalog.topics:
+            raise DomainError('invalid_help_context', '未找到此答疑请求对应的内容。', 422)
         self.access_store.authorize(access, topic_id, 'request_help')
-        self.subjects.authorize_topic(subject_id, topic_id)
+        if not bank_id:
+            self.subjects.authorize_topic(subject_id, topic_id)
         message = values['message'].strip()
         if '\x00' in message:
             raise DomainError('invalid_help_request', '请求字段不完整或格式错误，请刷新后重试。', 422)
@@ -92,7 +109,7 @@ class HelpRequestStore:
             existing = con.execute('SELECT id,body,created_at FROM help_requests WHERE learner_id=? AND request_id=?',
                                    (access['learner_id'], payload['request_id'])).fetchone()
             if existing:
-                if json.loads(existing['body'])['request'] != payload:
+                if HelpRequest.model_validate(json.loads(existing['body'])['request']).model_dump() != payload:
                     raise DomainError('request_conflict', '同一请求标识不能用于不同内容。', 409)
                 return {'id': existing['id'], 'status': 'saved', 'created_at': existing['created_at']}
             owner = self._owner(con, access['learner_id'])
@@ -102,48 +119,73 @@ class HelpRequestStore:
                 self._require_admin(con, owner)
             except DomainError:
                 raise DomainError('help_admin_unavailable', '答疑管理员暂不可用，请稍后重试。', 503) from None
-            topic = self.catalog.topic(topic_id)
-            block, question_id = payload['content_block_id'], payload.get('question_id')
-            revision = payload['content_version']
-            bank_question = None
-            if revision != topic['version']:
-                # Converted questions pin an immutable bank revision rather than
-                # the source Topic version, including in history and reviews.
-                try:
-                    if not question_id or topic.get('training_mode') == 'atomic_retrieval':
-                        raise ValueError('A bank revision requires a paradigm question')
-                    bank = QuestionBank(topic, self.access_store.data_dir)
-                    if question_id not in bank.load(revision)['questions']:
-                        raise ValueError('The revision does not contain this question')
-                    bank_question = bank.question(question_id, revision)
-                except (ValueError, KeyError, OSError):
-                    raise DomainError('content_version_mismatch', '正文版本已变化，请刷新后重新提交答疑请求。', 409) from None
-            html = None
-            if question_id:
-                questions = topic['flashcards'] if topic.get('training_mode') == 'atomic_retrieval' else [q for m in topic['modules'] for q in [m['example'], *m['practices']]]
-                question = bank_question or next((q for q in questions if q['id'] == question_id), None)
-                field = {f'question:{question_id}': 'html', f'explanation:{question_id}': 'explanation_html'}.get(block)
-                if question and field: html = question[field]
-            elif block == 'introduction':
-                html = topic['introduction']['html']
-            elif block.startswith('chunk:') and topic.get('training_mode') == 'atomic_retrieval':
-                chunk = next((c for c in topic['memory_chunks'] if 'chunk:' + c['id'] == block), None)
-                if chunk: html = chunk['html']
-            if html is None:
-                raise DomainError('invalid_help_context', '未找到此答疑请求对应的内容。', 422)
+            html, context = self._content(payload)
             created = now()
             cutoff = (datetime.fromisoformat(created) - timedelta(seconds=60)).isoformat()
             if con.execute('SELECT COUNT(*) FROM help_requests WHERE learner_id=? AND created_at>?', (access['learner_id'], cutoff)).fetchone()[0] >= 3:
                 raise PublicLimitError('help_rate_limited', '答疑请求过于频繁，请稍后重试。', 60)
-            course = self.catalog.courses[self.catalog.topic_courses[topic_id]]
-            body = {'request': payload, 'display_name': access['display_name'],
-                    'course_id': course['id'], 'course_title': course['title'], 'topic_title': topic['title'],
-                    'subject_id': self.subjects.course_subjects[course['id']],
+            body = {'request': payload, 'display_name': access['display_name'], **context,
                     'content_text': ''.join(ContentText(html).parts)}
             request_id = str(uuid.uuid4())
             con.execute('INSERT INTO help_requests VALUES (?,?,?,?,?)',
                         (request_id, access['learner_id'], payload['request_id'], json.dumps(body, ensure_ascii=False), created))
         return {'id': request_id, 'status': 'saved', 'created_at': created}
+
+    def _content(self, payload):
+        topic_id = payload['topic_id']
+        block, question_id = payload['content_block_id'], payload.get('question_id')
+        revision = payload['content_version']
+        block_type = block.split(':')[0]
+        if payload['bank_id']:
+            bank, group, question = self.training.question(payload['bank_id'], payload['group_id'], question_id)
+            if revision != bank['version']:
+                raise DomainError('content_version_mismatch', '正文版本已变化，请刷新后重新提交答疑请求。', 409)
+            field = {f'question:{question_id}': 'html', f'explanation:{question_id}': 'explanation_html'}.get(block)
+            if field is None:
+                raise DomainError('invalid_help_context', '未找到此答疑请求对应的内容。', 422)
+            return question[field], {'course_id': bank['id'], 'course_title': bank['title'],
+                'topic_title': group['title'], 'subject_id': bank['subject_id'],
+                'content_block_type': block_type, 'content_block_title': question.get('title', question_id)}
+        topic = self.catalog.topic(topic_id)
+        bank_question = None
+        if revision != topic['version']:
+            # Converted questions pin an immutable bank revision rather than
+            # the source Topic version, including in history and reviews.
+            try:
+                if not question_id or topic.get('training_mode') == 'atomic_retrieval':
+                    raise ValueError('A bank revision requires a paradigm question')
+                bank = QuestionBank(topic, self.access_store.data_dir)
+                if question_id not in bank.load(revision)['questions']:
+                    raise ValueError('The revision does not contain this question')
+                bank_question = bank.question(question_id, revision)
+            except (ValueError, KeyError, OSError):
+                raise DomainError('content_version_mismatch', '正文版本已变化，请刷新后重新提交答疑请求。', 409) from None
+        html = None
+        block_title = ''
+        if question_id:
+            questions = topic['flashcards'] if topic.get('training_mode') == 'atomic_retrieval' else [q for m in topic['modules'] for q in [m['example'], *m['practices']]]
+            question = bank_question or next((q for q in questions if q['id'] == question_id), None)
+            field = {f'question:{question_id}': 'html', f'explanation:{question_id}': 'explanation_html'}.get(block)
+            if question and field:
+                html = question[field]
+                block_title = question.get('title', question_id)
+        elif block == 'introduction':
+            html = topic['introduction']['html']
+            block_title = topic['introduction'].get('title', '')
+        elif block.startswith('introduction:') and topic.get('topic_format_version') == 2:
+            intro = next((i for i in topic['introductions'] if 'introduction:' + i['id'] == block), None)
+            if intro:
+                html, block_title = intro['html'], intro.get('title', intro['id'])
+        elif block.startswith('chunk:') and topic.get('training_mode') == 'atomic_retrieval':
+            chunk = next((c for c in topic['memory_chunks'] if 'chunk:' + c['id'] == block), None)
+            if chunk:
+                html, block_title = chunk['html'], chunk.get('title', chunk['id'])
+        if html is None:
+            raise DomainError('invalid_help_context', '未找到此答疑请求对应的内容。', 422)
+        course = self.catalog.courses[self.catalog.topic_courses[topic_id]]
+        return html, {'course_id': course['id'], 'course_title': course['title'], 'topic_title': topic['title'],
+                'subject_id': self.subjects.course_subjects[course['id']],
+                'content_block_type': block_type, 'content_block_title': block_title}
 
     def inbox(self, access, limit=25, offset=0):
         if not access.get('is_admin'):

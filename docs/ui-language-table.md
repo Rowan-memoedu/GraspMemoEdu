@@ -2,7 +2,7 @@
 
 本表从当前界面词库自动生成。修改以词库为准，随后重新生成并检查本表。术语约定见 [界面语言规范](ui-language.md)。
 
-共 629 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
+共 638 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
 
 不包括作者课程正文、题目、答案、解析或用户输入。首页的学科双语副标题按约定保留。
 
@@ -332,6 +332,15 @@
 | Student | 学员 |
 | Non-student | 非学员 |
 | Request help | 请求答疑 |
+| Poor content quality | 内容质量不佳 |
+| Optionally describe the problem with this content, or submit without a message. | 可补充这段内容的问题，也可留空直接提交。 |
+| Your content quality report has been saved. | 内容质量反馈已保存。 |
+| Saving your content quality report… | 正在保存内容质量反馈… |
+| Question | 题目 |
+| Explanation | 解析 |
+| Introduction | 指导 |
+| Memory chunk | 记忆组块 |
+| Open this content | 打开对应内容 |
 | Help requests | 答疑请求 |
 | Optionally describe your question about this content, or submit without a message. | 可补充你对这段内容的疑问，也可留空直接提交。 |
 | No additional message | 未填写补充说明 |
