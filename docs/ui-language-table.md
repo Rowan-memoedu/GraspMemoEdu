@@ -332,8 +332,8 @@
 | Student | 学员 |
 | Non-student | 非学员 |
 | Request help | 请求答疑 |
-| Poor content quality | 内容质量不佳 |
-| Optionally describe the problem with this content, or submit without a message. | 可补充这段内容的问题，也可留空直接提交。 |
+| Content quality feedback | 内容质量反馈 |
+| You may share the issues you see in this content, or submit directly. We will improve this content. | 可反馈你认为这段内容存在的问题，也可直接提交，我们会优化这段内容 |
 | Your content quality report has been saved. | 内容质量反馈已保存。 |
 | Saving your content quality report… | 正在保存内容质量反馈… |
 | Question | 题目 |
