@@ -55,8 +55,8 @@ scheduled = reviews.record_module_result(
 
 - `GET /api/dashboard` 汇集当前课程已授权 Topic 的到期卡片和未完成轮次，返回 `type: "Review"` 与 `next_review_due_at`。主页到期自动查询，页面隐藏时暂停查询、恢复可见后继续。已完成轮次并入现有学习历史分页。课程完成度仍由 Lesson 决定。
 - `POST /api/review/begin` 接收 `module_id/request_id`；`GET /api/review/sessions/{id}` 读取当前轮次。前端地址为 `#/review/<topic>/<module>?session=<id>`，刷新恢复相同轮次。
-- `POST /api/review/sessions/{id}/submit`、`/continue`、`/pause` 对应提交、下一题与主动暂停；`GET /api/review/submissions/{id}` 读取判题结果。前两者使用 revision 与 question_id 校验；所有请求带 `topic_id` 并核对身份和权限。
-- 复习页面只有当前 Practice 和本轮已答题，不提供 Example、Introduction、未来题或未作答题解析。游客主动暂停返回 403；游客自愿开启体验浏览时，`GET /api/review/sessions/{id}/demo-answer` 只提供当前可提交题的标准答案，已有草稿不覆盖。
+- `POST /api/review/sessions/{id}/submit`、`/continue` 对应提交与下一题；`GET /api/review/submissions/{id}` 读取判题结果。修改请求使用 revision 与 question_id 校验；所有请求带 `topic_id` 并核对身份和权限。旧 `/pause` 接口已停用，返回 403。
+- 复习页面只有当前 Practice 和本轮已答题，不提供 Example、Introduction、未来题或未作答题解析。所有用户均无主动暂停按钮；游客自愿开启体验浏览时，`GET /api/review/sessions/{id}/demo-answer` 只提供当前可提交题的标准答案，已有草稿不覆盖。
 - 保留度、优化及后台配置不开放网页接口。管理员可在“暂停管理”页解除自己负责学员的暂停，见 [管理员暂停管理](admin-pauses.md)；普通账号与游客不可使用。`review-status --learner ... --topic ...` 查看服务端复习状态；`review-unlock --learner ... --topic ... --pause-event ...` 按精确暂停事件解锁，Lesson 已完成时同样有效。
 - 本次推送指网站内到期任务；浏览器系统通知、邮件与站外消息未接入。
 
@@ -93,7 +93,7 @@ result = reviews.submission(submission["submission_id"])
 | 第一题正确 | 1 | 4 |
 | 最终错 1 题，完成全部补题 | 3 | 2 |
 | 最终错 2 题，完成全部补题 | 5 | 1 |
-| 第 3 次错误，或主动暂停 | 立即终止 | `null` |
+| 第 3 次错误 | 立即终止 | `null` |
 
 当前复习规则没有产生 3 的条件；算法接口仍完整支持 3，Lesson 也继续使用自己的 4/3/2/1 规则。
 
@@ -101,11 +101,11 @@ result = reviews.submission(submission["submission_id"])
 
 ## 暂停和管理解锁
 
-`pause(session_id, request_id=...)` 或第 3 次错误沿用“整个 Topic 暂停”的语义。若 Lesson 仍在进行，也会暂停其当前未完成模块；已完成模块评分保留。若 Lesson 已全部完成，保留其完成状态，同时停止该 Topic 的所有复习推送。暂停的复习不调用 FSRS，保留原卡与到期时间。
+第 3 次错误暂停整个 Topic 的推送。学员沿用管理员精确解锁规则，若 Lesson 仍在进行则暂停当前未完成模块，已完成模块评分保留。非学员冷却 6 小时后重开本轮复习，不改变先前 Lesson 进度。暂停的复习不调用 FSRS，保留原卡、到期时间和持久抽题队列。旧 `pause(session_id, request_id=...)` 仅保留为可信服务端兼容入口，不向网页开放。
 
 `unlock_topic(pause_event_id=...)` 是仅供服务端管理侧调用的入口。它按精确事件恢复整个 Topic；若 Lesson 同时暂停，复用其原有解锁规则。旧复习轮次作为历史保留，再次 `begin()` 新建轮次，从该 Example 剩余队列继续取题，本轮错误数清零，组内已补题标记保留。对同一事件重复解锁不会重复创建轮次，也不能误解锁后来的暂停。
 
-学习权限（包括游客不能主动暂停）由现有账号系统决定；正式接线时在调用这些后端方法前执行原有权限检查，不给网页开放解锁入口。
+学习权限由现有账号系统决定；调用后端方法前执行资格与授权检查。仅分配管理员可在暂停管理页按精确事件解锁，普通学习用户不可使用。
 
 ## 设置保留度、优化与应用参数
 

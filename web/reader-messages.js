@@ -1,5 +1,11 @@
 // Explicit reader UI catalog. Course text, question titles, answers, and judge feedback are excluded.
 export const readerMessages = {
+  'reader.studentOnly': ['该功能仅对学员开放', 'This feature is available only to students'],
+  'reader.skipped': ['已跳过，等待补学', 'Skipped; awaiting catch-up learning'],
+  'reader.skipDone': ['已跳过当前模块', 'Current module skipped'],
+  'reader.roundEnded': ['本轮学习已结束', 'This learning round has ended'],
+  'reader.catchUpPending': ['含跳过模块，等待管理员解锁补学。其他已完成模块仍正常安排复习。', 'Skipped modules await administrator unlock for catch-up learning. Completed modules continue their normal reviews.'],
+  'reader.cooldown': ['6 小时后可再次学习 · {time}', 'You can study again after 6 hours · {time}'],
   'reader.introductionTask': ['引论', 'Introduction'],
   'reader.introductionUpdate': ['引论更新', 'Updated introduction'],
   'reader.updatedNotice': ['引论内容已更新，请阅读本次内容。原完成记录和课程进度已保留。', 'This introduction has changed. Read the updated content; your original completion and course progress are preserved.'],

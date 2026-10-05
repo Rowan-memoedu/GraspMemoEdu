@@ -77,7 +77,7 @@ class AdministratorTests(unittest.TestCase):
     def test_unrestricted_dynamic_access_and_normal_accounts_remain_locked(self):
         self.store.set_permissions(self.learner, [], [])
         access = self.call('GET', 'access')
-        self.assertTrue(access['is_admin']); self.assertEqual(access['features'], list(FEATURES))
+        self.assertTrue(access['is_admin']); self.assertEqual(access['features'], [f for f in FEATURES if f != 'skip_module'])
         self.assertEqual(len(access['topics']), 3)
         self.store.topics['future'] = {'id': 'future', 'title': 'Added later'}
         self.assertIn('future', {t['id'] for t in self.call('GET', 'access')['topics']})

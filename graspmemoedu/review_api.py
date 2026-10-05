@@ -49,6 +49,8 @@ class ReviewAnswer(ReviewAction):
 
 def register_review_routes(app, identity, admission_lock, limits, schedule, outstanding_count, dependency_policy=None, references_for=None):
     def public_state(state, access, learner):
+        with closing(learner._connect()) as con:
+            state['cooldown_until'] = (learner._load(con).get('cooldown') or {}).get('resume_at')
         if 'review_history' not in access['features']:
             with closing(learner._connect()) as con:
                 latest = con.execute('SELECT id FROM review_sessions WHERE learner=? AND topic=? ORDER BY rowid DESC LIMIT 1',
@@ -111,8 +113,7 @@ def register_review_routes(app, identity, admission_lock, limits, schedule, outs
 
     @app.post('/api/review/sessions/{session_id}/pause')
     def pause(session_id: str, payload: ReviewPause, request: Request):
-        access, learner = identity(request, 'pause_topic')
-        return public_state(learner.review_backend.pause(session_id, request_id=payload.request_id), access, learner)
+        raise DomainError('manual_pause_removed', '主动暂停功能已移除。', 403)
 
     @app.get('/api/review/sessions/{session_id}/demo-answer')
     def demo(session_id: str, request: Request):

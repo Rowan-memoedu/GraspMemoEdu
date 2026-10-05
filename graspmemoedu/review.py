@@ -276,6 +276,8 @@ class ReviewBackend:
         return con.execute('SELECT * FROM review_topic_pauses WHERE learner=? AND topic=?', self.key).fetchone()
 
     def _guard_topic(self, con):
+        from .module_flow import resume_due
+        resume_due(self.learning, con)
         if self._paused(con) or self.learning._load(con)['status'] == 'paused':
             raise DomainError('topic_paused', '当前 Topic 已暂停，等待管理员解锁。')
 
@@ -350,6 +352,7 @@ class ReviewBackend:
         """Durable in-site dispatch queue; overdue tasks survive outages/restarts."""
         if type(limit) is not int or not 1 <= limit <= 500:
             raise DomainError('invalid_limit', '到期任务数量须在 1 至 500 之间。', 422)
+        self.learning.resume_due()
         with closing(self.learning._connect()) as con:
             if self._paused(con) or self.learning._load(con)['status'] == 'paused':
                 return []
@@ -659,6 +662,13 @@ class ReviewBackend:
 
     def _pause_topic(self, con, reason):
         lesson = self.learning._load(con)
+        from .module_flow import student, set_cooldown
+        if reason == 'review_practice_error_limit' and not student(self.learning, con):
+            event_id = self._event(con, 'review_topic_paused', pause_reason=reason, mastery=None)
+            self.on_topic_paused(con, event_id, reason)
+            set_cooldown(self.learning, lesson, event_id, 'review')
+            self.learning._save(con, lesson)
+            return
         if lesson['status'] == 'in_progress':
             self.learning._pause(con, lesson, reason)
             self.learning._save(con, lesson)

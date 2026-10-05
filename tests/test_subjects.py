@@ -210,7 +210,7 @@ class SubjectAcceptanceTests(unittest.TestCase):
             'attempt_id': state['attempt_id'], 'step_id': state['active_step_id'], 'choice': 'mastered'})
         self.assertEqual(chosen['topic_id'], 'topic-b')
         denied = self.call('POST', '/api/pause?topic_id=topic-b&subject_id=physics', {'request_id': 'physics-pause'}, status=403)
-        self.assertEqual(denied['detail']['code'], 'feature_forbidden')
+        self.assertEqual(denied['detail']['code'], 'manual_pause_removed')
         self.assertEqual(chosen, self.call('GET', '/api/state?topic_id=topic-b'))
 
     def test_nonmath_assets_accept_guests_and_still_require_valid_identity(self):

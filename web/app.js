@@ -1,11 +1,11 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=7aef4a60b5ceaa7e";
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=7aef4a60b5ceaa7e';
-import {reportableContent} from './content-report.js?v=7aef4a60b5ceaa7e';
-import {createLearningCache} from './learning-cache.js?v=7aef4a60b5ceaa7e';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=f04cea821ce153af";
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=f04cea821ce153af';
+import {reportableContent} from './content-report.js?v=f04cea821ce153af';
+import {createLearningCache} from './learning-cache.js?v=f04cea821ce153af';
 
-import {answerEditor} from './learning-ui.js?v=7aef4a60b5ceaa7e';
-import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=7aef4a60b5ceaa7e';
-import {enhanceTopicContent, mountTopicBacklinks, focusContentNode} from './topic-content.js?v=7aef4a60b5ceaa7e';
+import {answerEditor} from './learning-ui.js?v=f04cea821ce153af';
+import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=f04cea821ce153af';
+import {enhanceTopicContent, mountTopicBacklinks, focusContentNode} from './topic-content.js?v=f04cea821ce153af';
 
 applyStaticTranslations();
 
@@ -603,7 +603,7 @@ function renderIdentity() {
 
 function featureMessage(feature) {
   if (feature === "pause_topic" && access?.role === "guest") return t("该功能需注册账号才能使用");
-  const names = { learn: t("继续学习"), submit_answer: t("作答"), review_history: t("回看"), pause_topic: t("暂时终止学习") };
+  const names = { learn: t("继续学习"), submit_answer: t("作答"), review_history: t("回看"), skip_module: t('lesson.pause') };
   return t("reader.featureUnavailable", { feature: names[feature] || t("此") });
 }
 function allowFeature(feature) {
@@ -769,7 +769,8 @@ function renderUnavailable() {
 
 async function mutate(path, payload, { pause = false } = {}) {
   if ((pause ? pauseBusy : actionBusy) || !state) return;
-  if (!allowFeature(pause ? "pause_topic" : path === "select" ? "review_history" : path === 'reveal' ? 'submit_answer' : "learn")) return;
+  if (pause && !access?.is_student) { pageMessage = t('reader.studentOnly'); render(); return; }
+  if (!allowFeature(pause ? "skip_module" : path === "select" ? "review_history" : path === 'reveal' ? 'submit_answer' : "learn")) return;
   const generation = connectionGeneration;
   if (pause) pauseBusy = true;
   else actionBusy = true;
@@ -780,8 +781,8 @@ async function mutate(path, payload, { pause = false } = {}) {
     const next = await topicRequest(path, { method: "POST", body: payload });
     applyState(next, { force: true, announceChange: true });
     notifyOtherTabs();
-    if (path === "pause") announce(t("已暂时终止学习，等待管理者解锁。"));
-    if (["continue", "select"].includes(path)) focusStep();
+    if (path === "skip") announce(t('reader.skipDone'));
+    if (["continue", "select", "skip"].includes(path)) focusStep();
   } catch (error) {
     if (generation !== connectionGeneration) return;
     if (await recoverIdentity(error)) return;
@@ -1008,7 +1009,7 @@ function renderProgress() {
   const completed = state.modules.filter((module) => module.status === "completed").length;
   const caption = $("progressCaption");
   caption.hidden = false;
-  caption.replaceChildren(el("span", "", t("reader.modulesCompleted", { completed, total: state.modules.length })), el("span", "", state.status === "paused" ? t("已暂停") : state.status === "completed" ? t("学习完成") : t("学习中")));
+  caption.replaceChildren(el("span", "", t("reader.modulesCompleted", { completed, total: state.modules.length })), el("span", "", state.status === "paused" ? t("已暂停") : state.status === "completed" ? state.skipped_modules?.length ? t('reader.roundEnded') : t("学习完成") : t("学习中")));
   const target = $("lessonProgress");
   target.hidden = false;
   target.setAttribute("aria-valuenow", String(Math.round(100 * completed / (state.modules.length || 1))));
@@ -1022,12 +1023,12 @@ function renderProgress() {
 
 function renderPause() {
   const target = $("pauseNotice");
-  target.hidden = readingStatus() !== "paused";
+  target.hidden = readingStatus() !== "paused" && !state.topic_locked;
   if (target.hidden) return;
-  const automatic = state.pause?.reason === "practice_error_limit";
+  const automatic = ['practice_error_limit', 'review_practice_error_limit'].includes((state.pause || state.topic_pause)?.reason);
   target.replaceChildren(
     el("h2", "", automatic ? t("检测到状态不佳，已暂停作答") : t("已暂时终止学习")),
-    el("p", "", t("请等待管理者解锁。已完成模块的评分和学习记录已保留，仍可回看已学内容。")),
+    el("p", "", state.cooldown_until ? t('reader.cooldown', {time: new Date(state.cooldown_until).toLocaleString()}) : t("请等待管理者解锁。已完成模块的评分和学习记录已保留，仍可回看已学内容。")),
   );
 }
 
@@ -1046,7 +1047,7 @@ function renderHistory() {
       else if (!visited.slice(0, visited.indexOf(step)).some(item => item.module_id === step.module_id && item.kind !== 'introduction')) {
         const module = state.modules.find(item => item.id === step.module_id);
         const steps = visited.filter(item => item.module_id === step.module_id && !['introduction', 'completion'].includes(item.kind));
-        nodes.push(historyGroup(learningTitle(module.title), module.status === 'completed' ? t('reader.completedMastery', {score: module.mastery}) : t('学习中'), steps, module.status, module.attempt_id));
+        nodes.push(historyGroup(learningTitle(module.title), module.status === 'skipped' ? t('reader.skipped') : module.status === 'completed' ? t('reader.completedMastery', {score: module.mastery}) : t('学习中'), steps, module.status, module.attempt_id));
       }
     }
     target.replaceChildren(...nodes);
@@ -1057,7 +1058,7 @@ function renderHistory() {
   for (const module of state.modules) {
     const steps = visited.filter((step) => step.module_id === module.id && !["introduction", "completion"].includes(step.kind));
     const status = module.status === "completed" ? t("reader.completedMastery", { score: module.mastery })
-      : module.status === "paused" ? t("已暂停") : steps.length ? t("学习中") : t("尚未学习");
+      : module.status === 'skipped' ? t('reader.skipped') : module.status === "paused" ? t("已暂停") : steps.length ? t("学习中") : t("尚未学习");
     nodes.push(historyGroup(learningTitle(module.title), status, steps, module.status, module.attempt_id));
   }
   const completion = visited.filter((step) => step.kind === "completion");
@@ -1197,7 +1198,7 @@ function renderStep(step) {
   if (state.pending_submission_id && step.id === state.active_step_id) {
     const wait = el("div", "waiting");
     wait.setAttribute("role", "status");
-    wait.append(el("span", "spinner"), el("span", "", can("pause_topic") ? t("正在判题，请稍候。你仍可暂时终止学习或回看已学内容。") : t("正在判题，请稍候。你仍可回看已学内容。")));
+    wait.append(el("span", "spinner"), el("span", "", t("正在判题，请稍候。你仍可回看已学内容。")));
     target.append(wait);
   }
   renderStepNavigation(target, step, actions);
@@ -1306,14 +1307,15 @@ function renderResult(step) {
   target.append(text, masteryBadge(module.mastery));
 }
 function renderCompletion(target) {
-  const heading = el("h2", "completionHeading", t("本 Topic 已完成"));
+  const incomplete = Boolean(state.skipped_modules?.length);
+  const heading = el("h2", "completionHeading", incomplete ? t('reader.roundEnded') : t("本 Topic 已完成"));
   heading.id = "stepTitle";
   heading.tabIndex = -1;
-  target.append(heading, el("p", "completionIntro", state.topic_kind === 'introduction' ? t('reader.readingComplete') : t("各模块的学习结果已保存。你可以通过学习记录回看题目与讲解。")));
+  target.append(heading, el("p", "completionIntro", incomplete ? t('reader.catchUpPending') : state.topic_kind === 'introduction' ? t('reader.readingComplete') : t("各模块的学习结果已保存。你可以通过学习记录回看题目与讲解。")));
   const list = el("div", "completionList");
   for (const module of state.modules) {
     const row = el("div", "completionRow");
-    row.append(el("span", "completionRowTitle", learningTitle(module.title)), masteryBadge(module.mastery));
+    row.append(el("span", "completionRowTitle", learningTitle(module.title)), module.status === 'skipped' ? el('span', 'historyStatus skipped', t('reader.skipped')) : masteryBadge(module.mastery));
     list.append(row);
   }
   target.append(list);
@@ -1333,10 +1335,13 @@ function renderBusy() {
   if ($("submitButton") && !disabled) $("submitButton").disabled = !answerReady($("answerInput")) || !can("submit_answer");
   for (const element of $("historyPanel").querySelectorAll("button")) element.disabled = disabled || !can("review_history");
   for (const element of $("reviewNotice").querySelectorAll("button")) element.disabled = disabled || !can("review_history");
-  $("pauseButton").hidden = readingStatus() !== "in_progress";
-  $("pauseControl").hidden = readingStatus() !== "in_progress";
-  $("pauseButton").disabled = pauseBusy || identityBusy || (access?.role === "account" && !can("pause_topic"));
-  $("pauseButton").title = can("pause_topic") ? t("暂时终止整个 Topic 的作答，等待管理者解锁") : featureMessage("pause_topic");
+  const skipVisible = readingStatus() === 'in_progress' && !state.topic_locked && state.topic_kind !== 'introduction'
+    && state.current_step_id === state.active_step_id
+    && state.modules.some(module => module.attempt_id === state.attempt_id && module.status !== 'completed');
+  $("pauseButton").hidden = !skipVisible;
+  $("pauseControl").hidden = !skipVisible;
+  $("pauseButton").disabled = pauseBusy || identityBusy;
+  $("pauseButton").title = access?.is_student ? t('lesson.pauseTitle') : t('reader.studentOnly');
   $("pauseButton").setAttribute("aria-busy", String(pauseBusy));
   $("stepCard").setAttribute("aria-busy", String(actionBusy));
 }
@@ -1452,7 +1457,7 @@ document.addEventListener("keydown", (event) => {
 });
 setHistoryOpen(true);
 $("pauseButton").addEventListener("click", () => {
-  if (readingStatus() === "in_progress" && !pauseBusy) mutate("pause", { request_id: uuid() }, { pause: true });
+  if (readingStatus() === "in_progress" && !pauseBusy) mutate("skip", mutationPayload(), { pause: true });
 });
 window.addEventListener("focus", () => { pageActive = true; syncAnswerClock(); scheduleIdentitySync(); if (!actionBusy && !pauseBusy) refreshState(); });
 window.addEventListener("blur", () => { pageActive = false; syncAnswerClock(); });
@@ -1507,7 +1512,7 @@ async function openTopic(id, subjectId) {
   }
 }
 
-const { initPortal } = await import("./portal.js?v=7aef4a60b5ceaa7e");
+const { initPortal } = await import("./portal.js?v=f04cea821ce153af");
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {
     try { return await fetchGuideAsset(url, subjectId); }

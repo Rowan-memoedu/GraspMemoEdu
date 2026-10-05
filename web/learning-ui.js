@@ -1,5 +1,5 @@
-import {t} from './i18n.js?v=7aef4a60b5ceaa7e';
-import {questionInput, answerReady} from './question-input.js?v=7aef4a60b5ceaa7e';
+import {t} from './i18n.js?v=f04cea821ce153af';
+import {questionInput, answerReady} from './question-input.js?v=f04cea821ce153af';
 
 const node = (tag, cls = '', text) => {
   const item = document.createElement(tag); item.className = cls;
@@ -37,6 +37,7 @@ export function answerEditor(step, stem, value, {formId = 'answerForm', inputId 
 // This keeps the sidebar, lesson, progress, card and mobile drawer geometry identical.
 export function readerFrame(template, prefix) {
   const frame = template.cloneNode(true), refs = {};
+  frame.querySelector('#pauseControl')?.remove();
   for (const item of [frame, ...frame.querySelectorAll('[id]')]) {
     if (!item.id) continue;
     refs[item.id] = item; item.id = prefix + item.id;

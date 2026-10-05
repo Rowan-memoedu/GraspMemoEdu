@@ -2,7 +2,7 @@
 
 本表从当前界面词库自动生成。修改以词库为准，随后重新生成并检查本表。术语约定见 [界面语言规范](ui-language.md)。
 
-共 749 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
+共 767 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
 
 不包括作者课程正文、题目、答案、解析或用户输入。首页的学科双语副标题按约定保留。
 
@@ -79,8 +79,8 @@
 | Content feedback | 内容反馈 |
 | Topic | 主题 |
 | Module completion progress | 模块完成进度 |
-| Pause this entire topic until the administrator unlocks it | 暂时终止整个主题的作答，等待管理员解锁 |
-| Pause learning | 暂时终止学习 |
+| Skip this module and continue to the next | 跳过当前模块，继续下一个模块 |
+| Skip this module | 跳过此模块 |
 | If missing prerequisite knowledge makes this module difficult, you can postpone it. | 未掌握前置知识，感到困难，可选择后延该模块 |
 | Module learning results | 模块学习结果 |
 | Learning progress is saved automatically | 学习进度自动保存 |
@@ -89,6 +89,12 @@
 
 | English | 中文 |
 |---|---|
+| This feature is available only to students | 该功能仅对学员开放 |
+| Skipped; awaiting catch-up learning | 已跳过，等待补学 |
+| Current module skipped | 已跳过当前模块 |
+| This learning round has ended | 本轮学习已结束 |
+| Skipped modules await administrator unlock for catch-up learning. Completed modules continue their normal reviews. | 含跳过模块，等待管理员解锁补学。其他已完成模块仍正常安排复习。 |
+| You can study again after 6 hours · {time} | 6 小时后可再次学习 · {time} |
 | Introduction | 引论 |
 | Updated introduction | 引论更新 |
 | This introduction has changed. Read the updated content; your original completion and course progress are preserved. | 引论内容已更新，请阅读本次内容。原完成记录和课程进度已保留。 |
@@ -313,7 +319,13 @@
 | Review delivery stopped | 已停止复习推送 |
 | Paused learning | 暂停管理 |
 | Refresh list | 刷新列表 |
-| Only pauses for your assigned students are shown. Unlocking follows the existing training rules and preserves completed work and review records. | 仅显示您负责学员的暂停。解除后，按原规则继续训练，已完成内容及复习记录保留。 |
+| Shows pauses and skipped modules for your assigned students. Unlocked skipped modules in the same Topic form one catch-up task. | 显示您负责学员的暂停与跳过模块。解锁跳过模块后，同一 Topic 的补学内容合并为一个学习任务。 |
+| Student skipped this module | 学员跳过此模块 |
+| Unlocked; awaiting catch-up learning | 已解锁，等待补学 |
+| Allow downstream Topic delivery | 允许推送下游 Topic |
+| Unlock catch-up learning | 解锁补学 |
+| Unlock the skipped module for {name} in {topic} and deliver a catch-up task? | 解锁“{name}”在“{topic}”的跳过模块，推送补学任务？ |
+| Studied; includes modules awaiting catch-up learning | 已学过，含待补学模块 |
 | No pauses to handle. | 暂无待处理的暂停。 |
 | Student paused learning | 学员主动暂停 |
 | Error limit reached | 错误次数达到上限 |
@@ -708,6 +720,12 @@
 
 | English | 中文 |
 |---|---|
+| Manual pausing has been removed. | 主动暂停功能已移除。 |
+| You can study again after 6 hours. | 6 小时后可再次学习。 |
+| Skipped modules have changed. Refresh and try again. | 跳过记录已更新，请刷新后重试。 |
+| Specify the currently skipped module and its exact event. | 必须指定当前跳过模块及对应事件。 |
+| Completed modules cannot be skipped. | 已完成的模块不能跳过。 |
+| This content has no initial-learning module to skip. | 当前内容没有可跳过的初学模块。 |
 | The selected content has changed. Reopen the preview and select it again. | 标注的内容已变化，请重新打开预览后选择。 |
 | The selected content positions are invalid. Please select them again. | 所选内容位置无效，请重新选择。 |
 | Only advanced learners may submit individual questions. | 逐题提交仅对高阶学习者开放。 |

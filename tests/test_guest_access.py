@@ -160,7 +160,7 @@ class GuestAccessAcceptanceTests(unittest.TestCase):
                                     headers={**self._headers(identity), **(extra_headers or {})})
         self.assertEqual(response.status_code, 403, response.text)
         self.assertEqual(response.json()["detail"], {
-            "code": "feature_forbidden", "message": self.registered_only_message,
+            "code": "manual_pause_removed", "message": '主动暂停功能已移除。',
         })
         self.assertEqual(self._state(identity), before, "Rejected guest pause changed learning progress")
         return before

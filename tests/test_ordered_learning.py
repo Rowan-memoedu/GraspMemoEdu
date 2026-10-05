@@ -72,6 +72,20 @@ class OrderedLearningTests(unittest.TestCase):
         service.choose(payload(service, choice='unmastered'))
         self.assertEqual(active(service.advance(payload(service)))['introduction_id'], 'intro-b')
 
+    def test_skips_follow_example_order_and_unlocked_module_restores_its_own_guidance(self):
+        service = self.service(ordered_topic())
+        first = service.skip_module(payload(service))
+        record = first['skipped_modules'][0]
+        self.assertEqual(active(first)['question_id'], 'module-2-example')
+        state = service.skip_module(payload(service))
+        self.assertEqual(state['status'], 'completed')
+        self.assertEqual(state['reading_status'], 'completed')
+        state = service.unlock(service.topic_id, record['module_id'], record['event_id'])
+        self.assertEqual(active(state)['question_id'], 'module-1-example')
+        self.assertEqual(state['reading_status'], 'in_progress')
+        service.choose(payload(service, choice='unmastered'))
+        self.assertEqual(active(service.advance(payload(service)))['introduction_id'], 'intro-a')
+
     def test_mastered_answers_directly_and_wrong_answer_returns_to_its_guidance(self):
         service = self.service(ordered_topic())
         service.choose(payload(service, choice='mastered'))

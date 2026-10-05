@@ -557,8 +557,8 @@ class PublicAccessAcceptanceTests(unittest.TestCase):
             before = self._state(identity)
             response = self.client.post("/api/pause", json={"request_id": str(uuid.uuid4())},
                                         headers=self._headers(identity))
-            self._assert_error(response, 403, "feature_forbidden")
-            self.assertEqual(response.json()["detail"]["message"], "该功能需注册账号才能使用")
+            self._assert_error(response, 403, "manual_pause_removed")
+            self.assertEqual(response.json()["detail"]["message"], "主动暂停功能已移除。")
             self.assertEqual(self._state(identity), before)
         finally:
             self.judge.release.set()
@@ -585,9 +585,9 @@ class PublicAccessAcceptanceTests(unittest.TestCase):
         # account-creation behavior, even against the temporary fixture.
         allowed = {"", "/", "/deployment.json", "/api/health", "/api/session", "/api/access", "/api/access/guest",
                    "/api/access/login", "/api/access/logout", "/api/state", "/api/demo-answer", "/api/guest/reset", "/api/choose", "/api/continue",
-                   "/api/select", "/api/pause", "/api/submit", "/api/reveal", "/api/submissions/{submission_id}",
+                   "/api/select", "/api/pause", "/api/skip", "/api/submit", "/api/reveal", "/api/submissions/{submission_id}",
                    "/api/subjects", "/api/catalog", "/api/catalog/select", "/api/dashboard", "/api/profile", "/api/feedback",
-                   "/api/atomic/reviews", "/api/help-requests", "/api/admin/pauses", "/api/admin/pauses/unlock",
+                   "/api/atomic/reviews", "/api/help-requests", "/api/admin/pauses", "/api/admin/pauses/unlock", "/api/admin/pauses/skip-policy",
                    "/api/help-center", "/api/help-replies", "/api/help-replies/read", "/api/help-requests/preview",
                    "/api/admin/students", "/api/admin/students/{learner_id}",
                    "/api/materials", "/api/materials/open", "/api/materials/content",

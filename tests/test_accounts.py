@@ -341,7 +341,7 @@ class AccountAcceptanceTests(unittest.TestCase):
         answer_payload = self._payload(token, answer='correct')
         self.store.set_permissions(learner_id, features=['learn', 'review_history'])
         self._request('POST', '/api/submit?topic_id=account-topic-a', token, answer_payload, 403, 'feature_forbidden')
-        self._request('POST', '/api/pause?topic_id=account-topic-a', token, {'request_id': str(uuid.uuid4())}, 403, 'feature_forbidden')
+        self._request('POST', '/api/pause?topic_id=account-topic-a', token, {'request_id': str(uuid.uuid4())}, 403, 'manual_pause_removed')
         self.store.set_permissions(learner_id, features=list(FEATURES))
         submitted = self._request('POST', '/api/submit?topic_id=account-topic-a', token, answer_payload)
         self._poll(token, submitted['submission_id'])
@@ -392,17 +392,18 @@ class AccountAcceptanceTests(unittest.TestCase):
                       self._payload(token, step_id='forged-future-practice'), 403, 'locked_step')
         self._request('GET', '/api/tasks/lesson:account-topic-a/answers', token, status=404)
 
-    def test_account_manual_pause_and_precise_local_unlock_are_idempotent(self):
+    def test_legacy_precise_local_unlock_remains_idempotent_but_public_pause_is_retired(self):
         account = self._account()
         token = self._login(account)['identity_token']
         before = self._state(token)
         payload = {'request_id': str(uuid.uuid4())}
-        paused = self._request('POST', '/api/pause?topic_id=account-topic-a', token, payload)
-        replay = self._request('POST', '/api/pause?topic_id=account-topic-a', token, payload)
+        self._request('POST', '/api/pause?topic_id=account-topic-a', token, payload, 403, 'manual_pause_removed')
+        learner = self.app.state.learning_services[(account['account']['learner_id'], 'account-topic-a')]
+        paused = learner.pause(payload)
+        replay = learner.pause(payload)
         self.assertEqual(paused['status'], 'paused')
         self.assertEqual(replay['revision'], paused['revision'])
         pause = paused['pause']
-        learner = self.app.state.learning_services[(account['account']['learner_id'], 'account-topic-a')]
         for topic, module, event in [('wrong-topic', pause['module_id'], pause['event_id']),
                                      ('account-topic-a', 'wrong-module', pause['event_id']),
                                      ('account-topic-a', pause['module_id'], 'wrong-event')]:
@@ -421,19 +422,20 @@ class AccountAcceptanceTests(unittest.TestCase):
         self.assertIn(response.status_code, {404, 405})
         self.assertEqual(learner.state()['revision'], unlocked['revision'])
 
-    def test_account_pause_during_judgement_discards_late_result_and_preserves_permission_boundary(self):
+    def test_student_skip_during_judgement_discards_late_result_and_preserves_permission_boundary(self):
         account = self._account()
+        self.store.set_permissions(account['account']['learner_id'], is_student=True)
         token = self._login(account)['identity_token']
         self._action(token, 'choose', choice='mastered')
         submitted = self._action(token, 'submit', answer='blocked-correct')
         self.assertTrue(self.judge.started.wait(3))
-        paused = self._request('POST', '/api/pause?topic_id=account-topic-a', token, {'request_id': str(uuid.uuid4())})
+        skipped = self._request('POST', '/api/skip?topic_id=account-topic-a', token, self._payload(token))
         self.judge.release.set()
         settled = self._poll(token, submitted['submission_id'])
         self.assertEqual(settled['status'], 'discarded')
-        self.assertEqual(settled['state']['status'], 'paused')
+        self.assertEqual(settled['state']['status'], 'completed')
         self.assertIsNone(settled['state']['modules'][0]['mastery'])
-        self.assertEqual(settled['state']['pause']['event_id'], paused['pause']['event_id'])
+        self.assertEqual(settled['state']['skipped_modules'], skipped['skipped_modules'])
 
     def test_course_choice_and_progress_are_shared_across_devices_but_separate_between_courses(self):
         account = self._account()

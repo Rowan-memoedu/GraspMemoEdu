@@ -1,9 +1,9 @@
-import { t, translateMessage, learningTitle } from './i18n.js?v=7aef4a60b5ceaa7e';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=7aef4a60b5ceaa7e';
-import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=7aef4a60b5ceaa7e';
-import {reportableContent} from './content-report.js?v=7aef4a60b5ceaa7e';
-import {createLearningCache} from './learning-cache.js?v=7aef4a60b5ceaa7e';
-import {enhanceTopicContent} from './topic-content.js?v=7aef4a60b5ceaa7e';
+import { t, translateMessage, learningTitle } from './i18n.js?v=f04cea821ce153af';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=f04cea821ce153af';
+import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=f04cea821ce153af';
+import {reportableContent} from './content-report.js?v=f04cea821ce153af';
+import {createLearningCache} from './learning-cache.js?v=f04cea821ce153af';
+import {enhanceTopicContent} from './topic-content.js?v=f04cea821ce153af';
 
 const node = (tag, cls = '', text) => {
   const item = document.createElement(tag); item.className = cls;
@@ -183,14 +183,7 @@ export function createReviewView(bridge) {
     main.append(breadcrumb, node('p', 'eyebrow', t('portal.review')), node('h1', 'lessonTitle', state.module_title ? learningTitle(state.module_title) : state.topic_title), node('p', 'reviewTopicTitle', state.topic_title));
     const count = node('p', 'reviewProgress', t('review.progress', {done: state.practice_answered_count, total: state.practice_target_count, errors: state.practice_error_count})); count.setAttribute('aria-live', 'polite'); main.append(count);
     const message = node('div', 'notice'); message.id = 'reviewNoticeBox'; message.setAttribute('role', 'status'); message.hidden = !failure; message.textContent = failure || ''; main.append(message);
-    if (state.status === 'in_progress') {
-      const toolbar = node('div', 'lessonToolbar'), pause = node('div', 'pauseControl');
-      const pauseButton = button(t('lesson.pause'), 'textButton pauseButton', () => {
-        if (!can('pause_topic')) { notice(bridge.getAccess()?.role === 'guest' ? t('review.accountRequired') : t('review.featureUnavailable')); return; }
-        void mutate('pause', {request_id: crypto.randomUUID()});
-      }, 'reviewPauseButton'); pauseButton.disabled = busy;
-      pause.append(pauseButton, node('p', 'pauseHint', t('lesson.pauseHint'))); toolbar.append(pause); main.append(toolbar);
-    } else {
+    if (state.status !== 'in_progress') {
       const outcome = node('section', state.status === 'completed' ? 'moduleResult' : 'pauseNotice'); outcome.id = 'reviewResult'; outcome.setAttribute('role', 'status');
       const copy = node('div');
       if (state.status === 'completed') {
@@ -198,7 +191,7 @@ export function createReviewView(bridge) {
         copy.append(node('h2', 'resultTitle', t('review.completed')), node('p', 'resultDetail', t('review.nextDue', {time: bridge.formatDate(state.due_at)})));
         outcome.append(copy, node('strong', 'reviewMastery', t('review.rating', {rating: state.mastery, label: labels[state.mastery]})));
       } else {
-        copy.append(node('h2', '', t('review.paused')), node('p', '', t('review.pauseReason'))); outcome.append(copy);
+        copy.append(node('h2', '', t('review.paused')), node('p', '', state.cooldown_until ? t('reader.cooldown', {time: bridge.formatDate(state.cooldown_until)}) : t('review.pauseReason'))); outcome.append(copy);
       }
       main.append(outcome);
     }

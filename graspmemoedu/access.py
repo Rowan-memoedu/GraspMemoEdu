@@ -15,7 +15,7 @@ from .service import DomainError
 
 
 FEATURE_REQUIREMENTS = {'learn': {}, 'submit_answer': {}, 'review_history': {}, 'pause_topic': {},
-                        'request_help': {'student': True},
+                        'request_help': {'student': True}, 'skip_module': {'student': True},
                         'course_hierarchy': {'advanced_learner': True},
                         'training_self_rating': {'advanced_learner': True},
                         'review_question_mode': {'advanced_learner': True}}
@@ -37,6 +37,8 @@ def feature_eligible(access, feature):
     if requirements is None:
         return False
     account = access.get('role') == 'account'
+    if feature == 'skip_module':
+        return account and bool(access.get('is_student'))
     if account and access.get('is_admin'):
         return True
     return all(not required or account and bool(access.get('is_' + qualification))
@@ -205,6 +207,8 @@ class AccessStore:
         return self._public(row)
 
     def authorize(self, access, topic_id, feature=None):
+        if feature == 'skip_module' and not access.get('is_student'):
+            raise DomainError('student_required', '该功能仅对学员开放', 403)
         if access['role'] == 'guest' and topic_id not in self.guest_topic_ids:
             raise DomainError('topic_forbidden', REGISTER_MESSAGE, 403)
         if topic_id not in {topic['id'] for topic in access['topics']}:

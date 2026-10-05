@@ -46,9 +46,12 @@ class OrderedLearningService(LearningService):
             state.update(topic_kind=self.course['topic_kind'], content_version=self.course['content_version'],
                          read_introductions=[], read_content_version=None, reading_status='in_progress', reread_pending=False)
             self._start_order(state, 0)
-        elif self.course['content_order'][state['order_index']]['kind'] == 'introduction':
+        elif is_introduction(self.course) or index < 0:
             self._start_order(state, state['order_index'])
         else:
+            state['order_index'] = next(i for i, item in enumerate(self.course['content_order'])
+                                        if item['kind'] == 'example' and item['id'] == self.course['modules'][index]['id'])
+            state['reading_status'] = 'in_progress'
             super()._new_attempt(state, index)
 
     def _start_order(self, state, index):
@@ -101,8 +104,19 @@ class OrderedLearningService(LearningService):
             example['phase'] = 'reading'
             state['active_step_id'] = state['current_step_id'] = example['id']
 
+    def _module_order(self):
+        indexes = {module['id']: i for i, module in enumerate(self.course['modules'])}
+        return [indexes[item['id']] for item in self.course['content_order'] if item['kind'] == 'example']
+
     def _next_module(self, state):
-        self._start_order(state, state['order_index'] + 1)
+        if is_introduction(self.course):
+            self._start_order(state, state['order_index'] + 1)
+        else:
+            super()._next_module(state)
+            state['reading_status'] = state['status']
+            if state['status'] == 'completed':
+                state.update(reread_pending=False, read_content_version=self.course['content_version'])
+                state.setdefault('read_versions', {})[self.course['content_version']] = now()
 
     def _guard(self, state, payload, **options):
         effective = state

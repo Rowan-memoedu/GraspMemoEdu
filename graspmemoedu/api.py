@@ -191,7 +191,24 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                     **({'clock': atomic_clock} if is_atomic(catalog.topic(topic_id)) and atomic_clock else {}))
                 if not is_atomic(learning_services[key].course) and not is_introduction(learning_services[key].course):
                     ReviewBackend(learning_services[key])
-            return learning_services[key]
+            learner = learning_services[key]
+        learner.resume_due()
+        return learner
+
+    def recover_cooldowns(access):
+        if access.get('is_admin'):
+            return
+        allowed = {item['id'] for item in access['topics']}
+        with closing(access_store._connect()) as con:
+            rows = con.execute('SELECT topic,version,body FROM topics WHERE learner=?', (access['learner_id'],)).fetchall()
+            has_reviews = con.execute("SELECT 1 FROM sqlite_master WHERE name='review_topic_pauses'").fetchone()
+            legacy_review_topics = {row['topic'] for row in con.execute(
+                'SELECT topic FROM review_topic_pauses WHERE learner=?', (access['learner_id'],))} if has_reviews and not access.get('is_student') else set()
+        for row in rows:
+            state = json.loads(row['body'])
+            if (row['topic'] in allowed and row['version'] == catalog.topic(row['topic'])['version']
+                    and (state.get('cooldown') or state.get('pause') or row['topic'] in legacy_review_topics)):
+                service_for(access['learner_id'], row['topic'])
 
     def requested_topic(request):
         topic_id = request.query_params.get('topic_id', catalog.default_topic_id)
@@ -204,8 +221,9 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         subjects.authorize_subject(access, request.query_params.get('subject_id'))
         topic_id = requested_topic(request)
         access_store.authorize(access, topic_id, feature)
+        recover_cooldowns(access)
         path = request.url.path
-        gated = path in ('/api/choose', '/api/continue', '/api/submit', '/api/demo-answer', '/api/review/begin')
+        gated = path in ('/api/choose', '/api/continue', '/api/skip', '/api/submit', '/api/demo-answer', '/api/review/begin')
         gated = gated or (path.startswith('/api/review/sessions/') and path.rsplit('/', 1)[-1] in ('submit', 'continue', 'demo-answer'))
         if gated:
             dependency_policy.require(access, topic_id)
@@ -237,6 +255,13 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         state['access'] = access
         features = set(access['features'])
         state['dependency_ready'] = dependency_policy.is_ready(access, state['topic_id'])
+        if learner.review_backend is not None:
+            with closing(learner._connect()) as con:
+                pause = learner.review_backend._paused(con)
+                state['topic_locked'] = bool(pause)
+                state['topic_pause'] = dict(pause) if pause else None
+        else:
+            state['topic_locked'] = bool(state.get('pause'))
         with closing(learner._connect()) as con:
             self_rating = self_rating_enabled(access, con) and state['dependency_ready'] and 'submit_answer' in features
         if state.get('training_mode') == 'atomic_retrieval':
@@ -263,7 +288,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         for step in state['steps']:
             protect_assessment(step, self_rating)
             step['actions'] = [action for action in step['actions']
-                               if state['dependency_ready'] and action_feature.get(action) in features]
+                               if state['dependency_ready'] and not state['topic_locked'] and action_feature.get(action) in features]
         if state.get('topic_format_version') == 2:
             state['content_references'] = references_for(access, learner)
         return state
@@ -421,7 +446,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         public_paths = {'/api/health', '/api/access', '/api/access/guest', '/api/access/login', '/api/access/logout',
                         '/api/help-center', '/api/help-replies', '/api/help-replies/read', '/api/help-requests/preview',
                         '/api/materials', '/api/materials/open', '/api/materials/content',
-                        '/api/state', '/api/demo-answer', '/api/guest/reset', '/api/choose', '/api/continue', '/api/select', '/api/pause', '/api/submit', '/api/reveal',
+                        '/api/state', '/api/demo-answer', '/api/guest/reset', '/api/choose', '/api/continue', '/api/select', '/api/pause', '/api/skip', '/api/submit', '/api/reveal',
                         '/api/subjects', '/api/catalog', '/api/catalog/select', '/api/dashboard', '/api/profile', '/api/feedback', '/api/help-requests', '/api/guide', '/api/atomic/reviews'}
         public_paths.update(TRAINING_PATHS)
         public_paths.update(PAPER_PATHS)
@@ -465,8 +490,14 @@ def create_app(settings: Settings | None = None, service: LearningService | None
             if not size.isdigit() or int(size) > (65536 if path == '/api/help-requests' else 16384):
                 return deny('request_too_large', '请求过大。', 413)
             # Enforce permissions before parsing a mutation body; hiding controls is not authorization.
+            if request.method == 'POST' and (path == '/api/pause' or path.startswith('/api/review/sessions/') and path.endswith('/pause')):
+                try:
+                    access_store.resolve(request.headers.get('x-learning-identity'))
+                except DomainError as exc:
+                    return deny(exc.code, exc.message, exc.status_code)
+                return deny('manual_pause_removed', '主动暂停功能已移除。', 403)
             action_features = {'/api/choose': 'learn', '/api/continue': 'learn', '/api/guest/reset': 'learn',
-                               '/api/submit': 'submit_answer', '/api/select': 'review_history', '/api/pause': 'pause_topic'}
+                               '/api/submit': 'submit_answer', '/api/select': 'review_history', '/api/skip': 'skip_module'}
             if path in action_features or path == '/api/state' or path.startswith('/api/submissions/') or review_path:
                 try:
                     access = access_store.resolve(request.headers.get('x-learning-identity'))
@@ -565,6 +596,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     def dashboard(request: Request, course_id: str | None = None, cursor: str | None = None,
                   limit: int = Query(default=25, ge=1, le=50)):
         access = access_store.resolve(request.headers.get('x-learning-identity'))
+        recover_cooldowns(access)
         return dashboard_store.dashboard(access, course_id, cursor, limit, request.query_params.get('subject_id'))
 
     @app.get('/api/graphs')
@@ -682,8 +714,12 @@ def create_app(settings: Settings | None = None, service: LearningService | None
 
     @app.post('/api/pause')
     def pause(payload: Pause, request: Request):
-        access, learner = identity(request, 'pause_topic')
-        return public_state(learner.pause(payload.model_dump()), access, learner)
+        raise DomainError('manual_pause_removed', '主动暂停功能已移除。', 403)
+
+    @app.post('/api/skip')
+    def skip_module(payload: Action, request: Request):
+        access, learner = identity(request, 'skip_module')
+        return public_state(learner.skip_module(payload.model_dump()), access, learner)
 
     @app.post('/api/submit')
     def submit(payload: Answer, request: Request):

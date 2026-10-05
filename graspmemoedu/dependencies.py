@@ -50,7 +50,10 @@ class DependencyPolicy:
             row = con.execute('SELECT body,version FROM topics WHERE learner=? AND topic=?', key).fetchone()
             valid = bool(row and row['version'] == version)
             state = json.loads(row['body']) if valid else {}
-            valid = valid and state.get('status') == 'completed'
+            skipped = state.get('skipped_modules', {})
+            skip_allowed = bool(skipped and state.get('skip_downstream_allowed'))
+            valid = valid and (state.get('status') == 'completed' or skip_allowed and state.get('initial_completed_at'))
+            valid = valid and not state.get('pause') and (not skipped or skip_allowed)
             if valid and state.get('training_mode') == 'atomic_retrieval':
                 valid = not state.get('pause') and not any(p.get('due_at') and datetime.fromisoformat(p['due_at']) <= current
                                                          for p in state['points'].values())

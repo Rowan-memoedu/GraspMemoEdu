@@ -197,7 +197,7 @@ class APISecurityAcceptanceTests(unittest.TestCase):
     def test_http_has_no_unlock_endpoint(self):
         response = self.client.post("/api/pause", json={"request_id": str(uuid.uuid4())}, headers=self.local_headers)
         self.assertEqual(response.status_code, 403)
-        self.assertEqual(response.json()["detail"]["message"], "该功能需注册账号才能使用")
+        self.assertEqual(response.json()["detail"]["message"], "主动暂停功能已移除。")
         baseline = self.state()
         for path in ["/api/unlock", "/api/admin/unlock", "/api/resume"]:
             with self.subTest(path=path):
@@ -228,7 +228,7 @@ class APISecurityAcceptanceTests(unittest.TestCase):
             response = self.client.post("/api/pause", json={"request_id": str(uuid.uuid4())}, headers=self.local_headers)
             self.assertLess(time.monotonic() - began, 2)
             self.assertEqual(response.status_code, 403)
-            self.assertEqual(response.json()["detail"]["message"], "该功能需注册账号才能使用")
+            self.assertEqual(response.json()["detail"]["message"], "主动暂停功能已移除。")
             self.assertEqual(self.state()["pending_submission_id"], submitted["submission_id"])
         finally:
             release.set()

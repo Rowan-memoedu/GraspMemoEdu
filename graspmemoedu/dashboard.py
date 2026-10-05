@@ -198,6 +198,8 @@ class DashboardStore:
         if status == 'completed':
             completed_at = state.get('completed_at') or max(
                 (attempt['completed_at'] for attempt in attempts if attempt.get('completed_at')), default=None)
+        if state and state.get('initial_completed_at') and (status != 'completed' or state.get('skipped_modules')):
+            completed_at = state['initial_completed_at']
         module_count = len(topic['modules'])
         return {'state': state, 'status': status, 'started_at': started_at, 'completed_at': completed_at,
                 'mastery': self.dependency_policy.mastery(con, learner_id, topic_id, state),
@@ -215,6 +217,13 @@ class DashboardStore:
                 'maintenance': False}
         if snapshot['status'] == 'completed':
             task.update(completed_at=snapshot['completed_at'], result='completed')
+        state = snapshot['state'] or {}
+        if state.get('initial_completed_at') and snapshot['status'] != 'completed':
+            task['retake'] = True
+        task.update(skipped_modules=list(state.get('skipped_modules', {})),
+                    half_checked=bool(state.get('skipped_modules')),
+                    cooldown_until=(state.get('cooldown') or {}).get('resume_at'),
+                    locked=bool(state.get('pause')))
         if is_introduction(self.catalog.topic(topic_id)):
             task.update(topic_kind='introduction', reread_pending=snapshot.get('reread_pending', False))
         return task
@@ -287,6 +296,13 @@ class DashboardStore:
                 elif row['status'] == 'in_progress':
                     active = self._review_task(course, topic_id, row['module'], state=state)
             if is_paused:
+                cooldown = ((snapshot['state'] or {}).get('cooldown') or {}).get('resume_at')
+                if cooldown:
+                    wakeups.append(cooldown)
+                if snapshot['status'] == 'completed':
+                    held = self._task(course, topic_id, snapshot, self._allowed_topics(access))
+                    held.update(id='paused:' + topic_id, status='paused', locked=True, result=None, completed_at=None)
+                    tasks.append(held)
                 continue
             if active:
                 tasks.append(active)
@@ -352,7 +368,8 @@ class DashboardStore:
         progress = round(100 * completed / total, 2) if total else 0
         started = [item['started_at'] for item in snapshots.values() if item['started_at']]
         finished = [item['completed_at'] for item in snapshots.values() if item['completed_at']]
-        all_complete = bool(visible) and len(finished) == len(counted)
+        all_complete = bool(visible) and len(finished) == len(counted) and not any(
+            (item['state'] or {}).get('skipped_modules') for item in snapshots.values())
         overview = {'id': course['id'], 'title': course['title'], 'description': course['description'],
                     'progress': progress, 'start_date': min(started) if started else None,
                     'end_date': max(finished) if all_complete else None, 'estimated_completion': None}
@@ -373,7 +390,12 @@ class DashboardStore:
             task.update(prerequisite_details=details(topic_id), dependency_ready=eligibility[topic_id],
                         missing_prerequisite_count=missing[topic_id], mastery=snapshot['mastery'])
             if topic_id in review_paused and snapshot['status'] != 'completed':
-                task['status'] = 'paused'
+                task.update(status='paused', locked=True)
+            if snapshot['status'] == 'paused' and task.get('cooldown_until'):
+                next_review_due_at = min(filter(None, [next_review_due_at, task['cooldown_until']]))
+            if snapshot['status'] != 'completed' and (snapshot['state'] or {}).get('initial_completed_at'):
+                history.append({**task, 'status': 'completed', 'result': 'completed',
+                                'completed_at': snapshot['completed_at'], 'locked': False})
             if snapshot['status'] == 'completed':
                 history.append(task)
                 if snapshot.get('reread_pending'):
@@ -472,8 +494,11 @@ class DashboardStore:
             current_attempts = {attempt['id'] for attempt in snapshot['state']['attempts']} if snapshot['state'] else set()
             rows = [row for row in rows if row['attempt'] in current_attempts]
         task = self._task(course, topic_id, snapshot, self._allowed_topics(access))
-        if snapshot['status'] != 'completed' or not rows:
+        initially_done = bool((snapshot['state'] or {}).get('initial_completed_at'))
+        if (snapshot['status'] != 'completed' and not initially_done) or (not rows and not task.get('skipped_modules')):
             raise DomainError('unknown_task_answers', '此身份尚无该任务的已完成作答记录。', 404)
+        if initially_done:
+            task.update(status='completed', result='completed', completed_at=snapshot['completed_at'])
         groups = []
         bank = QuestionBank(topic, self.access_store.data_dir)
         steps = {s['id']: s for s in snapshot['state']['steps']}

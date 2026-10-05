@@ -1,8 +1,8 @@
-import {t, translateMessage} from './i18n.js?v=7aef4a60b5ceaa7e';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=7aef4a60b5ceaa7e';
-import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=7aef4a60b5ceaa7e';
-import {reportableContent, helpableContent} from './content-report.js?v=7aef4a60b5ceaa7e';
-import {createLearningCache} from './learning-cache.js?v=7aef4a60b5ceaa7e';
+import {t, translateMessage} from './i18n.js?v=f04cea821ce153af';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=f04cea821ce153af';
+import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=f04cea821ce153af';
+import {reportableContent, helpableContent} from './content-report.js?v=f04cea821ce153af';
+import {createLearningCache} from './learning-cache.js?v=f04cea821ce153af';
 
 const node = (tag, cls = '', text) => {
   const el = document.createElement(tag); el.className = cls;
@@ -206,11 +206,9 @@ export function createAtomicView(bridge) {
         button(t('atomic.refresh'), () => mutate('continue')));
     }
     if (state.pause) main.append(node('p', 'atomicPaused', t('atomic.paused')));
-    else if (can('pause_topic') && state.phase !== 'completed') main.append(button(t('atomic.pause'), () => mutate('pause'), 'textButton atomicPause'));
     for (const control of main.querySelectorAll('button')) {
       if (control.dataset.readOnly || control.dataset.helpAction) continue;
-      const pause = control.classList.contains('atomicPause');
-      if (busy || state.pause || (!pause && (state.pending_submission_id || !state.can_learn))) control.disabled = true;
+      if (busy || state.pause || state.pending_submission_id || !state.can_learn) control.disabled = true;
     }
     page.append(sidebar, main); root.replaceChildren(page);
   }

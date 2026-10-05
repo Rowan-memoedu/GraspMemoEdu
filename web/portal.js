@@ -1,19 +1,19 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=7aef4a60b5ceaa7e";
-import { createReviewView } from "./review.js?v=7aef4a60b5ceaa7e";
-import { renderCourseGraph } from "./course-graph.js?v=7aef4a60b5ceaa7e";
-import {questionInput, choiceTypeField} from './question-input.js?v=7aef4a60b5ceaa7e';
-import {enhanceTopicContent} from './topic-content.js?v=7aef4a60b5ceaa7e';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=7aef4a60b5ceaa7e';
-import {createCatalogPicker} from './catalog-picker.js?v=7aef4a60b5ceaa7e';
-import {createAtomicView} from './atomic.js?v=7aef4a60b5ceaa7e';
-import {createTrainingView} from './training.js?v=7aef4a60b5ceaa7e';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=7aef4a60b5ceaa7e";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=f04cea821ce153af";
+import { createReviewView } from "./review.js?v=f04cea821ce153af";
+import { renderCourseGraph } from "./course-graph.js?v=f04cea821ce153af";
+import {questionInput, choiceTypeField} from './question-input.js?v=f04cea821ce153af';
+import {enhanceTopicContent} from './topic-content.js?v=f04cea821ce153af';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=f04cea821ce153af';
+import {createCatalogPicker} from './catalog-picker.js?v=f04cea821ce153af';
+import {createAtomicView} from './atomic.js?v=f04cea821ce153af';
+import {createTrainingView} from './training.js?v=f04cea821ce153af';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=f04cea821ce153af";
 
-import {createPaperView} from './review-papers.js?v=7aef4a60b5ceaa7e';
+import {createPaperView} from './review-papers.js?v=f04cea821ce153af';
 
-import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=7aef4a60b5ceaa7e';
-import {referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=7aef4a60b5ceaa7e';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=7aef4a60b5ceaa7e';
+import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=f04cea821ce153af';
+import {referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=f04cea821ce153af';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=f04cea821ce153af';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -531,20 +531,20 @@ export function initPortal(bridge) {
   }
 
   function taskIcon(task, history = false) {
-    if (task.type === "Review") {
+    const locked = task.maintenance || task.dependency_ready === false || task.locked || task.status === 'paused';
+    if (task.type === "Review" && (history || !locked)) {
       const icon = node("span", "taskIcon reviewMastery masteryBars");
       icon.setAttribute("role", "img"); icon.setAttribute("aria-label", t("review.lowMasteryIcon"));
       for (let i = 1; i <= 4; i++) icon.append(node("i", i === 1 ? "filled" : ""));
       return icon;
     }
     const successful = ["correct", "passed", "full", "full_credit"].includes(task.result);
-    const locked = task.maintenance || task.dependency_ready === false;
     const icon = node("span", `taskIcon ${history ? successful ? "passed" : "ended" : locked ? "locked" : "unlocked"}`);
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("viewBox", "0 0 22 24"); svg.setAttribute("aria-hidden", "true");
     const path = document.createElementNS(svg.namespaceURI, "path");
-    path.setAttribute("d", !history && locked ? "M6 10V7a5 5 0 0 1 10 0v3M4 10h14v11H4zM11 14v3" : history ? "M3 4h16v16H3zM6 12l3 3 7-7" : "M3 4h16v16H3z"); svg.append(path); icon.append(svg);
+    path.setAttribute("d", !history && locked ? "M6 10V7a5 5 0 0 1 10 0v3M4 10h14v11H4zM11 14v3" : history ? task.half_checked ? "M3 4h16v16H3zM6 12l3 3 3-3" : "M3 4h16v16H3zM6 12l3 3 7-7" : "M3 4h16v16H3z"); svg.append(path); icon.append(svg);
     icon.setAttribute("role", "img");
-    icon.setAttribute("aria-label", history ? t("portal.finished.42") : task.dependency_ready === false ? t("portal.prerequisitesRequired") : task.maintenance ? t("portal.under.maintenance.43") : t("portal.available.44")); return icon;
+    icon.setAttribute("aria-label", history ? task.half_checked ? t('pause.halfChecked') : t("portal.finished.42") : locked ? t("portal.prerequisitesRequired") : t("portal.available.44")); return icon;
   }
   function taskSummary(task, history = false, view = {}) {
     const wrap = node("div", "taskSummaryContent"), heading = node("div", "taskHeading");
@@ -568,11 +568,12 @@ export function initPortal(bridge) {
     for (const item of root.querySelectorAll(".taskToggle")) item.setAttribute("aria-expanded", "false");
   }
   function incompleteTask(task, data, view = {}) {
-    const card = node("article", task.dependency_ready === false ? "portalTask taskLocked" : "portalTask taskUnlocked"); card.dataset.taskId = task.id;
+    const card = node("article", task.dependency_ready === false || task.locked || task.status === 'paused' ? "portalTask taskLocked" : "portalTask taskUnlocked"); card.dataset.taskId = task.id;
     const toggle = control("", "taskToggle", () => { const was = expandedTask === task.id; collapseTasks(); if (!was) { expandedTask = task.id; details.hidden = false; toggle.setAttribute("aria-expanded", "true"); } });
     toggle.append(taskSummary(task, false, view)); toggle.setAttribute("aria-expanded", "false");
     const details = node("div", "taskDetails"); details.hidden = true;
     if (task.status === "paused") details.append(node("p", "taskStatusNote", t("portal.learning.is.paused.you.can.review.previously.studied.content.47")));
+    if (task.cooldown_until) details.append(node('p', 'taskStatusNote', t('reader.cooldown', {time: apiDate(task.cooldown_until, true)})));
     if (view.training || view.review) {
       const info = node('div', 'taskPrerequisites');
       if (task.question_count != null) info.append(infoRow(t('portal.questions.49'), Number(task.question_count).toLocaleString(locale())));
@@ -595,7 +596,9 @@ export function initPortal(bridge) {
       const actions = node("div", "taskStartRow");
       const explicit = task.start_href || task.start_url;
       const target = view.target ? view.target(task) : (task.type === "Lesson" || !task.type) && task.topic_id ? `#/topic/${encode(task.topic_id)}` : typeof explicit === "string" && /^#\/(topic|review|learn|courses)\//.test(explicit) ? explicit : null;
-      if (task.dependency_ready === false) {
+      if (task.status === 'paused' || task.locked) {
+        const blocked = roundButton(t('portal.paused.5'), () => {}); blocked.disabled = true; actions.append(blocked);
+      } else if (task.dependency_ready === false) {
         const blocked = roundButton(t("portal.prerequisitesRequired"), () => {}); blocked.disabled = true; blocked.classList.add("prerequisiteBlocked"); actions.append(blocked);
       } else if (view.start && allowed('learn')) {
         const start = roundButton(task.started ? t('paper.active') : view.startLabel || t('paper.start'), async () => {
@@ -628,6 +631,7 @@ export function initPortal(bridge) {
     return card;
   }
   function appendGuestReset(actions, task) {
+    if (task.cooldown_until || task.locked || task.status === 'paused') return;
     if (bridge.getAccess()?.role !== "guest" || !allowed("learn") || !task.topic_id || (task.type && task.type !== "Lesson")) return;
     const reset = control(t("portal.reset.57"), "portalStart guestReset", async () => {
       if (reset.disabled) return;
@@ -1168,12 +1172,29 @@ export function initPortal(bridge) {
         if (!result.items.length && offset === 0) list.append(emptyBox(t('pause.empty')));
         for (const item of result.items) {
           const card = node('article', 'courseChoice helpRequest');
-          const reason = ['manual', 'manual_difficulty', 'review_manual_difficulty'].includes(item.reason) ? 'pause.manual' : 'pause.errors';
+          const skipped = item.reason === 'module_skipped';
+          const reason = skipped ? 'pause.skipped' : ['manual', 'manual_difficulty', 'review_manual_difficulty'].includes(item.reason) ? 'pause.manual' : 'pause.errors';
           card.append(node('h2', '', item.display_name), node('p', '', `${item.course_title} · ${item.topic_title}`),
             node('p', '', `${t(reason)} · ${apiDate(item.paused_at, true)}`),
             node('p', '', item.module_title || t('pause.reviewOnly')));
-          const unlock = control(t('pause.unlock'), 'primaryButton', async () => {
-            if (busy || !window.confirm(t('pause.confirm', {name: item.display_name, topic: item.topic_title}))) return;
+          if (skipped) {
+            const label = node('label', 'checkLabel'), checkbox = node('input'); checkbox.type = 'checkbox';
+            checkbox.checked = item.downstream_allowed; checkbox.disabled = !item.version_current;
+            label.append(checkbox, node('span', '', t('pause.downstream'))); card.append(label);
+            checkbox.addEventListener('change', async () => {
+              if (busy) {checkbox.checked = item.downstream_allowed; return;}
+              busy = true; checkbox.disabled = true;
+              try {
+                await bridge.request('admin/pauses/skip-policy', {method: 'POST', body: {
+                  learner_id: item.learner_id, topic_id: item.topic_id, allowed: checkbox.checked, expected_events: item.skip_events}});
+                dashboards.clear();
+              } catch (error) { status.textContent = translateMessage(error.message); }
+              finally {busy = false; if (ticket === sequence) await load(true);}
+            });
+            if (item.released) card.append(node('p', 'inputHint', t('pause.released')));
+          }
+          const unlock = control(t(skipped ? 'pause.skipUnlock' : 'pause.unlock'), 'primaryButton', async () => {
+            if (busy || !window.confirm(t(skipped ? 'pause.skipConfirm' : 'pause.confirm', {name: item.display_name, topic: item.topic_title}))) return;
             busy = true; unlock.disabled = refresh.disabled = more.disabled = true; status.textContent = t('pause.unlocking');
             try {
               await bridge.request('admin/pauses/unlock', {method: 'POST', body: {learner_id: item.learner_id,
@@ -1186,7 +1207,7 @@ export function initPortal(bridge) {
               if (ticket === sequence) await load(true);
             }
           });
-          unlock.disabled = !item.version_current;
+          unlock.disabled = !item.version_current || Boolean(item.released);
           if (!item.version_current) card.append(node('p', 'inputHint', t('pause.oldVersion')));
           card.append(unlock, link(t('help.location'), subjectHref(item.subject_id, '/topic/' + encode(item.topic_id)), 'textButton'));
           list.append(card);

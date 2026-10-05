@@ -1,10 +1,10 @@
 // UI strings only. Course HTML, names, answers and explanations never enter this module.
-import {trainingMessages} from './training-messages.js?v=7aef4a60b5ceaa7e';
-import {readerMessages} from './reader-messages.js?v=7aef4a60b5ceaa7e';
-import {portalMessages} from './portal-messages.js?v=7aef4a60b5ceaa7e';
-import {staticMessages} from './static-messages.js?v=7aef4a60b5ceaa7e';
+import {trainingMessages} from './training-messages.js?v=f04cea821ce153af';
+import {readerMessages} from './reader-messages.js?v=f04cea821ce153af';
+import {portalMessages} from './portal-messages.js?v=f04cea821ce153af';
+import {staticMessages} from './static-messages.js?v=f04cea821ce153af';
 
-import {paperMessages} from './review-paper-messages.js?v=7aef4a60b5ceaa7e';
+import {paperMessages} from './review-paper-messages.js?v=f04cea821ce153af';
 
 export const LANGUAGE_KEY = 'graspmemoedu:ui-language';
 // Read the previous namespace once on the same origin. Renaming the public
@@ -57,6 +57,12 @@ export function t(key, params = {}) {
 
 // Only API operational errors belong here. A judge's explanation is course content.
 const errors = {
+  '主动暂停功能已移除。': 'Manual pausing has been removed.',
+  '6 小时后可再次学习。': 'You can study again after 6 hours.',
+  '跳过记录已更新，请刷新后重试。': 'Skipped modules have changed. Refresh and try again.',
+  '必须指定当前跳过模块及对应事件。': 'Specify the currently skipped module and its exact event.',
+  '已完成的模块不能跳过。': 'Completed modules cannot be skipped.',
+  '当前内容没有可跳过的初学模块。': 'This content has no initial-learning module to skip.',
   '标注的内容已变化，请重新打开预览后选择。': 'The selected content has changed. Reopen the preview and select it again.',
   '所选内容位置无效，请重新选择。': 'The selected content positions are invalid. Please select them again.',
   '逐题提交仅对高阶学习者开放。': 'Only advanced learners may submit individual questions.',

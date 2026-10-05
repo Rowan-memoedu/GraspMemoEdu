@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | 学科外观与路由 | `web/subjects.js`、`graspmemoedu/subjects.py` | 六科学科主题、路由、课程归属；旧数学路径继续兼容 |
 | 课程与内容 | `catalog.py`、`author_import.py`、`scripts/import_course.mjs` | 作者 Markdown 机械导入、离线公式、来源校验、稳定 Topic ID |
-| Lesson | `service.py`、`web/app.js` | 掌握选择、指导、练习、暂停、幂等提交、历史与草稿 |
+| Lesson | `service.py`、`module_flow.py`、`web/app.js` | 掌握选择、指导、练习、模块跳过、自动暂停与冷却、幂等提交、历史与草稿 |
 | 复习 | `review.py`、`review_api.py`、`web/review.js` | FSRS、到期任务、持久练习队列；沿用原评分政策 |
 | 原子训练 | `atomic.py`、`atomic_content.py`、`atomic_api.py`、`web/atomic.js` | 记忆组块与点级状态、交错、可变设问、打包复习 |
 | 独立题库 | `training_content.py`、`training.py`、`training_api.py`、`web/training.js` | 独立内容树、自由选题、单题卡片、自评与统一复习入口，见 [题库架构](training-banks.md) |
@@ -22,7 +22,7 @@
 - 题目交互类型与“复刻/复现”判题模式独立。旧题缺省继续使用原问答与语义判题。
 - 多判断、多空、配对均整题提交；全部小项正确才算正确，其他情况仅计一次错题。结构不完整、旧版本或判题故障不计错。
 - 配对每侧候选数可多于框数；两侧可编辑，也可预填并锁定任一侧。关系一对一；两侧可编辑时整行排序不影响正确性。
-- 综合范式训练的 Lesson 第四次练习错误暂停，Review 第三次错误暂停；原子训练只保留主动暂停。
+- 综合范式训练的 Lesson 第四次练习错误暂停，Review 第三次错误暂停；非学员 6 小时后恢复，学员等待管理员解锁。全站移除主动暂停；初学模块仅学员可跳过，见 [模块跳过与冷却](module-skip.md)。原子训练无错误阈值暂停，也不提供跳过。
 - 原子训练初学答对不评分，6 小时后首次复习；初学答错记 1；正式复习答错 1、答对 3。同组块两次卡片展示至少间隔 3 分钟。完整内容合同和学习规则见 [两套 Topic 架构](topic-training-modes.md)。
 - 切换学科/课程保留浏览器当前身份的未提交答案；仅浏览目录不改变课程。
 - 文字纠错仅存建议，携带正文版本、块 ID、精确选区和前后文；不会直接修改课程或成绩。

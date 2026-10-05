@@ -175,7 +175,7 @@ class ReviewAPITests(unittest.TestCase):
         self.app.state.access_store.set_permissions(login['access']['learner_id'], topic_ids=[])
         self.call('GET', '/api/review/sessions/' + state['session_id'], status=403)
 
-    def test_account_manual_pause_is_unscored_and_previous_round_is_history(self):
+    def test_account_manual_pause_is_retired_without_changing_ratings_or_active_round(self):
         account = self.app.state.access_store.create_account('Review pause test', purpose='test')
         login = self.call('POST', '/api/access/login', {'invitation_code': account['invitation_code']})
         self.headers['X-Learning-Identity'] = login['identity_token']
@@ -192,9 +192,9 @@ class ReviewAPITests(unittest.TestCase):
         self.call('GET', '/api/review/submissions/' + old_submission, status=403)
         with closing(self.learner._connect()) as con:
             before = con.execute('SELECT COUNT(*) FROM review_ratings').fetchone()[0]
-        state = self.call('POST', '/api/review/sessions/' + state['session_id'] + '/pause', {'request_id': 'pause-current'})
-        self.assertEqual(state['status'], 'paused')
-        self.assertIsNone(state['mastery'])
+        result = self.call('POST', '/api/review/sessions/' + state['session_id'] + '/pause', {'request_id': 'pause-current'}, status=403)
+        self.assertEqual(result['detail']['code'], 'manual_pause_removed')
+        self.assertEqual(self.call('GET', '/api/review/sessions/' + state['session_id'])['status'], 'in_progress')
         with closing(self.learner._connect()) as con:
             self.assertEqual(before, con.execute('SELECT COUNT(*) FROM review_ratings').fetchone()[0])
 

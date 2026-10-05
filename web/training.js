@@ -1,8 +1,8 @@
-import {t, translateMessage} from './i18n.js?v=7aef4a60b5ceaa7e';
-import {questionInput, answerReady, answerEmpty, choiceTypeField} from './question-input.js?v=7aef4a60b5ceaa7e';
-import {createLearningCache} from './learning-cache.js?v=7aef4a60b5ceaa7e';
-import {helpableContent} from './content-report.js?v=7aef4a60b5ceaa7e';
-import {referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=7aef4a60b5ceaa7e';
+import {t, translateMessage} from './i18n.js?v=f04cea821ce153af';
+import {questionInput, answerReady, answerEmpty, choiceTypeField} from './question-input.js?v=f04cea821ce153af';
+import {createLearningCache} from './learning-cache.js?v=f04cea821ce153af';
+import {helpableContent} from './content-report.js?v=f04cea821ce153af';
+import {referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=f04cea821ce153af';
 
 const node = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const button = (text, cls, action) => { const n = node('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
@@ -10,7 +10,7 @@ const encode = encodeURIComponent;
 const query = fields => new URLSearchParams(fields).toString();
 const html = (content, cls = 'courseContent') => { const n = node('div', cls); n.innerHTML = content || ''; return n; };
 const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy', 'training.retire'];
-import {answerEditor, readerFrame} from './learning-ui.js?v=7aef4a60b5ceaa7e';
+import {answerEditor, readerFrame} from './learning-ui.js?v=f04cea821ce153af';
 
 export function createTrainingView(bridge) {
   const {root, request, href, formatDate, getAccess} = bridge;

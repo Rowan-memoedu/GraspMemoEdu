@@ -240,6 +240,10 @@ class LearningService:
         con.execute('INSERT INTO actions VALUES (?,?,?,?,?)', (*self.key, payload['request_id'], fingerprint, kind))
 
     def _guard(self, state, payload, *, active=True, revision=True):
+        if self.review_backend is not None:
+            with closing(self._connect()) as con:
+                if self.review_backend._paused(con):
+                    raise DomainError('topic_paused', '当前 Topic 已暂停。')
         if state['status'] != 'in_progress':
             raise DomainError('topic_paused' if state['status'] == 'paused' else 'topic_completed', '当前 Topic 已暂停或完成。')
         if revision and payload.get('expected_revision') != state['revision']:
@@ -263,6 +267,7 @@ class LearningService:
         return event['event_id']
 
     def state(self):
+        self.resume_due()
         self.flush_logs()
         with closing(self._connect()) as con:
             return self._public(self._load(con))
@@ -319,7 +324,18 @@ class LearningService:
                 'learner_id': self.learner_id, 'revision': state['revision'], 'status': state['status'],
                 'introduction_read': state['introduction_read'], 'active_step_id': state['active_step_id'],
                 'current_step_id': state['current_step_id'], 'attempt_id': attempt['id'], 'pause': state['pause'],
-                'pending_submission_id': state['pending_submission_id'], 'modules': modules, 'steps': steps}
+                'pending_submission_id': state['pending_submission_id'], 'modules': modules, 'steps': steps,
+                'skipped_modules': list(state.get('skipped_modules', {}).values()),
+                'cooldown_until': (state.get('cooldown') or {}).get('resume_at')}
+
+    def skip_module(self, payload):
+        from .module_flow import skip
+        return skip(self, payload)
+
+    def resume_due(self):
+        from .module_flow import resume_due
+        with self._transaction() as con:
+            return resume_due(self, con)
 
     def reset_progress(self, payload):
         """Start a fresh Topic generation, retaining the previous state for audit."""
@@ -327,6 +343,8 @@ class LearningService:
             state = self._load(con)
             replay, fingerprint = self._request(con, 'guest_reset', payload)
             if not replay:
+                if state.get('cooldown'):
+                    raise DomainError('topic_cooldown', '6 小时后可再次学习。', 409)
                 # Reset is also allowed after completion, pause or while judging.
                 if payload.get('expected_revision') != state['revision']:
                     raise DomainError('stale_revision', '学习状态已更新，请刷新后重置。')
@@ -401,12 +419,24 @@ class LearningService:
             example['phase'] = 'reading'
             state['active_step_id'] = state['current_step_id'] = example['id']
 
+    def _module_order(self):
+        return list(range(len(self.course['modules'])))
+
     def _next_module(self, state):
         completed = {a['module_id'] for a in state['attempts'] if a['status'] == 'completed'}
-        index = next((i for i, m in enumerate(self.course['modules']) if m['id'] not in completed), None)
+        skipped = state.get('skipped_modules', {})
+        index = next((i for i in self._module_order() if self.course['modules'][i]['id'] not in completed
+                      and self.course['modules'][i]['id'] not in skipped), None)
+        if index is None:
+            state.setdefault('initial_completed_at', now())
+            index = next((i for i in self._module_order() if self.course['modules'][i]['id'] in skipped
+                          and skipped[self.course['modules'][i]['id']]['released']
+                          and self.course['modules'][i]['id'] not in completed), None)
         if index is None:
             state['status'] = 'completed'
             state.setdefault('completed_at', now())
+            if not skipped:
+                state['completed_at'] = now()
             self._add_step(state, kind='completion', phase='completed')
         else:
             self._new_attempt(state, index)
@@ -491,6 +521,9 @@ class LearningService:
 
         if self.review_backend is not None:
             self.review_backend.on_topic_paused(con, event_id, reason)
+        from .module_flow import student, set_cooldown
+        if reason in ('practice_error_limit', 'review_practice_error_limit') and not student(self, con):
+            set_cooldown(self, state, event_id, 'lesson')
 
     def pause(self, payload):
         with self._transaction() as con:
@@ -635,6 +668,7 @@ class LearningService:
     def _complete(self, con, state, mastery):
         attempt = self._attempt(state)
         attempt.update(status='completed', mastery=mastery, completed_at=now())
+        state.get('skipped_modules', {}).pop(attempt['module_id'], None)
         self._event(con, state, 'module_completed')
         if self.review_backend is not None:
             self.review_backend.on_lesson_completed(con, attempt)
@@ -660,11 +694,17 @@ class LearningService:
                 if prior['learner'] != self.learner_id or prior['topic'] != topic_id or prior['module'] != module_id:
                     raise DomainError('unlock_mismatch', '解锁对象不匹配。')
                 return self._public(state)
+            if module_id in state.get('skipped_modules', {}):
+                from .module_flow import unlock_skip
+                unlock_skip(self, con, state, module_id, pause_event_id)
+                self._save(con, state)
+                return self._public(state)
             pause = state['pause']
             if state['status'] != 'paused' or not pause or pause['event_id'] != pause_event_id or pause['module_id'] != module_id:
                 raise DomainError('unlock_mismatch', '必须指定当前暂停的学习者、Topic、模块及暂停事件。')
             previous = self._attempt(state)
             state.update(status='in_progress', pause=None, pending_submission_id=None)
+            state.pop('cooldown', None)
             if previous['status'] == 'completed':
                 self._next_module(state)
             else:

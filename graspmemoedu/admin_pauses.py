@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .service import DomainError
 
 
-PUBLIC_PATHS = {'/api/admin/pauses', '/api/admin/pauses/unlock'}
+PUBLIC_PATHS = {'/api/admin/pauses', '/api/admin/pauses/unlock', '/api/admin/pauses/skip-policy'}
 
 
 class UnlockPause(BaseModel):
@@ -17,6 +17,14 @@ class UnlockPause(BaseModel):
     topic_id: str = Field(min_length=1, max_length=128)
     pause_event_id: str = Field(min_length=1, max_length=128)
     module_id: str | None = Field(default=None, max_length=128)
+
+
+class SkipPolicy(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    learner_id: str = Field(min_length=1, max_length=128)
+    topic_id: str = Field(min_length=1, max_length=128)
+    allowed: bool = Field(strict=True)
+    expected_events: list[str] = Field(min_length=1, max_length=1000)
 
 
 class AdminPauses:
@@ -56,6 +64,21 @@ class AdminPauses:
                 if not self.access_store.test_materials.topic_visible(row['topic'], access):
                     continue
                 state = json.loads(row['body'])
+                if row['topic'] in self.catalog.topics:
+                    topic = self.catalog.topic(row['topic'])
+                    course = self.catalog.courses[self.catalog.topic_courses[row['topic']]]
+                    skipped = state.get('skipped_modules', {})
+                    for module_id, record in skipped.items():
+                        module = next((m for m in topic['modules'] if m['id'] == module_id), None)
+                        items.append({'learner_id': row['learner_id'], 'display_name': row['display_name'],
+                            'topic_id': row['topic'], 'topic_title': topic['title'], 'course_title': course['title'],
+                            'subject_id': self.subjects.course_subjects[course['id']], 'module_id': module_id,
+                            'module_title': module.get('title', module_id) if module else module_id,
+                            'pause_event_id': record['event_id'], 'reason': 'module_skipped',
+                            'paused_at': record['created_at'], 'released': record['released'],
+                            'downstream_allowed': bool(state.get('skip_downstream_allowed')),
+                            'skip_events': [r['event_id'] for r in skipped.values()],
+                            'version_current': row['version'] == topic['version']})
                 pause = state.get('pause') or reviews.get((row['learner_id'], row['topic']))
                 if not pause or row['topic'] not in self.catalog.topics:
                     continue
@@ -98,11 +121,27 @@ class AdminPauses:
                 'SELECT 1 FROM review_unlocks WHERE learner=? AND topic=? AND event_id=?',
                 (values['learner_id'], values['topic_id'], values['pause_event_id'])).fetchone()
         learner = self.service_for(values['learner_id'], values['topic_id'])
-        if topic.get('training_mode') != 'atomic_retrieval' and (review_pause or review_replay):
+        skip_record = state.get('skipped_modules', {}).get(values['module_id'])
+        skip_event = skip_record and skip_record['event_id'] == values['pause_event_id']
+        if not skip_event and topic.get('training_mode') != 'atomic_retrieval' and (review_pause or review_replay):
             learner.review_backend.unlock_topic(pause_event_id=values['pause_event_id'])
         else:
             learner.unlock(values['topic_id'], values['module_id'], values['pause_event_id'])
         return {'unlocked': True, 'pause_event_id': values['pause_event_id']}
+
+    def skip_policy(self, access, values):
+        self.require_admin(access)
+        with closing(self.access_store._connect()) as con:
+            con.execute('BEGIN')
+            row = next((r for r in self._owned(con, access['learner_id'], values['learner_id'])
+                        if r['topic'] == values['topic_id']), None)
+            if not row or not self.access_store.test_materials.topic_visible(row['topic'], access):
+                raise DomainError('pause_not_found', '未找到可由您管理的跳过记录。', 404)
+            if row['version'] != self.catalog.topic(row['topic'])['version']:
+                raise DomainError('course_version_mismatch', '该跳过记录对应旧版内容。', 409)
+        from .module_flow import skip_policy
+        return skip_policy(self.service_for(values['learner_id'], values['topic_id']),
+                           values['allowed'], values['expected_events'])
 
 
 def register_admin_pause_routes(app, catalog, access_store, subjects, service_for):
@@ -116,3 +155,7 @@ def register_admin_pause_routes(app, catalog, access_store, subjects, service_fo
     @app.post('/api/admin/pauses/unlock')
     def unlock(payload: UnlockPause, request: Request):
         return store.unlock(access_store.resolve(request.headers.get('x-learning-identity')), payload.model_dump())
+
+    @app.post('/api/admin/pauses/skip-policy')
+    def policy(payload: SkipPolicy, request: Request):
+        return store.skip_policy(access_store.resolve(request.headers.get('x-learning-identity')), payload.model_dump())
