@@ -367,7 +367,8 @@ def backup_site(settings, destination=None):
         name = prefix + '/guide.md'
         blobs[name] = source.read_bytes()
         reader = GuideReader(source)
-        if reader.read('https://guide-assets.invalid')['status'] == 'unavailable':
+        # A portable backup includes every permission section and its assets.
+        if reader.read('https://guide-assets.invalid', {'role': 'account', 'is_admin': True})['status'] == 'unavailable':
             raise DomainError('guide_unavailable', '指南暂时无法读取，未创建不完整备份。', 422)
         for relative in reader._resources:
             try:

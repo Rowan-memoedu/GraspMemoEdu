@@ -66,7 +66,7 @@ Topic 支持既有综合范式训练，以及面向英语、语文、生物、�
 ssh ubuntu@124.221.144.155 'cd /opt/graspmemoedu/app && sudo -u graspmemoedu /opt/graspmemoedu/venv/bin/python -m graspmemoedu --data-dir /var/lib/graspmemoedu feedback-list --limit 30'
 ```
 
-正式指南由服务器 `/var/lib/graspmemoedu/subjects.json` 指定，当前位于 `subject-guides/<学科ID>/guide.md`，配图放在同级 `assets` 中。数学与物理指南已发布，其他四科为空。正文更新必须同步到服务器；只修改本机回滚快照不会更新网站。打开的 GUIDE 约每 5 秒检查更新并保留滚动位置；重新进入或刷新同样读取最新内容。读取或渲染错误会如实提示。网页没有指南或服务器配置编辑入口。
+正式指南由服务器 `/var/lib/graspmemoedu/subjects.json` 指定。数学与物理共用 `subject-guides/shared/guide.md` 和同级 `assets`；本地编辑源为 `D:/AppData/GraspMemoEduGuide/guide.md`。其他四科指南为空。正文更新必须同步到服务器；只修改本机回滚快照不会更新网站。GUIDE 的标题和多层列表复用任务目录的展开、收起控件，同一身份和学科在本次访问中保留展开状态。页面约每 5 秒检查更新并保留滚动位置；重新进入或刷新同样读取最新内容。学员与高阶说明由服务端按当前资格及权限分别提供，游客和管理员可阅读全部说明，见 [指南可见性](docs/guide-visibility.md)。读取或渲染错误会如实提示，网页没有指南或服务器配置编辑入口。
 
 指南支持标准 Markdown、表格、代码和 `$...$`、`\(...\)`、`$$...$$`、`\[...\]` 数学公式。仅正文明确引用、位于指南目录内的图片/PDF/TXT/CSV 可通过只读资源入口访问；源文件、目录外文件、脚本和主动 TeX 不会发布。
 

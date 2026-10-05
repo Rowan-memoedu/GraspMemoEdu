@@ -1,19 +1,19 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=6d29867e0d7351ea";
-import { createReviewView } from "./review.js?v=6d29867e0d7351ea";
-import { renderCourseGraph } from "./course-graph.js?v=6d29867e0d7351ea";
-import {questionInput, choiceTypeField} from './question-input.js?v=6d29867e0d7351ea';
-import {enhanceTopicContent} from './topic-content.js?v=6d29867e0d7351ea';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=6d29867e0d7351ea';
-import {createCatalogPicker} from './catalog-picker.js?v=6d29867e0d7351ea';
-import {createAtomicView} from './atomic.js?v=6d29867e0d7351ea';
-import {createTrainingView} from './training.js?v=6d29867e0d7351ea';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=6d29867e0d7351ea";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=7aef4a60b5ceaa7e";
+import { createReviewView } from "./review.js?v=7aef4a60b5ceaa7e";
+import { renderCourseGraph } from "./course-graph.js?v=7aef4a60b5ceaa7e";
+import {questionInput, choiceTypeField} from './question-input.js?v=7aef4a60b5ceaa7e';
+import {enhanceTopicContent} from './topic-content.js?v=7aef4a60b5ceaa7e';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=7aef4a60b5ceaa7e';
+import {createCatalogPicker} from './catalog-picker.js?v=7aef4a60b5ceaa7e';
+import {createAtomicView} from './atomic.js?v=7aef4a60b5ceaa7e';
+import {createTrainingView} from './training.js?v=7aef4a60b5ceaa7e';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=7aef4a60b5ceaa7e";
 
-import {createPaperView} from './review-papers.js?v=6d29867e0d7351ea';
+import {createPaperView} from './review-papers.js?v=7aef4a60b5ceaa7e';
 
-import {renderTaskTree} from './task-tree.js?v=6d29867e0d7351ea';
-import {referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=6d29867e0d7351ea';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=6d29867e0d7351ea';
+import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=7aef4a60b5ceaa7e';
+import {referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=7aef4a60b5ceaa7e';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=7aef4a60b5ceaa7e';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -37,6 +37,7 @@ export function initPortal(bridge) {
   let sequence = 0, currentHash = "", currentRoute = null, busyCourse = false;
   let expandedTask = null, paging = false, historyError = null, guideVersion = null, guideLoaded = false;
   const expandedUnits = new Map();
+  const guideExpansion = new Map();
   let refreshTimer = null, menuTimer = null, popoverTimer = null, pageTimer = null;
   let guideObjectUrls = [];
   let graphScroll = 0, feedbackContext = {}, feedbackBusy = false, renderedDay = null;
@@ -900,7 +901,10 @@ export function initPortal(bridge) {
         else if (result.status === "ready") {
           const fragment = await guideContent(result.html, ticket, currentRoute.subjectId);
           if (ticket !== sequence) return;
-          body.replaceChildren(fragment); mathStyle(result.math_css, "guideMathStyle");
+          body.replaceChildren(fragment);
+          enhanceMarkdownOutline(body, {expanded: guideExpansion,
+            keyPrefix: `guide:${bridge.getAccess()?.learner_id}:${currentRoute.subjectId}`});
+          mathStyle(result.math_css, "guideMathStyle");
         }
         else throw new Error(t("portal.the.guide.returned.an.unrecognized.status.113"));
         guideVersion = result.version; guideLoaded = true; window.scrollTo(0, y);

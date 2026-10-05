@@ -393,6 +393,17 @@ body.portalModalOpen { overflow: hidden; }
 .courseUnitHeading:focus-visible { outline: 2px solid var(--ma-blue); outline-offset: -3px; }
 .courseUnitBody { padding: 0 12px 8px; }
 .courseUnitBody .courseUnitGroup { margin-top: 8px; }
+.guideBody .guideOutline { border-color: #e5e9ed; margin: 10px 0; }
+.guideBody .guideOutline > summary { padding: 10px 12px; }
+.guideBody .guideOutline > summary h1,
+.guideBody .guideOutline > summary h2,
+.guideBody .guideOutline > summary h3,
+.guideBody .guideOutline > summary h4,
+.guideBody .guideOutline > summary h5,
+.guideBody .guideOutline > summary h6 { display: inline; padding: 0; margin: 0; border: 0; font-size: inherit; }
+.guideBody li:has(> .guideOutline) { list-style: none; }
+.guideBody li > .guideOutline { margin-left: -18px; }
+.guideBody .guideOutline .courseUnitBody { padding: 0 12px 6px; }
 .taskIcon.reviewMastery { width: 29px; flex: 0 0 29px; margin-left: 0; align-items: flex-end; justify-content: flex-start; }
 .courseHierarchySetting { display: flex; align-items: center; gap: 10px; }
 .profileForm .courseHierarchySetting input { width: auto; }

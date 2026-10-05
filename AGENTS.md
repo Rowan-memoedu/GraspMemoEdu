@@ -8,7 +8,7 @@
 - 学科路由为 `#/subjects/<id>/...`；旧数学路径继续兼容。账号、身份存储与 Topic ID 不因学科拆分改变。正式课程归属、名称及指南由服务器 `/var/lib/graspmemoedu/subjects.json` 配置；配色和首页/导航栏共用徽标统一在 `web/subjects.js` 维护，见 `docs/subjects.md`。不得将服务器或本机路径暴露给公开前端。
 - 腾讯云托管的多学科学习应用；Lesson 产品行为以 `D:/Artifacts/GraspMemoEduPlan/01-需求与方案.md`、`04-推送系统补充需求.md` 为准，复习后端以 `docs/review-backend.md` 为准，当前实现/运维以 README 为准。
 - 主页布局以 `D:/Artifacts/MathTopicPipeline/MathAcademy-learn-主页复刻需求.md` 为准；Course「再探小学算术」组织 Topic「数字化为字母」，不改变其 ID、版本和既有进度。网站主页产生真实 Lesson 和到期 Review 任务，尚未接入 XP 或测验。
-- 正式 GUIDE 由服务器 `/var/lib/graspmemoedu/guide/guide.md` 与相对 assets 单向发布；内容分极简使用流程和系统工作原理，配图用本网站真实截图标注。更新指南不能夹带技术配置说明或暴露其他文件。
+- 正式 GUIDE 由服务器 `subjects.json` 指定并单向发布；数学和物理共用 `/var/lib/graspmemoedu/subject-guides/shared/guide.md` 与相对 assets，本地编辑源在 `D:/AppData/GraspMemoEduGuide/guide.md`。保留分层大纲，标题与列表可展开收起；学员和高阶说明按 `docs/guide-visibility.md` 独立投影，游客与管理员可阅读全部。配图用本网站真实界面。更新指南不能夹带技术配置说明或暴露其他文件。
 - 技术栈：Python/FastAPI/SQLite，原生 HTML/CSS/JS，离线 MathJax SVG；复用 `D:/Projects/MathAnswerJudge`，不在网页判题。
 - 正式启动由腾讯云 `graspmemoedu.service` 管理，只监听 127.0.0.1:18768。Windows 启动脚本仅用于显式指定的隔离开发目录。8765 属于 AnkiConnect，不要终止。
 - 活动开发源码仅在本仓库；正式数据在腾讯云 `/var/lib/graspmemoedu`，本机 `D:/AppData/GraspMemoEdu` 仅作回滚快照及原稿存档，证据在 `D:/Artifacts/GraspMemoEdu`。课程正文、答案表、数据库、配对信息和密钥不进入 Git。

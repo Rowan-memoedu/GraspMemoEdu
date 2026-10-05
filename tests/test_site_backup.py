@@ -32,6 +32,20 @@ def write_json(path, value):
 
 
 class SiteBackupAcceptanceTests(unittest.TestCase):
+    def test_permission_guide_assets_survive_backup_and_restore(self):
+        guide = self.settings.guide_path
+        guide.write_text('# Public\n<!-- guide:student -->\n![Private](assets/student.txt)\n'
+                         '<!-- /guide:student -->\n', encoding='utf-8')
+        # Downloads and images are both referenced Guide resources.
+        guide.write_text(guide.read_text().replace('![Private]', '[Private]'), encoding='utf-8')
+        asset = guide.parent / 'assets/student.txt'
+        asset.parent.mkdir(parents=True, exist_ok=True)
+        asset.write_text('Student section resource', encoding='utf-8')
+        archive = self._backup()
+        destination = self.root / 'permission-guide-restored'
+        restore_site(archive, destination)
+        self.assertEqual((destination / 'guide/assets/student.txt').read_text(), 'Student section resource')
+
     def test_training_format_survives_portable_restore(self):
         from training_fixtures import training_bank
         from test_training_format import format_fixture

@@ -1,9 +1,11 @@
 """One-way local Markdown guide and a narrowly scoped public asset reader."""
 from datetime import datetime, timezone
+from collections import OrderedDict
 import hashlib
 import json
 import mimetypes
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -15,9 +17,74 @@ from fastapi.responses import FileResponse
 
 from .service import DomainError
 from .subjects import Subjects
+from .access import feature_eligible
+
+
+GUIDE_FEATURES = ('course_hierarchy', 'training_self_rating', 'review_question_mode')
+GUIDE_MARKERS = ('student', 'advanced', *GUIDE_FEATURES, 'review_timeout')
+
+
+def guide_visibility(access=None):
+    """The two qualifications are independent; grants alone never qualify."""
+    access = access or {}
+    if access.get('role') == 'guest' or (access.get('role') == 'account' and access.get('is_admin')):
+        return dict.fromkeys(GUIDE_MARKERS, True)
+    account = access.get('role') == 'account'
+    granted = access.get('features') or ()
+    effective = lambda name: account and name in granted and feature_eligible(access, name)
+    features = {name: bool(effective(name)) for name in GUIDE_FEATURES}
+    timeout = bool(account and access.get('is_advanced_learner'))
+    return {'student': bool(access.get('is_student') and effective('request_help')),
+            'advanced': bool(account and access.get('is_advanced_learner') and (timeout or any(features.values()))),
+            'review_timeout': timeout, **features}
+
+
+def project_guide(text, visibility):
+    """Validate the whole source, then expose only permitted Markdown lines.
+
+    Fenced code is literal, including apparent markers inside a hidden block.
+    An invalid marker anywhere fails closed, even in an otherwise hidden block.
+    """
+    output, stack = [], []
+    fence = None
+    marker = re.compile(r'\s*<!--\s*(/?)guide:([a-z_]+)\s*-->\s*')
+    for line in text.splitlines(keepends=True):
+        visible = all(visibility[name] for name in stack)
+        if fence:
+            if re.fullmatch(r' {0,3}' + re.escape(fence[0]) + '{' + str(fence[1]) + r',}\s*', line):
+                fence = None
+            if visible:
+                output.append(line)
+            continue
+        opening = re.match(r' {0,3}(`{3,}|~{3,})(.*)$', line.rstrip('\r\n'))
+        if opening and (opening[1][0] != '`' or '`' not in opening[2]):
+            fence = (opening[1][0], len(opening[1]))
+            if visible:
+                output.append(line)
+            continue
+        match = marker.fullmatch(line)
+        if match:
+            closing, name = match.groups()
+            if name not in GUIDE_MARKERS:
+                raise ValueError('Unknown guide visibility marker')
+            if closing:
+                if not stack or stack.pop() != name:
+                    raise ValueError('Unbalanced guide visibility marker')
+            else:
+                stack.append(name)
+            # Keep paragraph boundaries without emitting permission syntax.
+            output.append('\n')
+        elif re.search(r'<!--\s*/?guide\s*:', line):
+            raise ValueError('Guide markers must occupy their own line')
+        elif visible:
+            output.append(line)
+    if stack:
+        raise ValueError('Unclosed guide visibility marker')
+    return ''.join(output)
 
 
 class GuideReader:
+    MAX_CACHED_VIEWS = 8
     MAX_SOURCE_BYTES = 1024 * 1024
     MAX_ASSET_BYTES = 20 * 1024 * 1024
     ASSET_SUFFIXES = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.bmp', '.pdf', '.txt', '.csv'}
@@ -28,6 +95,7 @@ class GuideReader:
         self._source_digest = None
         self._rendered = None
         self._resources = set()
+        self._views = OrderedDict()
 
     def _resource(self, relative):
         if not isinstance(relative, str) or not relative or any(c in relative for c in '\\:\x00'):
@@ -58,7 +126,7 @@ class GuideReader:
             raise ValueError('Invalid guide result')
         return result
 
-    def read(self, asset_base):
+    def read(self, asset_base, access=None):
         with self._lock:
             try:
                 if not self.source.is_file() or self.source.stat().st_size > self.MAX_SOURCE_BYTES:
@@ -66,12 +134,26 @@ class GuideReader:
                 raw = self.source.read_bytes()
                 if len(raw) > self.MAX_SOURCE_BYTES:
                     raise ValueError('Guide too large')
-                text = raw.decode('utf-8-sig')
-                digest = hashlib.sha256(raw).hexdigest()
-                if digest != self._source_digest:
+                visibility = guide_visibility(access)
+                source_digest = hashlib.sha256(raw).hexdigest()
+                if source_digest != self._source_digest:
+                    self._views.clear()
+                    self._source_digest = source_digest
+                key = (source_digest, tuple(visibility[name] for name in GUIDE_MARKERS))
+                cached = self._views.get(key)
+                if cached is None:
+                    text = project_guide(raw.decode('utf-8-sig'), visibility)
+                    digest = hashlib.sha256((json.dumps(visibility, sort_keys=True) + '\0' + text).encode()).hexdigest()
                     rendered = self._compile(text) if text.strip() else {'html': '', 'math_css': '', 'resources': []}
-                    self._rendered, self._source_digest = rendered, digest
-                    self._resources = set(rendered['resources'])
+                    cached = (rendered, digest, bool(text.strip()))
+                    self._views[key] = cached
+                    while len(self._views) > self.MAX_CACHED_VIEWS:
+                        self._views.popitem(last=False)
+                self._views.move_to_end(key)
+                self._rendered, digest, has_text = cached
+                # Always select resources from this request's current authority,
+                # including cache hits after a grant or qualification revocation.
+                self._resources = set(self._rendered['resources'])
                 asset_states = []
                 for relative in sorted(self._resources):
                     try:
@@ -82,21 +164,22 @@ class GuideReader:
                 version = hashlib.sha256((digest + json.dumps(asset_states)).encode()).hexdigest()
                 html = self._rendered['html'].replace('https://guide-asset.invalid/', asset_base.rstrip('/') + '/')
                 html = html.replace('GUIDEASSETVERSION', version)
-                return {'status': 'ready' if text.strip() else 'empty', 'html': html,
+                return {'status': 'ready' if has_text else 'empty', 'html': html,
                         'math_css': self._rendered.get('math_css', ''), 'version': version,
                         'modified_at': datetime.fromtimestamp(self.source.stat().st_mtime, timezone.utc).isoformat(),
-                        'message': '' if text.strip() else '指南暂未填写。'}
+                        'message': '' if has_text else '指南暂未填写。'}
             except (OSError, ValueError, subprocess.SubprocessError):
                 self._resources = set()
                 self._source_digest = None
                 self._rendered = None
+                self._views.clear()
                 return {'status': 'unavailable', 'html': '', 'math_css': '', 'version': None,
                         'modified_at': None, 'message': '指南暂时无法读取，请稍后重试。'}
 
-    def asset(self, relative):
+    def asset(self, relative, access=None):
         with self._lock:
             # Recheck the source so a removed reference stops being exposed.
-            self.read('https://guide-asset.invalid')
+            self.read('https://guide-asset.invalid', access)
             if relative not in self._resources:
                 raise DomainError('guide_asset_not_found', '未找到指南资源。', 404)
             try:
@@ -144,22 +227,32 @@ def register_guide_routes(app, settings, access_store, subjects=None):
             if selected is None or not selected.source.is_file():
                 return {'status': 'empty', 'html': '', 'math_css': '', 'version': None,
                         'modified_at': None, 'message': '该学科指南暂未填写。'}
-            return selected.read(origin + '/subject-guide-assets/' + subject_id)
+            return selected.read(origin + '/subject-guide-assets/' + subject_id, access)
         authorize_test_guide(request, 'math', reader)
-        return reader.read(origin + '/guide-assets')
+        return reader.read(origin + '/guide-assets', access)
+
+    def asset_access(request):
+        # Images may be fetched anonymously; they only see unmarked content.
+        # Resolve supplied tokens on every request, including revocations.
+        token = request.headers.get('x-learning-identity')
+        return access_store.resolve(token) if token else None
 
     @app.get('/subject-guide-assets/{subject_id}/{relative:path}')
     def subject_guide_asset(subject_id: str, relative: str, request: Request):
+        access = asset_access(request)
         if subjects:
             subjects.require(subject_id)
-            if subject_id != 'math':
-                access = access_store.resolve(request.headers.get('x-learning-identity'))
+            if subject_id != 'math' and access is None:
+                # Preserve the existing non-math identity boundary. Anonymous
+                # public-asset compatibility applies to math/legacy only.
+                access = access_store.resolve(None)
+            if access is not None:
                 subjects.authorize_subject(access, subject_id)
         selected = subject_reader(subject_id) if subjects else None
         authorize_test_guide(request, subject_id, selected)
         if selected is None:
             raise DomainError('guide_asset_not_found', '未找到指南资源。', 404)
-        return asset_response(selected.asset(relative))
+        return asset_response(selected.asset(relative, access))
 
     def asset_response(resource):
         media_type = mimetypes.guess_type(resource.name)[0] or 'application/octet-stream'
@@ -171,5 +264,5 @@ def register_guide_routes(app, settings, access_store, subjects=None):
     @app.get('/guide-assets/{relative:path}')
     def guide_asset(relative: str, request: Request):
         authorize_test_guide(request, 'math', reader)
-        resource = reader.asset(relative)
+        resource = reader.asset(relative, asset_access(request))
         return asset_response(resource)

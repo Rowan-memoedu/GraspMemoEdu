@@ -1,15 +1,15 @@
-import {t, translateMessage} from './i18n.js?v=6d29867e0d7351ea';
-import {answerEditor, readerFrame} from './learning-ui.js?v=6d29867e0d7351ea';
-import {answerReady, questionInput, choiceTypeField} from './question-input.js?v=6d29867e0d7351ea';
-import {createLearningCache} from './learning-cache.js?v=6d29867e0d7351ea';
-import {helpableContent, reportableContent} from './content-report.js?v=6d29867e0d7351ea';
+import {t, translateMessage} from './i18n.js?v=7aef4a60b5ceaa7e';
+import {answerEditor, readerFrame} from './learning-ui.js?v=7aef4a60b5ceaa7e';
+import {answerReady, questionInput, choiceTypeField} from './question-input.js?v=7aef4a60b5ceaa7e';
+import {createLearningCache} from './learning-cache.js?v=7aef4a60b5ceaa7e';
+import {helpableContent, reportableContent} from './content-report.js?v=7aef4a60b5ceaa7e';
 
 const node = (tag, cls = '', text) => { const x = document.createElement(tag); x.className = cls; if (text !== undefined) x.textContent = text; return x; };
 const button = (label, cls, action) => { const x = node('button', cls, label); x.type = 'button'; x.addEventListener('click', action); return x; };
 const html = content => { const x = node('div', 'courseContent'); x.innerHTML = content || ''; return x; };
-import {createContentTimer} from './content-timer.js?v=6d29867e0d7351ea';
-import {renderReviewDirectory, paperNumber} from './review-directory.js?v=6d29867e0d7351ea';
-import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=6d29867e0d7351ea';
+import {createContentTimer} from './content-timer.js?v=7aef4a60b5ceaa7e';
+import {renderReviewDirectory, paperNumber} from './review-directory.js?v=7aef4a60b5ceaa7e';
+import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=7aef4a60b5ceaa7e';
 
 export function createPaperView({root, request, href, getAccess, formatDate, progressChanged, courseSidebar, taskTree}) {
   const template = document.getElementById('appLayout').cloneNode(true);
