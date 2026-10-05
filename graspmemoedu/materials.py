@@ -78,6 +78,8 @@ def material_inventory(catalog, subjects, access, subject_id=None, topic_id=None
         if subject_id and actual_subject != subject_id:
             continue
         for declaration in course['topics']:
+            if not subjects.test_materials.graph_topic_visible(course['id'], declaration['id'], access):
+                continue
             topic = catalog.topic(declaration['id'])
             if topic_id and topic['id'] != topic_id:
                 continue
@@ -109,6 +111,7 @@ def register_material_routes(app, catalog, access_store, subjects, identity, pub
         subjects.authorize_subject(access, subject_id)
         helper = app.state.help_requests
         if bank_id:
+            access_store.authorize(access, permission_id(bank_id))
             bank = helper.training.bank(bank_id)
             if topic_id != permission_id(bank_id) or (subject_id and subject_id != bank['subject_id']):
                 raise DomainError('invalid_help_context', '未找到此答疑请求对应的内容。', 422)

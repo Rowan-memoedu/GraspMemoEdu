@@ -79,6 +79,19 @@ class AdminPauseTests(unittest.TestCase):
         self.assertEqual(self.client.options('/api/admin/pauses/unlock', headers={
             'Origin': 'https://evil.test', 'Access-Control-Request-Method': 'POST'}).status_code, 403)
 
+    def test_test_material_pause_requires_test_administrator_even_when_owned(self):
+        payload = self.pause()
+        policy = self.store.test_materials
+        policy.permission_ids.add(self.course['id'])
+        before = self.learner().state()
+        self.assertEqual(self.inbox().json()['total'], 0)
+        self.assertEqual(self.unlock(payload).status_code, 404)
+        self.assertEqual(self.learner().state(), before)
+        with self.store._transaction() as con:
+            con.execute('UPDATE access_principals SET purpose=? WHERE learner_id=?', ('test', self.admin))
+        self.assertEqual(self.inbox().json()['total'], 1)
+        self.assertEqual(self.unlock(payload).status_code, 200)
+
     def test_unlock_preserves_completed_work_is_idempotent_and_cannot_unlock_new_pause(self):
         learner = self.learner()
         state = learner.choose(self.action(learner.state(), choice='mastered'))

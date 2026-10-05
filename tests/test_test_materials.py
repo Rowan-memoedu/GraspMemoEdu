@@ -78,19 +78,20 @@ class TestMaterialTests(unittest.TestCase):
         self.denied()
 
     def test_advanced_students_can_view_but_explicit_permissions_still_apply(self):
-        for purpose in ('learner', 'test'):
-            self.account(is_advanced_learner=True, is_student=True, purpose=purpose)
-            self.assertEqual(len(self.call('GET', '/api/catalog?subject_id=english')['courses']), 1)
-            self.assertEqual(len(self.call('GET', '/api/training/catalog')['banks']), 1)
-            self.assertEqual(self.call('GET', '/api/guide?subject_id=math')['status'], 'ready')
-            self.assertEqual(self.client.get('/guide-assets/test.png', headers=self.headers).status_code, 200)
-        self.account(is_advanced_learner=True, is_student=True, topic_ids=[])
+        self.account(is_advanced_learner=True, is_student=True, purpose='learner')
+        self.denied()
+        self.account(is_advanced_learner=True, is_student=True, purpose='test')
+        self.assertEqual(len(self.call('GET', '/api/catalog?subject_id=english')['courses']), 1)
+        self.assertEqual(len(self.call('GET', '/api/training/catalog')['banks']), 1)
+        self.assertEqual(self.call('GET', '/api/guide?subject_id=math')['status'], 'ready')
+        self.assertEqual(self.client.get('/guide-assets/test.png', headers=self.headers).status_code, 200)
+        self.account(is_advanced_learner=True, is_student=True, purpose='test', topic_ids=[])
         self.call('GET', '/api/state?topic_id=atomic-english&subject_id=english', status=403)
         self.call('GET', '/api/training/bank?bank_id=isolated-bank', status=403)
 
     def test_admin_sees_original_materials_and_protected_guide_assets(self):
         before = hashlib.sha256((self.root / 'training-banks/isolated-bank.json').read_bytes()).hexdigest()
-        self.account(is_admin=True)
+        self.account(is_admin=True, purpose='test')
         self.assertEqual(len(self.call('GET', '/api/catalog?subject_id=english')['courses']), 1)
         self.assertEqual(len(self.call('GET', '/api/training/catalog')['banks']), 1)
         self.assertEqual(self.call('GET', '/api/state?topic_id=atomic-english')['access']['is_admin'], True)
@@ -100,6 +101,20 @@ class TestMaterialTests(unittest.TestCase):
         for path in ['/guide-assets/test.png', '/subject-guide-assets/math/test.png']:
             self.assertEqual(self.client.get(path, headers=self.headers).status_code, 200)
         self.assertEqual(hashlib.sha256((self.root / 'training-banks/isolated-bank.json').read_bytes()).hexdigest(), before)
+
+    def test_formal_admin_cannot_bypass_material_inventory_or_bank_content(self):
+        self.account(is_admin=True, purpose='learner')
+        self.denied()
+        items = self.call('GET', '/api/materials')['items']
+        self.assertFalse({'atomic-english', 'atomic-chemistry'} & {i['topic_id'] for i in items})
+        self.assertIn('atomic-biology', {i['topic_id'] for i in items})
+        self.call('GET', '/api/materials/content?topic_id=atomic-english', status=403)
+        self.call('GET', '/api/materials/content?topic_id=training.isolated-bank&bank_id=isolated-bank&group_id=group-a', status=403)
+        self.assertEqual(self.call('GET', '/api/review-papers/inbox?subject_id=english&materials=1')['due_count'], 0)
+        self.assertEqual(self.call('GET', '/api/review-papers/inbox?subject_id=math&materials=1')['due_count'], 0)
+        self.account(is_admin=True, purpose='test')
+        self.assertTrue(self.call('GET', '/api/materials/content?topic_id=training.isolated-bank&bank_id=isolated-bank&group_id=group-a')['blocks'])
+        self.assertGreater(self.call('GET', '/api/review-papers/inbox?subject_id=math&materials=1')['due_count'], 0)
 
     def test_policy_survives_backup_and_does_not_change_source_versions(self):
         archive = self.root / 'backup.zip'; backup_site(self.settings, archive)
@@ -122,10 +137,10 @@ class TestMaterialTests(unittest.TestCase):
     def test_saved_help_snapshots_obey_policy_without_deleting_history(self):
         access_store = self.app.state.access_store
         with access_store._transaction() as con:
-            admin = access_store._insert_account(con, '历史材料管理员', is_admin=True)
+            admin = access_store._insert_account(con, '历史材料管理员', is_admin=True, purpose='test')
         admin_headers = {**self.headers, 'X-Learning-Identity': access_store.login(admin['invitation_code'])['identity_token']}
         self.app.state.help_requests.set_default_admin(admin['account']['learner_id'])
-        self.account(is_student=True)
+        self.account(is_student=True, purpose='test')
         student_headers = dict(self.headers)
         policy = access_store.test_materials
         policy.permission_ids.remove('training.isolated-bank')
@@ -153,6 +168,20 @@ class TestMaterialTests(unittest.TestCase):
         kept = self.call('GET', '/api/help-center?report_id=' + saved)['items'][0]
         self.assertEqual(kept['content_html'], self.bank['groups'][1]['questions'][0]['html'])
         self.assertEqual(kept['reply']['message'], '保留管理员回复')
+        # Changing only account purpose revokes every administrator snapshot path.
+        with access_store._transaction() as con:
+            con.execute('UPDATE access_principals SET purpose=? WHERE learner_id=?', ('learner', admin['account']['learner_id']))
+        self.assertEqual(self.call('GET', '/api/help-center')['total'], 1)
+        self.assertEqual(self.call('GET', '/api/help-requests?limit=1')['total'], 1)
+        self.assertIsNone(self.call('GET', '/api/help-requests?limit=1')['next_offset'])
+        self.call('GET', '/api/help-requests?report_id=' + saved, status=404)
+        self.call('GET', '/api/help-center?report_id=' + saved, status=404)
+        self.call('POST', '/api/help-replies', {'request_id': str(uuid.uuid4()), 'report_id': saved,
+                                             'expected_revision': 1, 'message': '不得写入'}, status=404)
+        with access_store._transaction() as con:
+            con.execute('UPDATE access_principals SET purpose=? WHERE learner_id=?', ('test', admin['account']['learner_id']))
+        self.assertEqual(self.call('GET', '/api/help-requests')['total'], 2)
+        self.assertEqual(self.call('GET', '/api/help-requests?report_id=' + saved)['id'], saved)
         self.headers = student_headers
         learner = access_store.resolve(self.headers['X-Learning-Identity'])['learner_id']
         access_store.set_permissions(learner, is_advanced_learner=True)
@@ -176,7 +205,7 @@ class TestMaterialTests(unittest.TestCase):
             for path in ['/api/guide?subject_id=english', '/subject-guide-assets/english/test.png']:
                 response = client.get(path, headers=self.headers)
                 self.assertEqual(response.status_code, 404, response.text)
-            self.account(is_admin=True)
+            self.account(is_admin=True, purpose='test')
             for path in ['/api/guide?subject_id=english', '/subject-guide-assets/english/test.png']:
                 self.assertEqual(client.get(path, headers=self.headers).status_code, 200)
 

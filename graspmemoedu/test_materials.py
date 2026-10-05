@@ -1,4 +1,4 @@
-"""Retained test content, visible to administrators and advanced students."""
+"""Retained test content, visible only to qualified test accounts."""
 import json
 from pathlib import Path
 import re
@@ -46,7 +46,7 @@ class TestMaterials:
 
     @staticmethod
     def allowed(access):
-        return bool(access and access.get('role') == 'account' and
+        return bool(access and access.get('role') == 'account' and access.get('purpose') == 'test' and
                     (access.get('is_admin') or (access.get('is_advanced_learner') and access.get('is_student'))))
 
     def topic_visible(self, topic_id, access):

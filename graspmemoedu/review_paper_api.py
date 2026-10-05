@@ -11,6 +11,7 @@ from .review_hierarchy import source_trees
 from .materials import material_inventory
 from .service import DomainError
 from .training import TrainingService
+from .training_content import permission_id
 
 PUBLIC_PATHS = {'/api/review-papers/' + part for part in ('inbox', 'open', 'state', 'draft', 'submit', 'cancel', 'preferences')}
 
@@ -128,7 +129,9 @@ def register_paper_routes(app, training, catalog, dependencies, access_store, su
                         'source': {'kind': 'atomic', 'container': row['topic_id']}}
                        for row in material_inventory(catalog, subjects, backend.access, subject)
                        if row['kind'] == 'atomic_card']
-            banks = [bank for bank in training.banks.values() if bank['subject_id'] == subject]
+            allowed = {topic['id'] for topic in backend.access['topics']}
+            banks = [bank for bank in training.banks.values()
+                     if bank['subject_id'] == subject and permission_id(bank['id']) in allowed]
             entries.extend({'id': 'training:' + row['bank_id'] + ':' + row['question_id'],
                             'kind': 'single', 'title': row['title'], 'count': 1, 'material': True,
                             'bank_id': row['bank_id'], 'group_id': row['group_id'], 'question_id': row['question_id'],

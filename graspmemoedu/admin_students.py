@@ -57,7 +57,8 @@ class AdminStudents:
             items = []
             for row in rows:
                 item = self.student(row)
-                states = [json.loads(r['body']) for r in con.execute('SELECT body FROM topics WHERE learner=?', (row['learner_id'],))]
+                states = [json.loads(r['body']) for r in con.execute('SELECT topic,body FROM topics WHERE learner=?', (row['learner_id'],))
+                          if self.access.test_materials.topic_visible(r['topic'], access)]
                 item.update(started_topics=sum(self.started(s) for s in states),
                             completed_topics=sum(s.get('status') == 'completed' for s in states))
                 items.append(item)
@@ -131,13 +132,16 @@ class AdminStudents:
                 raise DomainError('student_not_found', '未找到该学员。', 404)
             student = self.access._public(row)
             tables = self.dashboard.dependency_policy.tables(con)
-            rows = {r['topic']: r for r in con.execute('SELECT topic,version,body FROM topics WHERE learner=?', (learner_id,))}
+            rows = {r['topic']: r for r in con.execute('SELECT topic,version,body FROM topics WHERE learner=?', (learner_id,))
+                    if self.access.test_materials.topic_visible(r['topic'], access)}
             states = {key: json.loads(r['body']) for key, r in rows.items()}
             learned = [self.learned_topic(key, r) for key, r in rows.items()
                        if self.started(states[key])]
             reviews, cards = [], []
             if 'review_cards' in tables:
                 for card in con.execute('SELECT * FROM review_cards WHERE learner=? ORDER BY due_at,topic,module', (learner_id,)):
+                    if not self.access.test_materials.topic_visible(card['topic'], access):
+                        continue
                     context = self.context(card['topic'])
                     topic = self.catalog.topics.get(card['topic'], {})
                     title = next((m['title'] for m in topic.get('modules', []) if m['id'] == card['module']), card['module'])
@@ -150,6 +154,8 @@ class AdminStudents:
                         'due_at': card['due_at'], 'stored_due_at': card['due_at'], 'active': bool(card['active_session']),
                         'blockers': blocked, 'overdue': datetime.fromisoformat(card['due_at']) <= current})
             for topic_id, topic in self.catalog.topics.items():
+                if not self.access.test_materials.topic_visible(topic_id, access):
+                    continue
                 if topic.get('training_mode') != 'atomic_retrieval' or (topic_id not in rows and topic_id not in {t['id'] for t in student['topics']}):
                     continue
                 state = states.get(topic_id, {})
@@ -178,25 +184,29 @@ class AdminStudents:
                         'point_ids': flashcard['point_ids'], 'points': point_dates,
                         'due_at': max((p['due_at'] for p in point_dates), key=datetime.fromisoformat, default=None) if all_scheduled else None,
                         'blockers': blocked[:], 'bundle': len(point_dates) > 1})
-            training_learned, training_reviews = self.training_records(con, student, tables, current)
+            training_learned, training_reviews = self.training_records(con, student, tables, current, access)
             reviews.extend(training_reviews)
         reviews.sort(key=lambda r: (r['due_at'] or '', r['kind'], r['id']))
         learned.sort(key=lambda r: (r['started_at'] or '', r['topic_id']), reverse=True)
         return {'student': self.student(row), 'generated_at': current.isoformat(), 'learned': learned,
                 'reviews': reviews, 'atomic_cards': cards, 'training_learned': training_learned}
 
-    def training_records(self, con, student, tables, current):
+    def training_records(self, con, student, tables, current, access):
         learned, reviews = [], []
         learner_id = student['learner_id']
         if 'training_attempts' in tables:
             for row in con.execute('''SELECT bank,question,version,MAX(completed_at) AS completed_at,COUNT(*) AS attempts
                 FROM training_attempts WHERE learner=? AND completed_at IS NOT NULL GROUP BY bank,question,version''', (learner_id,)):
+                if not self.access.test_materials.topic_visible(permission_id(row['bank']), access):
+                    continue
                 bank, title = self.training_title(row['bank'], row['question'])
                 learned.append({'bank_id': row['bank'], 'bank_title': bank.get('title', row['bank']),
                     'subject_id': bank.get('subject_id'), 'id': row['question'], 'title': title,
                     'completed_at': row['completed_at'], 'attempts': row['attempts']})
         if 'training_memory' in tables:
             for row in con.execute('SELECT * FROM training_memory WHERE learner=? ORDER BY due_at,bank,question', (learner_id,)):
+                if not self.access.test_materials.topic_visible(permission_id(row['bank']), access):
+                    continue
                 bank, title = self.training_title(row['bank'], row['question'])
                 blocked = []
                 if not student['enabled']: blocked.append('account_disabled')

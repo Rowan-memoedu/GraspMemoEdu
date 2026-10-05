@@ -258,6 +258,16 @@ class HelpRequestStore:
                 'subject_id': self.subjects.course_subjects[course['id']],
                 'content_block_type': block_type, 'content_block_title': block_title}
 
+    def visible_scope(self, scope, parameters, access):
+        restricted = self.access_store.test_materials.permission_ids
+        if self.access_store.test_materials.allowed(access):
+            restricted = restricted - {t['id'] for t in access['topics']}
+        if restricted:
+            scope += ''' AND NOT EXISTS (SELECT 1 FROM json_each(?) blocked
+                WHERE blocked.value=json_extract(r.body,'$.request.topic_id'))'''
+            parameters += (json.dumps(sorted(restricted)),)
+        return scope, parameters
+
     def inbox(self, access, limit=25, offset=0):
         if not access.get('is_admin'):
             raise DomainError('feature_forbidden', '此页面仅供管理员查看。', 403)
@@ -268,9 +278,10 @@ class HelpRequestStore:
                 LEFT JOIN help_admin_assignments a ON a.learner_id=r.learner_id
                 LEFT JOIN help_admin_config c ON c.id=1
                 WHERE COALESCE(a.admin_id,c.admin_id)=?'''
+            scope, parameters = self.visible_scope(scope, (access['learner_id'],), access)
             rows = con.execute('SELECT r.id,r.learner_id,r.body,r.created_at ' + scope +
-                               ' ORDER BY r.created_at DESC,r.id DESC LIMIT ? OFFSET ?', (access['learner_id'], limit + 1, offset)).fetchall()
-            total = con.execute('SELECT COUNT(*) ' + scope, (access['learner_id'],)).fetchone()[0]
+                               ' ORDER BY r.created_at DESC,r.id DESC LIMIT ? OFFSET ?', (*parameters, limit + 1, offset)).fetchall()
+            total = con.execute('SELECT COUNT(*) ' + scope, parameters).fetchone()[0]
         return {'items': [{**{key: value for key, value in json.loads(row['body']).items()
                               if key not in ('content_html', 'math_css')}, 'id': row['id'], 'learner_id': row['learner_id'],
                            'created_at': row['created_at']} for row in rows[:limit]],
@@ -286,7 +297,7 @@ class HelpRequestStore:
                 LEFT JOIN help_admin_config c ON c.id=1
                 WHERE r.id=? AND COALESCE(a.admin_id,c.admin_id)=?''',
                 (report_id, access['learner_id'])).fetchone()
-        if not row:
+        if not row or not self.access_store.test_materials.snapshot_visible(json.loads(row['body'])['request']['topic_id'], access):
             raise DomainError('unknown_help_request', '未找到此提交记录。', 404)
         return self._render_record(row)
 
@@ -331,15 +342,7 @@ class HelpRequestStore:
         viewer = self._viewer(access)
         scope = self._center_scope(viewer)
         parameters = (access['learner_id'],)
-        restricted = self.access_store.test_materials.permission_ids
-        if self.access_store.test_materials.allowed(access):
-            restricted = restricted - {t['id'] for t in access['topics']}
-        if restricted:
-            # Saved question snapshots obey the same test-material boundary as
-            # their current sources, including counts and pagination.
-            scope += ''' AND NOT EXISTS (SELECT 1 FROM json_each(?) blocked
-                WHERE blocked.value=json_extract(r.body,'$.request.topic_id'))'''
-            parameters += (json.dumps(sorted(restricted)),)
+        scope, parameters = self.visible_scope(scope, parameters, access)
         with closing(self.access_store._connect()) as con:
             con.execute('BEGIN')
             counts = con.execute('''SELECT COUNT(*) total,
@@ -379,8 +382,9 @@ class HelpRequestStore:
             raise DomainError('invalid_help_reply', '请填写回复内容。', 422)
         with self.access_store._transaction() as con:
             self._require_admin(con, access['learner_id'])
-            row = con.execute('SELECT learner_id FROM help_requests WHERE id=?', (values['report_id'],)).fetchone()
-            if not row or self._owner(con, row['learner_id']) != access['learner_id']:
+            row = con.execute('SELECT learner_id,body FROM help_requests WHERE id=?', (values['report_id'],)).fetchone()
+            if (not row or self._owner(con, row['learner_id']) != access['learner_id'] or
+                    not self.access_store.test_materials.snapshot_visible(json.loads(row['body'])['request']['topic_id'], access)):
                 raise DomainError('unknown_help_request', '未找到此提交记录。', 404)
             existing = con.execute('SELECT * FROM help_replies WHERE admin_id=? AND request_id=?',
                 (access['learner_id'], values['request_id'])).fetchone()

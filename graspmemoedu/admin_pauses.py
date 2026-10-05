@@ -53,6 +53,8 @@ class AdminPauses:
             con.execute('BEGIN')
             reviews = self._reviews(con)
             for row in self._owned(con, access['learner_id']):
+                if not self.access_store.test_materials.topic_visible(row['topic'], access):
+                    continue
                 state = json.loads(row['body'])
                 pause = state.get('pause') or reviews.get((row['learner_id'], row['topic']))
                 if not pause or row['topic'] not in self.catalog.topics:
@@ -80,7 +82,7 @@ class AdminPauses:
             con.execute('BEGIN')
             row = next((r for r in self._owned(con, access['learner_id'], values['learner_id'])
                         if r['topic'] == values['topic_id']), None)
-            if not row:
+            if not row or not self.access_store.test_materials.topic_visible(row['topic'], access):
                 raise DomainError('pause_not_found', '未找到可由您管理的暂停记录。', 404)
             topic = self.catalog.topic(values['topic_id'])
             if row['version'] != topic['version']:

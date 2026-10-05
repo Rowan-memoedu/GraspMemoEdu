@@ -121,6 +121,8 @@ class VariantWorkerTests(unittest.TestCase):
         (self.root / 'test-materials.json').write_text(json.dumps({'schema': 1, 'banks': [self.bank['id']]}))
         self.assertIsNone(worker.run_one())
         self.account(is_advanced_learner=True, is_student=True); self.prime()
+        self.assertIsNone(worker.run_one())
+        self.account(is_advanced_learner=True, is_student=True, purpose='test'); self.prime()
         self.assertEqual(worker.run_one()['state'], 'installed')
 
     def test_rejected_or_malformed_output_is_never_installed_or_repeated(self):
