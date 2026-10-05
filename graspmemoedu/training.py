@@ -1,15 +1,14 @@
 """Free-order single-question training over the shared judge and FSRS adapter."""
 from contextlib import closing, contextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
-import random
 import sqlite3
 
 from .fsrs_engine import FSRSEngine, utc_time
 from .judging import judge_answer
-from .question_types import parse_answer, public_interaction, display_answer
+from .question_types import parse_answer, public_interaction, display_answer, present_choice
 from .service import DomainError
 from .learning_storage import administrator
 
@@ -119,10 +118,7 @@ class TrainingService:
             mode = ('practice' if self._stopped(con, bank_id, question_id, bank['version']) else
                     'initial' if not memory or not memory['mastered'] else
                     'review' if utc_time(memory['due_at']) <= now else 'practice')
-            spec = question.get('interaction', {})
-            if spec.get('type') == 'choice' and spec.get('shuffle', True):
-                # Stable for this attempt, and independent of the answer key.
-                random.Random(hashlib.sha256(request_id.encode()).hexdigest()).shuffle(spec['options'])
+            question = present_choice(question, request_id)
             con.execute('''INSERT INTO training_attempts
                 (id,learner,bank,group_id,question,version,snapshot,mode,memory_revision,phase,created_at)
                 VALUES (?,?,?,?,?,?,?,?,?,'answer',?)''',
@@ -157,7 +153,8 @@ class TrainingService:
                 'answer': submission['answer'] if submission else '',
                 'answer_display': display_answer(question, submission['answer']) if submission else '',
                 'error': submission['reason'] if submission and submission['status'] == 'error' else None,
-                'result': result, 'stopped': stopped, 'due_at': memory['due_at'] if memory and not stopped else None}
+                'result': result, 'stopped': stopped, 'can_review_early': memory is not None or stopped,
+                'due_at': memory['due_at'] if memory and not stopped else None}
 
     @staticmethod
     def submission_fingerprint(data):
@@ -210,21 +207,23 @@ class TrainingService:
         scheduled, fsrs, mastery = False, None, None
         due = memory['due_at'] if memory else None
         if eligible:
-            mastery = rating if rating is not None else 1 if not correct else 3 if row['mode'] == 'review' else None
+            mastery = rating if rating is not None else 1 if not correct else 5 if memory is None else 3
             mastered = bool(memory and memory['mastered'] or (rating > 1 if rating is not None else correct))
-            if mastery is not None:
+            if mastery == 5:
+                # FSRS accepts 1-4; use the persistent suspension for score 5.
+                con.execute('INSERT INTO training_suspensions VALUES (?,?,?,?,?)',
+                            (self.learner_id, row['bank'], row['question'], row['version'], now.isoformat()))
+                stopped = True
+                due = now.isoformat()
+            else:
                 fsrs = self.fsrs.schedule(memory['card_json'] if memory else None, mastery, now, elapsed_ms)
                 due = fsrs['due_at']
-            else:
-                # Same initial correct behavior as atomic retrieval: no rating,
-                # first review six hours later, preserving previous wrong-answer state.
-                due = (now + timedelta(hours=6)).isoformat()
             card_json = fsrs['card_json'] if fsrs else memory['card_json'] if memory else None
             con.execute('''INSERT INTO training_memory VALUES (?,?,?,?,?,?,?,?)
                 ON CONFLICT(learner,bank,question,version) DO UPDATE SET mastered=excluded.mastered,
                 revision=excluded.revision,card_json=excluded.card_json,due_at=excluded.due_at''',
                 (self.learner_id, row['bank'], row['question'], row['version'], int(mastered), revision + 1, card_json, due))
-            scheduled = True
+            scheduled = not stopped
         result = {'correct': correct, 'reason': reason, 'rating': mastery,
                   'self_rating': rating, 'scheduled': scheduled, 'due_at': None if stopped else due,
                   'stopped': stopped, 'stop_requested': stop,

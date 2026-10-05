@@ -1,5 +1,6 @@
 from contextlib import closing
 from copy import deepcopy
+import hashlib
 import json
 from pathlib import Path
 import unittest
@@ -38,6 +39,20 @@ class TrainingFormatTests(unittest.TestCase):
         path = self.root / 'format.json'
         path.write_text(json.dumps(self.value), encoding='utf-8')
         return install(path, self.root)
+
+    def test_format_update_requires_exact_previous_hash_and_keeps_previous_bytes(self):
+        self.save()
+        target = self.root / 'training-formats' / (self.bank['id'] + '.json')
+        previous = target.read_bytes(); previous_hash = hashlib.sha256(previous).hexdigest()
+        self.value['questions']['essay']['html'] = '<p>同一道题的排版修正。</p>'
+        candidate = self.root / 'format-update.json'
+        candidate.write_text(json.dumps(self.value), encoding='utf-8')
+        for guard in (None, '0' * 64):
+            with self.assertRaises(ValueError): install(candidate, self.root, expected_previous=guard)
+        self.assertEqual(target.read_bytes(), previous)
+        self.assertEqual(install(candidate, self.root, expected_previous=previous_hash), 'updated')
+        self.assertEqual((target.parent / 'history' / (self.bank['id'] + '-' + previous_hash + '.json')).read_bytes(), previous)
+        self.assertEqual(TrainingCatalog(self.root).banks[self.bank['id']], self.bank)
 
     def test_multiple_selection_all_or_nothing_roundtrip_and_secrets(self):
         q = self.value['questions']['essay']; spec = q['interaction']

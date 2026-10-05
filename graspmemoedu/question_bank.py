@@ -3,7 +3,6 @@
 Each presented step/round pins a revision. A missing pin means original content,
 including when a bank is installed later. No source answers or explanations change.
 """
-from copy import deepcopy
 import hashlib
 import json
 import os
@@ -11,7 +10,7 @@ from pathlib import Path
 import re
 import uuid
 
-from .question_types import validate_interaction
+from .question_types import validate_interaction, present_choice
 from .idea_presentation import present_question
 
 REVISION = re.compile(r'[0-9a-f]{64}\Z')
@@ -79,13 +78,7 @@ class QuestionBank:
             variant = self.load(revision)['questions'].get(question_id)
             if variant:
                 question = {**question, **{k: v for k, v in variant.items() if k != 'source_sha256'}}
-        spec = question.get('interaction')
-        if spec and spec['type'] == 'choice' and spec.get('shuffle', True):
-            question = deepcopy(question)
-            # Stable across reload, draft restore and retry; varies by actual
-            # presentation, without using the key or learner answer as a seed.
-            question['interaction']['options'].sort(key=lambda item: hashlib.sha256(
-                (presentation_id + ':' + item['id']).encode()).digest())
+        question = present_choice(question, presentation_id)
         return present_question(question, self.originals[question_id])
 
     def css(self, revisions):

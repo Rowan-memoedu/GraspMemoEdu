@@ -2,6 +2,8 @@
 
 Example 与 Practice 共用可选 `interaction`（version 1）。不填时保留原问答题，继续交给已有 LLM 判题。`answer_type` 仍是原答案描述字段，不作为前端控件类型。
 
+全站课程、复习、原子题、独立题库及历史页共用 `questionInput` 选择控件与 `choiceTypeField`，在习题编号或标题下显示“单选”或“多选”。鼠标、触摸、Tab 和空格操作保持，方向键不切换选项；Ctrl + Enter 提交。后端选项排序统一由 `present_choice` 处理，按作答标识保持稳定，`shuffle:false` 保持原顺序；选择题继续共用解析、隐藏答案与判分规则。
+
 在作者 Markdown 的每题下，与 `Explanation` 并列增加一个 `Interaction` 节点；它只能包含一份 JSON 对象。该节点不显示在题干或解析里。原 `Explanation` 仍须保留，作为教学解析和旧判题参考。
 
 ```text

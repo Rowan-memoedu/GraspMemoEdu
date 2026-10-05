@@ -5,11 +5,14 @@ answers, versions and attempt snapshots remain owned by the original bank.
 """
 from copy import deepcopy
 import json
+import hashlib
+import os
 from pathlib import Path
 import re
 
 from .question_bank import digest
 from .question_types import validate_interaction
+from .training_presentation import present_book_question
 
 DIRECTORY = 'training-formats'
 
@@ -53,6 +56,8 @@ def present(bank, value):
     for group in groups:
         group['questions'] = [{**q, **{k: v for k, v in value['questions'].get(q['id'], {}).items()
                                      if k != 'source_sha256'}} for q in group.get('questions', [])]
+    for group in groups:
+        group['questions'] = [present_book_question(q) for q in group['questions']]
     return {**bank, 'groups': groups}
 
 
@@ -80,9 +85,8 @@ def validate_archive(blobs, banks):
     return names
 
 
-def install(compiled, data_dir):
-    # Additive/idempotent like original bank installation. An existing differing
-    # format is not silently replaced; its backup remains the rollback boundary.
+def install(compiled, data_dir, *, expected_previous=None):
+    # Different derived formats require an explicit previous-content hash.
     from .training_content import TrainingCatalog
     raw = Path(compiled).read_bytes()
     if len(raw) > 32000000:
@@ -99,9 +103,24 @@ def install(compiled, data_dir):
         raise ValueError('Training format directory must not be a symlink')
     target = root / (ident + '.json')
     if target.exists():
-        if target.is_symlink() or json.loads(target.read_bytes()) != value:
+        if target.is_symlink():
             raise ValueError('An existing format differs')
-        return 'already_installed'
+        previous = target.read_bytes()
+        if json.loads(previous) == value:
+            return 'already_installed'
+        if expected_previous is None or hashlib.sha256(previous).hexdigest() != expected_previous:
+            raise ValueError('An existing format differs')
+        history = root / 'history'; history.mkdir(exist_ok=True)
+        if history.is_symlink():
+            raise ValueError('Format history must not be a symlink')
+        saved = history / (ident + '-' + expected_previous + '.json')
+        if not saved.exists():
+            with saved.open('xb') as stream: stream.write(previous)
+        temporary = target.with_suffix('.pending')
+        with temporary.open('x', encoding='utf-8') as stream:
+            json.dump(value, stream, ensure_ascii=False, indent=2); stream.write('\n')
+        os.replace(temporary, target)
+        return 'updated'
     with target.open('x', encoding='utf-8') as stream:
         json.dump(value, stream, ensure_ascii=False, indent=2)
         stream.write('\n')

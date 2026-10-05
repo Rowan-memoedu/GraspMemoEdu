@@ -46,9 +46,10 @@ try {
     delete publicSpec.correct_id; delete publicSpec.correct_ids;
     for (const b of publicSpec.blanks || []) delete b.answers;
     await page.evaluate(async ({q, spec}) => {
-      const {questionInput, answerReady} = await import('/web/question-input.js');
+      const {questionInput, answerReady, choiceTypeField} = await import('/web/question-input.js');
       const stem = document.querySelector('#stem'); stem.innerHTML = q.html;
       document.querySelector('#title').textContent = spec.type === 'fill_blank' ? '填空题' : spec.multiple ? '多项选择题' : '单项选择题';
+      const typeField = choiceTypeField(spec); if (typeField) document.querySelector('#title').after(typeField);
       window.control = questionInput(spec, {id: 'fixtureInput', stem, formId: 'answerForm'});
       document.querySelector('form').append(control.element);
       window.answerReady = answerReady;
@@ -60,6 +61,16 @@ try {
     if (q.interaction.type === 'choice') {
       const fields = page.locator('.choiceOption input');
       assert.equal(await fields.count(), q.interaction.options.length);
+      await fields.nth(0).check();
+      assert.equal(await page.locator('.questionTypeField').textContent(), q.interaction.multiple ? '多选' : '单选');
+      assert.equal(await page.locator('#title + .questionTypeField + #stem').count(), 1);
+      const beforeKeys = await page.evaluate(() => control.input.value);
+      await fields.nth(0).focus();
+      for (const key of ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']) await page.keyboard.press(key);
+      assert.equal(await page.evaluate(() => control.input.value), beforeKeys);
+      assert.equal(await fields.nth(0).isChecked(), true);
+      await page.keyboard.press('Space');
+      assert.equal(await fields.nth(0).isChecked(), !q.interaction.multiple);
       await fields.nth(0).check();
       if (q.interaction.multiple) {
         await fields.nth(2).check();

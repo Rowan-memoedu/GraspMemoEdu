@@ -1,5 +1,7 @@
 """Versioned question interactions. Answer keys never enter public metadata."""
 import json
+import hashlib
+from copy import deepcopy
 import re
 import unicodedata
 
@@ -8,6 +10,16 @@ import regex
 
 TYPES = {'text', 'true_false', 'fill_blank', 'matching', 'choice'}
 ID = re.compile(r'[A-Za-z][A-Za-z0-9_-]{0,39}\Z')
+
+
+def present_choice(question, presentation_id):
+    """One stable option-order policy for courses and standalone banks."""
+    spec = question.get('interaction') or {}
+    if spec.get('type') == 'choice' and spec.get('shuffle', True):
+        question = deepcopy(question)
+        question['interaction']['options'].sort(key=lambda item: hashlib.sha256(
+            (presentation_id + ':' + item['id']).encode()).digest())
+    return question
 
 
 def _require(condition, message='Invalid question interaction'):

@@ -73,10 +73,12 @@ class TrainingAPITests(unittest.TestCase):
         self.assertEqual(self.call('GET', '/api/training/catalog?subject_id=physics')['banks'], [])
         self.call('GET', '/api/training/bank?subject_id=physics&bank_id=isolated-bank', status=403)
         result, payload = self.answer(self.open('exact'))
-        self.assertIsNone(result['result']['rating'])
+        self.assertEqual(result['result']['rating'], 5)
+        self.assertTrue(result['stopped']); self.assertTrue(result['can_review_early'])
+        self.assertIsNone(result['due_at'])
         replay = self.call('POST', '/api/training/submit', payload); self.assertEqual(replay['result'], result['result'])
         self.when += timedelta(hours=6, seconds=1)
-        self.assertEqual(len(self.call('GET', '/api/training/reviews?subject_id=math')['items']), 1)
+        self.assertEqual(len(self.call('GET', '/api/training/reviews?subject_id=math')['items']), 0)
         with closing(sqlite3.connect(self.root / 'learning.sqlite3')) as con:
             self.assertEqual(con.execute('SELECT COUNT(*) FROM topics WHERE learner=?', (self.guest['access']['learner_id'],)).fetchone()[0], 0)
 

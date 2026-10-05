@@ -45,24 +45,31 @@ class TrainingTests(unittest.TestCase):
             row = self.service._memory(con, self.bank['id'], qid, self.bank['version'])
             return dict(row) if row else None
 
-    def test_initial_correct_six_hours_and_early_repeat_preserves_schedule(self):
+    def test_initial_correct_five_never_schedules_and_manual_repeat_preserves_memory(self):
+        self.assertFalse(self.service.state(self.open())['can_review_early'])
+        self.service.fsrs.schedule = lambda *args: self.fail('Score 5 must not enter FSRS')
         state, _ = self.answer(self.open())
-        self.assertIsNone(state['result']['rating'])
-        self.assertEqual(state['due_at'], (self.now + timedelta(hours=6)).isoformat())
+        self.assertEqual(state['result']['rating'], 5)
+        self.assertIsNone(state['due_at']); self.assertTrue(state['stopped'])
+        self.assertFalse(state['result']['scheduled']); self.assertFalse(state['result']['practice_only'])
+        self.assertTrue(state['can_review_early'])
         saved = self.memory(); self.assertIsNone(saved['card_json'])
+        self.now += timedelta(days=365)
+        self.assertEqual(self.service.reviews([self.bank]), {'items': [], 'next_due_at': None})
         for answer in ('wrong', '2', 'wrong'):
             state, _ = self.answer(self.open(), answer)
             self.assertEqual(state['mode'], 'practice'); self.assertTrue(state['result']['practice_only'])
             self.assertEqual(saved, self.memory())
-        self.assertEqual(len(self.service.history(self.bank['id'], 'essay')['items']), 4)
+        self.assertEqual(len(self.service.history(self.bank['id'], 'essay')['items']), 5)
 
-    def test_wrong_then_correct_preserves_fsrs_and_due_review_binary_rating(self):
+    def test_wrong_then_correct_rates_three_and_due_review_binary_rating(self):
         state, _ = self.answer(self.open(), 'wrong')
         self.assertEqual(state['result']['rating'], 1)
         card = self.memory()['card_json']; self.assertIsNotNone(card)
         state, _ = self.answer(self.open())
-        self.assertIsNone(state['result']['rating']); self.assertEqual(self.memory()['card_json'], card)
-        self.now += timedelta(hours=6, seconds=1)
+        self.assertEqual(state['result']['rating'], 3); self.assertNotEqual(self.memory()['card_json'], card)
+        self.assertTrue(state['result']['scheduled']); self.assertFalse(state['stopped'])
+        self.now = datetime.fromisoformat(state['due_at']) + timedelta(seconds=1)
         self.assertEqual(len(self.service.reviews([self.bank])['items']), 1)
         state, _ = self.answer(self.open())
         self.assertEqual(state['mode'], 'review'); self.assertEqual(state['result']['rating'], 3)
@@ -86,12 +93,12 @@ class TrainingTests(unittest.TestCase):
         self.assertEqual(self.calls, [])
 
     def test_early_self_rating_also_leaves_schedule_unchanged(self):
-        self.answer(self.open()); memory = self.memory()
+        self.answer(self.open(), 'wrong'); self.answer(self.open()); memory = self.memory()
         attempt = self.open(); self.service.reveal(attempt); self.service.rate(attempt, 1)
         self.assertEqual(memory, self.memory()); self.assertTrue(self.service.state(attempt)['result']['practice_only'])
 
     def test_stop_reviews_preserves_card_and_survives_restart_and_manual_practice(self):
-        self.answer(self.open()); memory = self.memory()
+        self.answer(self.open(), 'wrong'); self.answer(self.open()); memory = self.memory()
         # Stopping also works before the next due date, without FSRS rating 5.
         attempt = self.open(); self.service.reveal(attempt)
         self.service.fsrs.schedule = lambda *args: self.fail('Stop must never call FSRS')
@@ -130,11 +137,12 @@ class TrainingTests(unittest.TestCase):
         other = TrainingService(self.catalog, self.root, 'other', self.service.judge, clock=lambda: self.now)
         with self.assertRaises(DomainError): other.stop_reviews(attempt)
         result, _ = self.answer(self.open(service=other), service=other)
-        self.assertFalse(result['stopped']); self.assertTrue(result['result']['scheduled'])
+        self.assertTrue(result['stopped']); self.assertEqual(result['result']['rating'], 5)
+        self.assertFalse(result['result']['scheduled'])
 
     def test_review_again_does_not_return_card_to_initial_learning(self):
-        self.answer(self.open())
-        self.now += timedelta(hours=6, seconds=1)
+        self.answer(self.open(), 'wrong'); self.answer(self.open())
+        self.now = datetime.fromisoformat(self.memory()['due_at']) + timedelta(seconds=1)
         attempt = self.open(); self.service.reveal(attempt); self.service.rate(attempt, 1)
         self.now = datetime.fromisoformat(self.memory()['due_at']) + timedelta(seconds=1)
         state, _ = self.answer(self.open())
@@ -166,6 +174,25 @@ class TrainingTests(unittest.TestCase):
         memory = self.memory(); self.answer(second, 'wrong')
         self.assertEqual(self.memory(), memory); self.assertEqual(len(self.calls), 2)
         with self.assertRaises(DomainError): self.answer(first, 'changed', request=payload['request_id'])
+
+    def test_concurrent_first_correct_cannot_override_an_earlier_wrong(self):
+        first, second = self.open(), self.open()
+        self.answer(first, 'wrong'); saved = self.memory()
+        state, _ = self.answer(second)
+        self.assertTrue(state['result']['practice_only']); self.assertFalse(state['stopped'])
+        self.assertEqual(self.memory(), saved)
+        state, _ = self.answer(self.open())
+        self.assertEqual(state['result']['rating'], 3); self.assertFalse(state['stopped'])
+
+    def test_reveal_only_is_not_learned_and_error_retry_can_still_score_five(self):
+        attempt = self.open(); self.service.reveal(attempt)
+        self.assertFalse(self.service.state(attempt)['can_review_early'])
+        self.service.judge = lambda *args: None
+        attempt = self.open(); state, payload = self.answer(attempt)
+        self.assertFalse(state['can_review_early'])
+        self.service.judge = lambda *args: {'status': 'judged', 'correct': True, 'reason': 'ok'}
+        self.service.submit(payload); self.service.process_submission(payload['request_id'])
+        self.assertEqual(self.service.state(attempt)['result']['rating'], 5)
 
     def test_judge_error_retry_and_recovery_never_counts_wrong(self):
         self.service.judge = lambda *args: None

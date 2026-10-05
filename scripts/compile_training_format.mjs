@@ -31,5 +31,15 @@ const checked = spawnSync(process.env.GRASPMEMOEDU_PYTHON || 'python', ['-c', co
   encoding: 'utf8', maxBuffer: 64 * 1024 * 1024});
 if (checked.status !== 0) throw new Error(checked.stderr || checked.error?.message || 'Format validation failed');
 if (Buffer.byteLength(checked.stdout) > 32000000) throw new Error('Format exceeds file size limit');
-await fs.writeFile(output, checked.stdout, {flag: 'wx'});
+let previous;
+try { previous = await fs.readFile(output); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+if (previous && !previous.equals(Buffer.from(checked.stdout))) {
+  const history = path.join(path.dirname(output), 'format-history'); await fs.mkdir(history, {recursive: true});
+  const saved = path.join(history, 'compiled-' + crypto.createHash('sha256').update(previous).digest('hex') + '.json');
+  try { await fs.writeFile(saved, previous, {flag: 'wx'}); } catch (e) { if (e.code !== 'EEXIST') throw e; }
+}
+if (!previous || !previous.equals(Buffer.from(checked.stdout))) {
+  const temporary = output + '.pending'; await fs.writeFile(temporary, checked.stdout, {flag: 'wx'});
+  await fs.rename(temporary, output);
+}
 console.log(JSON.stringify({questions: changed.length, flattened: audit.flatten, bytes: Buffer.byteLength(checked.stdout), sha256: crypto.createHash('sha256').update(checked.stdout).digest('hex')}));
