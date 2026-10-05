@@ -1,11 +1,11 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=f04cea821ce153af";
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=f04cea821ce153af';
-import {reportableContent} from './content-report.js?v=f04cea821ce153af';
-import {createLearningCache} from './learning-cache.js?v=f04cea821ce153af';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=6a737386373f84cd";
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=6a737386373f84cd';
+import {reportableContent} from './content-report.js?v=6a737386373f84cd';
+import {createLearningCache} from './learning-cache.js?v=6a737386373f84cd';
 
-import {answerEditor} from './learning-ui.js?v=f04cea821ce153af';
-import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=f04cea821ce153af';
-import {enhanceTopicContent, mountTopicBacklinks, focusContentNode} from './topic-content.js?v=f04cea821ce153af';
+import {answerEditor} from './learning-ui.js?v=6a737386373f84cd';
+import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=6a737386373f84cd';
+import {enhanceTopicContent, mountTopicBacklinks, focusContentNode} from './topic-content.js?v=6a737386373f84cd';
 
 applyStaticTranslations();
 
@@ -1512,7 +1512,7 @@ async function openTopic(id, subjectId) {
   }
 }
 
-const { initPortal } = await import("./portal.js?v=f04cea821ce153af");
+const { initPortal } = await import("./portal.js?v=6a737386373f84cd");
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {
     try { return await fetchGuideAsset(url, subjectId); }

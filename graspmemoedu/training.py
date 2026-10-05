@@ -316,6 +316,7 @@ class TrainingService:
         return {**{k: bank.get(k, '') for k in ('id', 'title', 'subject_id', 'description', 'version')},
                 'groups': [{'id': g['id'], 'title': g['title'], 'parent_id': g.get('parent_id'),
                             'question_count': len(g.get('questions', [])),
+                            **({'introduction_count': len(g['introductions'])} if 'introductions' in g else {}),
                             'completed_count': counts.get(g['id'], 0) if history else None}
                            for g in bank['groups']]}
 
@@ -334,6 +335,8 @@ class TrainingService:
         counts = {r['question']: r['count'] for r in rows}
         return {'id': group_id, 'title': group['title'], 'bank_id': bank_id, 'bank_title': bank['title'],
                 'version': bank['version'], 'math_css': bank.get('math_css', ''),
+                **({ 'introductions': group['introductions'], 'content_order': group['content_order']}
+                   if 'introductions' in group else {}),
                 'questions': [{'id': q['id'], 'title': q.get('title', q['id']),
                                'completed_count': counts.get(q['id'], 0) if history else None,
                                'latest_attempt_id': recent[q['id']]['id'] if recent[q['id']] else None,

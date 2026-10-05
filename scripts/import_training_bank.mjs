@@ -12,8 +12,9 @@ if (!sourcePath || !outputPath) throw new Error('Usage: node scripts/import_trai
 if (options.some(option => option !== '--literal-prose')) throw new Error('Unknown training-bank compiler option');
 const raw = await fs.readFile(sourcePath);
 const source = JSON.parse(raw.toString('utf8').replace(/^\uFEFF/, ''));
-const texts = source.groups.flatMap(g => (g.questions || []).flatMap(q => [q.question, q.explanation,
-  ...['options', 'statements', 'left', 'right'].flatMap(key => (q.interaction?.[key] || []).map(x => x.text))]));
+const texts = source.groups.flatMap(g => [...(g.introductions || []).map(i => i.text),
+  ...(g.questions || []).flatMap(q => [q.question, q.explanation,
+  ...['options', 'statements', 'left', 'right'].flatMap(key => (q.interaction?.[key] || []).map(x => x.text))])]);
 const render = await renderer(await loadAssets(sourcePath, texts.join('\n')), {cacheGlyphs:true});
 const renderErrors = [];
 const html = (value, context) => {
@@ -28,6 +29,8 @@ const html = (value, context) => {
 const bank = {schema: 1, id: source.id, subject_id: source.subject_id, title: source.title,
   description: source.description || '', source_sha256: crypto.createHash('sha256').update(raw).digest('hex'),
   groups: source.groups.map(g => ({id: g.id, title: g.title, parent_id: g.parent_id || null,
+    ...(g.introductions ? {introductions: g.introductions.map(i => ({...i, html: html(i.text, `${g.id}/${i.id}/introduction`)})),
+      content_order: structuredClone(g.content_order)} : {}),
     questions: (g.questions || []).map(q => {
       const compiled = {id: q.id, title: q.title || q.id, question: q.question, html: html(q.question, `${g.id}/${q.id}/question`),
         explanation_html: html(q.explanation, `${g.id}/${q.id}/explanation`), reference_answer: q.reference_answer || q.explanation,

@@ -2,6 +2,7 @@ export const trainingMessages = {
   'training.banks': ['题库', 'Question banks'],
   'training.train': ['训练', 'Train'],
   'training.start': ['开始训练', 'Start training'],
+  'training.guidance': ['指导', 'Guidance'],
   'training.groups': ['题组', 'Question groups'],
   'training.empty': ['此学科暂未导入题库。', 'No question banks have been added to this subject yet.'],
   'training.back': ['返回题库', 'Back to question banks'],

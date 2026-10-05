@@ -45,12 +45,20 @@ def validate(bank):
     require(bank.get('version') == fingerprint(bank), 'Training bank version differs from content')
     groups = bank.get('groups')
     require(isinstance(groups, list) and 1 <= len(groups) <= 200, 'Missing question groups')
-    ids, questions = set(), set()
+    ids, questions, introductions = set(), set(), set()
     for group in groups:
         require(isinstance(group, dict) and identifier(group.get('id')) and group['id'] not in ids,
                 'Duplicate or invalid group')
         ids.add(group['id'])
         require(text(group.get('title'), 200), 'Missing group title')
+        intros = group.get('introductions', [])
+        require(isinstance(intros, list) and len(intros) <= 200, 'Invalid group Introductions')
+        for intro in intros:
+            require(isinstance(intro, dict) and identifier(intro.get('id'))
+                    and intro['id'] not in introductions, 'Duplicate or invalid Introduction')
+            introductions.add(intro['id'])
+            require(text(intro.get('title'), 200) and text(intro.get('text'))
+                    and text(intro.get('html'), 1000000), 'Missing Introduction content')
         rows = group.get('questions', [])
         require(isinstance(rows, list) and len(rows) <= 500, 'Too many questions in group')
         for q in rows:
@@ -65,7 +73,17 @@ def validate(bank):
                     'Missing or oversized rendered question or explanation')
             require(text(q.get('title', q['id']), 200), 'Invalid question title')
             validate_interaction(q.get('interaction'), q['question'])
-    require(0 < len(questions) <= 5000, 'Bank must contain 1 to 5000 questions')
+        if 'content_order' in group:
+            order = group['content_order']
+            expected = {('introduction', i['id']) for i in intros} | {('question', q['id']) for q in rows}
+            require(isinstance(order, list) and all(isinstance(item, dict) and set(item) == {'type', 'id'}
+                    and isinstance(item['type'], str) and isinstance(item['id'], str) for item in order),
+                    'Invalid group content order')
+            actual = [(item['type'], item['id']) for item in order]
+            require(len(actual) == len(set(actual)) and set(actual) == expected, 'Incomplete group content order')
+        elif intros:
+            raise ValueError('Introductions require explicit source content order')
+    require(0 <= len(questions) <= 5000 and (questions or introductions), 'Bank must contain questions or Introductions')
     Catalog._validate_unit_tree(groups)
     return bank
 
