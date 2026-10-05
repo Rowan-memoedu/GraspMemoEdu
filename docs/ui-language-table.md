@@ -2,7 +2,7 @@
 
 本表从当前界面词库自动生成。修改以词库为准，随后重新生成并检查本表。术语约定见 [界面语言规范](ui-language.md)。
 
-共 574 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
+共 575 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
 
 不包括作者课程正文、题目、答案、解析或用户输入。首页的学科双语副标题按约定保留。
 
@@ -512,6 +512,7 @@
 | Your answer | 你的答案 |
 | Submit | Submit |
 | Show Answer | Show Answer |
+| If writing an answer is inconvenient, click Show answer to check it yourself. | 若题目不方便书写作答，可直接点击 Show answer 自行核对 |
 | Explanation | Explanation |
 | Incorrect | 做错了 |
 | Correct, but very difficult | 勉强做对，但很困难 |

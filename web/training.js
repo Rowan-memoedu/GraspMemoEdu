@@ -1,6 +1,6 @@
-import {t, translateMessage} from './i18n.js?v=7bf41f10b28e77b3';
-import {questionInput, answerReady} from './question-input.js?v=7bf41f10b28e77b3';
-import {createLearningCache} from './learning-cache.js?v=7bf41f10b28e77b3';
+import {t, translateMessage} from './i18n.js?v=9c53a53dce245c82';
+import {questionInput, answerReady} from './question-input.js?v=9c53a53dce245c82';
+import {createLearningCache} from './learning-cache.js?v=9c53a53dce245c82';
 
 const node = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const button = (text, cls, action) => { const n = node('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
@@ -8,7 +8,7 @@ const encode = encodeURIComponent;
 const query = fields => new URLSearchParams(fields).toString();
 const html = (content, cls = 'courseContent') => { const n = node('div', cls); n.innerHTML = content || ''; return n; };
 const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy', 'training.retire'];
-import {answerEditor, readerFrame} from './learning-ui.js?v=7bf41f10b28e77b3';
+import {answerEditor, readerFrame} from './learning-ui.js?v=9c53a53dce245c82';
 
 export function createTrainingView(bridge) {
   const {root, request, href, formatDate, getAccess} = bridge;
@@ -169,7 +169,7 @@ export function createTrainingView(bridge) {
       try { savedPayload = JSON.parse(read('submission', state.attempt_id)); } catch {}
       const draft = savedPayload?.answer ?? (state.answer || read('draft', state.attempt_id) || '');
       const {form, input, submit, bottom} = answerEditor(state.question, stem, draft,
-        {formId: 'trainingAnswerForm', inputId: 'trainingAnswer', submitId: 'trainingSubmit'});
+        {formId: 'trainingAnswerForm', inputId: 'trainingAnswer', submitId: 'trainingSubmit', canSelfRate: state.can_self_rate && state.can_submit});
       form.classList.add('trainingAnswerForm');
       const disable = value => { if (input.questionControl) input.questionControl.setDisabled(value); else input.disabled = value; };
       const pending = ['pending', 'running'].includes(state.submission_status);

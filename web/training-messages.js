@@ -12,6 +12,7 @@ export const trainingMessages = {
   'training.answer': ['你的答案', 'Your answer'],
   'training.submit': ['Submit', 'Submit'],
   'training.show': ['Show Answer', 'Show Answer'],
+  'training.showHint': ['若题目不方便书写作答，可直接点击 Show answer 自行核对', 'If writing an answer is inconvenient, click Show answer to check it yourself.'],
   'training.explanation': ['Explanation', 'Explanation'],
   'training.again': ['做错了', 'Incorrect'],
   'training.hard': ['勉强做对，但很困难', 'Correct, but very difficult'],

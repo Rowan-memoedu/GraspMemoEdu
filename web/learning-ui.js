@@ -1,5 +1,5 @@
-import {t} from './i18n.js?v=7bf41f10b28e77b3';
-import {questionInput, answerReady} from './question-input.js?v=7bf41f10b28e77b3';
+import {t} from './i18n.js?v=9c53a53dce245c82';
+import {questionInput, answerReady} from './question-input.js?v=9c53a53dce245c82';
 
 const node = (tag, cls = '', text) => {
   const item = document.createElement(tag); item.className = cls;
@@ -9,7 +9,7 @@ const node = (tag, cls = '', text) => {
 
 // Stateless presentation shared by Lesson and single-question training.
 // Callers retain their own submission, permissions and scheduling logic.
-export function answerEditor(step, stem, value, {formId = 'answerForm', inputId = 'answerInput', submitId = 'submitButton'} = {}) {
+export function answerEditor(step, stem, value, {formId = 'answerForm', inputId = 'answerInput', submitId = 'submitButton', canSelfRate = false} = {}) {
   const form = node('form', 'learningActions answerForm'); form.id = formId;
   const structured = step.interaction && step.interaction.type !== 'text';
   const control = structured ? questionInput(step.interaction, {id: inputId, stem, value, formId}) : null;
@@ -25,6 +25,7 @@ export function answerEditor(step, stem, value, {formId = 'answerForm', inputId 
     : structured && step.interaction.type !== 'fill_blank' ? 'question.completeHint'
     : '只要描述清楚正确答案的形式即可，表达方式不限，夹杂口语也没关系。Ctrl + Enter 提交。'));
   hint.id = inputId === 'answerInput' ? 'answerHint' : `${inputId}Hint`;
+  if (canSelfRate) hint.append(document.createElement('br'), document.createTextNode(t('training.showHint')));
   input.setAttribute('aria-describedby', `${hint.id} ${error.id}`);
   const submit = node('button', 'primaryButton', t('Submit'));
   submit.id = submitId; submit.type = 'submit'; submit.setAttribute('form', formId); submit.disabled = !answerReady(input);
