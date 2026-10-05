@@ -1,8 +1,8 @@
-import { t, translateMessage, learningTitle } from './i18n.js?v=2ab329bf62800a3c';
-import {questionInput, answerReady} from './question-input.js?v=2ab329bf62800a3c';
-import {reportableContent} from './content-report.js?v=2ab329bf62800a3c';
-import {createLearningCache} from './learning-cache.js?v=2ab329bf62800a3c';
-import {enhanceTopicContent} from './topic-content.js?v=2ab329bf62800a3c';
+import { t, translateMessage, learningTitle } from './i18n.js?v=f90df1160a71f538';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=f90df1160a71f538';
+import {reportableContent} from './content-report.js?v=f90df1160a71f538';
+import {createLearningCache} from './learning-cache.js?v=f90df1160a71f538';
+import {enhanceTopicContent} from './topic-content.js?v=f90df1160a71f538';
 
 const node = (tag, cls = '', text) => {
   const item = document.createElement(tag); item.className = cls;
@@ -214,6 +214,7 @@ export function createReviewView(bridge) {
     const editable = isCurrent && state.status === 'in_progress' && state.actions.includes('submit');
     const structured = question.interaction && question.interaction.type !== 'text';
     card.append(node('h2', 'stepTitle', t('review.questionNumber', {number: index + 1})), stem);
+    const typeField = choiceTypeField(question.interaction); if (typeField) stem.before(typeField);
     if (structured && !editable) card.append(questionInput(question.interaction, {id: 'reviewSubmittedInteraction',
       stem, value: answer?.answer || (isCurrent ? read(draftKey()) || '' : ''), disabled: true}).element);
     if (answer) {

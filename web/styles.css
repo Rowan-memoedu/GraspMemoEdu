@@ -292,6 +292,7 @@ mjx-container[jax="SVG"] text { font-family: "Microsoft YaHei", sans-serif; }
 .matchingSlot .outlineNode, .matchingOption .outlineNode { margin: 0; }
 .statementBody, .statementBody .outlineNode, .statementBody p { display: inline; }
 .srOnly { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.questionTypeField { margin: 0 0 16px; color: var(--muted); font-size: 14px; }
 @media (max-width: 600px) {
   .matchingRow { gap: 8px; grid-template-columns: minmax(0,1fr); }
   .matchingArrow { transform: rotate(90deg); line-height: 24px; }

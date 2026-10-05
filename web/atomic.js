@@ -1,7 +1,7 @@
-import {t, translateMessage} from './i18n.js?v=2ab329bf62800a3c';
-import {questionInput, answerReady} from './question-input.js?v=2ab329bf62800a3c';
-import {reportableContent, helpableContent} from './content-report.js?v=2ab329bf62800a3c';
-import {createLearningCache} from './learning-cache.js?v=2ab329bf62800a3c';
+import {t, translateMessage} from './i18n.js?v=f90df1160a71f538';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=f90df1160a71f538';
+import {reportableContent, helpableContent} from './content-report.js?v=f90df1160a71f538';
+import {createLearningCache} from './learning-cache.js?v=f90df1160a71f538';
 
 const node = (tag, cls = '', text) => {
   const el = document.createElement(tag); el.className = cls;
@@ -99,6 +99,7 @@ export function createAtomicView(bridge) {
     const box = node('section', 'atomicQuestion'); box.dataset.cardId = question.card_id;
     box.append(node('h2', '', question.title));
     const stem = marked(question.html, `question:${question.card_id}`, question.card_id);
+    const typeField = choiceTypeField(question.interaction); if (typeField) box.append(typeField);
     box.append(stem);
     const form = node('form', 'atomicAnswerForm'); form.id = 'atomicAnswerForm';
     const disabled = history || question.phase !== 'answer' || busy || Boolean(state.pause || state.pending_submission_id) || !state.can_submit;

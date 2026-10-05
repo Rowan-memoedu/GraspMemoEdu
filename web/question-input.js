@@ -1,4 +1,4 @@
-import {t} from './i18n.js?v=2ab329bf62800a3c';
+import {t} from './i18n.js?v=f90df1160a71f538';
 
 const node = (tag, cls, text) => {
   const element = document.createElement(tag); element.className = cls;
@@ -9,6 +9,11 @@ const parse = value => { try { return JSON.parse(value); } catch { return null; 
 export const answerReady = input => Boolean(input && !input.disabled && input.value.trim()
   && (!input.questionControl || input.questionControl.complete()));
 
+// Shared by all learning views, including submitted-answer history.
+export function choiceTypeField(spec) {
+  return spec?.type === 'choice' ? node('p', 'questionTypeField', t(spec.multiple ? 'question.multipleChoice' : 'question.singleChoice')) : null;
+}
+
 // The serialized answer uses the existing draft, retry and idempotency path.
 // This component receives presentation metadata only, never answer keys.
 export function questionInput(spec, {id, value = '', stem, disabled = false, formId} = {}) {
@@ -18,6 +23,8 @@ export function questionInput(spec, {id, value = '', stem, disabled = false, for
   input.name = 'answer'; input.hidden = true; input.disabled = disabled;
   input.value = value; root.append(input);
   root.addEventListener('keydown', event => {
+    if (spec.type === 'choice' && event.target.matches('input[type="radio"], input[type="checkbox"]')
+      && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) event.preventDefault();
     if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && !event.isComposing) {
       event.preventDefault(); document.getElementById(formId)?.requestSubmit();
     }

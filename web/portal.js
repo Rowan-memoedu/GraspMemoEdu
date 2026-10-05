@@ -1,13 +1,13 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=2ab329bf62800a3c";
-import { createReviewView } from "./review.js?v=2ab329bf62800a3c";
-import { renderCourseGraph } from "./course-graph.js?v=2ab329bf62800a3c";
-import {questionInput} from './question-input.js?v=2ab329bf62800a3c';
-import {enhanceTopicContent} from './topic-content.js?v=2ab329bf62800a3c';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=2ab329bf62800a3c';
-import {createCatalogPicker} from './catalog-picker.js?v=2ab329bf62800a3c';
-import {createAtomicView} from './atomic.js?v=2ab329bf62800a3c';
-import {createTrainingView} from './training.js?v=2ab329bf62800a3c';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=2ab329bf62800a3c";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=f90df1160a71f538";
+import { createReviewView } from "./review.js?v=f90df1160a71f538";
+import { renderCourseGraph } from "./course-graph.js?v=f90df1160a71f538";
+import {questionInput} from './question-input.js?v=f90df1160a71f538';
+import {enhanceTopicContent} from './topic-content.js?v=f90df1160a71f538';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=f90df1160a71f538';
+import {createCatalogPicker} from './catalog-picker.js?v=f90df1160a71f538';
+import {createAtomicView} from './atomic.js?v=f90df1160a71f538';
+import {createTrainingView} from './training.js?v=f90df1160a71f538';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=f90df1160a71f538";
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {

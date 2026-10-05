@@ -1,6 +1,6 @@
-import {t, translateMessage} from './i18n.js?v=2ab329bf62800a3c';
-import {questionInput, answerReady} from './question-input.js?v=2ab329bf62800a3c';
-import {createLearningCache} from './learning-cache.js?v=2ab329bf62800a3c';
+import {t, translateMessage} from './i18n.js?v=f90df1160a71f538';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=f90df1160a71f538';
+import {createLearningCache} from './learning-cache.js?v=f90df1160a71f538';
 
 const node = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const button = (text, cls, action) => { const n = node('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
@@ -8,7 +8,7 @@ const encode = encodeURIComponent;
 const query = fields => new URLSearchParams(fields).toString();
 const html = (content, cls = 'courseContent') => { const n = node('div', cls); n.innerHTML = content || ''; return n; };
 const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy', 'training.retire'];
-import {answerEditor, readerFrame} from './learning-ui.js?v=2ab329bf62800a3c';
+import {answerEditor, readerFrame} from './learning-ui.js?v=f90df1160a71f538';
 
 export function createTrainingView(bridge) {
   const {root, request, href, formatDate, getAccess} = bridge;
@@ -161,6 +161,7 @@ export function createTrainingView(bridge) {
     title.id = 'trainingStepTitle'; title.tabIndex = -1; main.setAttribute('aria-labelledby', title.id);
     heading.append(title, node('span', 'stepCounter', t('reader.modulePosition', {current: index + 1, total: group.questions.length})));
     const stem = html(state.question.html); main.replaceChildren(heading, stem);
+    const typeField = choiceTypeField(state.question.interaction); if (typeField) heading.after(typeField);
     reader.refs.footerPosition.textContent = t('reader.modulePosition', {current: index + 1, total: group.questions.length});
     reader.refs.saveStatus.textContent = t(state.submission_status === 'pending' || state.submission_status === 'running' ? '答案已提交，正在判题' : '学习进度已保存');
     const navigation = node('div', 'stepNavigation'), continueRow = node('div', 'continueRow');
@@ -254,7 +255,7 @@ export function createTrainingView(bridge) {
       }
       main.append(ratings);
     }
-    if (state.can_learn) {
+    if (state.can_learn && state.can_review_early) {
       const redo = button(t('training.redo'), 'secondaryButton trainingRedo', () => select(state.question_id, true));
       redo.disabled = ['pending', 'running'].includes(state.submission_status); navigation.append(redo);
     }

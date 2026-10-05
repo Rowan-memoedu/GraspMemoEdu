@@ -2,7 +2,7 @@
 
 本表从当前界面词库自动生成。修改以词库为准，随后重新生成并检查本表。术语约定见 [界面语言规范](ui-language.md)。
 
-共 627 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
+共 629 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
 
 不包括作者课程正文、题目、答案、解析或用户输入。首页的学科双语副标题按约定保留。
 
@@ -108,7 +108,9 @@
 | Exact recall: enter the exact answer. Only whitespace and permitted formatting differences are ignored. | 复刻：请填写准确答案，仅忽略空白和允许的格式差异。 |
 | Semantic recall: express the meaning in your own words. Ctrl + Enter to submit. | 复现：按含义判断，可用自己的话表述。Ctrl + Enter 提交。 |
 | Complete every item before submitting. The question is correct only when every item is correct. | 完成所有小项后提交；整题全部正确才计为正确。 |
-| Select one answer. Use arrow keys to change your selection; Ctrl + Enter to submit. | 选择一个答案后提交。方向键切换选项，Ctrl + Enter 提交。 |
+| Select your answer, then submit. Ctrl + Enter to submit. | 选择答案后提交。Ctrl + Enter 提交。 |
+| Single choice | 单选 |
+| Multiple choice | 多选 |
 | Move {side} item {number} up | 将{side}第 {number} 项上移 |
 | Move {side} item {number} down | 将{side}第 {number} 项下移 |
 | Moved to slot {number} | 已移动到位置 {number} |
