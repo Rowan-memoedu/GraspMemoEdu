@@ -152,14 +152,15 @@ class AccessStore:
             'is_advanced_learner': not guest and bool(row['is_advanced_learner']),
             'is_student': not guest and bool(row['is_student']),
             'features': [],
-            'topics': [self.topics[topic_id] for topic_id in topic_ids if topic_id in self.topics
-                       and (admin or topic_id not in self.test_materials.permission_ids)],
+            'topics': [],
         }
         if not guest:
             result.update(purpose=row['purpose'], enabled=bool(row['enabled']), batch_id=row['batch_id'],
                           permission_defaults={'topics': bool(row['topics_default']), 'features': bool(row['features_default'])})
         if admin:
             result.update(is_admin=True, learning_policy={'persistence': 'memory', 'content_scope': 'all', 'scheduled_delivery': False})
+        result['topics'] = [self.topics[topic_id] for topic_id in topic_ids if topic_id in self.topics
+                            and self.test_materials.topic_visible(topic_id, result)]
         result['features'] = [feature for feature in FEATURES if feature in features and feature_eligible(result, feature)]
         return result
 

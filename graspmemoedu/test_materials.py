@@ -1,4 +1,4 @@
-"""Explicit administrator-only test content, without deleting or versioning it."""
+"""Retained test content, visible to administrators and advanced students."""
 import json
 from pathlib import Path
 import re
@@ -44,16 +44,25 @@ class TestMaterials:
                     self.topics.update(t['id'] for t in course['topics'])
         self.permission_ids = self.topics | {'training.' + bank for bank in self.banks}
 
+    @staticmethod
+    def allowed(access):
+        return bool(access and access.get('role') == 'account' and
+                    (access.get('is_admin') or (access.get('is_advanced_learner') and access.get('is_student'))))
+
     def topic_visible(self, topic_id, access):
-        return bool(access and access.get('is_admin')) or topic_id not in self.permission_ids
+        return self.allowed(access) or topic_id not in self.permission_ids
+
+    def snapshot_visible(self, topic_id, access):
+        return topic_id not in self.permission_ids or (self.allowed(access) and
+            (access.get('is_admin') or topic_id in {t['id'] for t in access.get('topics', [])}))
 
     def course_visible(self, course, access):
-        return bool(access and access.get('is_admin')) or (course['id'] not in self.courses
+        return self.allowed(access) or (course['id'] not in self.courses
             and (not course['topics'] or any(t['id'] not in self.topics for t in course['topics'])))
 
     def graph_topic_visible(self, course_id, topic_id, access):
-        return bool(access.get('is_admin')) or (course_id not in self.courses and topic_id not in self.topics)
+        return self.allowed(access) or (course_id not in self.courses and topic_id not in self.topics)
 
     def require_guide(self, subject_id, access):
-        if subject_id in self.guides and not access.get('is_admin'):
+        if subject_id in self.guides and not self.allowed(access):
             raise DomainError('guide_unavailable', '该学科指南暂未开放。', 404)

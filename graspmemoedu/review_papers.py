@@ -261,11 +261,13 @@ class PaperService:
             source = item['source']
             context = ({'topic_id': permission_id(source['container']), 'bank_id': source['container'],
                         'group_id': source['group_id'], 'question_id': source['local_points'][0]}
-                       if source['kind'] == 'training' and item['id'].startswith('training:') else
+                       if source['kind'] == 'training' else
                        {'topic_id': source['container'], 'question_id': source['local_card']} if source['kind'] == 'atomic' else None)
             items.append({'index': index, 'point_ids': item['point_ids'], 'title': question.get('title', ''),
                           'source_title': item['source_title'], 'html': question['html'],
-                          'content_context': context, 'content_version': source['version'], 'source_kind': source['kind'],
+                          'content_context': context,
+                          'content_version': item['id'] if item['id'].startswith('variant-') else source['version'],
+                          'source_kind': source['kind'],
                           'interaction': public_interaction(question), 'answer': item['answer'],
                           'elapsed_ms': item['elapsed_ms'], 'result': item['result'] if shown else None,
                           'explanation_html': question.get('explanation_html', '') if shown else None,

@@ -337,7 +337,9 @@ class AccountAdmin:
         return self._run('provision', 'batch:' + batch_id, batch_id, request, output, entries)
 
     def create(self, display_name, topic_ids=None, features=None, *, purpose='learner', output,
-               is_advanced_learner=False, is_student=False):
+               is_advanced_learner=False, is_student=False, is_admin=False):
+        if type(is_admin) is not bool:
+            raise DomainError('invalid_administrator', '管理员资格必须为 true 或 false。', 422)
         if type(is_advanced_learner) is not bool or type(is_student) is not bool:
             raise DomainError('invalid_learner_qualification', '学习者资格必须为 true 或 false。', 422)
         if not isinstance(display_name, str) or not display_name.strip() or len(display_name) > 100:
@@ -345,6 +347,7 @@ class AccountAdmin:
         if purpose not in ('learner', 'test'):
             raise DomainError('invalid_account_purpose', '账号用途只能是 learner 或 test。', 422)
         defaults = {'topics_default': topic_ids is None, 'features_default': features is None,
+                    **({'is_admin': True} if is_admin else {}),
                     **{key: True for key, value in [('is_advanced_learner', is_advanced_learner), ('is_student', is_student)] if value}}
         topics, features = self.store._validate_permissions(list(self.store.topics) if topic_ids is None else topic_ids,
                                                           list(FEATURES) if features is None else features)

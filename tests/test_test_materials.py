@@ -67,13 +67,26 @@ class TestMaterialTests(unittest.TestCase):
         # Content in an unmarked subject continues to work.
         self.assertEqual(len(self.call('GET', '/api/catalog?subject_id=biology')['courses']), 1)
 
-    def test_guests_and_explicit_high_level_test_accounts_cannot_bypass(self):
+    def test_guests_and_noneligible_account_combinations_cannot_bypass(self):
         self.denied()
         self.account(is_advanced_learner=True, purpose='test', topic_ids=['atomic-english', 'atomic-chemistry',
                      'atomic-biology', 'training.isolated-bank'])
         self.denied()
         self.account()
         self.denied()
+        self.account(is_student=True, purpose='test')
+        self.denied()
+
+    def test_advanced_students_can_view_but_explicit_permissions_still_apply(self):
+        for purpose in ('learner', 'test'):
+            self.account(is_advanced_learner=True, is_student=True, purpose=purpose)
+            self.assertEqual(len(self.call('GET', '/api/catalog?subject_id=english')['courses']), 1)
+            self.assertEqual(len(self.call('GET', '/api/training/catalog')['banks']), 1)
+            self.assertEqual(self.call('GET', '/api/guide?subject_id=math')['status'], 'ready')
+            self.assertEqual(self.client.get('/guide-assets/test.png', headers=self.headers).status_code, 200)
+        self.account(is_advanced_learner=True, is_student=True, topic_ids=[])
+        self.call('GET', '/api/state?topic_id=atomic-english&subject_id=english', status=403)
+        self.call('GET', '/api/training/bank?bank_id=isolated-bank', status=403)
 
     def test_admin_sees_original_materials_and_protected_guide_assets(self):
         before = hashlib.sha256((self.root / 'training-banks/isolated-bank.json').read_bytes()).hexdigest()
@@ -140,6 +153,17 @@ class TestMaterialTests(unittest.TestCase):
         kept = self.call('GET', '/api/help-center?report_id=' + saved)['items'][0]
         self.assertEqual(kept['content_html'], self.bank['groups'][1]['questions'][0]['html'])
         self.assertEqual(kept['reply']['message'], '保留管理员回复')
+        self.headers = student_headers
+        learner = access_store.resolve(self.headers['X-Learning-Identity'])['learner_id']
+        access_store.set_permissions(learner, is_advanced_learner=True)
+        self.assertEqual(self.call('GET', '/api/help-center')['total'], 2)
+        self.assertEqual(self.call('GET', '/api/help-center?report_id=' + saved)['items'][0]['id'], saved)
+        self.call('POST', '/api/help-replies/read', {'report_id': saved, 'revision': 1})
+        access_store.set_permissions(learner, topic_ids=['atomic-biology'])
+        self.call('GET', '/api/help-center?report_id=' + saved, status=404)
+        self.call('POST', '/api/help-replies/read', {'report_id': saved, 'revision': 1}, status=404)
+        access_store.set_permissions(learner, is_advanced_learner=False)
+        self.call('GET', '/api/help-center?report_id=' + saved, status=404)
 
     def test_guide_source_alias_cannot_bypass_admin_only_access(self):
         # Different subject URLs may point at the very same Markdown source.

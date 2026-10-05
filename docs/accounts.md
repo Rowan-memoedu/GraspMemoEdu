@@ -72,7 +72,9 @@ sudo -u graspmemoedu /opt/graspmemoedu/venv/bin/python -m graspmemoedu --data-di
   --topics 'digits-to-letters' --features 'learn,submit_answer,review_history'
 ```
 
-`account-list` 返回用途、启用状态、所属批次和权限，不返回邀请码。`account-create` 支持 `--purpose learner|test`；省略 `--topics` 或 `--features` 时使用当前全部权限。单账号的同一私密输出文件也支持安全重试。
+`account-list` 返回用途、启用状态、所属批次和权限，不返回邀请码。`account-create` 支持 `--purpose learner|test`，加 `--admin --output <私密JSON>` 可以创建测试管理员；管理员不允许省略私密输出。省略 `--topics` 或 `--features` 时使用当前全部权限。单账号的同一私密输出文件支持安全重试。
+
+2026-10-05 新增两名高阶测试学员及两名测试管理员，01/02 分别配对应答疑。原五个测试账号仍为普通且非学员，原邀请码保留；测试用途账号现共 9 个。可见性与预置场景见 [测试系统](testing-system.md)。
 
 为了兼容原管理命令，`account-create` 省略 `--output` 时仍会在终端显示一次邀请码。日常管理应使用 `--output`，避免终端历史、共享屏幕或重定向日志收录邀请码。
 

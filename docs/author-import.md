@@ -20,7 +20,7 @@ pwsh -NoProfile -File 'D:/Projects/GraspMemoEdu/Import-Topic.ps1' `
 pwsh -NoProfile -File 'D:/Projects/GraspMemoEdu/Start-PublicLearning.ps1' -RestartBackend
 ```
 
-账号默认开放全部 Topic 和功能，新增内容自动继承；明确设置的 Topic 或功能列表覆盖各自默认值。权限管理仍在本机 CLI，见 [账号管理](accounts.md)。历史测试课程已下线，不随导入器更新重新发布。
+账号默认开放全部 Topic 和功能，新增内容自动继承；明确设置的 Topic 或功能列表覆盖各自默认值。正式权限通过 SSH 在服务器 CLI 管理，见 [账号管理](accounts.md)。测试材料另受 [可见范围](test-materials.md) 限制；只有 [测试系统](testing-system.md) 列明的材料获准恢复，其余历史测试课程不随导入器更新重新发布。
 
 ## 输入格式
 

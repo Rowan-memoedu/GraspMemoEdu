@@ -303,6 +303,7 @@ def main():
     account_create.add_argument('--topics', help='逗号分隔的 Topic 标识；默认当前已配置的全部 Topic')
     account_create.add_argument('--features', help='逗号分隔的功能权限；默认 ' + ','.join(FEATURES))
     account_create.add_argument('--purpose', choices=('learner', 'test'), default='learner')
+    account_create.add_argument('--admin', action='store_true', help='创建管理员；必须用 --output 私密导出，支持测试用途')
     account_create.add_argument('--output', type=Path, help='私密 JSON 路径，必须位于数据目录 admin 下；省略保留一次性终端输出')
     provision = sub.add_parser('account-provision', help='安全创建可重试批次，邀请码只写入私密 JSON')
     provision.add_argument('--batch', required=True)
@@ -424,10 +425,12 @@ def main():
             output(backup_bundle(settings, args.output))
         elif args.command == 'account-create':
             store = make_access_store(settings)
+            if args.admin and args.output is None:
+                raise DomainError('account_export_required', '创建管理员必须通过 --output 保存私密邀请码清单。', 422)
             if args.output is not None:
                 output(AccountAdmin(store).create(args.name, split_permissions(args.topics),
                        split_permissions(args.features), purpose=args.purpose, output=args.output,
-                       is_advanced_learner=args.advanced_learner, is_student=args.student))
+                       is_advanced_learner=args.advanced_learner, is_student=args.student, is_admin=args.admin))
             else:
                 output(store.create_account(args.name, split_permissions(args.topics),
                                             split_permissions(args.features), purpose=args.purpose,

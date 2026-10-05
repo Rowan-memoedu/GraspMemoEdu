@@ -204,7 +204,10 @@ class HelpRequestStore:
         block_type = block.split(':')[0]
         if payload['bank_id']:
             bank, group, question = self.training.question(payload['bank_id'], payload['group_id'], question_id)
-            if revision != bank['version']:
+            if revision.startswith('variant-'):
+                from .review_variants import read_variant
+                question = read_variant(self.access_store.data_dir, revision, bank, question_id)
+            elif revision != bank['version']:
                 raise DomainError('content_version_mismatch', '正文版本已变化，请刷新后重新提交答疑请求。', 409)
             field = {f'question:{question_id}': 'html', f'explanation:{question_id}': 'explanation_html'}.get(block)
             if field is None:
@@ -329,7 +332,9 @@ class HelpRequestStore:
         scope = self._center_scope(viewer)
         parameters = (access['learner_id'],)
         restricted = self.access_store.test_materials.permission_ids
-        if viewer == 'student' and restricted:
+        if self.access_store.test_materials.allowed(access):
+            restricted = restricted - {t['id'] for t in access['topics']}
+        if restricted:
             # Saved question snapshots obey the same test-material boundary as
             # their current sources, including counts and pagination.
             scope += ''' AND NOT EXISTS (SELECT 1 FROM json_each(?) blocked
@@ -402,7 +407,7 @@ class HelpRequestStore:
                 JOIN help_requests r ON r.id=reply.report_id
                 WHERE r.id=? AND r.learner_id=? AND reply.revision=?''',
                 (values['report_id'], access['learner_id'], values['revision'])).fetchone()
-            if not row or not self.access_store.test_materials.topic_visible(json.loads(row['body'])['request']['topic_id'], access):
+            if not row or not self.access_store.test_materials.snapshot_visible(json.loads(row['body'])['request']['topic_id'], access):
                 raise DomainError('unknown_help_request', '未找到此答疑回复。', 404)
             con.execute('''INSERT INTO help_reply_reads VALUES (?,?,?,?) ON CONFLICT(report_id) DO UPDATE SET
                 revision=MAX(help_reply_reads.revision,excluded.revision),read_at=excluded.read_at''',
