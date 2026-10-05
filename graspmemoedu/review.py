@@ -398,7 +398,7 @@ class ReviewBackend:
                               'kind': 'practice', 'explanation_html':
                               question['explanation_html'] if state['phase'] == 'feedback' else None}
         from .self_assessment import presentation
-        result['practice'].update(presentation(question, state))
+        result['practice'].update(presentation(question, state, visible=state['phase'] == 'feedback'))
         result['feedback'] = state.get('feedback')
         if question.get('interaction'):
             result['practice']['interaction'] = public_interaction(question)

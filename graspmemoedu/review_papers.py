@@ -16,6 +16,7 @@ from .training_content import permission_id
 from .content_timing import active_limit, limit_state, update_activity
 from .review_hierarchy import source_trees, public_source
 from .self_assessment import enabled as self_rating_enabled, presentation, reveal as reveal_question
+from .reference_answers import reference_fields
 
 
 class PaperService:
@@ -301,7 +302,7 @@ class PaperService:
                           'completed': item.get('result') is not None,
                           'can_self_rate': self_rating and presentation(question, item)['reproduction'],
                           'revealed': self_rating and bool(item.get('revealed')),
-                          'reference_answer': presentation(question, item).get('reference_answer') if self_rating else None,
+                          **reference_fields(question, shown or self_rating and bool(item.get('revealed'))),
                           'self_rating': item.get('self_rating')})
             if self_rating and item.get('revealed'):
                 items[-1]['explanation_html'] = question.get('explanation_html', '')

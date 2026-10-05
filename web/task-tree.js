@@ -1,5 +1,5 @@
 // The same tree renderer serves courses, banks and review source directories.
-export function renderTaskTree(pending, data, {renderTask, expanded, keyPrefix = '', sourceOrder = []}) {
+export function renderTaskTree(pending, data, {renderTask, expanded, keyPrefix = '', sourceOrder = [], defaultOpen = false}) {
   const tasks = new Map(data.tasks.map(task => [task.topic_id || task.id, task]));
   const containers = new Map(), rendered = new Set();
   for (const unit of data.pending_hierarchy || []) {
@@ -8,7 +8,7 @@ export function renderTaskTree(pending, data, {renderTask, expanded, keyPrefix =
     const body = document.createElement('div'); body.className = 'courseUnitBody';
     const key = `${keyPrefix}:${data.course.id}:${unit.id}`;
     group.dataset.unitId = unit.id;
-    group.open = expanded.get(key) ?? !unit.parent_id;
+    group.open = expanded.get(key) ?? (defaultOpen || !unit.parent_id);
     group.addEventListener('toggle', () => expanded.set(key, group.open));
     group.append(summary, body); containers.set(unit.id, {group, body});
     for (const id of unit.topic_ids || []) if (tasks.has(id)) {

@@ -1,8 +1,8 @@
-import {t, translateMessage} from './i18n.js?v=7751db6e04572b2f';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=7751db6e04572b2f';
-import {selfAssessment} from './self-assessment.js?v=7751db6e04572b2f';
-import {reportableContent, helpableContent} from './content-report.js?v=7751db6e04572b2f';
-import {createLearningCache} from './learning-cache.js?v=7751db6e04572b2f';
+import {t, translateMessage} from './i18n.js?v=baf2a4c311530b42';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=baf2a4c311530b42';
+import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=baf2a4c311530b42';
+import {reportableContent, helpableContent} from './content-report.js?v=baf2a4c311530b42';
+import {createLearningCache} from './learning-cache.js?v=baf2a4c311530b42';
 
 const node = (tag, cls = '', text) => {
   const el = document.createElement(tag); el.className = cls;
@@ -142,7 +142,8 @@ export function createAtomicView(bridge) {
       const feedback = node('div', `feedback ${question.correct ? 'correct' : 'incorrect'}`);
       feedback.append(node('strong', '', t(question.correct ? 'atomic.correct' : 'atomic.incorrect')));
       if (question.reason) feedback.append(node('p', '', question.reason));
-      feedback.append(marked(question.explanation_html, `explanation:${question.card_id}`, question.card_id));
+      const reference = referenceAnswer(question); if (reference) feedback.append(reference);
+      feedback.append(prepareAnswerContent(marked(question.explanation_html, `explanation:${question.card_id}`, question.card_id)));
       box.append(feedback);
       if (!history && !state.pause) box.append(button(t('atomic.continue'), () => mutate('continue'), 'primaryButton'));
     }

@@ -1,7 +1,8 @@
-import {t, translateMessage} from './i18n.js?v=7751db6e04572b2f';
-import {questionInput, answerReady, answerEmpty, choiceTypeField} from './question-input.js?v=7751db6e04572b2f';
-import {createLearningCache} from './learning-cache.js?v=7751db6e04572b2f';
-import {helpableContent} from './content-report.js?v=7751db6e04572b2f';
+import {t, translateMessage} from './i18n.js?v=baf2a4c311530b42';
+import {questionInput, answerReady, answerEmpty, choiceTypeField} from './question-input.js?v=baf2a4c311530b42';
+import {createLearningCache} from './learning-cache.js?v=baf2a4c311530b42';
+import {helpableContent} from './content-report.js?v=baf2a4c311530b42';
+import {referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=baf2a4c311530b42';
 
 const node = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const button = (text, cls, action) => { const n = node('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
@@ -9,7 +10,7 @@ const encode = encodeURIComponent;
 const query = fields => new URLSearchParams(fields).toString();
 const html = (content, cls = 'courseContent') => { const n = node('div', cls); n.innerHTML = content || ''; return n; };
 const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy', 'training.retire'];
-import {answerEditor, readerFrame} from './learning-ui.js?v=7751db6e04572b2f';
+import {answerEditor, readerFrame} from './learning-ui.js?v=baf2a4c311530b42';
 
 export function createTrainingView(bridge) {
   const {root, request, href, formatDate, getAccess} = bridge;
@@ -238,11 +239,10 @@ export function createTrainingView(bridge) {
       if (state.due_at) body.append(node('div', 'feedbackReason', t('training.nextDue', {time: formatDate(state.due_at)})));
       verdict.append(node('span', 'feedbackIcon', correct ? '✓' : '!'), body); main.append(verdict);
     }
-    if (state.phase === 'shown' && state.reference_answer)
-      main.append(node('h3', 'exampleExplanationHeader', t('training.referenceAnswer')), node('pre', 'referenceAnswer', state.reference_answer));
+    const reference = referenceAnswer(state); if (reference) main.append(reference);
     if (state.explanation_html)
       main.append(node('h3', 'exampleExplanationHeader', t('Explanation · 解析')),
-        helpableContent(html(state.explanation_html, 'courseContent trainingExplanation'), reportContext, `explanation:${state.question_id}`, state.version));
+        prepareAnswerContent(helpableContent(html(state.explanation_html, 'courseContent trainingExplanation'), reportContext, `explanation:${state.question_id}`, state.version)));
     if (state.phase === 'shown' || state.phase === 'done' && (state.result.self_rating || state.result.stop_requested)) {
       const ratings = node('div', 'trainingRatings');
       for (let rating = 1; rating <= 5; rating++) {

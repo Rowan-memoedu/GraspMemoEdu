@@ -1,11 +1,11 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=7751db6e04572b2f";
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=7751db6e04572b2f';
-import {reportableContent} from './content-report.js?v=7751db6e04572b2f';
-import {createLearningCache} from './learning-cache.js?v=7751db6e04572b2f';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=baf2a4c311530b42";
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=baf2a4c311530b42';
+import {reportableContent} from './content-report.js?v=baf2a4c311530b42';
+import {createLearningCache} from './learning-cache.js?v=baf2a4c311530b42';
 
-import {answerEditor} from './learning-ui.js?v=7751db6e04572b2f';
-import {selfAssessment} from './self-assessment.js?v=7751db6e04572b2f';
-import {enhanceTopicContent, mountTopicBacklinks, focusContentNode} from './topic-content.js?v=7751db6e04572b2f';
+import {answerEditor} from './learning-ui.js?v=baf2a4c311530b42';
+import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=baf2a4c311530b42';
+import {enhanceTopicContent, mountTopicBacklinks, focusContentNode} from './topic-content.js?v=baf2a4c311530b42';
 
 applyStaticTranslations();
 
@@ -1169,9 +1169,10 @@ function renderStep(step) {
     feedback.append(body);
     target.append(feedback);
   }
-  if (step.explanation_html) {
+  if (step.explanation_html && !(step.revealed && actions.includes('submit'))) {
     const explanation = reportableContent(content(step.explanation_html), reportContext, `explanation:${step.question_id}`, step.content_version || state.course_version);
-    target.append(el("h3", "exampleExplanationHeader", t("Explanation · 解析")), explanation);
+    const reference = referenceAnswer(step); if (reference) target.append(reference);
+    target.append(el("h3", "exampleExplanationHeader", t("Explanation · 解析")), prepareAnswerContent(explanation));
   }
   if (state.dependency_ready === false && !actions.length) target.append(el("p", "featureNotice", translateMessage("请先完成前置知识的学习和待复习内容，并解除前置知识的暂停状态。")));
   if (state.status === "in_progress" && step.id === state.active_step_id) {
@@ -1506,7 +1507,7 @@ async function openTopic(id, subjectId) {
   }
 }
 
-const { initPortal } = await import("./portal.js?v=7751db6e04572b2f");
+const { initPortal } = await import("./portal.js?v=baf2a4c311530b42");
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {
     try { return await fetchGuideAsset(url, subjectId); }

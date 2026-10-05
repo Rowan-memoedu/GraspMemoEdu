@@ -115,7 +115,7 @@ class AtomicLearningService(LearningService):
                   'point_ids': card['point_ids'], 'phase': active['phase'], 'shown_at': active['shown_at'],
                   'interaction': public_interaction(card)}
         from .self_assessment import presentation
-        result.update(presentation(card, active))
+        result.update(presentation(card, active, visible=feedback))
         if feedback:
             result.update(answer=active.get('answer'), correct=active.get('correct'), reason=active.get('reason'),
                           answer_display=display_answer(card, active.get('answer')),

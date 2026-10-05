@@ -16,6 +16,7 @@ from .public_limits import PublicLimitError
 from .service import DomainError, now
 from .dependencies import DependencyPolicy
 from .question_types import public_interaction, display_answer
+from .reference_answers import reference_fields
 from .content_reports import validate_correction
 from .question_bank import QuestionBank
 from .course_hierarchy import pending_hierarchy
@@ -460,6 +461,7 @@ class DashboardStore:
                     answers = [{'id': r['id'], 'question_id': r['card_id'], 'html': questions[r['card_id']]['html'],
                                 'interaction': public_interaction(questions[r['card_id']]), 'content_version': topic['version'],
                                 'explanation_html': questions[r['card_id']]['explanation_html'], 'answer': r['answer'],
+                                **reference_fields(questions[r['card_id']], True),
                                 'answer_display': display_answer(questions[r['card_id']], r['answer']),
                                 'correct': r['correct'], 'reason': r['reason'],
                                 'result': 'correct' if r['correct'] else 'incorrect', 'answered_at': r['answered_at'],
@@ -484,11 +486,12 @@ class DashboardStore:
                 step = steps[row['step']]
                 question = bank.question(row['question'], step.get('question_bank_revision'), step['id'])
                 # Explanation is available only with that learner's actual
-                # judged answer. Reference answers and locked questions never leave.
+                # judged answer. Locked questions never leave.
                 answers.append({'id': row['id'], 'question_id': row['question'], 'html': question['html'],
                                 'interaction': public_interaction(question), 'content_version': step.get('question_bank_revision') or topic['version'],
                                 'answer_display': display_answer(question, row['answer']), 'reason': row['reason'],
                                 'explanation_html': question['explanation_html'], 'answer': row['answer'],
+                                **reference_fields(question, True),
                                 'correct': bool(row['correct']), 'result': 'correct' if row['correct'] else 'incorrect',
                                 'answered_at': row['created_at'],
                                 'elapsed_seconds': row['elapsed_ms'] / 1000 if row['elapsed_ms'] is not None else None,
@@ -516,6 +519,7 @@ class DashboardStore:
                     'interaction': public_interaction(questions[answer['question']]), 'content_version': revision or topic['version'],
                     'answer_display': display_answer(questions[answer['question']], answer['answer']), 'reason': answer['reason'],
                     'explanation_html': questions[answer['question']]['explanation_html'], 'answer': answer['answer'],
+                    **reference_fields(questions[answer['question']], True),
                     'correct': bool(answer['correct']), 'result': 'correct' if answer['correct'] else 'incorrect',
                     'answered_at': answer['created_at'], 'difficulty': None,
                     'elapsed_seconds': answer['elapsed_ms'] / 1000 if answer['elapsed_ms'] is not None else None}

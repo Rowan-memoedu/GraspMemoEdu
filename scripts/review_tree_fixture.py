@@ -26,6 +26,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--port', type=int, default=18859)
     parser.add_argument('--assessment', action='store_true')
+    parser.add_argument('--presentation', action='store_true')
     args = parser.parse_args()
     root = args.output.resolve()
     if root.exists() or not root.is_relative_to(Path('D:/Artifacts/GraspMemoEdu').resolve()) or args.port in (8765, 18768):
@@ -42,9 +43,24 @@ def main():
         blank = deepcopy(base[4]); blank.update(id='semantic-blank', title='复现填空')
         blank['interaction']['grading'] = 'semantic'; questions.append(blank)
         exact = deepcopy(base[1]); exact.update(id='exact-text', title='复刻问答'); questions.append(exact)
+    math = None
+    if args.presentation:
+        from graspmemoedu.guide import GuideReader
+        from tests.question_fixtures import interactions
+        math = GuideReader(Path())._compile('解析：$x^2+1=2$，所以 $x=1$。')
+        for q in questions:
+            q['explanation_html'] = math['html']
+            if q['id'] == 'semantic-blank':
+                q['interaction']['blanks'][0]['answers'] = ['$\\frac{1}{2}$']
+        for ident, index in [('boolean', 1), ('matching', 3)]:
+            stem, spec = interactions()[index]
+            q = deepcopy(essay); q.update(id=ident, title=ident, question=stem, html='<p>' + stem + '</p>',
+                interaction=spec, explanation_html=math['html']); questions.append(q)
     bank.update(id='tree-bank-a', title='隔离题库甲', groups=[
         {'id': 'chapter', 'title': '第一章', 'questions': []},
         {'id': 'section', 'title': '第一节', 'parent_id': 'chapter', 'questions': questions}])
+    if math:
+        bank['math_css'] = math['math_css']
     banks = [bank]
     other = deepcopy(bank); other.update(id='tree-bank-b', title='隔离题库乙')
     other['groups'][1]['questions'] = other['groups'][1]['questions'][:1]
@@ -53,6 +69,11 @@ def main():
         item['version'] = fingerprint(item); validate(item)
         (data / 'training-banks' / (item['id'] + '.json')).write_text(json.dumps(item, ensure_ascii=False), encoding='utf-8')
     course = synthetic_course(1); course_path = data / 'topic.json'; course_path.write_text(json.dumps(course), encoding='utf-8')
+    if math:
+        course['math_css'] = math['math_css']
+        for module in course['modules']:
+            for q in [module['example'], *module['practices']]: q['explanation_html'] = math['html']
+        course_path.write_text(json.dumps(course), encoding='utf-8')
     courses = [{'id': 'tree-course', 'title': '隔离课程',
         'units': [{'id': 'chapter', 'title': '第一章', 'topic_ids': [course['id']]}],
         'topics': [{'id': course['id'], 'path': 'topic.json'}]}]
@@ -60,6 +81,8 @@ def main():
         atomic = atomic_topic('english', 'assessment-atomic')
         for card in atomic['flashcards']:
             card['interaction']['grading'] = 'semantic'
+            if math: card['explanation_html'] = math['html']
+        if math: atomic['math_css'] = math['math_css']
         (data / 'atomic.json').write_text(json.dumps(atomic), encoding='utf-8')
         courses.append({'id': 'assessment-english', 'title': '原子隔离课程',
                         'topics': [{'id': atomic['id'], 'path': 'atomic.json'}]})
@@ -82,8 +105,10 @@ def main():
         for item in banks:
             for q in item['groups'][1]['questions']:
                 attempt = backend.open(item['id'], 'section', q['id'], str(uuid.uuid4()))
-                sid = backend.submit({'request_id': str(uuid.uuid4()), 'attempt_id': attempt,
-                                      'answer': '{"a":"九"}' if q['id'] == 'semantic-blank' else '九' if q['id'] in ('semantic', 'exact-text') else '{"selected":"b"}'})
+                wrong = ('{"a":false,"b":true}' if q['id'] == 'boolean' else
+                         '[{"left":"l2","right":"r9"},{"left":"l3","right":"r4"}]' if q['id'] == 'matching' else
+                         '{"a":"九"}' if q['id'] == 'semantic-blank' else '九' if q['id'] in ('semantic', 'exact-text') else '{"selected":"b"}')
+                sid = backend.submit({'request_id': str(uuid.uuid4()), 'attempt_id': attempt, 'answer': wrong})
                 backend.process_submission(sid)
                 if backend.state(attempt)['result']['rating'] != 1:
                     raise RuntimeError('Fixture setup did not produce an initial wrong answer')

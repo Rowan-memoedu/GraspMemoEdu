@@ -1,5 +1,5 @@
-import {t} from './i18n.js?v=7751db6e04572b2f';
-import {questionInput, answerReady} from './question-input.js?v=7751db6e04572b2f';
+import {t} from './i18n.js?v=baf2a4c311530b42';
+import {questionInput, answerReady} from './question-input.js?v=baf2a4c311530b42';
 
 const node = (tag, cls = '', text) => {
   const item = document.createElement(tag); item.className = cls;

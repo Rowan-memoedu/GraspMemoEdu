@@ -85,7 +85,7 @@ class CourseAssessmentTests(unittest.TestCase):
         state = self.call('POST', '/api/choose', data(state, choice='mastered'))
         shown = self.call('POST', '/api/reveal', data(state))
         self.assertEqual(shown['modules'][0]['status'], 'in_progress')
-        self.assertTrue(next(s for s in shown['steps'] if s['active'])['reference_answer'])
+        self.assertNotIn('reference_answer', next(s for s in shown['steps'] if s['active']))
         request = data(shown, answer='自主评分：2', self_rating=2)
         with patch('graspmemoedu.service.judge_answer', side_effect=AssertionError('No judge')):
             result = self.call('POST', '/api/submit', request)

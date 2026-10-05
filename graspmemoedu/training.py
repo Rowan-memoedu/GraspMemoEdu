@@ -12,6 +12,7 @@ from .question_types import parse_answer, public_interaction, display_answer, pr
 from .service import DomainError
 from .learning_storage import administrator
 from .review_cards import register_point, require_unreserved
+from .reference_answers import reference_fields
 
 
 def packed(value):
@@ -154,7 +155,7 @@ class TrainingService:
                 'question': {'id': question['id'], 'title': question.get('title', question['id']),
                              'html': question['html'], 'interaction': public_interaction(question)},
                 'explanation_html': question['explanation_html'] if revealed else None,
-                **({'reference_answer': display_answer(question, demo_answer(question))} if revealed else {}),
+                **reference_fields(question, revealed),
                 'can_self_rate': self_rating and is_reproduction(question),
                 'submission_id': row['submission_id'], 'submission_status': submission['status'] if submission else None,
                 'answer': submission['answer'] if submission else '',

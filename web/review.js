@@ -1,9 +1,9 @@
-import { t, translateMessage, learningTitle } from './i18n.js?v=7751db6e04572b2f';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=7751db6e04572b2f';
-import {selfAssessment} from './self-assessment.js?v=7751db6e04572b2f';
-import {reportableContent} from './content-report.js?v=7751db6e04572b2f';
-import {createLearningCache} from './learning-cache.js?v=7751db6e04572b2f';
-import {enhanceTopicContent} from './topic-content.js?v=7751db6e04572b2f';
+import { t, translateMessage, learningTitle } from './i18n.js?v=baf2a4c311530b42';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=baf2a4c311530b42';
+import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=baf2a4c311530b42';
+import {reportableContent} from './content-report.js?v=baf2a4c311530b42';
+import {createLearningCache} from './learning-cache.js?v=baf2a4c311530b42';
+import {enhanceTopicContent} from './topic-content.js?v=baf2a4c311530b42';
 
 const node = (tag, cls = '', text) => {
   const item = document.createElement(tag); item.className = cls;
@@ -227,8 +227,9 @@ export function createReviewView(bridge) {
       const detail = node('div'); detail.append(node('strong', 'feedbackTitle', feedback.correct ? t('回答正确') : t('本题回答有误')));
       if (feedback.reason) detail.append(node('p', 'feedbackReason', feedback.reason));
       box.append(node('span', 'feedbackIcon', feedback.correct ? '✓' : '!'), detail); card.append(box);
+      const reference = referenceAnswer(question); if (reference) card.append(reference);
       if (question.explanation_html) card.append(node('h3', 'exampleExplanationHeader', t('Explanation · 解析')),
-        reportableContent(content(question.explanation_html, state.content_references), reportContext, `explanation:${questionId}`, question.content_version || state.course_version));
+        prepareAnswerContent(reportableContent(content(question.explanation_html, state.content_references), reportContext, `explanation:${questionId}`, question.content_version || state.course_version)));
     }
     if (editable) {
       const form = node('form', 'learningActions answerForm'); form.id = 'reviewAnswerForm'; form.addEventListener('submit', submit);

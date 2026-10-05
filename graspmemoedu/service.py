@@ -288,7 +288,8 @@ class LearningService:
             if question:
                 step.update(title=question['title'], html=question['html'], explanation_html=None)
                 from .self_assessment import presentation
-                step.update(presentation(question, saved))
+                step.update(presentation(question, saved, visible=saved['phase'] == 'reading'
+                    or saved['kind'] == 'practice' and saved['phase'] == 'feedback'))
                 step['content_version'] = saved.get('question_bank_revision') or self.course['version']
                 if question.get('interaction'):
                     step['interaction'] = public_interaction(question)

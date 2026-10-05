@@ -1,11 +1,46 @@
-import {t} from './i18n.js?v=7751db6e04572b2f';
-import {answerEmpty} from './question-input.js?v=7751db6e04572b2f';
+import {t} from './i18n.js?v=baf2a4c311530b42';
+import {answerEmpty} from './question-input.js?v=baf2a4c311530b42';
 
 const element = (tag, cls, text) => {
   const node = document.createElement(tag); node.className = cls;
   if (text !== undefined) node.textContent = text;
   return node;
 };
+
+let mathFragment = 0;
+export function prepareAnswerContent(root) {
+  // Each mounted SVG fragment must resolve its own glyphs, even when the same
+  // explanation appears elsewhere in history or in another hidden reader.
+  const ids = new Map();
+  const prefix = `answer-math-${++mathFragment}-`;
+  for (const glyph of root.querySelectorAll('svg defs [id]')) {
+    const old = glyph.id; glyph.id = prefix + old; ids.set(old, glyph.id);
+  }
+  for (const use of root.querySelectorAll('svg use')) {
+    for (const attr of ['href', 'xlink:href']) {
+      const value = use.getAttribute(attr);
+      if (value?.startsWith('#') && ids.has(value.slice(1))) {
+        const next = '#' + ids.get(value.slice(1));
+        if (attr === 'xlink:href') use.setAttributeNS('http://www.w3.org/1999/xlink', attr, next);
+        else use.setAttribute(attr, next);
+      }
+    }
+  }
+  return root;
+}
+
+export function referenceAnswer(question) {
+  const type = question.interaction?.type || question.question?.interaction?.type;
+  if (type === 'text' || !type && !question.reference_answer_html) return null;
+  if (!question.reference_answer_html && !question.reference_answer) return null;
+  const box = element('section', 'referenceAnswer');
+  box.append(element('h3', 'exampleExplanationHeader', t('training.referenceAnswer')));
+  const body = element('div', 'courseContent referenceAnswerBody');
+  if (question.reference_answer_html) body.innerHTML = question.reference_answer_html;
+  else body.textContent = question.reference_answer;
+  if (question.reference_math_css) { const style = element('style', ''); style.textContent = question.reference_math_css; box.append(style); }
+  box.append(prepareAnswerContent(body)); return box;
+}
 
 // Shared controls; each reader keeps its original submission and grading policy.
 export function selfAssessment(question, input, {disabled = false, reveal, rate, explanation} = {}) {
@@ -19,9 +54,8 @@ export function selfAssessment(question, input, {disabled = false, reveal, rate,
     show.addEventListener('click', () => { if (!show.disabled) void reveal(); });
     box.append(show); return box;
   }
-  box.append(element('h3', 'exampleExplanationHeader', t('training.referenceAnswer')),
-    element('pre', 'referenceAnswer', question.reference_answer || ''));
-  if (explanation) box.append(element('h3', 'exampleExplanationHeader', t('Explanation · 解析')), explanation);
+  const reference = referenceAnswer(question); if (reference) box.append(reference);
+  if (explanation) box.append(element('h3', 'exampleExplanationHeader', t('Explanation · 解析')), prepareAnswerContent(explanation));
   const ratings = element('div', 'trainingRatings');
   const labels = ['training.again', 'training.hard', 'training.good', 'training.easy'];
   labels.forEach((label, index) => {

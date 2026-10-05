@@ -3,7 +3,8 @@
 Each caller retains its own grading/scheduling policy and transaction boundary.
 """
 from .access import feature_eligible
-from .question_types import is_reproduction, demo_answer, display_answer
+from .question_types import is_reproduction
+from .reference_answers import reference_fields
 
 
 def enabled(access, con):
@@ -23,18 +24,20 @@ def reveal(question, target):
     target['revealed'] = True
 
 
-def presentation(question, target):
+def presentation(question, target, *, visible=False):
     result = {'reproduction': is_reproduction(question), 'revealed': bool(target.get('revealed'))}
     if result['revealed']:
-        result.update(explanation_html=question.get('explanation_html', ''),
-                      reference_answer=display_answer(question, demo_answer(question)))
+        result.update(explanation_html=question.get('explanation_html', ''))
+    result.update(reference_fields(question, visible or result['revealed']))
     return result
 
 
 def protect(item, allowed):
     item['can_self_rate'] = bool(allowed and item.pop('reproduction', False))
     if item.get('revealed') and not item['can_self_rate']:
-        item.pop('reference_answer', None)
+        if item.get('phase', 'answer') == 'answer':
+            for key in ('reference_answer', 'reference_answer_html', 'reference_math_css'):
+                item.pop(key, None)
         if item.get('phase', 'answer') == 'answer':
             item['explanation_html'] = None
         item['revealed'] = False

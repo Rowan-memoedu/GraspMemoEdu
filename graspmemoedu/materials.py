@@ -10,6 +10,7 @@ from .service import DomainError
 from .training_content import permission_id
 from .question_types import public_interaction
 from .question_bank import QuestionBank
+from .reference_answers import reference_fields
 
 
 def topic_blocks(topic):
@@ -22,6 +23,7 @@ def topic_blocks(topic):
     def question(item):
         add('question', item)
         add('explanation', item, field='explanation_html')
+        blocks[-1].update(reference_fields(item, True))
     if topic.get('topic_format_version') == 2:
         introductions = {item['id']: item for item in topic['introductions']}
         modules = {item['id']: item for item in topic.get('modules', [])}
@@ -124,6 +126,7 @@ def register_material_routes(app, catalog, access_store, subjects, identity, pub
                 blocks.extend({'id': kind + ':' + q['id'], 'kind': kind, 'title': q.get('title', q['id']), 'html': q[field],
                                **({'interaction': public_interaction(q)} if kind == 'question' else {})}
                               for kind, field in [('question', 'html'), ('explanation', 'explanation_html')])
+                blocks[-1].update(reference_fields(q, True))
             result = {'title': group['title'], 'course_title': bank['title'], 'version': bank['version'],
                       'math_css': bank.get('math_css', ''), 'blocks': blocks}
         else:

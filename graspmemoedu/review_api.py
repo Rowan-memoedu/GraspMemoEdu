@@ -9,6 +9,7 @@ from .service import DomainError
 from .public_limits import PublicLimitError
 from .question_types import public_interaction, display_answer, demo_answer
 from .self_assessment import enabled as self_rating_enabled, protect as protect_assessment
+from .reference_answers import reference_fields
 
 
 def review_route_feature(path, method):
@@ -68,6 +69,7 @@ def register_review_routes(app, identity, admission_lock, limits, schedule, outs
                              'answer_display': display_answer(questions[answer['question_id']], answer['answer']),
                              'html': questions[answer['question_id']]['html'],
                              'explanation_html': questions[answer['question_id']]['explanation_html'],
+                             **reference_fields(questions[answer['question_id']], True),
                              'feedback': {'correct': answer['correct'], 'reason': reasons.get(answer['question_id'])}}
                             for answer in state['answers']]
         state.update(topic_title=learner.course['title'], module_title=module.get('title', state['module_id']),
