@@ -1,8 +1,8 @@
 // UI strings only. Course HTML, names, answers and explanations never enter this module.
-import {trainingMessages} from './training-messages.js?v=128cec7aaea785db';
-import {readerMessages} from './reader-messages.js?v=128cec7aaea785db';
-import {portalMessages} from './portal-messages.js?v=128cec7aaea785db';
-import {staticMessages} from './static-messages.js?v=128cec7aaea785db';
+import {trainingMessages} from './training-messages.js?v=5eb1b1039c9c02a4';
+import {readerMessages} from './reader-messages.js?v=5eb1b1039c9c02a4';
+import {portalMessages} from './portal-messages.js?v=5eb1b1039c9c02a4';
+import {staticMessages} from './static-messages.js?v=5eb1b1039c9c02a4';
 
 export const LANGUAGE_KEY = 'graspmemoedu:ui-language';
 // Read the previous namespace once on the same origin. Renaming the public
@@ -105,6 +105,13 @@ const errors = {
   '正文版本已变化，请刷新后重新提交答疑请求。': 'The content has changed. Refresh and submit your question again.',
   '未找到此答疑请求对应的内容。': 'The content linked to this question was not found.',
   '答疑请求过于频繁，请稍后重试。': 'Too many help requests. Please try again later.',
+  '答疑页面仅供学员和管理员使用。': 'Q&A is available to students and administrators only.',
+  '仅管理员可以回复答疑。': 'Only administrators can reply to questions.',
+  '请填写回复内容。': 'Enter a reply.',
+  '该回复已在其他页面更新，请重新载入后再提交。': 'This reply was updated elsewhere. Reload before submitting again.',
+  '仅学员可以标记自己的答疑回复。': 'Students can mark only their own replies as read.',
+  '未找到此答疑回复。': 'This reply was not found.',
+  '未找到此提交记录。': 'This submission was not found.',
   '该功能需注册账号才能使用': 'An account is required to use this feature.',
   '该功能需注册账号才能使用。': 'An account is required to use this feature.',
   '课程版本已变化，原进度已保留。请先由管理者处理版本迁移。': 'The course was updated. Your progress is preserved; please contact the administrator.',

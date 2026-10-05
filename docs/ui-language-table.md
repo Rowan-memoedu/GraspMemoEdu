@@ -2,7 +2,7 @@
 
 本表从当前界面词库自动生成。修改以词库为准，随后重新生成并检查本表。术语约定见 [界面语言规范](ui-language.md)。
 
-共 640 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
+共 665 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
 
 不包括作者课程正文、题目、答案、解析或用户输入。首页的学科双语副标题按约定保留。
 
@@ -344,6 +344,24 @@
 | Content version at submission: | 提交时的内容版本： |
 | The original formatting is unavailable. The saved text from submission is shown below. | 原版本的排版已不可用，以下显示提交时保存的正文。 |
 | Help requests | 答疑请求 |
+| Q&A | 答疑 |
+| Read each submission and reply on the right. | 查看学员提交的内容，在右侧填写回复。 |
+| View your submitted content, questions and administrator replies here. | 在这里查看你提交的内容、问题和管理员回复。 |
+| Student question | 学员的问题 |
+| My question | 我的问题 |
+| Administrator reply | 管理员回复 |
+| Write a reply | 填写回复 |
+| Send reply | 发送回复 |
+| Update reply | 更新回复 |
+| Sending reply… | 正在发送回复… |
+| Reply sent. | 回复已发送。 |
+| Awaiting reply | 等待回复 |
+| Replied | 已回复 |
+| New reply | 新回复 |
+| Q&A, {count} unread replies | 答疑，{count} 条未读回复 |
+| Refresh Q&A | 刷新答疑 |
+| The sent reply has changed. Review it before submitting your draft. | 已发送的回复发生了变化，请核对后再提交当前草稿。 |
+| Mark as read | 标为已读 |
 | Optionally describe your question about this content, or submit without a message. | 可补充你对这段内容的疑问，也可留空直接提交。 |
 | No additional message | 未填写补充说明 |
 | Your help request has been saved. | 答疑请求已保存。 |
@@ -665,6 +683,13 @@
 | The content has changed. Refresh and submit your question again. | 正文版本已变化，请刷新后重新提交答疑请求。 |
 | The content linked to this question was not found. | 未找到此答疑请求对应的内容。 |
 | Too many help requests. Please try again later. | 答疑请求过于频繁，请稍后重试。 |
+| Q&A is available to students and administrators only. | 答疑页面仅供学员和管理员使用。 |
+| Only administrators can reply to questions. | 仅管理员可以回复答疑。 |
+| Enter a reply. | 请填写回复内容。 |
+| This reply was updated elsewhere. Reload before submitting again. | 该回复已在其他页面更新，请重新载入后再提交。 |
+| Students can mark only their own replies as read. | 仅学员可以标记自己的答疑回复。 |
+| This reply was not found. | 未找到此答疑回复。 |
+| This submission was not found. | 未找到此提交记录。 |
 | An account is required to use this feature. | 该功能需注册账号才能使用 |
 | An account is required to use this feature. | 该功能需注册账号才能使用。 |
 | The course was updated. Your progress is preserved; please contact the administrator. | 课程版本已变化，原进度已保留。请先由管理员处理版本迁移。 |

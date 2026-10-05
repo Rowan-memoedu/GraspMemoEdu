@@ -210,6 +210,28 @@ body.portalModalOpen { overflow: hidden; }
 .helpRequestContext { color: #777; font-size: 14px; }
 .helpRequest > .contentQualityButton { color: #c62828; }
 .helpRequest > .requestHelpButton { color: #0874b9; }
+.helpInbox .helpRequestList { display: grid; gap: 20px; }
+.helpOriginalContent { overflow-wrap: anywhere; }
+.helpConversation .contentQualityButton { color: #c62828; }
+.helpConversation .requestHelpButton { color: #0874b9; }
+.helpRequest.helpConversation { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 32px; padding: 24px; }
+.helpConversation > * { min-width: 0; }
+.helpConversation h2 { font-size: 18px; }
+.helpConversation h3 { font-size: 15px; margin: 20px 0 10px; }
+.helpConversation .courseContent { overflow-wrap: anywhere; }
+.helpReplyPanel { border-left: 1px solid var(--ma-border); padding-left: 32px; }
+.helpReplyForm label { display: block; margin: 16px 0 8px; }
+.helpReplyForm textarea { display: block; width: 100%; min-height: 180px; border: 1px solid #cbd2d8; border-radius: 3px; padding: 12px; color: #404040; background: #fff; font: inherit; resize: vertical; }
+.helpReplyForm button { margin-top: 12px; }
+.helpReplyText { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.75; }
+.helpReplyStatus { color: var(--link-color); font-size: 13px; }
+.helpToolbar { display: flex; justify-content: flex-end; margin: 0 0 18px; }
+.mainNavigation #qaNavLink { position: relative; }
+.helpUnreadBadge { position: absolute; top: 5px; right: -4px; min-width: 15px; padding: 0 3px; border-radius: 9px; background: #c62828; color: white; font-size: 10px; line-height: 15px; text-align: center; }
+@media (max-width: 720px) {
+  .helpRequest.helpConversation { grid-template-columns: minmax(0,1fr); gap: 20px; padding: 18px; }
+  .helpReplyPanel { border-left: 0; border-top: 1px solid var(--ma-border); padding: 12px 0 0; }
+}
 .topicPage .historySidebar { top: 74px; max-height: calc(100dvh - 98px); }
 .topicPage .lesson { margin-top: 26px; }
 .topicPage .step { scroll-margin-top: 70px; }

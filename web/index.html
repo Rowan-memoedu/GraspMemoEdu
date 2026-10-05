@@ -7,22 +7,22 @@
     <meta name="referrer" content="no-referrer">
     <meta name="description" data-i18n-content="site.description" content="选择学科，按自己的进度阅读、练习与复习。">
     <title data-i18n="site.title">GraspMemoEdu</title>
-    <link rel="icon" href="./favicon.svg?v=128cec7aaea785db" type="image/svg+xml">
-    <link rel="stylesheet" href="./styles.css?v=128cec7aaea785db">
-    <link rel="stylesheet" href="./portal.css?v=128cec7aaea785db">
-    <link rel="stylesheet" href="./subjects.css?v=128cec7aaea785db">
-    <link rel="stylesheet" href="./course-graph.css?v=128cec7aaea785db">
-    <script type="module" src="./app.js?v=128cec7aaea785db"></script>
-    <link rel="stylesheet" href="./training.css?v=128cec7aaea785db">
-    <link rel="stylesheet" href="./topic-callouts.css?v=128cec7aaea785db">
-    <link rel="stylesheet" href="./topic-content.css?v=128cec7aaea785db">
+    <link rel="icon" href="./favicon.svg?v=5eb1b1039c9c02a4" type="image/svg+xml">
+    <link rel="stylesheet" href="./styles.css?v=5eb1b1039c9c02a4">
+    <link rel="stylesheet" href="./portal.css?v=5eb1b1039c9c02a4">
+    <link rel="stylesheet" href="./subjects.css?v=5eb1b1039c9c02a4">
+    <link rel="stylesheet" href="./course-graph.css?v=5eb1b1039c9c02a4">
+    <script type="module" src="./app.js?v=5eb1b1039c9c02a4"></script>
+    <link rel="stylesheet" href="./training.css?v=5eb1b1039c9c02a4">
+    <link rel="stylesheet" href="./topic-callouts.css?v=5eb1b1039c9c02a4">
+    <link rel="stylesheet" href="./topic-content.css?v=5eb1b1039c9c02a4">
   </head>
   <body>
     <a class="skipLink" id="skipContent" href="#portalContent" data-i18n="nav.skip">跳到主要内容</a>
     <header class="topRibbon">
       <div class="topBarContainer">
-        <a class="platformHomeLink" href="#/" aria-label="GraspMemoEdu 主页" data-i18n-aria-label="nav.home"><img src="./favicon.svg?v=128cec7aaea785db" width="34" height="34" alt=""><span>GraspMemoEdu</span></a>
-        <a class="portalLogo" href="#/" aria-label="GraspMemoEdu 主页" data-i18n-aria-label="nav.home"><img src="./favicon.svg?v=128cec7aaea785db" width="34" height="34" alt=""><span data-i18n="site.title">GraspMemoEdu</span></a>
+        <a class="platformHomeLink" href="#/" aria-label="GraspMemoEdu 主页" data-i18n-aria-label="nav.home"><img src="./favicon.svg?v=5eb1b1039c9c02a4" width="34" height="34" alt=""><span>GraspMemoEdu</span></a>
+        <a class="portalLogo" href="#/" aria-label="GraspMemoEdu 主页" data-i18n-aria-label="nav.home"><img src="./favicon.svg?v=5eb1b1039c9c02a4" width="34" height="34" alt=""><span data-i18n="site.title">GraspMemoEdu</span></a>
         <a id="subjectContext" class="subjectContext" href="#/" hidden></a>
         <nav class="mainNavigation" aria-label="主要导航" data-i18n-aria-label="nav.main">
           <button id="catalogToggle" class="catalogToggle" type="button" aria-expanded="false" aria-controls="catalogPanel" data-i18n="catalog.title">目录</button>
@@ -30,6 +30,7 @@
           <a href="#/subjects/english/reviews" data-navigation="reviews" data-i18n="atomic.reviewTitle" hidden>复习</a>
           <a href="#/subjects/math/courses" data-navigation="courses" data-i18n="nav.courses" hidden>课程</a>
           <a href="#/subjects/math/banks" data-navigation="banks" data-i18n="training.banks" hidden>题库</a>
+          <a href="#/qa" id="qaNavLink" data-navigation="qa" hidden><span data-i18n="help.pageTitle">答疑</span><span id="qaUnreadCount" class="helpUnreadBadge" aria-hidden="true" hidden></span></a>
           <a href="#/subjects/math/guide" data-navigation="guide" data-i18n="nav.guide" hidden>指南</a>
         </nav>
         <div class="userMenuHost" id="userMenuHost">
@@ -39,7 +40,6 @@
             <a href="#/settings" data-i18n="nav.settings">设置</a>
             <a href="#/help" data-i18n="nav.help">帮助</a>
             <button id="supportButton" type="button" data-i18n="nav.support">反馈</button>
-            <a href="#/help-requests" id="helpInboxLink" data-i18n="help.inbox" hidden>答疑请求</a>
             <a href="#/admin/pauses" id="pauseInboxLink" data-i18n="pause.inbox" hidden>暂停管理</a>
             <a href="#/admin/students" id="studentsLink" data-i18n="students.title" hidden>学员学习情况</a>
             <button class="identityButton" id="identityButton" type="button" aria-haspopup="dialog"><span id="identityAction">邀请码登录</span><span id="identityName" hidden>游客</span></button>

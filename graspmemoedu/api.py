@@ -405,6 +405,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                 response.headers['Vary'] = 'Origin'
             return response
         public_paths = {'/api/health', '/api/access', '/api/access/guest', '/api/access/login', '/api/access/logout',
+                        '/api/help-center', '/api/help-replies', '/api/help-replies/read',
                         '/api/materials', '/api/materials/open',
                         '/api/state', '/api/demo-answer', '/api/guest/reset', '/api/choose', '/api/continue', '/api/select', '/api/pause', '/api/submit',
                         '/api/subjects', '/api/catalog', '/api/catalog/select', '/api/dashboard', '/api/profile', '/api/feedback', '/api/help-requests', '/api/guide', '/api/atomic/reviews'}

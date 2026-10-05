@@ -26,6 +26,20 @@ class HelpRequest(BaseModel):
     group_id: str | None = Field(default=None, min_length=1, max_length=64)
 
 
+class HelpReply(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    report_id: str = Field(min_length=1, max_length=128)
+    request_id: str = Field(min_length=1, max_length=128)
+    message: str = Field(min_length=1, max_length=4000)
+    expected_revision: int = Field(ge=0)
+
+
+class HelpReplyRead(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    report_id: str = Field(min_length=1, max_length=128)
+    revision: int = Field(ge=1)
+
+
 class HelpRequestStore:
     def __init__(self, catalog, access_store, subjects):
         self.catalog, self.access_store, self.subjects = catalog, access_store, subjects
@@ -41,7 +55,17 @@ class HelpRequestStore:
                     admin_id TEXT NOT NULL REFERENCES access_principals(learner_id));
                 CREATE TABLE IF NOT EXISTS help_admin_assignments (
                     learner_id TEXT PRIMARY KEY REFERENCES access_principals(learner_id),
-                    admin_id TEXT NOT NULL REFERENCES access_principals(learner_id));''')
+                    admin_id TEXT NOT NULL REFERENCES access_principals(learner_id));
+                CREATE TABLE IF NOT EXISTS help_replies (
+                    id TEXT PRIMARY KEY, report_id TEXT NOT NULL REFERENCES help_requests(id),
+                    admin_id TEXT NOT NULL REFERENCES access_principals(learner_id),
+                    request_id TEXT NOT NULL, message TEXT NOT NULL,
+                    revision INTEGER NOT NULL CHECK(revision>0), created_at TEXT NOT NULL,
+                    UNIQUE(report_id,revision), UNIQUE(admin_id,request_id));
+                CREATE TABLE IF NOT EXISTS help_reply_reads (
+                    report_id TEXT PRIMARY KEY REFERENCES help_requests(id),
+                    learner_id TEXT NOT NULL REFERENCES access_principals(learner_id),
+                    revision INTEGER NOT NULL CHECK(revision>0), read_at TEXT NOT NULL);''')
 
     @staticmethod
     def _require_admin(con, admin_id):
@@ -219,6 +243,9 @@ class HelpRequestStore:
                 (report_id, access['learner_id'])).fetchone()
         if not row:
             raise DomainError('unknown_help_request', '未找到此提交记录。', 404)
+        return self._render_record(row)
+
+    def _render_record(self, row):
         body = json.loads(row['body'])
         fidelity = 'snapshot'
         if 'content_html' not in body:
@@ -235,6 +262,101 @@ class HelpRequestStore:
         return {**body, 'id': row['id'], 'learner_id': row['learner_id'],
                 'created_at': row['created_at'], 'content_fidelity': fidelity}
 
+    @staticmethod
+    def _viewer(access):
+        if access.get('is_admin'):
+            return 'admin'
+        if access.get('role') == 'account' and access.get('is_student') and 'request_help' in access.get('features', []):
+            return 'student'
+        raise DomainError('feature_forbidden', '答疑页面仅供学员和管理员使用。', 403)
+
+    @staticmethod
+    def _center_scope(viewer):
+        return '''FROM help_requests r
+            LEFT JOIN help_admin_assignments a ON a.learner_id=r.learner_id
+            LEFT JOIN help_admin_config c ON c.id=1
+            LEFT JOIN help_replies reply ON reply.report_id=r.id AND reply.revision=
+                (SELECT MAX(revision) FROM help_replies WHERE report_id=r.id)
+            LEFT JOIN help_reply_reads seen ON seen.report_id=r.id AND seen.learner_id=r.learner_id
+            WHERE ''' + ('COALESCE(a.admin_id,c.admin_id)=?' if viewer == 'admin' else 'r.learner_id=?')
+
+    def center(self, access, limit=10, offset=0, summary=False, report_id=None):
+        viewer = self._viewer(access)
+        scope = self._center_scope(viewer)
+        with closing(self.access_store._connect()) as con:
+            con.execute('BEGIN')
+            counts = con.execute('''SELECT COUNT(*) total,
+                COALESCE(SUM(reply.revision IS NULL),0) pending_count,
+                COALESCE(SUM(reply.revision>COALESCE(seen.revision,0)),0) unread_count,
+                MAX(reply.created_at) latest_reply_at ''' + scope,
+                (access['learner_id'],)).fetchone()
+            result = {'viewer': viewer, **dict(counts)}
+            if viewer == 'admin':
+                result['unread_count'] = 0
+            if summary:
+                return result
+            fields = '''SELECT r.id,r.learner_id,r.body,r.created_at,reply.message reply_message,
+                reply.revision,reply.created_at replied_at,COALESCE(seen.revision,0) seen_revision '''
+            if report_id:
+                rows = con.execute(fields + scope + ' AND r.id=?', (access['learner_id'], report_id)).fetchall()
+                if not rows:
+                    raise DomainError('unknown_help_request', '未找到此提交记录。', 404)
+            else:
+                rows = con.execute(fields + scope +
+                    ' ORDER BY COALESCE(reply.created_at,r.created_at) DESC,r.id DESC LIMIT ? OFFSET ?',
+                    (access['learner_id'], limit + 1, offset)).fetchall()
+        items = []
+        for row in rows[:limit]:
+            reply = ({'message': row['reply_message'], 'revision': row['revision'], 'created_at': row['replied_at']}
+                     if row['revision'] is not None else None)
+            items.append({**self._render_record(row), 'reply': reply,
+                          'unread': viewer == 'student' and bool(reply and row['revision'] > row['seen_revision'])})
+        return {**result, 'items': items, 'next_offset': offset + limit if not report_id and len(rows) > limit else None}
+
+    def reply(self, access, values):
+        if self._viewer(access) != 'admin':
+            raise DomainError('feature_forbidden', '仅管理员可以回复答疑。', 403)
+        values = HelpReply.model_validate(values).model_dump()
+        message = values['message'].strip()
+        if not message or '\x00' in message:
+            raise DomainError('invalid_help_reply', '请填写回复内容。', 422)
+        with self.access_store._transaction() as con:
+            self._require_admin(con, access['learner_id'])
+            row = con.execute('SELECT learner_id FROM help_requests WHERE id=?', (values['report_id'],)).fetchone()
+            if not row or self._owner(con, row['learner_id']) != access['learner_id']:
+                raise DomainError('unknown_help_request', '未找到此提交记录。', 404)
+            existing = con.execute('SELECT * FROM help_replies WHERE admin_id=? AND request_id=?',
+                (access['learner_id'], values['request_id'])).fetchone()
+            if existing:
+                if (existing['report_id'], existing['message'], existing['revision'] - 1) != (
+                        values['report_id'], message, values['expected_revision']):
+                    raise DomainError('request_conflict', '同一请求标识不能用于不同内容。', 409)
+                return {'status': 'saved', 'reply': {key: existing[key] for key in ('message', 'revision', 'created_at')}}
+            revision = con.execute('SELECT COALESCE(MAX(revision),0) FROM help_replies WHERE report_id=?',
+                (values['report_id'],)).fetchone()[0]
+            if values['expected_revision'] != revision:
+                raise DomainError('help_reply_conflict', '该回复已在其他页面更新，请重新载入后再提交。', 409)
+            created = now()
+            con.execute('INSERT INTO help_replies VALUES (?,?,?,?,?,?,?)',
+                (str(uuid.uuid4()), values['report_id'], access['learner_id'], values['request_id'], message, revision + 1, created))
+        return {'status': 'saved', 'reply': {'message': message, 'revision': revision + 1, 'created_at': created}}
+
+    def mark_read(self, access, values):
+        if self._viewer(access) != 'student':
+            raise DomainError('feature_forbidden', '仅学员可以标记自己的答疑回复。', 403)
+        values = HelpReplyRead.model_validate(values).model_dump()
+        with self.access_store._transaction() as con:
+            row = con.execute('''SELECT reply.revision FROM help_replies reply
+                JOIN help_requests r ON r.id=reply.report_id
+                WHERE r.id=? AND r.learner_id=? AND reply.revision=?''',
+                (values['report_id'], access['learner_id'], values['revision'])).fetchone()
+            if not row:
+                raise DomainError('unknown_help_request', '未找到此答疑回复。', 404)
+            con.execute('''INSERT INTO help_reply_reads VALUES (?,?,?,?) ON CONFLICT(report_id) DO UPDATE SET
+                revision=MAX(help_reply_reads.revision,excluded.revision),read_at=excluded.read_at''',
+                (values['report_id'], access['learner_id'], values['revision'], now()))
+        return {'status': 'read', 'revision': values['revision']}
+
 
 def register_help_routes(app, catalog, access_store, subjects):
     store = HelpRequestStore(catalog, access_store, subjects)
@@ -249,3 +371,17 @@ def register_help_routes(app, catalog, access_store, subjects):
                    report_id: str | None = Query(default=None, min_length=1, max_length=128)):
         access = access_store.resolve(request.headers.get('x-learning-identity'))
         return store.content(access, report_id) if report_id else store.inbox(access, limit, offset)
+
+    @app.get('/api/help-center')
+    def help_center(request: Request, limit: int = Query(default=10, ge=1, le=25),
+                    offset: int = Query(default=0, ge=0, le=1000000), summary: bool = False,
+                    report_id: str | None = Query(default=None, min_length=1, max_length=128)):
+        return store.center(access_store.resolve(request.headers.get('x-learning-identity')), limit, offset, summary, report_id)
+
+    @app.post('/api/help-replies')
+    def reply_help(payload: HelpReply, request: Request):
+        return store.reply(access_store.resolve(request.headers.get('x-learning-identity')), payload.model_dump())
+
+    @app.post('/api/help-replies/read')
+    def read_reply(payload: HelpReplyRead, request: Request):
+        return store.mark_read(access_store.resolve(request.headers.get('x-learning-identity')), payload.model_dump())
