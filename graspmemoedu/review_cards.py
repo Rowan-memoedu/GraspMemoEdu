@@ -53,7 +53,7 @@ def question_kind(question):
 
 
 def attach_training_variant(con, point, question, when):
-    """Private integration for compiled/reviewed cards; no generation is enabled."""
+    """Private integration for compiled/reviewed cards; no public generation API."""
     from .training_content import validate, fingerprint
     initialize_points(con)
     row = con.execute('SELECT subject,kind FROM review_points WHERE id=?', (point,)).fetchone()

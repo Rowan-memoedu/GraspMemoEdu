@@ -1,0 +1,29 @@
+[Unit]
+Description=GraspMemoEdu math review Practice replenishment
+After=network-online.target graspmemoedu.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=graspmemoedu
+Group=graspmemoedu
+WorkingDirectory=/opt/graspmemoedu/app
+EnvironmentFile=/etc/graspmemoedu/variants.env
+Environment=PATH=/home/ubuntu/.nvm/versions/node/v22.22.3/bin:/usr/bin:/bin
+Environment=CODEX_NODE_MODULES=/opt/graspmemoedu/node-runtime/node_modules
+Environment=MATH_TOPIC_PDF_RUNTIME=/opt/graspmemoedu/node-runtime/node_modules
+ExecStart=/opt/graspmemoedu/venv/bin/python -m graspmemoedu.variant_worker --data-dir /var/lib/graspmemoedu --watch
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=15
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/graspmemoedu
+MemoryMax=512M
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

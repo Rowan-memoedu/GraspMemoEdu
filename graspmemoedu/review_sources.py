@@ -56,7 +56,9 @@ class ReviewSources:
                     for cid, q in presentations:
                         cards.append({'id': cid, 'point_ids': [pid], 'question': q, 'source': source,
                                       'due_at': memory['due_at'], 'source_title': bank['title'] + ' · ' + group['title'],
-                                      'math_css': bank.get('math_css', ''), 'uses': uses.get(cid, 0)})
+                                      'math_css': bank.get('math_css', ''),
+                                      # The source was already shown when its memory was created.
+                                      'uses': uses.get(cid, 0) + (1 if subject == 'math' and cid.startswith('training:') else 0)})
         for topic_id, backend in self.atoms.items():
             topic = backend.course
             if topic['subject_id'] != subject or topic_id not in allowed:

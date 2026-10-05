@@ -1,5 +1,7 @@
 # GraspMemoEdu
 
+数学题库复习的同组变式由服务器按需补充：学习者未见变式为零时，每批生成两题，经一次 AI 审核及离线编译后自动入库；课程生产保持原流程。配置、运行和故障恢复见 [变式补题](docs/review-variant-production.md)。
+
 管理员邀请码可进入全部已制作内容，使用正常学习流程但不保存学习记录；复习页保留管理员全部卡片预览入口。共享权限、内存存储与扩展契约见 [管理员内容访问](docs/administrator-access.md)。
 
 通用架构的职责与学科开发边界见 [共用平台](docs/shared-platform.md)。题型支持单项选择、判断、多空填空、配对及复刻/复现判题，作者配置见 [题型规范](docs/question-types.md)；旧问答题转换、LLM 干扰项筛选与保留历史版本见 [题库工作流](docs/question-bank-workflow.md)。顶部学科/课程目录与选中文字纠错见 [导航与反馈](docs/content-navigation.md)。
