@@ -1,7 +1,7 @@
-import {t, translateMessage} from './i18n.js?v=e8d7048c8afc7361';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=e8d7048c8afc7361';
-import {createLearningCache} from './learning-cache.js?v=e8d7048c8afc7361';
-import {helpableContent} from './content-report.js?v=e8d7048c8afc7361';
+import {t, translateMessage} from './i18n.js?v=128cec7aaea785db';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=128cec7aaea785db';
+import {createLearningCache} from './learning-cache.js?v=128cec7aaea785db';
+import {helpableContent} from './content-report.js?v=128cec7aaea785db';
 
 const node = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const button = (text, cls, action) => { const n = node('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
@@ -9,7 +9,7 @@ const encode = encodeURIComponent;
 const query = fields => new URLSearchParams(fields).toString();
 const html = (content, cls = 'courseContent') => { const n = node('div', cls); n.innerHTML = content || ''; return n; };
 const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy', 'training.retire'];
-import {answerEditor, readerFrame} from './learning-ui.js?v=e8d7048c8afc7361';
+import {answerEditor, readerFrame} from './learning-ui.js?v=128cec7aaea785db';
 
 export function createTrainingView(bridge) {
   const {root, request, href, formatDate, getAccess} = bridge;

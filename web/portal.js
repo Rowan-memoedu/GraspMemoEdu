@@ -1,13 +1,13 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=e8d7048c8afc7361";
-import { createReviewView } from "./review.js?v=e8d7048c8afc7361";
-import { renderCourseGraph } from "./course-graph.js?v=e8d7048c8afc7361";
-import {questionInput} from './question-input.js?v=e8d7048c8afc7361';
-import {enhanceTopicContent} from './topic-content.js?v=e8d7048c8afc7361';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=e8d7048c8afc7361';
-import {createCatalogPicker} from './catalog-picker.js?v=e8d7048c8afc7361';
-import {createAtomicView} from './atomic.js?v=e8d7048c8afc7361';
-import {createTrainingView} from './training.js?v=e8d7048c8afc7361';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=e8d7048c8afc7361";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=128cec7aaea785db";
+import { createReviewView } from "./review.js?v=128cec7aaea785db";
+import { renderCourseGraph } from "./course-graph.js?v=128cec7aaea785db";
+import {questionInput} from './question-input.js?v=128cec7aaea785db';
+import {enhanceTopicContent} from './topic-content.js?v=128cec7aaea785db';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=128cec7aaea785db';
+import {createCatalogPicker} from './catalog-picker.js?v=128cec7aaea785db';
+import {createAtomicView} from './atomic.js?v=128cec7aaea785db';
+import {createTrainingView} from './training.js?v=128cec7aaea785db';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=128cec7aaea785db";
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -311,6 +311,9 @@ export function initPortal(bridge) {
       } else if (path === '/help-requests') {
         document.title = pageTitle(t('help.inbox'));
         await renderHelpInbox(ticket);
+      } else if (/^\/help-requests\/[^/]+$/.test(path)) {
+        document.title = pageTitle(t('help.openContent'));
+        await renderHelpContent(ticket, decodeURIComponent(path.split('/')[2]));
       } else if (path === '/admin/pauses') {
         document.title = pageTitle(t('pause.inbox'));
         await renderPauseInbox(ticket);
@@ -338,7 +341,9 @@ export function initPortal(bridge) {
       const target = params.get("unitId") || params.get("topicId");
       requestAnimationFrame(() => {
         if (ticket !== sequence) return;
-        if (target) root.querySelector(`[data-progress-id="${CSS.escape(target)}"]`)?.scrollIntoView({ block: "start" });
+        const reportBlock = root.querySelector('.helpContentBlock');
+        if (reportBlock) { reportBlock.focus({preventScroll: true}); reportBlock.scrollIntoView({block: 'start'}); }
+        else if (target) root.querySelector(`[data-progress-id="${CSS.escape(target)}"]`)?.scrollIntoView({ block: "start" });
         else window.scrollTo(0, scrolls.get(currentHash) || 0);
       });
     } catch (error) {
@@ -954,8 +959,7 @@ export function initPortal(bridge) {
             node('p', '', `${item.course_title} · ${item.topic_title} · ${item.request.content_block_id}`),
             node('p', '', `${t('help.block.' + (item.content_block_type || item.request.content_block_id.split(':')[0]))}${item.content_block_title ? ' · ' + item.content_block_title : ''}`),
             node('p', 'helpRequestMessage', item.request.message || t('help.noMessage')));
-          const path = item.request.bank_id ? `/banks/${encode(item.request.bank_id)}/${encode(item.request.group_id)}?question=${encode(item.request.question_id)}`
-            : '/topic/' + encode(item.request.topic_id);
+          const path = '/help-requests/' + encode(item.id);
           card.append(node('p', 'helpRequestContext', item.content_text), link(t('help.openContent'), subjectHref(item.subject_id, path), 'textButton'));
           list.append(card);
         }
@@ -964,6 +968,30 @@ export function initPortal(bridge) {
       finally { busy = false; more.disabled = false; }
     }
     await load();
+  }
+  async function renderHelpContent(ticket, reportId) {
+    const item = await bridge.request(`help-requests?report_id=${encode(reportId)}`);
+    if (ticket !== sequence) return;
+    mathStyle(item.math_css);
+    const page = node('section', 'helpContentPage');
+    const label = t('help.block.' + (item.content_block_type || item.request.content_block_id.split(':')[0]));
+    page.append(link(t('help.inbox'), subjectHref(item.subject_id, '/help-requests'), 'textButton'),
+      node('h1', 'portalPageTitle', item.content_block_title || label),
+      node('p', '', `${item.course_title} · ${item.topic_title} · ${label}`),
+      node('p', 'inputHint', `${item.display_name} · ${apiDate(item.created_at, true)}`),
+      node('p', 'inputHint', `${t('help.contentVersion')} ${item.request.content_version}`),
+      node('p', 'helpRequestMessage', item.request.message || t('help.noMessage')));
+    const block = node('article', 'courseChoice helpContentBlock');
+    block.dataset.contentBlock = item.request.content_block_id;
+    block.dataset.contentVersion = item.request.content_version;
+    block.tabIndex = -1;
+    block.setAttribute('aria-label', label);
+    if (item.content_fidelity === 'text_snapshot') {
+      page.append(node('p', 'inputHint', t('help.legacySnapshot')));
+      block.append(node('div', 'courseContent helpContentText', item.content_text));
+    } else block.append(trustedContent(item.content_html));
+    page.append(block); root.replaceChildren(page);
+    requestAnimationFrame(() => { if (ticket === sequence) block.focus({preventScroll: true}); });
   }
   async function renderPauseInbox(ticket) {
     const page = node('section', 'helpInbox'); page.append(node('h1', 'portalPageTitle', t('pause.inbox')));

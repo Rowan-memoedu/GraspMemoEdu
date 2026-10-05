@@ -1,10 +1,10 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=e8d7048c8afc7361";
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=e8d7048c8afc7361';
-import {reportableContent} from './content-report.js?v=e8d7048c8afc7361';
-import {createLearningCache} from './learning-cache.js?v=e8d7048c8afc7361';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=128cec7aaea785db";
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=128cec7aaea785db';
+import {reportableContent} from './content-report.js?v=128cec7aaea785db';
+import {createLearningCache} from './learning-cache.js?v=128cec7aaea785db';
 
-import {answerEditor} from './learning-ui.js?v=e8d7048c8afc7361';
-import {enhanceTopicContent, mountTopicBacklinks, focusContentNode} from './topic-content.js?v=e8d7048c8afc7361';
+import {answerEditor} from './learning-ui.js?v=128cec7aaea785db';
+import {enhanceTopicContent, mountTopicBacklinks, focusContentNode} from './topic-content.js?v=128cec7aaea785db';
 
 applyStaticTranslations();
 
@@ -1496,7 +1496,7 @@ async function openTopic(id, subjectId) {
   }
 }
 
-const { initPortal } = await import("./portal.js?v=e8d7048c8afc7361");
+const { initPortal } = await import("./portal.js?v=128cec7aaea785db");
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {
     try { return await fetchGuideAsset(url, subjectId); }

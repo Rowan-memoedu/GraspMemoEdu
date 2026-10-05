@@ -81,6 +81,8 @@ export const portalMessages = {
   'help.block.introduction': ['指导', 'Introduction'],
   'help.block.chunk': ['记忆组块', 'Memory chunk'],
   'help.openContent': ['打开对应内容', 'Open this content'],
+  'help.contentVersion': ['提交时的内容版本：', 'Content version at submission:'],
+  'help.legacySnapshot': ['原版本的排版已不可用，以下显示提交时保存的正文。', 'The original formatting is unavailable. The saved text from submission is shown below.'],
   'help.inbox': ['答疑请求', 'Help requests'],
   'help.prompt': ['可补充你对这段内容的疑问，也可留空直接提交。', 'Optionally describe your question about this content, or submit without a message.'],
   'help.noMessage': ['未填写补充说明', 'No additional message'],

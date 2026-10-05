@@ -54,6 +54,61 @@ class HelpRequestTests(unittest.TestCase):
     def send(self, payload=None, headers=None, suffix=''):
         return self.client.post('/api/help-requests' + suffix, headers=headers or self.headers, json=payload or self.payload())
 
+    def open_content(self, report_id, headers=None):
+        return self.client.get('/api/help-requests?report_id=' + report_id, headers=headers or self.admin_headers)
+
+    def test_exact_block_reader_keeps_submission_html_and_never_opens_learning(self):
+        topic = self.app.state.catalog.topic(self.course['id'])
+        topic['math_css'] = '.submitted-math {color: navy}'
+        q = topic['modules'][0]['practices'][-1]
+        for block in ('question', 'explanation'):
+            saved = self.send(self.payload(message='', question_id=q['id'], content_block_id=block + ':' + q['id'])).json()
+            expected = q['html' if block == 'question' else 'explanation_html']
+            q['html' if block == 'question' else 'explanation_html'] = '<p>NEW_CONTENT</p>'
+            before = self.client.get('/api/state', headers=self.headers).json()
+            self.app.state.catalog.topics.pop(topic['id'])
+            try:
+                result = self.open_content(saved['id'])
+                self.assertEqual(result.status_code, 200, result.text)
+                self.assertEqual(result.json()['content_html'], expected)
+                self.assertEqual(result.json()['math_css'], topic['math_css'])
+                self.assertEqual(result.json()['content_fidelity'], 'snapshot')
+                self.assertEqual(result.json()['request']['content_block_id'], block + ':' + q['id'])
+            finally:
+                self.app.state.catalog.topics[topic['id']] = topic
+            self.assertEqual(self.client.get('/api/state', headers=self.headers).json(), before)
+        self.assertNotIn('content_html', self.client.get('/api/help-requests', headers=self.admin_headers).text)
+
+    def test_exact_block_reader_enforces_current_owner_and_admin_identity(self):
+        saved = self.send().json()['id']
+        other_admin, other_headers = self.identity(is_admin=True)
+        self.assertEqual(self.open_content(saved, self.headers).status_code, 403)
+        self.assertEqual(self.open_content(saved, other_headers).status_code, 404)
+        self.assertEqual(self.open_content('missing').status_code, 404)
+        self.assertEqual(self.client.get('/api/help-requests?report_id=' + saved).status_code, 401)
+        self.app.state.help_requests.assign_admin(self.student, other_admin)
+        self.assertEqual(self.open_content(saved).status_code, 404)
+        self.assertEqual(self.open_content(saved, other_headers).status_code, 200)
+
+    def test_legacy_reader_recovers_only_verified_original_body_without_writing(self):
+        saved = self.send().json()['id']
+        with self.store._transaction() as con:
+            body = json.loads(con.execute('SELECT body FROM help_requests WHERE id=?', (saved,)).fetchone()[0])
+            body.pop('content_html'); body.pop('math_css')
+            original = json.dumps(body)
+            con.execute('UPDATE help_requests SET body=? WHERE id=?', (original, saved))
+        self.assertEqual(self.open_content(saved).json()['content_fidelity'], 'verified_source')
+        topic = self.app.state.catalog.topic(self.course['id'])
+        topic['introduction']['html'] = '<p>NEW_BODY_WITH_SAME_VERSION</p>'
+        result = self.open_content(saved).json()
+        self.assertEqual(result['content_fidelity'], 'text_snapshot')
+        self.assertNotIn('content_html', result)
+        self.assertIn('INTRODUCTION_ONLY', result['content_text'])
+        topic['version'] = 'new'
+        self.assertEqual(self.open_content(saved).json()['content_fidelity'], 'text_snapshot')
+        with closing(self.store._connect()) as con:
+            self.assertEqual(con.execute('SELECT body FROM help_requests WHERE id=?', (saved,)).fetchone()[0], original)
+
     def test_crossed_qualifications_and_explicit_grants_are_checked_server_side(self):
         for advanced, student in ((False, False), (True, False), (False, True), (True, True)):
             with self.subTest(advanced=advanced, student=student):
@@ -102,6 +157,9 @@ class HelpRequestTests(unittest.TestCase):
             response = self.send(self.payload(message='', question_id=step['question_id'],
                 content_block_id=f"{field}:{step['question_id']}", content_version=step['content_version']))
             self.assertEqual(response.status_code, 200, response.text)
+            detail = self.open_content(response.json()['id']).json()
+            self.assertEqual(detail['request']['content_version'], revision)
+            self.assertEqual(detail['content_fidelity'], 'snapshot')
         items = self.client.get('/api/help-requests', headers=self.admin_headers).json()['items']
         question = next(item for item in items if item['request']['content_block_id'].startswith('question:'))
         explanation = next(item for item in items if item['request']['content_block_id'].startswith('explanation:'))
@@ -247,6 +305,8 @@ class HelpRequestTests(unittest.TestCase):
         item = self.client.get('/api/help-requests', headers=self.admin_headers).json()['items'][0]
         self.assertEqual(item['content_text'], 'SECOND_SECTION')
         self.assertEqual(item['content_block_title'], 'Second section')
+        detail = self.open_content(item['id']).json()
+        self.assertEqual(detail['content_html'], '<p>SECOND_SECTION</p>')
         self.assertEqual(self.send(self.payload(content_block_id='introduction:missing')).status_code, 422)
 
     def test_rate_limit_does_not_block_replays_and_pagination_and_backup_survive(self):
@@ -278,7 +338,11 @@ class HelpRequestTests(unittest.TestCase):
         app.state.help_requests.set_default_admin(admin['learner_id'])
         for block, question in [('chunk:colors', None), ('question:a-1', 'a-1'), ('explanation:a-1', 'a-1')]:
             values = self.payload(topic_id=topic['id'], content_version=topic['version'], content_block_id=block, question_id=question)
-            self.assertEqual(app.state.help_requests.save(account, values, 'english')['status'], 'saved')
+            saved = app.state.help_requests.save(account, values, 'english')
+            self.assertEqual(saved['status'], 'saved')
+            detail = app.state.help_requests.content(admin, saved['id'])
+            self.assertEqual(detail['request']['content_block_id'], block)
+            self.assertEqual(detail['content_fidelity'], 'snapshot')
 
     def test_administrator_one_alone_sees_default_students_including_new_students(self):
         other_admin, other_headers = self.identity(is_admin=True)

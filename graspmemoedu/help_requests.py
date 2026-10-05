@@ -125,7 +125,7 @@ class HelpRequestStore:
             if con.execute('SELECT COUNT(*) FROM help_requests WHERE learner_id=? AND created_at>?', (access['learner_id'], cutoff)).fetchone()[0] >= 3:
                 raise PublicLimitError('help_rate_limited', '答疑请求过于频繁，请稍后重试。', 60)
             body = {'request': payload, 'display_name': access['display_name'], **context,
-                    'content_text': ''.join(ContentText(html).parts)}
+                    'content_text': ''.join(ContentText(html).parts), 'content_html': html}
             request_id = str(uuid.uuid4())
             con.execute('INSERT INTO help_requests VALUES (?,?,?,?,?)',
                         (request_id, access['learner_id'], payload['request_id'], json.dumps(body, ensure_ascii=False), created))
@@ -145,6 +145,7 @@ class HelpRequestStore:
                 raise DomainError('invalid_help_context', '未找到此答疑请求对应的内容。', 422)
             return question[field], {'course_id': bank['id'], 'course_title': bank['title'],
                 'topic_title': group['title'], 'subject_id': bank['subject_id'],
+                'math_css': bank.get('math_css', ''),
                 'content_block_type': block_type, 'content_block_title': question.get('title', question_id)}
         topic = self.catalog.topic(topic_id)
         bank_question = None
@@ -184,6 +185,7 @@ class HelpRequestStore:
             raise DomainError('invalid_help_context', '未找到此答疑请求对应的内容。', 422)
         course = self.catalog.courses[self.catalog.topic_courses[topic_id]]
         return html, {'course_id': course['id'], 'course_title': course['title'], 'topic_title': topic['title'],
+                'math_css': topic.get('math_css', '') + ('\n' + bank.load(revision)['math_css'] if bank_question else ''),
                 'subject_id': self.subjects.course_subjects[course['id']],
                 'content_block_type': block_type, 'content_block_title': block_title}
 
@@ -200,9 +202,38 @@ class HelpRequestStore:
             rows = con.execute('SELECT r.id,r.learner_id,r.body,r.created_at ' + scope +
                                ' ORDER BY r.created_at DESC,r.id DESC LIMIT ? OFFSET ?', (access['learner_id'], limit + 1, offset)).fetchall()
             total = con.execute('SELECT COUNT(*) ' + scope, (access['learner_id'],)).fetchone()[0]
-        return {'items': [{**json.loads(row['body']), 'id': row['id'], 'learner_id': row['learner_id'],
+        return {'items': [{**{key: value for key, value in json.loads(row['body']).items()
+                              if key not in ('content_html', 'math_css')}, 'id': row['id'], 'learner_id': row['learner_id'],
                            'created_at': row['created_at']} for row in rows[:limit]],
                 'total': total, 'next_offset': offset + limit if len(rows) > limit else None}
+
+    def content(self, access, report_id):
+        """Read one submitted block without opening a learning service or attempt."""
+        if not access.get('is_admin'):
+            raise DomainError('feature_forbidden', '此页面仅供管理员查看。', 403)
+        with closing(self.access_store._connect()) as con:
+            row = con.execute('''SELECT r.id,r.learner_id,r.body,r.created_at FROM help_requests r
+                LEFT JOIN help_admin_assignments a ON a.learner_id=r.learner_id
+                LEFT JOIN help_admin_config c ON c.id=1
+                WHERE r.id=? AND COALESCE(a.admin_id,c.admin_id)=?''',
+                (report_id, access['learner_id'])).fetchone()
+        if not row:
+            raise DomainError('unknown_help_request', '未找到此提交记录。', 404)
+        body = json.loads(row['body'])
+        fidelity = 'snapshot'
+        if 'content_html' not in body:
+            # Older records saved plain text only. Resolve the exact revision,
+            # and never substitute a changed current block for the saved text.
+            fidelity = 'text_snapshot'
+            try:
+                html, context = self._content(HelpRequest.model_validate(body['request']).model_dump())
+                if ''.join(ContentText(html).parts) == body['content_text']:
+                    body.update(content_html=html, math_css=context.get('math_css', ''))
+                    fidelity = 'verified_source'
+            except (DomainError, ValueError, KeyError, OSError):
+                pass
+        return {**body, 'id': row['id'], 'learner_id': row['learner_id'],
+                'created_at': row['created_at'], 'content_fidelity': fidelity}
 
 
 def register_help_routes(app, catalog, access_store, subjects):
@@ -214,5 +245,7 @@ def register_help_routes(app, catalog, access_store, subjects):
         return store.save(access, payload.model_dump(), request.query_params.get('subject_id'))
 
     @app.get('/api/help-requests')
-    def help_inbox(request: Request, limit: int = Query(default=25, ge=1, le=100), offset: int = Query(default=0, ge=0, le=1000000)):
-        return store.inbox(access_store.resolve(request.headers.get('x-learning-identity')), limit, offset)
+    def help_inbox(request: Request, limit: int = Query(default=25, ge=1, le=100), offset: int = Query(default=0, ge=0, le=1000000),
+                   report_id: str | None = Query(default=None, min_length=1, max_length=128)):
+        access = access_store.resolve(request.headers.get('x-learning-identity'))
+        return store.content(access, report_id) if report_id else store.inbox(access, limit, offset)

@@ -112,6 +112,9 @@ button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke
 .step ul ul { list-style-type: circle; }
 .step ul ul ul { list-style-type: square; }
 .courseContent { line-height: 1.75; }
+.helpContentBlock { border: 2px solid var(--ma-blue); }
+.helpContentBlock:focus { outline: 2px solid var(--ma-blue); outline-offset: 3px; }
+.helpContentText { white-space: pre-wrap; }
 .contentReportActions { display: flex; flex-direction: column; align-items: flex-end; gap: 1.5em; font-size: 13px; line-height: 1.5; margin-bottom: 12px; }
 .contentReportActions > button { position: static; font-size: inherit; line-height: inherit; padding: 0; }
 .contentReportActions > .requestHelpButton { color: #0874b9; }
