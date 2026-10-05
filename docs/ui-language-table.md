@@ -2,7 +2,7 @@
 
 本表从当前界面词库自动生成。修改以词库为准，随后重新生成并检查本表。术语约定见 [界面语言规范](ui-language.md)。
 
-共 575 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
+共 627 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
 
 不包括作者课程正文、题目、答案、解析或用户输入。首页的学科双语副标题按约定保留。
 
@@ -257,6 +257,58 @@
 
 | English | 中文 |
 |---|---|
+| Student learning overview | 学员学习情况 |
+| View every student’s learned content and complete review schedule. This page is read-only. | 查看全站所有学员的已学内容与完整复习排程。此页面只读取记录。 |
+| This page is for administrators only. | 此页面仅供管理员使用。 |
+| Search students | 搜索学员 |
+| Search by student name | 按学员名称搜索 |
+| {count} students | 共 {count} 位学员 |
+| {started} Topics started · {completed} Topics completed | 已开始 {started} 个 Topic · 已完成 {completed} 个 Topic |
+| No matching students. | 暂无符合条件的学员。 |
+| View learning and reviews | 查看学习与复习 |
+| Back to students | 返回学员列表 |
+| Data retrieved at {time} | 数据读取于 {time} |
+| Learned content | 已经学习的内容 |
+| No learning records yet. | 尚无学习记录。 |
+| Guidance or memory chunks have been read | 已阅读指导或记忆组块 |
+| Learning started: {time} | 开始学习：{time} |
+| Learning completed: {time} | 完成学习：{time} |
+| Mastery {rating} | 熟练度 {rating} |
+| Browse material | 浏览对应材料 |
+| {count} completed attempts · Last completed {time} | 已完成 {count} 次训练 · 最近完成 {time} |
+| Complete review schedule | 全部复习排程 |
+| Includes overdue and future tasks. Dates come from existing schedules; pauses, permissions and prerequisites affect delivery. Subsequent answers update these dates. | 包括已到期及尚未到期的任务。到期时间来自现有调度记录；暂停、权限和前置条件会影响实际推送。后续作答会更新时间。 |
+| Filter review schedule | 复习排程筛选 |
+| All tasks | 全部任务 |
+| Due | 已到期 |
+| Upcoming | 尚未到期 |
+| Delivery currently blocked | 当前推送受阻 |
+| No matching review tasks. | 暂无符合条件的复习任务。 |
+| Atomic memory point review | 原子记忆点复习 |
+| Paradigm module review | 范式模块复习 |
+| Question bank card review | 题库卡片复习 |
+| Scheduled due time: {time} | 预计到期：{time} |
+| Review in progress | 复习进行中 |
+| The next appearance time includes the gap between cards from the same chunk. | 可再次出现的时间已包含同组块交错间隔。 |
+| Initial consolidation, not yet mastered | 初学巩固，尚未掌握 |
+| Atomic flashcard due times | 原子卡片预计到期时间 |
+| Memory is scheduled per point. Card variants share dates, and the system chooses a suitable presentation rather than delivering every variant together. Unlearned cards have no due date. | 记忆数据绑定在记忆点上；同点的不同卡片共用时间，系统每次只选择合适的形式推送，不会同时推送所有变式。尚未初学的卡片没有到期时间。 |
+| No atomic flashcards. | 暂无原子卡片。 |
+| Earliest eligibility time: {time} | 最早具备到期条件：{time} |
+| Bundled card: all covered points must be due; the system selects the actual presentation. | 打包卡片：需涉及的记忆点全部到期，具体推送仍由系统选取。 |
+| Not scheduled | 尚未安排 |
+| Completed | 已完成 |
+| In progress | 学习中 |
+| Not started | 尚未学习 |
+| Paused, awaiting unlock | 已暂停，等待解除 |
+| Account disabled | 账号已停用 |
+| Content access not currently enabled | 当前未开放该内容 |
+| Learning or answer submission not enabled | 学习或作答权限未开放 |
+| Record belongs to older or retired content; dates are preserved for inspection | 记录对应旧版或已下线内容，时间保留供查看 |
+| Prerequisites not satisfied | 前置知识条件尚未满足 |
+| Initial learning is incomplete; regular review delivery is not available yet | 初学尚未全部完成，暂不推送常规复习 |
+| Another review is active in this Topic | 该 Topic 的其他复习进行中 |
+| Review delivery stopped | 已停止复习推送 |
 | Paused learning | 暂停管理 |
 | Refresh list | 刷新列表 |
 | Only pauses for your assigned students are shown. Unlocking follows the existing training rules and preserves completed work and review records. | 仅显示您负责学员的暂停。解除后，按原规则继续训练，已完成内容及复习记录保留。 |

@@ -1,13 +1,13 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=0f630bf2e4367917";
-import { createReviewView } from "./review.js?v=0f630bf2e4367917";
-import { renderCourseGraph } from "./course-graph.js?v=0f630bf2e4367917";
-import {questionInput} from './question-input.js?v=0f630bf2e4367917';
-import {enhanceTopicContent} from './topic-content.js?v=0f630bf2e4367917';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=0f630bf2e4367917';
-import {createCatalogPicker} from './catalog-picker.js?v=0f630bf2e4367917';
-import {createAtomicView} from './atomic.js?v=0f630bf2e4367917';
-import {createTrainingView} from './training.js?v=0f630bf2e4367917';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=0f630bf2e4367917";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=2ab329bf62800a3c";
+import { createReviewView } from "./review.js?v=2ab329bf62800a3c";
+import { renderCourseGraph } from "./course-graph.js?v=2ab329bf62800a3c";
+import {questionInput} from './question-input.js?v=2ab329bf62800a3c';
+import {enhanceTopicContent} from './topic-content.js?v=2ab329bf62800a3c';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=2ab329bf62800a3c';
+import {createCatalogPicker} from './catalog-picker.js?v=2ab329bf62800a3c';
+import {createAtomicView} from './atomic.js?v=2ab329bf62800a3c';
+import {createTrainingView} from './training.js?v=2ab329bf62800a3c';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=2ab329bf62800a3c";
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -158,6 +158,7 @@ export function initPortal(bridge) {
     $("menuRole").textContent = expired ? t("portal.session.expired.14") : current?.is_admin ? t('admin.identity') : current?.role === 'account' ? t(current.is_advanced_learner ? 'account.advancedLearner' : 'account.standardLearner') + ' · ' + t(current.is_student ? 'account.student' : 'account.nonStudent') : t("portal.guest.16");
     $('helpInboxLink').hidden = !current?.is_admin;
     $('pauseInboxLink').hidden = !current?.is_admin;
+    $('studentsLink').hidden = !current?.is_admin;
     helpReporting?.refresh();
     $('adminLearningNotice').hidden = expired || !current?.is_admin;
     $("menuAccountPurpose").hidden = current?.role !== "account" || current?.purpose !== "test";
@@ -313,6 +314,9 @@ export function initPortal(bridge) {
       } else if (path === '/admin/pauses') {
         document.title = pageTitle(t('pause.inbox'));
         await renderPauseInbox(ticket);
+      } else if (path === '/admin/students') {
+        document.title = pageTitle(t('students.title'));
+        await renderStudents(ticket, params.get('learner'));
       } else if (path === "/settings") {
         document.title = pageTitle(t("nav.settings")); await renderSettings();
       } else if (/^\/courses\/[^/]+\/progress$/.test(path)) {
@@ -1003,6 +1007,132 @@ export function initPortal(bridge) {
       finally { busy = false; refresh.disabled = more.disabled = false; }
     }
     await load(true);
+  }
+  async function renderStudents(ticket, learnerId) {
+    const page = node('section', 'studentOverview');
+    page.append(node('h1', 'portalPageTitle', t('students.title')), node('p', 'inputHint', t('students.hint')));
+    root.replaceChildren(page);
+    if (!bridge.getAccess()?.is_admin) { page.append(emptyBox(t('students.adminOnly'))); return; }
+    const statusNames = {completed: t('students.completed'), in_progress: t('students.inProgress'),
+      paused: t('students.paused'), not_started: t('students.notStarted')};
+    const blockedNames = {account_disabled: t('students.accountDisabled'), topic_forbidden: t('students.topicForbidden'),
+      feature_forbidden: t('students.featureForbidden'), old_version: t('students.oldVersion'),
+      paused: t('students.paused'), prerequisites: t('students.prerequisites'), initial_learning: t('students.initialLearning'),
+      another_review_active: t('students.otherActive'), stopped: t('students.stopped')};
+    const current = () => ticket === sequence && currentRoute?.path === '/admin/students';
+    const date = value => value ? apiDate(value, true) : t('students.unscheduled');
+    const stateLabel = value => statusNames[value] || t('students.notStarted');
+    if (!learnerId) {
+      const form = node('form', 'studentSearch'), search = node('input'), submit = node('button', 'secondaryButton', t('students.search'));
+      search.type = 'search'; search.maxLength = 100; search.placeholder = t('students.searchHint');
+      search.setAttribute('aria-label', t('students.searchHint')); submit.type = 'submit';
+      form.append(search, submit);
+      const count = node('p', 'inputHint'), list = node('div', 'studentList');
+      const more = control(t('help.more'), 'secondaryButton', () => load(false)); more.hidden = true;
+      page.append(form, count, list, more);
+      let offset = 0, busy = false, query = '';
+      form.addEventListener('submit', event => { event.preventDefault(); if (!busy) {query = search.value.trim(); void load(true);} });
+      async function load(reset) {
+        if (busy) return; busy = true; submit.disabled = more.disabled = true;
+        if (reset) offset = 0;
+        try {
+          const result = await bridge.request(`admin/students?offset=${offset}&q=${encode(query)}`);
+          if (!current()) return;
+          if (reset) list.replaceChildren();
+          count.textContent = t('students.count', {count: result.total});
+          if (!result.items.length && offset === 0) list.append(emptyBox(t('students.empty')));
+          for (const item of result.items) {
+            const card = node('article', 'courseChoice');
+            card.append(node('h2', '', item.display_name), node('p', '', t('students.topicCounts', {started: item.started_topics, completed: item.completed_topics})),
+              node('p', 'inputHint', [item.is_advanced_learner ? t('account.advancedLearner') : t('account.standardLearner'),
+                item.enabled ? '' : t('students.accountDisabled'), item.purpose === 'test' ? t('account.test') : ''].filter(Boolean).join(' · ')),
+              link(t('students.view'), `/admin/students?learner=${encode(item.learner_id)}`, 'primaryButton'));
+            list.append(card);
+          }
+          offset = result.next_offset; more.hidden = offset === null;
+        } catch (error) { if (current()) list.replaceChildren(errorBox(translateMessage(error.message), () => load(true))); }
+        finally { busy = false; submit.disabled = more.disabled = false; }
+      }
+      await load(true);
+      return;
+    }
+    page.append(link(t('students.back'), '/admin/students', 'subjectBack'));
+    const detail = node('div'); page.append(detail);
+    const refresh = control(t('pause.refresh'), 'secondaryButton', loadDetail); page.append(refresh);
+    let busy = false;
+    async function loadDetail() {
+      if (busy) return; busy = true; refresh.disabled = true;
+      try {
+        const data = await bridge.request('admin/students/' + encode(learnerId));
+        if (!current()) return;
+        detail.replaceChildren(node('h2', '', data.student.display_name),
+          node('p', 'inputHint', t('students.updated', {time: date(data.generated_at)})));
+        if (!data.student.enabled) detail.append(node('p', 'fieldError', t('students.accountDisabled')));
+        const learned = node('section', 'studentSection'); learned.append(node('h2', '', t('students.learned')));
+        if (!data.learned.length && !data.training_learned.length) learned.append(emptyBox(t('students.noLearning')));
+        for (const topic of data.learned) {
+          const card = node('article', 'courseChoice');
+          card.append(node('h3', '', topic.topic_title), node('p', '', `${topic.course_title} · ${stateLabel(topic.status)}`));
+          if (!topic.version_current) card.append(node('p', 'fieldError', t('students.oldVersion')));
+          if (topic.started_at) card.append(node('p', 'inputHint', t('students.startedAt', {time: date(topic.started_at)})));
+          if (topic.completed_at) card.append(node('p', 'inputHint', t('students.completedAt', {time: date(topic.completed_at)})));
+          if (topic.guidance_read) card.append(node('p', '', t('students.guidanceRead')));
+          for (const title of topic.guidance_titles) card.append(node('p', 'inputHint', learningTitle(title)));
+          for (const item of topic.modules) card.append(node('p', '', `${learningTitle(item.title)} · ${stateLabel(item.status)}` +
+            (item.mastery !== null ? ` · ${t('students.mastery', {rating: item.mastery})}` : '') + (item.completed_at ? ` · ${date(item.completed_at)}` : '')));
+          for (const point of topic.points) card.append(node('p', '', `${point.text} · ${point.mastered ? t('atomic.mastered') : t('atomic.unmastered')}`));
+          if (topic.subject_id) card.append(link(t('students.openMaterial'), subjectHref(topic.subject_id, '/topic/' + encode(topic.topic_id)), 'textButton'));
+          learned.append(card);
+        }
+        for (const item of data.training_learned) {
+          const card = node('article', 'courseChoice');
+          card.append(node('h3', '', item.title), node('p', '', item.bank_title),
+            node('p', 'inputHint', t('students.trainingAttempts', {count: item.attempts, time: date(item.completed_at)})));
+          learned.append(card);
+        }
+        detail.append(learned);
+        const schedule = node('section', 'studentSection');
+        schedule.append(node('h2', '', t('students.schedule')), node('p', 'inputHint', t('students.scheduleHint')));
+        const filter = node('select'); filter.setAttribute('aria-label', t('students.filter'));
+        for (const [value, key] of [['all', 'students.all'], ['due', 'students.overdue'], ['future', 'students.future'], ['blocked', 'students.blocked']]) {
+          const option = node('option', '', t(key)); option.value = value; filter.append(option);
+        }
+        const list = node('div', 'studentSchedule'); schedule.append(filter, list); detail.append(schedule);
+        function showSchedule() {
+          list.replaceChildren();
+          const rows = data.reviews.filter(item => filter.value === 'all' ||
+            (filter.value === 'due' && item.overdue) || (filter.value === 'future' && !item.overdue) ||
+            (filter.value === 'blocked' && item.blockers.length));
+          if (!rows.length) list.append(emptyBox(t('students.noReviews')));
+          for (const item of rows) {
+            const card = node('article', 'courseChoice');
+            const kind = item.kind === 'atomic_point' ? t('students.pointReview') : item.kind === 'training' ? t('students.trainingReview') : t('students.moduleReview');
+            card.append(node('h3', '', item.title), node('p', 'inputHint', `${kind} · ${item.course_title} · ${item.topic_title}`),
+              node('p', 'studentDue', t('students.dueAt', {time: date(item.due_at)})),
+              node('p', '', item.active ? t('students.active') : item.overdue ? t('students.overdue') : t('students.future')));
+            if (item.due_at !== item.stored_due_at) card.append(node('p', 'inputHint', t('students.interleaving')));
+            if (item.mastered === false) card.append(node('p', 'inputHint', t('students.initialConsolidation')));
+            for (const reason of item.blockers) card.append(node('p', 'studentBlocked', blockedNames[reason]));
+            list.append(card);
+          }
+        }
+        filter.addEventListener('change', showSchedule); showSchedule();
+        const atoms = node('section', 'studentSection');
+        atoms.append(node('h2', '', t('students.cards')), node('p', 'inputHint', t('students.cardsHint')));
+        if (!data.atomic_cards.length) atoms.append(emptyBox(t('students.noCards')));
+        for (const item of data.atomic_cards) {
+          const card = node('details', 'courseChoice studentAtomicCard'); card.append(node('summary', '', item.title),
+            node('p', 'inputHint', `${item.course_title} · ${item.topic_title}`), node('p', 'studentDue', t('students.earliestDue', {time: date(item.due_at)})));
+          if (item.bundle) card.append(node('p', 'inputHint', t('students.bundle')));
+          for (const point of item.points) card.append(node('p', '', `${point.id} · ${date(point.due_at)} · ${point.mastered ? t('atomic.mastered') : t('atomic.unmastered')}`));
+          for (const reason of item.blockers) card.append(node('p', 'studentBlocked', blockedNames[reason]));
+          atoms.append(card);
+        }
+        detail.append(atoms);
+      } catch (error) { if (current()) detail.replaceChildren(errorBox(translateMessage(error.message), loadDetail)); }
+      finally { busy = false; refresh.disabled = false; }
+    }
+    await loadDetail();
   }
   const feedbackDialog = node("dialog", "feedbackDialog"), feedbackForm = node("form"), feedbackHeading = node("div", "dialogHeading"), feedbackTitle = node("h2", "", t("portal.feedback.122"));
   const feedbackClose = control("×", "iconButton", () => feedbackDialog.close()); feedbackClose.setAttribute("aria-label", t("portal.close.feedback.123")); feedbackHeading.append(feedbackTitle, feedbackClose);

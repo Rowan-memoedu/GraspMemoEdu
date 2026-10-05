@@ -1,4 +1,19 @@
 /* Shared MA navigation; dashboard geometry is independent of the Topic reader. */
+.studentOverview { max-width: 1000px; margin: 24px auto; padding: 0 20px 40px; }
+.studentSearch { display: flex; flex-wrap: wrap; gap: 12px; margin: 24px 0; }
+.studentSearch input { min-width: 0; flex: 1 1 180px; padding: 10px; font: inherit; border: 1px solid #c8d2dc; border-radius: 5px; }
+.studentList { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(260px,100%),1fr)); gap: 16px; }
+.studentOverview .courseChoice { min-width: 0; margin: 14px 0; overflow-wrap: anywhere; }
+.studentSection { margin: 32px 0; }
+.studentSection .courseChoice { min-height: 0; }
+.studentSection .studentAtomicCard { display: block; }
+.studentSection h2 { margin-bottom: 16px; }
+.studentSection select { max-width: 100%; padding: 8px 12px; margin: 10px 0; font: inherit; }
+.studentBlocked { color: #8b4400; }
+.studentDue { font-weight: 600; }
+.studentAtomicCard summary { cursor: pointer; font-weight: 600; }
+.studentAtomicCard summary:focus-visible { outline: 2px solid var(--link-color); }
+@media (max-width:600px) { .studentOverview { padding-inline: 14px; } }
 body { padding-top: 50px; }
 .topRibbon { position: fixed; inset: 0 0 auto; height: 50px; background: #fff; border-bottom: 1px solid #e0e0e0; z-index: 40; }
 .topBarContainer { width: 100%; max-width: 1110px; height: 50px; margin: 0 auto; padding: 0 20px; display: flex; align-items: center; }
