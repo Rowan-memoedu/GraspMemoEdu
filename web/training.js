@@ -1,7 +1,7 @@
-import {t, translateMessage} from './i18n.js?v=1ac6f8835f4d45ce';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=1ac6f8835f4d45ce';
-import {createLearningCache} from './learning-cache.js?v=1ac6f8835f4d45ce';
-import {helpableContent} from './content-report.js?v=1ac6f8835f4d45ce';
+import {t, translateMessage} from './i18n.js?v=7751db6e04572b2f';
+import {questionInput, answerReady, answerEmpty, choiceTypeField} from './question-input.js?v=7751db6e04572b2f';
+import {createLearningCache} from './learning-cache.js?v=7751db6e04572b2f';
+import {helpableContent} from './content-report.js?v=7751db6e04572b2f';
 
 const node = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const button = (text, cls, action) => { const n = node('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
@@ -9,7 +9,7 @@ const encode = encodeURIComponent;
 const query = fields => new URLSearchParams(fields).toString();
 const html = (content, cls = 'courseContent') => { const n = node('div', cls); n.innerHTML = content || ''; return n; };
 const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy', 'training.retire'];
-import {answerEditor, readerFrame} from './learning-ui.js?v=1ac6f8835f4d45ce';
+import {answerEditor, readerFrame} from './learning-ui.js?v=7751db6e04572b2f';
 
 export function createTrainingView(bridge) {
   const {root, request, href, formatDate, getAccess} = bridge;
@@ -180,7 +180,7 @@ export function createTrainingView(bridge) {
       const pending = ['pending', 'running'].includes(state.submission_status);
       const failed = state.submission_status === 'error';
       const refresh = () => {
-        const show = state.can_self_rate && !input.value.trim() && !state.submission_id;
+        const show = state.can_self_rate && answerEmpty(input) && !state.submission_id;
         submit.textContent = pending ? t('training.checking') : failed || savedPayload ? t('training.retry') : t(show ? 'training.show' : 'training.submit');
         submit.disabled = pending || !state.can_submit || (!failed && !savedPayload && !show && !answerReady(input));
       };
@@ -194,7 +194,7 @@ export function createTrainingView(bridge) {
         disable(true);
         try {
           let next;
-          if (state.can_self_rate && !input.value.trim() && !state.submission_id && !savedPayload) next = await post('reveal', {attempt_id: state.attempt_id});
+          if (state.can_self_rate && answerEmpty(input) && !state.submission_id && !savedPayload) next = await post('reveal', {attempt_id: state.attempt_id});
           else {
             const payload = savedPayload || {request_id: state.submission_id || crypto.randomUUID(), attempt_id: state.attempt_id, answer: input.value, elapsed_ms: duration};
             savedPayload = payload;
@@ -238,6 +238,8 @@ export function createTrainingView(bridge) {
       if (state.due_at) body.append(node('div', 'feedbackReason', t('training.nextDue', {time: formatDate(state.due_at)})));
       verdict.append(node('span', 'feedbackIcon', correct ? '✓' : '!'), body); main.append(verdict);
     }
+    if (state.phase === 'shown' && state.reference_answer)
+      main.append(node('h3', 'exampleExplanationHeader', t('training.referenceAnswer')), node('pre', 'referenceAnswer', state.reference_answer));
     if (state.explanation_html)
       main.append(node('h3', 'exampleExplanationHeader', t('Explanation · 解析')),
         helpableContent(html(state.explanation_html, 'courseContent trainingExplanation'), reportContext, `explanation:${state.question_id}`, state.version));

@@ -1,10 +1,11 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=1ac6f8835f4d45ce";
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=1ac6f8835f4d45ce';
-import {reportableContent} from './content-report.js?v=1ac6f8835f4d45ce';
-import {createLearningCache} from './learning-cache.js?v=1ac6f8835f4d45ce';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=7751db6e04572b2f";
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=7751db6e04572b2f';
+import {reportableContent} from './content-report.js?v=7751db6e04572b2f';
+import {createLearningCache} from './learning-cache.js?v=7751db6e04572b2f';
 
-import {answerEditor} from './learning-ui.js?v=1ac6f8835f4d45ce';
-import {enhanceTopicContent, mountTopicBacklinks, focusContentNode} from './topic-content.js?v=1ac6f8835f4d45ce';
+import {answerEditor} from './learning-ui.js?v=7751db6e04572b2f';
+import {selfAssessment} from './self-assessment.js?v=7751db6e04572b2f';
+import {enhanceTopicContent, mountTopicBacklinks, focusContentNode} from './topic-content.js?v=7751db6e04572b2f';
 
 applyStaticTranslations();
 
@@ -229,7 +230,7 @@ function retireLegacyConnection() {
   legacyGuestIdentities = [];
 }
 
-async function request(path, { method = "GET", body, bootstrap = false, timeout = REQUEST_TIMEOUT, reauthenticated = false, skipIdentity = false, suppressIdentity = false, identityOverride, identityOperation = false, deploymentRetried = false } = {}) {
+async function request(path, { method = "GET", body, bootstrap = false, timeout = REQUEST_TIMEOUT, reauthenticated = false, skipIdentity = false, suppressIdentity = false, identityOverride, identityOperation = false, deploymentRetried = false, keepalive = false } = {}) {
   const identityEpoch = identityGeneration;
   if (!deploymentReady) await ensureDeployment();
   if (!bootstrap && !skipIdentity) await ensureIdentity();
@@ -253,6 +254,7 @@ async function request(path, { method = "GET", body, bootstrap = false, timeout 
   try {
     const response = await fetch(`${base}/api/${path}`, {
       method,
+      keepalive,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: controller.signal,
@@ -767,7 +769,7 @@ function renderUnavailable() {
 
 async function mutate(path, payload, { pause = false } = {}) {
   if ((pause ? pauseBusy : actionBusy) || !state) return;
-  if (!allowFeature(pause ? "pause_topic" : path === "select" ? "review_history" : "learn")) return;
+  if (!allowFeature(pause ? "pause_topic" : path === "select" ? "review_history" : path === 'reveal' ? 'submit_answer' : "learn")) return;
   const generation = connectionGeneration;
   if (pause) pauseBusy = true;
   else actionBusy = true;
@@ -1271,6 +1273,14 @@ function answerForm(step, stem) {
     form.append(failed);
   }
   form.append(bottom);
+  const controls = selfAssessment(step, input, {
+    disabled: actionBusy || pauseBusy || !can('submit_answer') || Boolean(state.pending_submission_id),
+    reveal: () => mutate('reveal', mutationPayload()),
+    rate: rating => sendSubmission(mutationPayload({answer: `自主评分：${rating}`, self_rating: rating, elapsed_ms: syncAnswerClock()})),
+    explanation: step.revealed && step.explanation_html ? content(step.explanation_html) : null,
+  });
+  if (controls) form.append(controls);
+  if (step.revealed) { submit.hidden = true; if (input.questionControl) input.questionControl.setDisabled(true); else input.disabled = true; }
   return form;
 }
 
@@ -1496,7 +1506,7 @@ async function openTopic(id, subjectId) {
   }
 }
 
-const { initPortal } = await import("./portal.js?v=1ac6f8835f4d45ce");
+const { initPortal } = await import("./portal.js?v=7751db6e04572b2f");
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {
     try { return await fetchGuideAsset(url, subjectId); }

@@ -12,6 +12,11 @@ TYPES = {'text', 'true_false', 'fill_blank', 'matching', 'choice'}
 ID = re.compile(r'[A-Za-z][A-Za-z0-9_-]{0,39}\Z')
 
 
+def is_reproduction(question):
+    spec = question.get('interaction') or {}
+    return spec.get('type', 'text') in ('text', 'fill_blank') and spec.get('grading', 'semantic') == 'semantic'
+
+
 def present_choice(question, presentation_id):
     """One stable option-order policy for courses and standalone banks."""
     spec = question.get('interaction') or {}

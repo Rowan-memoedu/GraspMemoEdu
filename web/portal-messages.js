@@ -710,6 +710,7 @@ export const portalMessages = {
     "复习",
     "Review"
   ],
+  'portal.reviewTask': ['复习任务', 'Review task'],
   "portal.retake": [
     "（重新学习）",
     " (Retake)"

@@ -77,12 +77,24 @@ try {
   if (mode !== 'directory') {
   await go('/settings'); await page.locator('#profileDisplayName').waitFor(); assert.equal(await page.locator('#reviewTimeoutAction').count(), 0);
   await go('/subjects/math/reviews'); await choosePaper();
-  let state = await current(); const deadline = state.timing.deadline_at;
+  let state = await current(); const paperId = state.id;
   await page.locator('#paperstepCard input[value="a"]').check();
   await page.waitForResponse(r => r.url().includes('/review-papers/draft') && r.request().method() === 'POST');
   await page.reload({waitUntil: 'networkidle'}); await page.locator('#paperstepCard').waitFor();
-  assert.equal((await current()).timing.deadline_at, deadline);
+  const beforeRefresh = state.timing.remaining_seconds;
+  assert.ok((await current()).timing.remaining_seconds <= beforeRefresh + 1);
   assert.equal(await page.locator('#paperstepCard input[value="a"]').isChecked(), true);
+  await page.locator('#papertopicHomeLink').click();
+  await page.locator('[data-review-kind]').first().waitFor();
+  await waitUntil(async () => (await api('review-papers/state?paper_id=' + paperId)).timing.paused, 5, 'exit pause persisted');
+  const paused = await api('review-papers/state?paper_id=' + paperId);
+  await page.waitForTimeout(20000);
+  const absent = await api('review-papers/state?paper_id=' + paperId);
+  assert.equal(absent.timing.remaining_seconds, paused.timing.remaining_seconds);
+  await go('/subjects/math/reviews/' + paperId); await page.locator('#paperstepCard').waitFor();
+  assert.ok((await current()).timing.remaining_seconds <= paused.timing.remaining_seconds);
+  assert.ok((await current()).timing.remaining_seconds >= paused.timing.remaining_seconds - 4);
+  pass('Exiting and returning preserves remaining allowance and excludes absence; refresh does not reset the paper');
   await shot('countdown-restored');
   await waitUntil(() => page.getByText('本次复习已完成', {exact: true}).isVisible(), 85, 'browser countdown to automatic submission');
   state = await current(); assert.equal(state.items.filter(i => i.result.correct).length, 1);

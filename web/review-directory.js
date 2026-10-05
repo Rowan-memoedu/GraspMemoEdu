@@ -1,4 +1,4 @@
-import {t, getLanguage} from './i18n.js?v=1ac6f8835f4d45ce';
+import {t, getLanguage} from './i18n.js?v=7751db6e04572b2f';
 
 export function paperNumber(number) {
   if (getLanguage() !== 'zh-CN') return t('paper.number', {number});
@@ -27,7 +27,7 @@ export function renderReviewDirectory(root, data, {courseSidebar, taskTree, star
       question_count: item.count, time_limit_minutes: item.time_limit_minutes || item.timing?.limit_minutes,
       started: item.active || item.can_resume, dependency_ready: !item.paused && item.can_resume !== false,
       progress: item.count && item.done ? item.done / item.count * 100 : 0}));
-    taskTree(container, {...data, tasks}, {review: true, label, sourceOrder: data.source_order,
+    taskTree(container, {...data, tasks}, {review: true, label: t('portal.reviewTask'), sourceOrder: data.source_order,
       start: task => start(task.entry), startLabel: t(data.all_materials ? 'admin.enterCard' : 'paper.start')});
   }
   for (const [kind, label] of [['atomic', 'paper.atomicCards'], ['training', 'training.reviewCards']]) {

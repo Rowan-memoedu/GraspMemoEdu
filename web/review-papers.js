@@ -1,20 +1,45 @@
-import {t, translateMessage} from './i18n.js?v=1ac6f8835f4d45ce';
-import {answerEditor, readerFrame} from './learning-ui.js?v=1ac6f8835f4d45ce';
-import {answerReady, questionInput, choiceTypeField} from './question-input.js?v=1ac6f8835f4d45ce';
-import {createLearningCache} from './learning-cache.js?v=1ac6f8835f4d45ce';
-import {helpableContent, reportableContent} from './content-report.js?v=1ac6f8835f4d45ce';
+import {t, translateMessage} from './i18n.js?v=7751db6e04572b2f';
+import {answerEditor, readerFrame} from './learning-ui.js?v=7751db6e04572b2f';
+import {answerReady, questionInput, choiceTypeField} from './question-input.js?v=7751db6e04572b2f';
+import {createLearningCache} from './learning-cache.js?v=7751db6e04572b2f';
+import {helpableContent, reportableContent} from './content-report.js?v=7751db6e04572b2f';
 
 const node = (tag, cls = '', text) => { const x = document.createElement(tag); x.className = cls; if (text !== undefined) x.textContent = text; return x; };
 const button = (label, cls, action) => { const x = node('button', cls, label); x.type = 'button'; x.addEventListener('click', action); return x; };
 const html = content => { const x = node('div', 'courseContent'); x.innerHTML = content || ''; return x; };
-import {createContentTimer} from './content-timer.js?v=1ac6f8835f4d45ce';
-import {renderReviewDirectory, paperNumber} from './review-directory.js?v=1ac6f8835f4d45ce';
+import {createContentTimer} from './content-timer.js?v=7751db6e04572b2f';
+import {renderReviewDirectory, paperNumber} from './review-directory.js?v=7751db6e04572b2f';
+import {selfAssessment} from './self-assessment.js?v=7751db6e04572b2f';
 
 export function createPaperView({root, request, href, getAccess, formatDate, progressChanged, courseSidebar, taskTree}) {
   const template = document.getElementById('appLayout').cloneNode(true);
   let epoch = 0, reader = null, state = null, selected = 0, pollTimer, saveTimer, input = null, since = null;
   let access, cache, dirty = new Map(), chain = Promise.resolve(), busy = false;
   let contentTimer = null, timeoutSync = false, timeoutRetry = null, timerElement = null;
+  let activityTimer = null, activitySession = null, activityChain = Promise.resolve();
+  function activity(active, keepalive = false) {
+    if (!state?.timing || state.phase !== 'answer' || !activitySession) return Promise.resolve();
+    const body = {paper_id: state.id, session_id: activitySession, active};
+    const subject = state.subject, e = epoch;
+    // Capture the paper's subject before routing changes the portal scope.
+    activityChain = activityChain.catch(() => {}).then(async () => {
+      const next = await request(`review-papers/activity?subject_id=${encodeURIComponent(subject)}`, {method: 'POST', body, keepalive});
+      if (e === epoch && state?.id === body.paper_id) {
+        state.timing = next.timing; contentTimer?.update(state.timing);
+        if (next.phase !== 'answer' || next.can_edit === false) { state = next; render(); poll(e); }
+      }
+    });
+    return activityChain;
+  }
+  function heartbeat() {
+    clearTimeout(activityTimer);
+    if (!state?.timing || state.phase !== 'answer') return;
+    activityTimer = setTimeout(() => {
+      if (!document.hidden) void activity(true).catch(error).finally(heartbeat);
+      else heartbeat();
+    }, 5000);
+  }
+  function pagehide() { remember(); clock(); void activity(false, true).catch(() => {}); }
   const key = (kind, suffix = '') => `graspmemoedu:papers:${access?.learner_id}:${kind}:${state?.id || 'open'}:${suffix}`;
   const read = (kind, suffix) => cache?.read(localStorage, key(kind, suffix));
   const save = (kind, suffix, value) => cache?.write(localStorage, key(kind, suffix), value);
@@ -35,16 +60,23 @@ export function createPaperView({root, request, href, getAccess, formatDate, pro
   }
   function remember() {
     if (!input || !state || state.phase !== 'answer' || state.can_edit === false || state.items[selected].completed) return;
+    if (state.items[selected].revealed) return;
     clock(); const item = state.items[selected]; item.answer = input.value;
     const draft = {index: selected, answer: item.answer, elapsed_ms: item.elapsed_ms};
     dirty.set(selected, draft); save('draft', selected, JSON.stringify(draft));
     if (!document.hidden) since = performance.now();
   }
-  function visibility() { remember(); if (document.hidden) { clock(); void flush().catch(error); } else if (state?.timing) void synchronizeTimeout(); }
+  function visibility() {
+    remember();
+    if (document.hidden) { clock(); void activity(false, true).catch(error); void flush().catch(error); }
+    else if (state?.timing) void activity(true).then(heartbeat).catch(error);
+  }
   function stop() {
+    void activity(false, true).catch(() => {}); clearTimeout(activityTimer); activitySession = null;
     remember(); clock(); ++epoch; clearTimeout(pollTimer); clearTimeout(saveTimer);
     contentTimer?.destroy(); contentTimer = null; timerElement = null; clearTimeout(timeoutRetry); timeoutSync = false;
     document.removeEventListener('visibilitychange', visibility);
+    window.removeEventListener('pagehide', pagehide);
     reader?.destroy(); reader = null; state = null; input = null; dirty = new Map();
     cache?.clear(); chain = Promise.resolve(); busy = false;
     document.getElementById('paperMathStyle')?.remove();
@@ -83,6 +115,9 @@ export function createPaperView({root, request, href, getAccess, formatDate, pro
   async function open(id) {
     const e = ++epoch; access = getAccess(); cache = createLearningCache(() => access);
     state = await request('review-papers/state?paper_id=' + encodeURIComponent(id)); if (e !== epoch) return;
+    activitySession = crypto.randomUUID();
+    if (!document.hidden) await activity(true);
+    if (e !== epoch) return;
     for (const item of state.items) if (!item.completed && state.phase === 'answer' && state.can_edit !== false) {
       try { const draft = JSON.parse(read('draft', item.index)); if (draft) { Object.assign(item, draft); dirty.set(item.index, draft); } } catch {}
     }
@@ -97,7 +132,8 @@ export function createPaperView({root, request, href, getAccess, formatDate, pro
     timerElement = node('div', 'contentTimer inputHint'); timerElement.id = 'paperTimeLimit';
     timerElement.setAttribute('role', 'timer'); reader.refs.stepCard.before(timerElement);
     contentTimer = createContentTimer({element: timerElement, render: renderTimer, onExpire: () => { void synchronizeTimeout(); }});
-    document.addEventListener('visibilitychange', visibility); render(); poll(e);
+    document.addEventListener('visibilitychange', visibility); window.addEventListener('pagehide', pagehide);
+    render(); poll(e); heartbeat();
   }
   function renderTimer(element, timing) {
     const seconds = timing.remaining_seconds;
@@ -170,6 +206,33 @@ export function createPaperView({root, request, href, getAccess, formatDate, pro
     } catch (failure) { error(failure); }
     finally { if (e === epoch) busy = false; }
   }
+  async function revealCurrent() {
+    if (busy) return;
+    const e = epoch; busy = true; remember(); clock();
+    try {
+      await flush();
+      const next = await post('reveal', {paper_id: state.id, index: selected, expected_revision: state.revision});
+      if (e !== epoch) return;
+      state = next; render();
+    } catch (failure) { if (e === epoch) error(failure); }
+    finally { if (e === epoch) busy = false; }
+  }
+  async function rateCurrent(rating) {
+    if (busy) return;
+    const e = epoch; busy = true; clock();
+    try {
+      const item = state.items[selected];
+      item.self_rating = rating; item.answer = `自主评分：${rating}`;
+      const draft = {index: selected, answer: item.answer, elapsed_ms: item.elapsed_ms, self_rating: rating};
+      dirty.set(selected, draft); save('draft', selected, JSON.stringify(draft));
+      await flush(); if (e !== epoch) return;
+      busy = false;
+      if (state.mode === 'question') await submit(selected);
+      else if (selected + 1 < state.items.length) await select(selected + 1);
+      else await submit();
+    } catch (failure) { if (e === epoch) error(failure); }
+    finally { if (e === epoch) { busy = false; render(); } }
+  }
   function poll(e) {
     clearTimeout(pollTimer);
     if (state?.phase !== 'grading' || state.job_status === 'error') return;
@@ -216,6 +279,11 @@ export function createPaperView({root, request, href, getAccess, formatDate, pro
       editor.form.addEventListener('submit', event => { event.preventDefault(); if (editor.submit.disabled) return; if (state.mode === 'question') void submit(selected); else if (selected < state.items.length - 1) void select(selected + 1); else void submit(); });
       if (!state.can_submit) { if (input.questionControl) input.questionControl.setDisabled(true); else input.disabled = true; }
       refresh(); if (!document.hidden) since = performance.now();
+      const controls = selfAssessment(item, input, {disabled: !state.can_submit,
+        reveal: revealCurrent, rate: rateCurrent,
+        explanation: item.revealed ? content(item, 'explanation', item.explanation_html) : null});
+      if (controls) main.append(controls);
+      if (item.revealed) { editor.submit.hidden = true; if (input.questionControl) input.questionControl.setDisabled(true); else input.disabled = true; }
     } else if (item.interaction && item.interaction.type !== 'text') {
       main.append(questionInput(item.interaction, {id: 'paperReadAnswer', stem, value: item.answer, disabled: true}).element);
     } else {

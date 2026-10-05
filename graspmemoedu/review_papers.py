@@ -13,8 +13,9 @@ from .review_sources import ReviewSources, fingerprint
 from .service import DomainError
 from .training import packed
 from .training_content import permission_id
-from .content_timing import start_limit, limit_state
+from .content_timing import active_limit, limit_state, update_activity
 from .review_hierarchy import source_trees, public_source
+from .self_assessment import enabled as self_rating_enabled, presentation, reveal as reveal_question
 
 
 class PaperService:
@@ -114,7 +115,7 @@ class PaperService:
         return paper
 
     def _expire(self, con):
-        con.execute("UPDATE review_papers SET phase='expired',revision=revision+1 WHERE learner=? AND phase='answer' AND expires_at<? AND json_extract(metadata, '$.timing.deadline_at') IS NULL",
+        con.execute("UPDATE review_papers SET phase='expired',revision=revision+1 WHERE learner=? AND phase='answer' AND expires_at<? AND json_extract(metadata, '$.timing.limit_minutes') IS NULL",
                     (self.learner_id, self._now().isoformat()))
         con.execute("DELETE FROM review_reservations WHERE learner=? AND paper IN (SELECT id FROM review_papers WHERE phase IN ('expired','cancelled','conflict','done'))", (self.learner_id,))
 
@@ -200,6 +201,10 @@ class PaperService:
 
     @staticmethod
     def _answered(item):
+        if item.get('self_rating') is not None:
+            return True
+        if item.get('revealed'):
+            return False
         try:
             parse_answer(item['question'], item['answer'])
             return True
@@ -216,9 +221,29 @@ class PaperService:
 
     def timed_papers(self, subject):
         with closing(self._connect()) as con:
-            return [r[0] for r in con.execute('''SELECT id FROM review_papers WHERE learner=? AND subject=?
-                AND phase='answer' AND json_extract(metadata, '$.timing.deadline_at')<=?''',
-                (self.learner_id, subject, self._now().isoformat()))]
+            ids = [r[0] for r in con.execute("SELECT id FROM review_papers WHERE learner=? AND subject=? AND phase='answer'",
+                                           (self.learner_id, subject))]
+            expired = []
+            for pid in ids:
+                try:
+                    if self._hard_expired(self._row(con, pid, subject)):
+                        expired.append(pid)
+                except DomainError as error:
+                    if error.code != 'feature_forbidden':
+                        raise
+            return expired
+
+    def activity(self, paper_id, session_id, active, subject=None):
+        with self.transaction() as con:
+            paper = self._row(con, paper_id, subject)
+            timing = paper['metadata'].get('timing')
+            if paper['phase'] != 'answer' or not timing:
+                return
+            if not update_activity(timing, self._now(), session_id, active):
+                if active:
+                    raise DomainError('paper_active_elsewhere', '此复习正在另一个页面计时，请先退出该页面。', 409)
+                return
+            con.execute('UPDATE review_papers SET metadata=? WHERE id=?', (packed(paper['metadata']), paper_id))
 
     def open(self, candidate, request_id, subject):
         preferences = self.preferences()
@@ -238,7 +263,7 @@ class PaperService:
             now = self._now()
             metadata = {key: description[key] for key in ('kind', 'paper_type_id', 'paper_number', 'source') if key in description}
             if description['kind'] == 'paper':
-                metadata['timing'] = start_limit(description.get('time_limit_minutes'), now, preferences['timeout_action'])
+                metadata['timing'] = active_limit(description.get('time_limit_minutes'), now, preferences['timeout_action'])
             self.sources.begin(con, items, subject, request_id, now.isoformat())
             for item in items:
                 item.update(answer='', elapsed_ms=0, result=None)
@@ -254,6 +279,7 @@ class PaperService:
             self._expire(con)
             paper = self._row(con, paper_id, subject)
             job = con.execute('SELECT status,reason,request_data FROM paper_submissions WHERE id=?', (paper['job'],)).fetchone()
+            self_rating = self_rating_enabled(self.access, con)
         items = []
         for index, item in enumerate(paper['items']):
             shown = item.get('result') is not None and (self._mode(paper) == 'question' or paper['phase'] in ('done', 'cancelled', 'expired', 'conflict'))
@@ -272,7 +298,13 @@ class PaperService:
                           'elapsed_ms': item['elapsed_ms'], 'result': item['result'] if shown else None,
                           'explanation_html': question.get('explanation_html', '') if shown else None,
                           'answer_display': display_answer(question, item['answer']) if shown else '',
-                          'completed': item.get('result') is not None})
+                          'completed': item.get('result') is not None,
+                          'can_self_rate': self_rating and presentation(question, item)['reproduction'],
+                          'revealed': self_rating and bool(item.get('revealed')),
+                          'reference_answer': presentation(question, item).get('reference_answer') if self_rating else None,
+                          'self_rating': item.get('self_rating')})
+            if self_rating and item.get('revealed'):
+                items[-1]['explanation_html'] = question.get('explanation_html', '')
         return {'id': paper['id'], 'title': paper['title'], 'subject': paper['subject'], 'mode': self._mode(paper),
                 'phase': paper['phase'], 'revision': paper['revision'], 'items': items,
                 'kind': paper['metadata'].get('kind'), 'paper_number': paper['metadata'].get('paper_number'),
@@ -301,6 +333,13 @@ class PaperService:
                 if item.get('result'):
                     raise DomainError('already_answered', '已完成的题目不能更改。', 409)
                 item['answer'], item['elapsed_ms'] = draft['answer'], draft.get('elapsed_ms', 0)
+                rating = draft.get('self_rating')
+                if rating is not None:
+                    if not self_rating_enabled(self.access, con) or not item.get('revealed') or type(rating) is not int or rating not in (1, 2, 3, 4):
+                        raise DomainError('self_rating_forbidden', '请先显示复现题答案，再选择自主评分。', 403)
+                    item['self_rating'] = rating
+                elif item.get('revealed'):
+                    item.pop('self_rating', None)
             con.execute('UPDATE review_papers SET items=?,revision=revision+1,expires_at=? WHERE id=?',
                         (packed(paper['items']), (self._now() + timedelta(hours=24)).isoformat(), paper_id))
 
@@ -308,6 +347,20 @@ class PaperService:
     def _editable(paper, revision):
         if paper['phase'] != 'answer' or paper['revision'] != revision:
             raise DomainError('stale_revision', '复习状态已变化，请重新同步；草稿仍保留。', 409)
+
+    def reveal(self, paper_id, index, revision, subject=None):
+        with self.transaction() as con:
+            paper = self._row(con, paper_id, subject)
+            self._editable(paper, revision)
+            if not self_rating_enabled(self.access, con):
+                raise DomainError('feature_forbidden', 'Show Answer 仅对高阶学习者开放。', 403)
+            if self._hard_expired(paper):
+                raise DomainError('review_time_elapsed', '限时已到，无法显示答案。', 409)
+            if not 0 <= index < len(paper['items']) or paper['items'][index].get('result'):
+                raise DomainError('already_answered', '此题已完成或不存在。', 409)
+            item = paper['items'][index]
+            reveal_question(item['question'], item)
+            con.execute('UPDATE review_papers SET items=?,revision=revision+1 WHERE id=?', (packed(paper['items']), paper_id))
 
     def submission_size(self, data):
         with closing(self._connect()) as con:
@@ -348,6 +401,12 @@ class PaperService:
                 raise DomainError('invalid_answer', '没有可提交的题目。', 422)
             verdicts = {}
             for i in indices:
+                item = paper['items'][i]
+                if item.get('self_rating') is not None:
+                    if not self_rating_enabled(self.access, con):
+                        raise DomainError('feature_forbidden', '自主评分权限已变化。', 403)
+                    verdicts[str(i)] = [item['self_rating'] > 1, '自主评分：' + str(item['self_rating'])]
+                    continue
                 if not self._answered(paper['items'][i]):
                     if timed_out:
                         verdicts[str(i)] = [False, '限时已到，本题未完成作答。']
@@ -389,6 +448,8 @@ class PaperService:
                 if ('submit_answer' not in self.access['features'] or (self._mode(paper) == 'paper'
                         and set(indices) != {i for i, item in enumerate(paper['items']) if not item.get('result')})):
                     raise DomainError('feature_forbidden', '提交权限已变化，请重新进入复习。', 403)
+                if any(paper['items'][i].get('self_rating') is not None for i in indices) and not self_rating_enabled(self.access, con):
+                    raise DomainError('feature_forbidden', '自主评分权限已变化，请重新进入复习。', 403)
                 if paper['phase'] != 'grading' or paper['job'] != submission_id:
                     return
                 if not all(self.sources.unchanged(con, paper['items'][i]) for i in indices):

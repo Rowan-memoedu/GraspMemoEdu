@@ -42,6 +42,7 @@ from .training import TrainingService
 from .review_paper_api import register_paper_routes, PUBLIC_PATHS as PAPER_PATHS
 from .review_papers import PaperService
 from .content_references import ContentReferenceIndex
+from .self_assessment import enabled as self_rating_enabled, protect as protect_assessment
 
 
 class Action(BaseModel):
@@ -59,6 +60,7 @@ class Choice(Action):
 class Answer(Action):
     answer: str = Field(min_length=1, max_length=2000)
     elapsed_ms: int | None = Field(default=None, strict=True, ge=0, le=86400000)
+    self_rating: int | None = Field(default=None, strict=True, ge=1, le=4)
 
 
 class Pause(BaseModel):
@@ -235,7 +237,13 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         state['access'] = access
         features = set(access['features'])
         state['dependency_ready'] = dependency_policy.is_ready(access, state['topic_id'])
+        with closing(learner._connect()) as con:
+            self_rating = self_rating_enabled(access, con) and state['dependency_ready'] and 'submit_answer' in features
         if state.get('training_mode') == 'atomic_retrieval':
+            if state.get('current'):
+                protect_assessment(state['current'], self_rating)
+            for item in state.get('history', []):
+                protect_assessment(item, self_rating)
             if 'review_history' not in features:
                 state['history'] = []
                 if state['phase'] != 'introduction':
@@ -253,6 +261,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                     step['actions'] = (['mastered', 'unmastered'] if step['phase'] == 'choice'
                                        else ['submit'] if step['phase'] == 'answer' else ['continue'])
         for step in state['steps']:
+            protect_assessment(step, self_rating)
             step['actions'] = [action for action in step['actions']
                                if state['dependency_ready'] and action_feature.get(action) in features]
         if state.get('topic_format_version') == 2:
@@ -412,7 +421,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         public_paths = {'/api/health', '/api/access', '/api/access/guest', '/api/access/login', '/api/access/logout',
                         '/api/help-center', '/api/help-replies', '/api/help-replies/read', '/api/help-requests/preview',
                         '/api/materials', '/api/materials/open', '/api/materials/content',
-                        '/api/state', '/api/demo-answer', '/api/guest/reset', '/api/choose', '/api/continue', '/api/select', '/api/pause', '/api/submit',
+                        '/api/state', '/api/demo-answer', '/api/guest/reset', '/api/choose', '/api/continue', '/api/select', '/api/pause', '/api/submit', '/api/reveal',
                         '/api/subjects', '/api/catalog', '/api/catalog/select', '/api/dashboard', '/api/profile', '/api/feedback', '/api/help-requests', '/api/guide', '/api/atomic/reviews'}
         public_paths.update(TRAINING_PATHS)
         public_paths.update(PAPER_PATHS)
@@ -680,6 +689,10 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     def submit(payload: Answer, request: Request):
         access, learner = identity(request, 'submit_answer')
         data = payload.model_dump(exclude_none=True)
+        if data.get('self_rating') is not None:
+            with closing(learner._connect()) as con:
+                if not self_rating_enabled(access, con):
+                    raise DomainError('feature_forbidden', '自主评分仅对高阶学习者开放。', 403)
         with admission_lock:
             with closing(learner._connect()) as con:
                 old = con.execute('SELECT * FROM submissions WHERE id=?', (data['request_id'],)).fetchone()
@@ -701,6 +714,14 @@ def create_app(settings: Settings | None = None, service: LearningService | None
             if result['status'] == 'pending':
                 schedule(learner, result['submission_id'])
         return public_submission(result, access, learner)
+
+    @app.post('/api/reveal')
+    def reveal(payload: Action, request: Request):
+        access, learner = identity(request, 'submit_answer')
+        with closing(learner._connect()) as con:
+            if not self_rating_enabled(access, con):
+                raise DomainError('feature_forbidden', 'Show Answer 仅对高阶学习者开放。', 403)
+        return public_state(learner.reveal(payload.model_dump()), access, learner)
 
     @app.get('/api/submissions/{submission_id}')
     def submission(submission_id: str, request: Request):

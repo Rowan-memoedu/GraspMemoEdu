@@ -287,6 +287,8 @@ class LearningService:
             question = self.question_for_step(saved) if saved['question_id'] else None
             if question:
                 step.update(title=question['title'], html=question['html'], explanation_html=None)
+                from .self_assessment import presentation
+                step.update(presentation(question, saved))
                 step['content_version'] = saved.get('question_bank_revision') or self.course['version']
                 if question.get('interaction'):
                     step['interaction'] = public_interaction(question)
@@ -526,8 +528,11 @@ class LearningService:
             answer = payload.get('answer')
             if not isinstance(answer, str) or not answer.strip() or len(answer) > 2000:
                 raise DomainError('invalid_answer', '请输入有效答案（最多 2000 字）。', 422)
+            from .self_assessment import answer as assessed_answer
             try:
-                parse_answer(self.question_for_step(step), answer)
+                assessed_answer(self.question_for_step(step), step, payload)
+                if payload.get('self_rating') is None:
+                    parse_answer(self.question_for_step(step), answer)
             except (ValueError, TypeError, KeyError) as exc:
                 raise DomainError('invalid_answer', '请完成全部作答，且不要重复使用配对选项。', 422) from exc
             if old:
@@ -542,6 +547,21 @@ class LearningService:
             self._save(con, state)
             row = con.execute('SELECT * FROM submissions WHERE id=?', (submission_id,)).fetchone()
         return self._submission_public(row, state)
+
+    def reveal(self, payload):
+        from .self_assessment import reveal
+        with self._transaction() as con:
+            state = self._load(con)
+            replay, fingerprint = self._request(con, 'reveal', payload)
+            if not replay:
+                self._guard(state, payload)
+                step = self._step(state)
+                if step['phase'] != 'answer' or step['kind'] not in ('example', 'practice'):
+                    raise DomainError('invalid_step', '当前没有可显示答案的题目。', 409)
+                reveal(self.question_for_step(step), step)
+                self._record_action(con, 'reveal', payload, fingerprint)
+                self._save(con, state)
+        return self._public(state)
 
     def _submission_public(self, row, state):
         return {'submission_id': row['id'], 'status': 'pending' if row['status'] == 'running' else row['status'],
@@ -568,7 +588,8 @@ class LearningService:
                 con.execute("UPDATE submissions SET status='discarded',updated_at=? WHERE id=?", (now(), submission_id))
                 return
             question = self.question_for_step(saved)
-        correct, reason = judge_answer(self.judge, question, item['answer'])
+        from .self_assessment import verdict as self_verdict
+        correct, reason = self_verdict(saved, submission_id) or judge_answer(self.judge, question, item['answer'])
         valid = correct is not None
         with self._transaction() as con:
             state = self._load(con)

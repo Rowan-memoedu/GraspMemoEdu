@@ -35,7 +35,7 @@ def reserved_points(con, learner, now=None):
     if not con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='review_reservations'").fetchone():
         return set()
     timed = 'metadata' in {r[1] for r in con.execute('PRAGMA table_info(review_papers)')}
-    limit_clause = " OR json_extract(p.metadata, '$.timing.deadline_at') IS NOT NULL" if timed else ''
+    limit_clause = " OR json_extract(p.metadata, '$.timing.limit_minutes') IS NOT NULL" if timed else ''
     return {r[0] for r in con.execute('''SELECT r.point FROM review_reservations r
         JOIN review_papers p ON p.id=r.paper WHERE r.learner=? AND
         (p.phase='grading' OR (p.phase='answer' AND (? IS NULL OR p.expires_at>?''' + limit_clause + ')))', (learner, now, now))}

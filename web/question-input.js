@@ -1,4 +1,4 @@
-import {t} from './i18n.js?v=1ac6f8835f4d45ce';
+import {t} from './i18n.js?v=7751db6e04572b2f';
 
 const node = (tag, cls, text) => {
   const element = document.createElement(tag); element.className = cls;
@@ -8,6 +8,8 @@ const node = (tag, cls, text) => {
 const parse = value => { try { return JSON.parse(value); } catch { return null; } };
 export const answerReady = input => Boolean(input && !input.disabled && input.value.trim()
   && (!input.questionControl || input.questionControl.complete()));
+export const answerEmpty = input => Boolean(input && (input.questionControl
+  ? input.questionControl.empty() : !input.value.trim()));
 
 // Shared by all learning views, including submitted-answer history.
 export function choiceTypeField(spec) {
@@ -225,6 +227,7 @@ export function questionInput(spec, {id, value = '', stem, disabled = false, for
   normalize();
   input.questionControl = {
     complete,
+    empty: () => spec.type === 'fill_blank' && Object.values(values).every(value => !value.trim()),
     focus: () => (stem?.querySelector('.inlineBlank') || root.querySelector('input,button'))?.focus(),
     setDisabled: value => {
       if (disabled === value) return;

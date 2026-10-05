@@ -1,18 +1,18 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=1ac6f8835f4d45ce";
-import { createReviewView } from "./review.js?v=1ac6f8835f4d45ce";
-import { renderCourseGraph } from "./course-graph.js?v=1ac6f8835f4d45ce";
-import {questionInput, choiceTypeField} from './question-input.js?v=1ac6f8835f4d45ce';
-import {enhanceTopicContent} from './topic-content.js?v=1ac6f8835f4d45ce';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=1ac6f8835f4d45ce';
-import {createCatalogPicker} from './catalog-picker.js?v=1ac6f8835f4d45ce';
-import {createAtomicView} from './atomic.js?v=1ac6f8835f4d45ce';
-import {createTrainingView} from './training.js?v=1ac6f8835f4d45ce';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=1ac6f8835f4d45ce";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=7751db6e04572b2f";
+import { createReviewView } from "./review.js?v=7751db6e04572b2f";
+import { renderCourseGraph } from "./course-graph.js?v=7751db6e04572b2f";
+import {questionInput, choiceTypeField} from './question-input.js?v=7751db6e04572b2f';
+import {enhanceTopicContent} from './topic-content.js?v=7751db6e04572b2f';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=7751db6e04572b2f';
+import {createCatalogPicker} from './catalog-picker.js?v=7751db6e04572b2f';
+import {createAtomicView} from './atomic.js?v=7751db6e04572b2f';
+import {createTrainingView} from './training.js?v=7751db6e04572b2f';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=7751db6e04572b2f";
 
-import {createPaperView} from './review-papers.js?v=1ac6f8835f4d45ce';
+import {createPaperView} from './review-papers.js?v=7751db6e04572b2f';
 
-import {renderTaskTree} from './task-tree.js?v=1ac6f8835f4d45ce';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=1ac6f8835f4d45ce';
+import {renderTaskTree} from './task-tree.js?v=7751db6e04572b2f';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=7751db6e04572b2f';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -48,7 +48,8 @@ export function initPortal(bridge) {
   const timezone = () => profile?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   const query = (fields) => new URLSearchParams(Object.entries(fields).filter(([, value]) => value !== null && value !== undefined && value !== "")).toString();
   const scopedRequest = (path, options, subjectId) => bridge.request(
-    subjectId ? `${path}${path.includes("?") ? "&" : "?"}subject_id=${encode(subjectId)}` : path, options);
+    subjectId && !new URLSearchParams(path.split('?')[1]).has('subject_id')
+      ? `${path}${path.includes("?") ? "&" : "?"}subject_id=${encode(subjectId)}` : path, options);
   const call = (path, options) => scopedRequest(path, options, currentRoute?.subjectId);
   const allowed = (feature) => Boolean(bridge.getAccess()?.features?.includes(feature));
   const canUseHelp = () => Boolean(!bridge.getIdentityProblem() && (bridge.getAccess()?.is_admin ||
@@ -78,7 +79,7 @@ export function initPortal(bridge) {
   const learnHref = () => subjectHref(currentRoute?.subjectId || "math", "/learn");
   const localHref = (path) => {
     const raw = path.replace(/^#/, "");
-    return /^\/(learn|courses|banks|guide|topic|review|reviews)(\/|\?|$)/.test(raw)
+    return /^\/(learn|courses|banks|guide|topic|review|reviews|qa)(\/|\?|$)/.test(raw)
       ? subjectHref(currentRoute?.subjectId || "math", raw) : `#${raw}`;
   };
   const link = (text, href, className = "") => { const item = node("a", className, text); item.href = localHref(href); return item; };
@@ -139,7 +140,9 @@ export function initPortal(bridge) {
     }
   }
   function updateSubjectContext(subject) {
+    const changed = activeSubject?.id !== subject?.id;
     activeSubject = subject;
+    if (changed) { showHelpSummary(null); helpSummaryAt = 0; }
     const home = currentRoute?.path === "/" && !currentRoute.subjectId;
     applySubjectTheme(subject, {home});
     const logo = document.querySelector('.portalLogo');
@@ -154,10 +157,11 @@ export function initPortal(bridge) {
     context.href = subject ? subjectHref(subject.id) : "#/";
     for (const item of document.querySelectorAll(".mainNavigation [data-navigation]")) {
       const section = item.dataset.navigation;
-      item.hidden = section === 'qa' ? !canUseHelp() : !subject;
+      item.hidden = !subject || section === 'qa' && !canUseHelp();
       item.href = subjectHref(section === 'qa' ? subject?.id : subject?.id || "math", `/${section}`);
     }
     $("topicHomeLink").href = learnHref();
+    if (changed && subject) void refreshHelpSummary(true);
   }
   function updateUser() {
     const current = bridge.getAccess();
@@ -170,7 +174,7 @@ export function initPortal(bridge) {
     $("userMenuButton").setAttribute("aria-label", t("portal.userMenu", { name }));
     $("menuDisplayName").textContent = name;
     $("menuRole").textContent = expired ? t("portal.session.expired.14") : current?.is_admin ? t('admin.identity') : current?.role === 'account' ? t(current.is_advanced_learner ? 'account.advancedLearner' : 'account.standardLearner') + ' · ' + t(current.is_student ? 'account.student' : 'account.nonStudent') : t("portal.guest.16");
-    $('qaNavLink').hidden = !canUseHelp();
+    $('qaNavLink').hidden = !activeSubject || !canUseHelp();
     void refreshHelpSummary();
     $('pauseInboxLink').hidden = !current?.is_admin;
     $('studentsLink').hidden = !current?.is_admin;
@@ -187,13 +191,14 @@ export function initPortal(bridge) {
     $('qaNavLink').setAttribute('aria-label', count ? t('help.unreadCount', {count}) : t('help.pageTitle'));
   }
   async function refreshHelpSummary(force = false) {
-    if (!canUseHelp()) { showHelpSummary(null); return; }
+    if (!activeSubject || !canUseHelp()) { showHelpSummary(null); helpSummaryAt = 0; return; }
     if (helpSummaryBusy || document.hidden || (!force && Date.now() - helpSummaryAt < 15000)) return;
     const learner = bridge.getAccess()?.learner_id;
+    const subject = activeSubject.id;
     helpSummaryBusy = true;
     try {
-      const result = await bridge.request('help-center?summary=true');
-      if (learner !== bridge.getAccess()?.learner_id || !canUseHelp()) return;
+      const result = await scopedRequest('help-center?summary=true', undefined, subject);
+      if (learner !== bridge.getAccess()?.learner_id || subject !== activeSubject?.id || !canUseHelp()) return;
       const changed = helpSummary && result.latest_reply_at !== helpSummary.latest_reply_at;
       showHelpSummary(result); helpSummaryAt = Date.now();
       if (changed && result.viewer === 'student') helpFeedRefresh?.();
@@ -296,6 +301,7 @@ export function initPortal(bridge) {
       await basics(ticket, currentRoute.subjectId);
       if (ticket !== sequence) return;
       const { path, params, subjectId } = currentRoute;
+      if (!subjectId && /^\/qa(\/|$)/.test(path)) { location.replace('#/'); return; }
       const subject = subjects.find(item => item.id === subjectId);
       if (subjectId && !subject) throw new Error(t("platform.unknownSubject"));
       updateSubjectContext(subject || null);
@@ -540,7 +546,7 @@ export function initPortal(bridge) {
   }
   function taskSummary(task, history = false, view = {}) {
     const wrap = node("div", "taskSummaryContent"), heading = node("div", "taskHeading");
-    heading.append(taskIcon(task, history), node("strong", "", task.topic_kind === 'introduction' ? t(task.content_update ? 'reader.introductionUpdate' : 'reader.introductionTask') : view.label || `${typeNames[task.type] || t("portal.lesson")}${task.retake ? t("portal.retake") : ""}`));
+    heading.append(taskIcon(task, history), node("strong", "", task.topic_kind === 'introduction' ? t(task.content_update ? 'reader.introductionUpdate' : 'reader.introductionTask') : view.label || `${task.type === 'Review' ? t('portal.reviewTask') : typeNames[task.type] || t("portal.lesson")}${task.retake ? t("portal.retake") : ""}`));
     if (task.reason === "gravity") {
       const reason = node("span", "taskReason", "●"); reason.title = task.reason_message ? translateMessage(task.reason_message) : t("portal.this.task.was.selected.by.the.course.schedule.45"); reason.setAttribute("aria-label", reason.title); heading.append(reason);
     }
@@ -992,7 +998,7 @@ export function initPortal(bridge) {
     async function load(reset = false) {
       if (busy) return; busy = true; more.disabled = refresh.disabled = true;
       try {
-        const result = await bridge.request(`help-center?offset=${reset ? 0 : offset}`);
+        const result = await call(`help-center?offset=${reset ? 0 : offset}`);
         if (ticket !== sequence) return;
         showHelpSummary(result); helpSummaryAt = Date.now();
         if (reset) { list.replaceChildren(); offset = 0; styles = new Set(); ids = new Set(); helpReadObserver?.disconnect(); helpReadObserver = null; }
@@ -1052,7 +1058,7 @@ export function initPortal(bridge) {
         pending ||= {report_id: item.id, request_id: crypto.randomUUID(), expected_revision: revision, message: input.value.trim()};
         replyDrafts.set(item.id, {message: input.value, revision, pending});
         try {
-          const result = await bridge.request('help-replies', {method: 'POST', body: pending});
+          const result = await call('help-replies', {method: 'POST', body: pending});
           if (ticket !== sequence || owner !== bridge.getAccess()?.learner_id) return;
           if (result.status !== 'saved') throw new Error(t('portal.feedback.was.not.confirmed.as.saved.please.try.again.129'));
           revision = result.reply.revision; pending = null; replyDrafts.delete(item.id);
@@ -1070,7 +1076,7 @@ export function initPortal(bridge) {
         if (reading || ticket !== sequence || item.learner_id !== bridge.getAccess()?.learner_id) return;
         reading = true; read.disabled = true;
         try {
-          await bridge.request('help-replies/read', {method: 'POST', body: {report_id: item.id, revision: item.reply.revision}});
+          await call('help-replies/read', {method: 'POST', body: {report_id: item.id, revision: item.reply.revision}});
           if (ticket !== sequence) return;
           status.textContent = t('help.replyReceived'); read.remove(); void refreshHelpSummary(true);
         } catch { reading = false; read.disabled = false; }
@@ -1087,7 +1093,7 @@ export function initPortal(bridge) {
     return card;
   }
   async function renderHelpContent(ticket, reportId) {
-    const result = await bridge.request(`help-center?report_id=${encode(reportId)}`);
+    const result = await call(`help-center?report_id=${encode(reportId)}`);
     if (ticket !== sequence) return;
     const item = result.items[0]; showHelpSummary(result);
     mathStyle(item.math_css);

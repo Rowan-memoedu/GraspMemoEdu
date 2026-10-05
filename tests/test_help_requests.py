@@ -24,6 +24,24 @@ from graspmemoedu.training_content import permission_id
 
 
 class HelpRequestTests(unittest.TestCase):
+    def test_subject_scope_applies_to_feed_counts_details_replies_and_reads(self):
+        saved = self.send().json()
+        for headers in (self.headers, self.admin_headers):
+            scoped = self.client.get('/api/help-center?subject_id=math', headers=headers)
+            self.assertEqual(scoped.status_code, 200, scoped.text)
+            self.assertEqual(scoped.json()['total'], 1)
+            other = self.client.get('/api/help-center?subject_id=physics', headers=headers)
+            self.assertEqual(other.status_code, 200, other.text)
+            self.assertEqual(other.json()['total'], 0)
+            detail = self.client.get('/api/help-center?subject_id=physics&report_id=' + saved['id'], headers=headers)
+            self.assertEqual(detail.status_code, 404, detail.text)
+        reply = {'report_id': saved['id'], 'request_id': str(uuid.uuid4()), 'expected_revision': 0, 'message': 'fixture reply'}
+        self.assertEqual(self.client.post('/api/help-replies?subject_id=physics', headers=self.admin_headers, json=reply).status_code, 404)
+        self.assertEqual(self.client.post('/api/help-replies?subject_id=math', headers=self.admin_headers, json=reply).status_code, 200)
+        read = {'report_id': saved['id'], 'revision': 1}
+        self.assertEqual(self.client.post('/api/help-replies/read?subject_id=physics', headers=self.headers, json=read).status_code, 404)
+        self.assertEqual(self.client.get('/api/help-center?subject_id=math&summary=true', headers=self.headers).json()['unread_count'], 1)
+
     def setUp(self):
         self.temp = temporary_test_directory(); self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name); self.course = synthetic_course(1)

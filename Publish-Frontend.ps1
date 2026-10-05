@@ -11,7 +11,7 @@ $expected = @('.nojekyll','app.js','deployment.json','favicon.svg','index.html',
 $files = @(Get-ChildItem -LiteralPath $ExportDirectory -File -Force -Recurse)
 $expected += @('training.js','training.css','training-messages.js','learning-ui.js')
 $expected += @('review-papers.js','review-paper-messages.js')
-$expected += @('review-directory.js','task-tree.js','content-timer.js')
+$expected += @('review-directory.js','task-tree.js','content-timer.js','self-assessment.js')
 $expected += @('topic-content.js','topic-content.css','topic-callouts.css')
 $vendor = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'scripts/topic-presentation-assets.json') -Raw | ConvertFrom-Json -AsHashtable
 foreach ($name in $vendor.files.Keys) {

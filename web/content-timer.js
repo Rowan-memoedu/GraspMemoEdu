@@ -7,7 +7,7 @@ export function createContentTimer({element, render, onExpire, now = () => perfo
     clear();
     if (!state) { element.hidden = true; return; }
     element.hidden = false;
-    const elapsed = state.finished_at ? 0 : Math.max(0, now() - receivedAt) / 1000;
+    const elapsed = state.finished_at || state.paused ? 0 : Math.max(0, now() - receivedAt) / 1000;
     const remaining = Math.max(0, Math.ceil(state.remaining_seconds - elapsed));
     const timedOut = state.timed_out || remaining === 0;
     render(element, {...state, remaining_seconds: remaining, timed_out: timedOut});

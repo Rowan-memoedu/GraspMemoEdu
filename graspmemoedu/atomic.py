@@ -114,6 +114,8 @@ class AtomicLearningService(LearningService):
         result = {'id': active['id'], 'card_id': card['id'], 'title': card['title'], 'html': card['html'],
                   'point_ids': card['point_ids'], 'phase': active['phase'], 'shown_at': active['shown_at'],
                   'interaction': public_interaction(card)}
+        from .self_assessment import presentation
+        result.update(presentation(card, active))
         if feedback:
             result.update(answer=active.get('answer'), correct=active.get('correct'), reason=active.get('reason'),
                           answer_display=display_answer(card, active.get('answer')),
@@ -260,8 +262,11 @@ class AtomicLearningService(LearningService):
             answer = payload.get('answer')
             if not isinstance(answer, str) or not answer.strip() or len(answer) > 2000:
                 raise DomainError('invalid_answer', '请填写完整答案。', 422)
+            from .self_assessment import answer as assessed_answer
             try:
-                parse_answer(self.questions[active['card_id']], answer)
+                assessed_answer(self.questions[active['card_id']], active, payload)
+                if payload.get('self_rating') is None:
+                    parse_answer(self.questions[active['card_id']], answer)
             except (ValueError, TypeError) as exc:
                 raise DomainError('invalid_answer', '请填写完整且有效的答案。', 422) from exc
             if con.execute('SELECT 1 FROM actions WHERE learner=? AND topic=? AND id=?', (*self.key, request_id)).fetchone():
@@ -277,6 +282,20 @@ class AtomicLearningService(LearningService):
             self._save(con, state)
             row = con.execute('SELECT * FROM submissions WHERE id=?', (request_id,)).fetchone()
             return self._submission_public(row, state)
+
+    def reveal(self, payload):
+        from .self_assessment import reveal
+        with self._transaction() as con:
+            state = self._load(con)
+            replay, fingerprint = self._request(con, 'atomic_reveal', payload)
+            if not replay:
+                self._guard_atomic(state, payload)
+                if state['phase'] != 'answer' or not state['active']:
+                    raise DomainError('invalid_step', '当前没有可显示答案的卡片。', 409)
+                reveal(self.questions[state['active']['card_id']], state['active'])
+                self._record_action(con, 'atomic_reveal', payload, fingerprint)
+                self._save(con, state)
+        return self._public(state)
 
     def _submission_public(self, row, state):
         record = next((r for r in state['history'] if r['id'] == row['step']), None)
@@ -312,9 +331,11 @@ class AtomicLearningService(LearningService):
             if not row:
                 return
             item = dict(row)
+            target = self._load(con).get('active') or {}
             con.execute("UPDATE submissions SET status='running' WHERE id=?", (submission_id,))
         try:
-            correct, reason = judge_answer(self.judge, self.questions[item['question']], item['answer'])
+            from .self_assessment import verdict as self_verdict
+            correct, reason = self_verdict(target, submission_id) or judge_answer(self.judge, self.questions[item['question']], item['answer'])
             if correct is not None and type(correct) is not bool:
                 correct, reason = None, '判题结果无效，请重试；本次不计错。'
         except Exception:

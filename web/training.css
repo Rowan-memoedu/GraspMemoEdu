@@ -11,6 +11,8 @@
 .trainingRating.rating5 { background: #745198; }
 .trainingRating:hover:not(:disabled) { filter: brightness(.93); }
 .trainingRating[aria-pressed="true"] { outline: 2px solid var(--ma-navy); outline-offset: 2px; opacity: 1; }
+.selfAssessment .trainingRatings { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.referenceAnswer { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
 .trainingError { margin: 12px 0; }
 .trainingReviewSection { margin-top: 30px; }
 /* Keep six navigation entries evenly spaced without splitting Chinese labels. */

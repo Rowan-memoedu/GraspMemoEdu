@@ -338,11 +338,15 @@ class HelpRequestStore:
             LEFT JOIN help_reply_reads seen ON seen.report_id=r.id AND seen.learner_id=r.learner_id
             WHERE ''' + ('COALESCE(a.admin_id,c.admin_id)=?' if viewer == 'admin' else 'r.learner_id=?')
 
-    def center(self, access, limit=10, offset=0, summary=False, report_id=None):
+    def center(self, access, limit=10, offset=0, summary=False, report_id=None, subject_id=None):
         viewer = self._viewer(access)
+        self.subjects.authorize_subject(access, subject_id)
         scope = self._center_scope(viewer)
         parameters = (access['learner_id'],)
         scope, parameters = self.visible_scope(scope, parameters, access)
+        if subject_id:
+            scope += " AND json_extract(r.body,'$.subject_id')=?"
+            parameters += (subject_id,)
         with closing(self.access_store._connect()) as con:
             con.execute('BEGIN')
             counts = con.execute('''SELECT COUNT(*) total,
@@ -442,12 +446,21 @@ def register_help_routes(app, catalog, access_store, subjects):
     def help_center(request: Request, limit: int = Query(default=10, ge=1, le=25),
                     offset: int = Query(default=0, ge=0, le=1000000), summary: bool = False,
                     report_id: str | None = Query(default=None, min_length=1, max_length=128)):
-        return store.center(access_store.resolve(request.headers.get('x-learning-identity')), limit, offset, summary, report_id)
+        return store.center(access_store.resolve(request.headers.get('x-learning-identity')), limit, offset, summary, report_id,
+                            request.query_params.get('subject_id'))
 
     @app.post('/api/help-replies')
     def reply_help(payload: HelpReply, request: Request):
-        return store.reply(access_store.resolve(request.headers.get('x-learning-identity')), payload.model_dump())
+        access = access_store.resolve(request.headers.get('x-learning-identity'))
+        subject = request.query_params.get('subject_id')
+        if subject:
+            store.center(access, report_id=payload.report_id, subject_id=subject)
+        return store.reply(access, payload.model_dump())
 
     @app.post('/api/help-replies/read')
     def read_reply(payload: HelpReplyRead, request: Request):
-        return store.mark_read(access_store.resolve(request.headers.get('x-learning-identity')), payload.model_dump())
+        access = access_store.resolve(request.headers.get('x-learning-identity'))
+        subject = request.query_params.get('subject_id')
+        if subject:
+            store.center(access, report_id=payload.report_id, subject_id=subject)
+        return store.mark_read(access, payload.model_dump())

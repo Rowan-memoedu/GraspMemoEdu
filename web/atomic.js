@@ -1,7 +1,8 @@
-import {t, translateMessage} from './i18n.js?v=1ac6f8835f4d45ce';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=1ac6f8835f4d45ce';
-import {reportableContent, helpableContent} from './content-report.js?v=1ac6f8835f4d45ce';
-import {createLearningCache} from './learning-cache.js?v=1ac6f8835f4d45ce';
+import {t, translateMessage} from './i18n.js?v=7751db6e04572b2f';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=7751db6e04572b2f';
+import {selfAssessment} from './self-assessment.js?v=7751db6e04572b2f';
+import {reportableContent, helpableContent} from './content-report.js?v=7751db6e04572b2f';
+import {createLearningCache} from './learning-cache.js?v=7751db6e04572b2f';
 
 const node = (tag, cls = '', text) => {
   const el = document.createElement(tag); el.className = cls;
@@ -76,11 +77,12 @@ export function createAtomicView(bridge) {
       if (active(ticket)) { busy = false; render(); notice(translateMessage(error.message)); }
     } finally { if (active(ticket)) { busy = false; schedule(); } }
   }
-  async function submit(input) {
-    if (busy || !answerReady(input)) return;
+  async function submit(input, rating = null) {
+    if (busy || rating === null && !answerReady(input)) return;
     const ticket = epoch;
     const saved = savedSubmission();
-    const body = saved?.step_id === state.active_step_id ? saved : {...payload(), answer: input.value};
+    const body = saved?.step_id === state.active_step_id ? saved : {...payload(),
+      answer: rating === null ? input.value : `自主评分：${rating}`, ...(rating === null ? {} : {self_rating: rating})};
     write(submissionKey(), JSON.stringify(body)); busy = true; failure = null; render();
     try {
       const result = await call('submit', {method: 'POST', body});
@@ -123,6 +125,13 @@ export function createAtomicView(bridge) {
     form.addEventListener('submit', event => { event.preventDefault(); if (!disabled) void submit(input); });
     if (!history && question.phase === 'answer') form.append(send);
     box.append(form);
+    if (!history && question.phase === 'answer') {
+      const controls = selfAssessment(question, input, {disabled,
+        reveal: () => mutate('reveal'), rate: rating => submit(input, rating),
+        explanation: question.revealed ? marked(question.explanation_html, `explanation:${question.card_id}`, question.card_id) : null});
+      if (controls) box.append(controls);
+      if (question.revealed) { send.hidden = true; if (input.questionControl) input.questionControl.setDisabled(true); else input.disabled = true; }
+    }
     if (!history && question.phase === 'answer' && question.interaction?.type === 'choice') {
       box.append(node('p', 'inputHint', t('question.choiceHint')));
     }

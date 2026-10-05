@@ -22,7 +22,7 @@ class PublicExportTests(unittest.TestCase):
             self.assertTrue({'training.js', 'training.css', 'training-messages.js', 'learning-ui.js'} <= {p.name for p in output.iterdir()})
             self.assertTrue({'review-papers.js', 'review-paper-messages.js'} <= {p.name for p in output.iterdir()})
             self.assertTrue({'review-directory.js', 'task-tree.js', 'content-timer.js'} <= {p.name for p in output.iterdir()})
-            self.assertEqual({p.name for p in output.iterdir()} - {'training.js', 'training.css', 'training-messages.js', 'learning-ui.js', 'review-papers.js', 'review-paper-messages.js', 'review-directory.js', 'task-tree.js', 'content-timer.js'},
+            self.assertEqual({p.name for p in output.iterdir()} - {'training.js', 'training.css', 'training-messages.js', 'learning-ui.js', 'review-papers.js', 'review-paper-messages.js', 'review-directory.js', 'task-tree.js', 'content-timer.js', 'self-assessment.js'},
                              {'.nojekyll', 'app.js', 'deployment.json', 'favicon.svg', 'index.html', 'portal.js', 'review.js', 'atomic.js','learning-cache.js', 'question-input.js', 'content-report.js', 'help-feedback.js', 'catalog-picker.js', 'portal.css', 'subjects.js', 'subjects.css', 'styles.css', 'i18n.js', 'reader-messages.js', 'portal-messages.js', 'static-messages.js', 'course-graph.js', 'course-graph.css', 'topic-content.js', 'topic-content.css', 'topic-callouts.css', 'vendor'})
             self.assertEqual(json.loads((output / 'deployment.json').read_text()),
                              {'api_origin': 'https://example.trycloudflare.com'})

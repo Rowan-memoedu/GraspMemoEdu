@@ -1,8 +1,9 @@
-import { t, translateMessage, learningTitle } from './i18n.js?v=1ac6f8835f4d45ce';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=1ac6f8835f4d45ce';
-import {reportableContent} from './content-report.js?v=1ac6f8835f4d45ce';
-import {createLearningCache} from './learning-cache.js?v=1ac6f8835f4d45ce';
-import {enhanceTopicContent} from './topic-content.js?v=1ac6f8835f4d45ce';
+import { t, translateMessage, learningTitle } from './i18n.js?v=7751db6e04572b2f';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=7751db6e04572b2f';
+import {selfAssessment} from './self-assessment.js?v=7751db6e04572b2f';
+import {reportableContent} from './content-report.js?v=7751db6e04572b2f';
+import {createLearningCache} from './learning-cache.js?v=7751db6e04572b2f';
+import {enhanceTopicContent} from './topic-content.js?v=7751db6e04572b2f';
 
 const node = (tag, cls = '', text) => {
   const item = document.createElement(tag); item.className = cls;
@@ -243,6 +244,13 @@ export function createReviewView(bridge) {
         : question.interaction?.grading === 'semantic' ? 'question.semanticHint'
         : structured ? 'question.completeHint' : '只要描述清楚正确答案的形式即可，表达方式不限，夹杂口语也没关系。Ctrl + Enter 提交。')));
       card.append(form);
+      const controls = selfAssessment(question, input, {disabled: busy || !can('submit_answer'),
+        reveal: () => mutate('reveal', payload()),
+        rate: rating => mutate('submit', {...payload(), answer: `自主评分：${rating}`, self_rating: rating, elapsed_ms: tick(true)}),
+        explanation: question.revealed ? reportableContent(content(question.explanation_html, state.content_references), reportContext,
+          `explanation:${questionId}`, question.content_version || state.course_version) : null});
+      if (controls) card.append(controls);
+      if (question.revealed) { if (input.questionControl) input.questionControl.setDisabled(true); else input.disabled = true; }
     }
     if (isCurrent && state.pending_submission_id) { const waiting = node('p', 'waiting', t('review.judging')); waiting.setAttribute('role', 'status'); card.append(waiting); }
     if (!state.actions.length && state.dependency_ready === false) card.append(node('p', 'featureNotice', translateMessage('请先完成前置知识的学习和待复习内容，并解除前置知识的暂停状态。')));
@@ -260,6 +268,7 @@ export function createReviewView(bridge) {
     layout.append(renderHistory(), main); root.replaceChildren(layout);
     const input = root.querySelector('#reviewAnswerInput'), send = root.querySelector('#reviewSubmitButton');
     if (send) send.disabled = busy || !answerReady(input) || !can('submit_answer');
+    if (send && state.practice.revealed) send.hidden = true;
     if (focus && input && !input.disabled) { input.focus({preventScroll: true}); input.setSelectionRange(...focus); }
     let css = document.getElementById('reviewMathStyle'); if (!css) { css = node('style'); css.id = 'reviewMathStyle'; document.head.append(css); }
     css.textContent = state.math_css || '';

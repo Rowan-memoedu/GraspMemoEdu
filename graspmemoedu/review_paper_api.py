@@ -13,7 +13,7 @@ from .service import DomainError
 from .training import TrainingService
 from .training_content import permission_id
 
-PUBLIC_PATHS = {'/api/review-papers/' + part for part in ('inbox', 'open', 'state', 'draft', 'submit', 'cancel', 'preferences')}
+PUBLIC_PATHS = {'/api/review-papers/' + part for part in ('inbox', 'open', 'state', 'draft', 'submit', 'cancel', 'preferences', 'activity', 'reveal')}
 
 
 class Model(BaseModel):
@@ -33,6 +33,17 @@ class Draft(Model):
     index: int = Field(strict=True, ge=0, le=59)
     answer: str = Field(max_length=2000)
     elapsed_ms: int = Field(default=0, strict=True, ge=0, le=86400000)
+    self_rating: int | None = Field(default=None, strict=True, ge=1, le=4)
+
+
+class Reveal(Paper):
+    index: int = Field(strict=True, ge=0, le=59)
+    expected_revision: int = Field(strict=True, ge=0)
+
+
+class Activity(Paper):
+    session_id: str = Field(min_length=1, max_length=100)
+    active: bool = Field(strict=True)
 
 
 class SaveDraft(Paper):
@@ -166,6 +177,18 @@ def register_paper_routes(app, training, catalog, dependencies, access_store, su
         if backend.timeout_submission(payload.paper_id, subject):
             return current_state(request, backend, payload.paper_id, subject)
         backend.save(payload.paper_id, payload.expected_revision, [a.model_dump() for a in payload.answers], subject)
+        return current_state(request, backend, payload.paper_id, subject)
+
+    @app.post('/api/review-papers/activity')
+    def activity(payload: Activity, request: Request):
+        backend, subject = context(request, 'learn')
+        backend.activity(payload.paper_id, payload.session_id, payload.active, subject)
+        return current_state(request, backend, payload.paper_id, subject)
+
+    @app.post('/api/review-papers/reveal')
+    def reveal(payload: Reveal, request: Request):
+        backend, subject = context(request, 'submit_answer')
+        backend.reveal(payload.paper_id, payload.index, payload.expected_revision, subject)
         return current_state(request, backend, payload.paper_id, subject)
 
     @app.post('/api/review-papers/submit')

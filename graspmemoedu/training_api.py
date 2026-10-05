@@ -72,7 +72,8 @@ def register_training_routes(app, training, access_store, subjects, service_for,
                 and (not request.query_params.get('subject_id') or bank['subject_id'] == request.query_params['subject_id'])]
 
     def self_enabled(access, backend):
-        return 'training_self_rating' in access['features'] and backend.preferences()['self_rating_enabled']
+        return ('training_self_rating' in access['features'] and feature_eligible(access, 'training_self_rating')
+                and backend.preferences()['self_rating_enabled'])
 
     def state(request, access, backend, attempt_id):
         with closing(backend._connect()) as con:

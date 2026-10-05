@@ -8,7 +8,7 @@ import sqlite3
 
 from .fsrs_engine import FSRSEngine, utc_time
 from .judging import judge_answer
-from .question_types import parse_answer, public_interaction, display_answer, present_choice
+from .question_types import parse_answer, public_interaction, display_answer, present_choice, is_reproduction, demo_answer
 from .service import DomainError
 from .learning_storage import administrator
 from .review_cards import register_point, require_unreserved
@@ -150,7 +150,8 @@ class TrainingService:
                 'question': {'id': question['id'], 'title': question.get('title', question['id']),
                              'html': question['html'], 'interaction': public_interaction(question)},
                 'explanation_html': question['explanation_html'] if revealed else None,
-                'can_self_rate': self_rating and question.get('interaction', {}).get('type', 'text') == 'text',
+                **({'reference_answer': display_answer(question, demo_answer(question))} if revealed else {}),
+                'can_self_rate': self_rating and is_reproduction(question),
                 'submission_id': row['submission_id'], 'submission_status': submission['status'] if submission else None,
                 'answer': submission['answer'] if submission else '',
                 'answer_display': display_answer(question, submission['answer']) if submission else '',
@@ -269,8 +270,8 @@ class TrainingService:
     def reveal(self, attempt_id):
         with self.transaction() as con:
             row = self._attempt(con, attempt_id)
-            if json.loads(row['snapshot']).get('interaction', {}).get('type', 'text') != 'text':
-                raise DomainError('self_rating_forbidden', '只有问答题支持高阶学习者作答。', 403)
+            if not is_reproduction(json.loads(row['snapshot'])):
+                raise DomainError('self_rating_forbidden', '只有复现题支持高阶学习者自主评分。', 403)
             if row['submission_id']:
                 raise DomainError('training_already_answered', '本次作答已提交。', 409)
             if row['phase'] == 'answer':

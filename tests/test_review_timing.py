@@ -15,12 +15,25 @@ class TimedPaperTests(unittest.TestCase):
     service = paper_tests.PaperTests.service
     prime = paper_tests.PaperTests.prime
     inbox = paper_tests.PaperTests.inbox
-    open_paper = paper_tests.PaperTests.open_paper
     draft = paper_tests.PaperTests.draft
     submit_paper = paper_tests.PaperTests.submit_paper
     memories = paper_tests.PaperTests.memories
     finish = paper_tests.PaperTests.finish
     payload = paper_tests.PaperTests.payload
+
+    def open_paper(self):
+        paper = paper_tests.PaperTests.open_paper(self)
+        if paper['timing']:
+            self.active_paper = paper['id']
+            paper = self.call('POST', '/api/review-papers/activity', {
+                'paper_id': paper['id'], 'session_id': 'timing-test', 'active': True})
+        return paper
+
+    def advance_active(self, seconds):
+        while seconds:
+            step = min(10, seconds); self.when += timedelta(seconds=step); seconds -= step
+            self.call('POST', '/api/review-papers/activity', {
+                'paper_id': self.active_paper, 'session_id': 'timing-test', 'active': True})
 
     def timed(self):
         self.prime()
@@ -39,7 +52,7 @@ class TimedPaperTests(unittest.TestCase):
         self.timed()
         paper = self.draft(self.open_paper(), 0)
         deadline = paper['timing']['deadline_at']
-        self.when += timedelta(seconds=60)
+        self.advance_active(60)
         state = self.settled(paper)
         self.assertEqual(state['phase'], 'done', state)
         self.assertEqual([i['result']['correct'] for i in state['items']], [True, False])
@@ -51,8 +64,10 @@ class TimedPaperTests(unittest.TestCase):
 
     def test_late_draft_cannot_change_answer_or_extend_deadline(self):
         self.timed(); paper = self.open_paper()
-        self.when += timedelta(minutes=2)
-        late = self.draft(paper)
+        self.advance_active(120)
+        self.call('POST', '/api/review-papers/draft', {'paper_id': paper['id'], 'expected_revision': paper['revision'],
+                  'answers': [{'index': 0, 'answer': '{"selected":"a"}'}]}, 409)
+        late = self.settled_without_wait(paper)
         self.assertTrue(all(not i['answer'] for i in late['items']))
         state = self.settled(paper)
         self.assertTrue(all(not i['result']['correct'] for i in state['items']))
@@ -64,7 +79,7 @@ class TimedPaperTests(unittest.TestCase):
         self.assertTrue(settings['can_choose_timeout'])
         paper = self.open_paper()
         self.call('POST', '/api/review-papers/preferences', {'timeout_action': 'submit'})
-        self.when += timedelta(minutes=2)
+        self.advance_active(120)
         late = self.call('GET', '/api/review-papers/state?paper_id=' + paper['id'])
         self.assertEqual(late['phase'], 'answer')
         self.assertTrue(late['can_edit']); self.assertTrue(late['timing']['timed_out'])
@@ -77,7 +92,7 @@ class TimedPaperTests(unittest.TestCase):
         self.call('POST', '/api/review-papers/preferences', {'mode': 'question'})
         paper = self.draft(self.open_paper(), 0)
         first, _ = self.submit_paper(paper, 0, expected='answer')
-        self.when += timedelta(minutes=2)
+        self.advance_active(120)
         done = self.settled(first)
         self.assertEqual(done['items'][0]['result'], first['items'][0]['result'])
         self.assertFalse(done['items'][1]['result']['correct'])
@@ -121,7 +136,7 @@ class TimedPaperTests(unittest.TestCase):
         learner = self.service().learner_id
         with self.app.state.access_store._transaction() as con:
             con.execute('UPDATE access_principals SET is_advanced_learner=0 WHERE learner_id=?', (learner,))
-        self.when += timedelta(minutes=2)
+        self.advance_active(120)
         state = self.settled(paper)
         self.assertEqual(state['timing']['timeout_action'], 'submit')
         self.assertEqual(state['phase'], 'done')
@@ -137,7 +152,9 @@ class TimedPaperTests(unittest.TestCase):
         candidate = next(i for i in inbox['items'] if i['kind'] == 'paper')
         paper = self.call('POST', '/api/review-papers/open?subject_id=english', {
             'candidate_id': candidate['id'], 'request_id': str(uuid.uuid4())})
-        self.when += timedelta(minutes=2)
+        self.active_paper = paper['id']
+        self.call('POST', '/api/review-papers/activity', {'paper_id': paper['id'], 'session_id': 'timing-test', 'active': True})
+        self.advance_active(120)
         state = self.settled(paper)
         self.assertEqual(state['phase'], 'done', state)
         self.assertEqual([list(i['result']['ratings'].values()) for i in state['items']], [[1], [1], [1]])
@@ -148,3 +165,37 @@ class TimedPaperTests(unittest.TestCase):
         self.when += timedelta(minutes=2)
         self.assertEqual(self.inbox()['active'], [])
         self.call('GET', '/api/review-papers/state?paper_id=' + paper['id'], status=403)
+
+    def test_exit_and_resume_exclude_absence_without_resetting_used_time(self):
+        self.timed(); paper = self.open_paper(); self.advance_active(10)
+        paused = self.call('POST', '/api/review-papers/activity', {
+            'paper_id': paper['id'], 'session_id': 'timing-test', 'active': False})
+        self.assertEqual(paused['timing']['remaining_seconds'], 50)
+        self.when += timedelta(days=3)
+        self.assertEqual(self.settled_without_wait(paper)['timing']['remaining_seconds'], 50)
+        self.assertEqual(self.inbox()['due_count'], 0)
+        self.call('POST', '/api/training/open?subject_id=math', {'request_id': str(uuid.uuid4()),
+                  'bank_id': self.bank['id'], 'group_id': 'group-a', 'question_id': 'choice'}, 409)
+        resumed = self.call('POST', '/api/review-papers/activity', {
+            'paper_id': paper['id'], 'session_id': 'timing-test', 'active': True})
+        self.assertEqual(resumed['timing']['remaining_seconds'], 50)
+        self.advance_active(50)
+        self.assertEqual(self.settled(paper)['phase'], 'done')
+
+    def settled_without_wait(self, paper):
+        return self.call('GET', '/api/review-papers/state?paper_id=' + paper['id'])
+
+    def test_lost_exit_event_stops_at_lease_and_different_tabs_cannot_reset_allowance(self):
+        self.timed(); paper = self.open_paper()
+        self.call('POST', '/api/review-papers/activity', {
+            'paper_id': paper['id'], 'session_id': 'other-tab', 'active': True}, 409)
+        self.when += timedelta(days=1)
+        state = self.settled_without_wait(paper)
+        self.assertEqual(state['phase'], 'answer')
+        self.assertEqual(state['timing']['remaining_seconds'], 45)
+        resumed = self.call('POST', '/api/review-papers/activity', {
+            'paper_id': paper['id'], 'session_id': 'other-tab', 'active': True})
+        self.assertEqual(resumed['timing']['remaining_seconds'], 45)
+        self.call('POST', '/api/review-papers/activity', {
+            'paper_id': paper['id'], 'session_id': 'timing-test', 'active': False})
+        self.assertFalse(self.settled_without_wait(paper)['timing']['paused'])

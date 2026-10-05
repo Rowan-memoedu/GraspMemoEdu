@@ -393,9 +393,12 @@ class ReviewBackend:
             result['question_bank_revision'] = state['question_bank_revision']
         question = self.question_for_session(state)
         result['practice'] = {'id': question['id'], 'title': question['title'], 'html': question['html'],
+                              'phase': state['phase'],
                               'content_version': state.get('question_bank_revision') or self.version,
                               'kind': 'practice', 'explanation_html':
                               question['explanation_html'] if state['phase'] == 'feedback' else None}
+        from .self_assessment import presentation
+        result['practice'].update(presentation(question, state))
         result['feedback'] = state.get('feedback')
         if question.get('interaction'):
             result['practice']['interaction'] = public_interaction(question)
@@ -500,6 +503,8 @@ class ReviewBackend:
                     state['order'].append(self.learning.practice_queue.draw(
                         con, self._module(state['module_id']), exclude=state['order']))
                 state.update(index=state['index'] + 1, phase='answer', feedback=None)
+                state.pop('revealed', None)
+                state.pop('self_assessment', None)
                 self._save_session(con, state)
                 self._record_action(con, data, fingerprint, session_id)
         return self._public(state)
@@ -544,8 +549,11 @@ class ReviewBackend:
             self._guard_session(con, state, data, revision=not bool(old))
             if state['phase'] != 'answer':
                 raise DomainError('already_answered', '当前题目已经获得判定。')
+            from .self_assessment import answer as assessed_answer
             try:
-                parse_answer(self.question_for_session(state, data['question_id']), answer)
+                assessed_answer(self.question_for_session(state, data['question_id']), state, payload)
+                if payload.get('self_rating') is None:
+                    parse_answer(self.question_for_session(state, data['question_id']), answer)
             except (ValueError, TypeError, KeyError) as exc:
                 raise DomainError('invalid_answer', '请完成全部作答，且不要重复使用配对选项。', 422) from exc
             stamp = self._now().isoformat()
@@ -560,6 +568,20 @@ class ReviewBackend:
             row = self._submission(con, submission_id)
         return self._submission_public(row, state)
 
+    def reveal(self, session_id, payload):
+        from .self_assessment import reveal
+        with self.learning._transaction() as con:
+            state = self._session(con, session_id)
+            replay, fingerprint = self._action(con, 'reveal', {**payload, 'session_id': session_id})
+            if not replay:
+                self._guard_session(con, state, payload)
+                if state['phase'] != 'answer':
+                    raise DomainError('invalid_step', '当前没有可显示答案的题目。', 409)
+                reveal(self.question_for_session(state), state)
+                self._record_action(con, payload, fingerprint, session_id)
+                self._save_session(con, state)
+        return self._public(state)
+
     def process_submission(self, submission_id):
         """Worker entry point, sharing the exact Lesson judging contract."""
         with self.learning._transaction() as con:
@@ -570,8 +592,10 @@ class ReviewBackend:
             run_token = uuid.uuid4().hex
             con.execute("UPDATE review_submissions SET status='running',run_token=?,updated_at=? WHERE id=?",
                         (run_token, self._now().isoformat(), submission_id))
-            question = self.question_for_session(self._session(con, item['session']), item['question'])
-        correct, reason = judge_answer(self.learning.judge, question, item['answer'])
+            target = self._session(con, item['session'])
+            question = self.question_for_session(target, item['question'])
+        from .self_assessment import verdict as self_verdict
+        correct, reason = self_verdict(target, submission_id) or judge_answer(self.learning.judge, question, item['answer'])
         with self.learning._transaction() as con:
             latest = self._submission(con, submission_id)
             if latest['status'] != 'running' or latest['run_token'] != run_token:

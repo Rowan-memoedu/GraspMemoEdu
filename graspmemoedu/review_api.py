@@ -8,12 +8,14 @@ from pydantic import BaseModel, ConfigDict, Field
 from .service import DomainError
 from .public_limits import PublicLimitError
 from .question_types import public_interaction, display_answer, demo_answer
+from .self_assessment import enabled as self_rating_enabled, protect as protect_assessment
 
 
 def review_route_feature(path, method):
     routes = ((r'/api/review/begin', 'POST', 'learn'),
               (r'/api/review/sessions/[^/]+', 'GET', 'learn'),
               (r'/api/review/sessions/[^/]+/submit', 'POST', 'submit_answer'),
+              (r'/api/review/sessions/[^/]+/reveal', 'POST', 'submit_answer'),
               (r'/api/review/sessions/[^/]+/continue', 'POST', 'learn'),
               (r'/api/review/sessions/[^/]+/pause', 'POST', 'pause_topic'),
               (r'/api/review/sessions/[^/]+/demo-answer', 'GET', 'submit_answer'),
@@ -41,6 +43,7 @@ class ReviewAction(ReviewPause):
 class ReviewAnswer(ReviewAction):
     answer: str = Field(min_length=1, max_length=2000)
     elapsed_ms: int | None = Field(default=None, strict=True, ge=0, le=86400000)
+    self_rating: int | None = Field(default=None, strict=True, ge=1, le=4)
 
 
 def register_review_routes(app, identity, admission_lock, limits, schedule, outstanding_count, dependency_policy=None, references_for=None):
@@ -72,6 +75,9 @@ def register_review_routes(app, identity, admission_lock, limits, schedule, outs
         action_features = {'submit': 'submit_answer', 'continue': 'learn'}
         state['dependency_ready'] = dependency_policy is None or dependency_policy.is_ready(access, learner.topic_id)
         state['actions'] = [a for a in state['actions'] if state['dependency_ready'] and action_features.get(a) in access['features']]
+        with closing(learner._connect()) as con:
+            protect_assessment(state['practice'], self_rating_enabled(access, con) and state['dependency_ready']
+                               and 'submit_answer' in access['features'])
         if references_for and learner.course.get('topic_format_version') == 2:
             state['content_references'] = references_for(access, learner)
         return state
@@ -121,6 +127,9 @@ def register_review_routes(app, identity, admission_lock, limits, schedule, outs
     def submit(session_id: str, payload: ReviewAnswer, request: Request):
         access, learner = identity(request, 'submit_answer')
         data = payload.model_dump(exclude_none=True)
+        with closing(learner._connect()) as con:
+            if data.get('self_rating') is not None and not self_rating_enabled(access, con):
+                raise DomainError('feature_forbidden', '自主评分仅对高阶学习者开放。', 403)
         backend = learner.review_backend
         with admission_lock:
             with closing(learner._connect()) as con:
@@ -145,6 +154,14 @@ def register_review_routes(app, identity, admission_lock, limits, schedule, outs
             if result['status'] == 'pending':
                 schedule(learner, result['submission_id'], review=True)
         return public_submission(result, access, learner)
+
+    @app.post('/api/review/sessions/{session_id}/reveal')
+    def reveal(session_id: str, payload: ReviewAction, request: Request):
+        access, learner = identity(request, 'submit_answer')
+        with closing(learner._connect()) as con:
+            if not self_rating_enabled(access, con):
+                raise DomainError('feature_forbidden', 'Show Answer 仅对高阶学习者开放。', 403)
+        return public_state(learner.review_backend.reveal(session_id, payload.model_dump()), access, learner)
 
     @app.get('/api/review/submissions/{submission_id}')
     def submission(submission_id: str, request: Request):

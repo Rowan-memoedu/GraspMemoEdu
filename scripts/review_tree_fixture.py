@@ -18,12 +18,14 @@ from graspmemoedu.training import TrainingService
 from graspmemoedu.training_content import fingerprint, validate
 from tests.fixtures import synthetic_course
 from tests.training_fixtures import training_bank
+from tests.atomic_fixtures import atomic_topic
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--port', type=int, default=18859)
+    parser.add_argument('--assessment', action='store_true')
     args = parser.parse_args()
     root = args.output.resolve()
     if root.exists() or not root.is_relative_to(Path('D:/Artifacts/GraspMemoEdu').resolve()) or args.port in (8765, 18768):
@@ -36,6 +38,10 @@ def main():
     for index in range(16):
         q = deepcopy(base[3]); q.update(id=f'choice-{index}', title=f'单选 {index + 1}'); questions.append(q)
     essay = deepcopy(base[0]); essay.update(id='semantic', title='真实语义判题'); questions.append(essay)
+    if args.assessment:
+        blank = deepcopy(base[4]); blank.update(id='semantic-blank', title='复现填空')
+        blank['interaction']['grading'] = 'semantic'; questions.append(blank)
+        exact = deepcopy(base[1]); exact.update(id='exact-text', title='复刻问答'); questions.append(exact)
     bank.update(id='tree-bank-a', title='隔离题库甲', groups=[
         {'id': 'chapter', 'title': '第一章', 'questions': []},
         {'id': 'section', 'title': '第一节', 'parent_id': 'chapter', 'questions': questions}])
@@ -47,9 +53,20 @@ def main():
         item['version'] = fingerprint(item); validate(item)
         (data / 'training-banks' / (item['id'] + '.json')).write_text(json.dumps(item, ensure_ascii=False), encoding='utf-8')
     course = synthetic_course(1); course_path = data / 'topic.json'; course_path.write_text(json.dumps(course), encoding='utf-8')
-    (data / 'catalog.json').write_text(json.dumps({'courses': [{'id': 'tree-course', 'title': '隔离课程',
+    courses = [{'id': 'tree-course', 'title': '隔离课程',
         'units': [{'id': 'chapter', 'title': '第一章', 'topic_ids': [course['id']]}],
-        'topics': [{'id': course['id'], 'path': 'topic.json'}]}]}), encoding='utf-8')
+        'topics': [{'id': course['id'], 'path': 'topic.json'}]}]
+    if args.assessment:
+        atomic = atomic_topic('english', 'assessment-atomic')
+        for card in atomic['flashcards']:
+            card['interaction']['grading'] = 'semantic'
+        (data / 'atomic.json').write_text(json.dumps(atomic), encoding='utf-8')
+        courses.append({'id': 'assessment-english', 'title': '原子隔离课程',
+                        'topics': [{'id': atomic['id'], 'path': 'atomic.json'}]})
+        (data / 'subjects.json').write_text(json.dumps({'subjects': [
+            {'id': 'math', 'course_ids': ['tree-course']},
+            {'id': 'english', 'course_ids': ['assessment-english']}]}), encoding='utf-8')
+    (data / 'catalog.json').write_text(json.dumps({'courses': courses}), encoding='utf-8')
     offset = [timedelta(0)]
     clock = lambda: datetime.now(timezone.utc) + offset[0]
     judge = ExistingJudge(Path('D:/Projects/MathAnswerJudge'))
@@ -59,14 +76,14 @@ def main():
         'enabled': True, 'requirements': {'choice': 8}, 'time_limit_minutes': 1}]
     accounts = {}
     for name, advanced in [('standard', False), ('advanced', True)]:
-        created = app.state.access_store.create_account('树形限时隔离 ' + name, purpose='test', is_advanced_learner=advanced)
+        created = app.state.access_store.create_account('树形限时隔离 ' + name, purpose='test', is_advanced_learner=advanced, is_student=args.assessment)
         accounts[name] = created['invitation_code']
         backend = TrainingService(app.state.training_catalog, data, created['account']['learner_id'], judge, clock=clock)
         for item in banks:
             for q in item['groups'][1]['questions']:
                 attempt = backend.open(item['id'], 'section', q['id'], str(uuid.uuid4()))
                 sid = backend.submit({'request_id': str(uuid.uuid4()), 'attempt_id': attempt,
-                                      'answer': '九' if q['id'] == 'semantic' else '{"selected":"b"}'})
+                                      'answer': '{"a":"九"}' if q['id'] == 'semantic-blank' else '九' if q['id'] in ('semantic', 'exact-text') else '{"selected":"b"}'})
                 backend.process_submission(sid)
                 if backend.state(attempt)['result']['rating'] != 1:
                     raise RuntimeError('Fixture setup did not produce an initial wrong answer')
