@@ -588,6 +588,7 @@ class PublicAccessAcceptanceTests(unittest.TestCase):
                    "/api/select", "/api/pause", "/api/submit", "/api/submissions/{submission_id}",
                    "/api/subjects", "/api/catalog", "/api/catalog/select", "/api/dashboard", "/api/profile", "/api/feedback",
                    "/api/atomic/reviews", "/api/help-requests", "/api/admin/pauses", "/api/admin/pauses/unlock",
+                   "/api/help-center", "/api/help-replies", "/api/help-replies/read",
                    "/api/admin/students", "/api/admin/students/{learner_id}",
                    "/api/materials", "/api/materials/open",
                    "/api/graphs", "/api/graphs/{course_id}",
