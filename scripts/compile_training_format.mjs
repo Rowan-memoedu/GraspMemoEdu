@@ -11,12 +11,18 @@ const [originalPath, formattedPath, auditPath, output] = process.argv.slice(2);
 if (!output) throw new Error('Usage: compile_training_format.mjs ORIGINAL FORMATTED_SOURCE AUDIT OUTPUT');
 const read = async file => JSON.parse((await fs.readFile(file, 'utf8')).replace(/^\uFEFF/, ''));
 const original = await read(originalPath), source = await read(formattedPath), audit = await read(auditPath);
+let previous;
+try { previous = await fs.readFile(output); } catch (e) { if (e.code !== 'ENOENT') throw e; }
 if (original.id !== source.id) throw new Error('Bank identity changed');
 const originals = new Map(original.groups.flatMap(g => g.questions.map(q => [q.id, q])));
 const changed = source.groups.flatMap(g => g.questions).filter(q => q.interaction);
 const render = await renderer(await loadAssets(formattedPath, changed.map(q => q.question + '\n' + (q.interaction.options || []).map(o => o.text).join('\n')).join('\n')), {cacheGlyphs: true});
 const html = text => render.nodes([{head: literalProse(text), lines: [], children: [], line: 1}]);
 const format = {schema: 1, bank_id: original.id, bank_version: original.version, questions: {}, flatten: audit.flatten};
+if (previous) {
+  const old = JSON.parse(previous.toString('utf8').replace(/^\uFEFF/, ''));
+  if (old.bank_id === original.id && old.bank_version === original.version && old.media) format.media = old.media;
+}
 for (const q of changed) {
   const old = originals.get(q.id);
   if (!old || ['title', 'reference_answer', 'answer_type', 'constraints'].some(k => q[k] !== old[k])) throw new Error('Original answer/identity changed: ' + q.id);
@@ -31,8 +37,6 @@ const checked = spawnSync(process.env.GRASPMEMOEDU_PYTHON || 'python', ['-c', co
   encoding: 'utf8', maxBuffer: 64 * 1024 * 1024});
 if (checked.status !== 0) throw new Error(checked.stderr || checked.error?.message || 'Format validation failed');
 if (Buffer.byteLength(checked.stdout) > 32000000) throw new Error('Format exceeds file size limit');
-let previous;
-try { previous = await fs.readFile(output); } catch (e) { if (e.code !== 'ENOENT') throw e; }
 if (previous && !previous.equals(Buffer.from(checked.stdout))) {
   const history = path.join(path.dirname(output), 'format-history'); await fs.mkdir(history, {recursive: true});
   const saved = path.join(history, 'compiled-' + crypto.createHash('sha256').update(previous).digest('hex') + '.json');

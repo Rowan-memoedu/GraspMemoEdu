@@ -37,7 +37,7 @@ def html_layout(html, *, choice=False):
 
         def handle_starttag(self, tag, attrs):
             self.parts.append(self.get_starttag_text())
-            if tag in ('svg', 'math', 'pre', 'code'):
+            if tag in ('svg', 'math', 'pre', 'code', 'figcaption'):
                 self.protected += 1
             if not self.protected and tag in ('p', 'div', 'li', 'br'):
                 self.block_start = True
@@ -47,7 +47,7 @@ def html_layout(html, *, choice=False):
 
         def handle_endtag(self, tag):
             self.parts.append('</' + tag + '>')
-            if tag in ('svg', 'math', 'pre', 'code'):
+            if tag in ('svg', 'math', 'pre', 'code', 'figcaption'):
                 self.protected -= 1
                 self.block_start = False
             elif not self.protected and tag in ('p', 'div', 'li'):
@@ -86,7 +86,9 @@ def html_layout(html, *, choice=False):
     return ''.join(parser.parts)
 
 
-def present_book_question(question):
+def present_book_question(question, media=None):
+    from .training_media import present_media
+    question = present_media(question, media)
     choice = (question.get('interaction') or {}).get('type') == 'choice'
     return {**question, 'question': prose_layout(question['question'], choice=choice),
             'html': html_layout(question['html'], choice=choice),

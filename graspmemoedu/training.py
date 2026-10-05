@@ -138,6 +138,10 @@ class TrainingService:
                 if latest['id'] != attempt_id:
                     raise DomainError('feature_forbidden', '当前账号没有查看历史记录的权限。', 403)
             question = json.loads(row['snapshot'])
+            media = getattr(self.catalog, 'formats', {}).get(row['bank'], {}).get('media')
+            if media:
+                from .training_presentation import present_book_question
+                question = present_book_question(question, media)
             submission = con.execute('SELECT status,reason,answer FROM training_submissions WHERE id=?',
                                      (row['submission_id'],)).fetchone()
             result = json.loads(row['result']) if row['result'] else None

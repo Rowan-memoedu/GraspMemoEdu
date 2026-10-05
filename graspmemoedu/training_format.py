@@ -32,7 +32,8 @@ def flatten(groups, wrappers):
 
 
 def validate_format(value, bank):
-    if (not isinstance(value, dict) or set(value) != {'schema', 'bank_id', 'bank_version', 'questions', 'flatten'}
+    if (not isinstance(value, dict) or set(value) - {'schema', 'bank_id', 'bank_version', 'questions', 'flatten', 'media'}
+            or not {'schema', 'bank_id', 'bank_version', 'questions', 'flatten'} <= set(value)
             or type(value['schema']) is not int or value['schema'] != 1
             or value['bank_id'] != bank['id'] or value['bank_version'] != bank['version']
             or not isinstance(value['questions'], dict)):
@@ -48,6 +49,9 @@ def validate_format(value, bank):
             raise ValueError('Training format must bind to an unchanged source question')
         validate_interaction(variant['interaction'], variant['question'])
     flatten(bank['groups'], value['flatten'])
+    if 'media' in value:
+        from .training_media import validate_media
+        validate_media(value['media'], bank, value['questions'])
     return value
 
 
@@ -57,7 +61,7 @@ def present(bank, value):
         group['questions'] = [{**q, **{k: v for k, v in value['questions'].get(q['id'], {}).items()
                                      if k != 'source_sha256'}} for q in group.get('questions', [])]
     for group in groups:
-        group['questions'] = [present_book_question(q) for q in group['questions']]
+        group['questions'] = [present_book_question(q, value.get('media')) for q in group['questions']]
     return {**bank, 'groups': groups}
 
 

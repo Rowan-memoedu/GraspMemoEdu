@@ -112,6 +112,31 @@ class TrainingFormatTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_archive({k: v for k, v in blobs.items() if k.startswith('training-formats/')})
 
+    def test_media_repair_cleans_old_display_without_rewriting_attempt_snapshot(self):
+        q = self.bank['groups'][1]['questions'][0]
+        q['html'] += '<img src="data:image/png;base64,YWJj"><p>题目续文。</p>'
+        self.bank['version'] = fingerprint(self.bank)
+        original_path = self.root / 'training-banks/isolated-bank.json'
+        original_path.write_text(json.dumps(self.bank), encoding='utf-8')
+        original_bytes = original_path.read_bytes()
+        service = TrainingService(TrainingCatalog(self.root), self.root, 'fixture-learner')
+        attempt = service.open(self.bank['id'], 'group-a', 'essay', str(uuid.uuid4()))
+        with closing(service._connect()) as con:
+            previous = tuple(con.execute('SELECT * FROM training_attempts').fetchone())
+        self.value = {'schema': 1, 'bank_id': self.bank['id'], 'bank_version': self.bank['version'],
+                      'questions': {}, 'flatten': [], 'media': {'watermark_policy': 'preserve_embedded',
+                      'excluded_images': {hashlib.sha256(b'abc').hexdigest(): 'qr_code'}}}
+        self.save()
+        updated = TrainingCatalog(self.root)
+        service = TrainingService(updated, self.root, 'fixture-learner')
+        self.assertNotIn('YWJj', service.state(attempt)['question']['html'])
+        self.assertIn('题目续文', service.state(attempt)['question']['html'])
+        with closing(service._connect()) as con:
+            self.assertEqual(tuple(con.execute('SELECT * FROM training_attempts').fetchone()), previous)
+            validate_saved(con, updated)
+        self.assertEqual(original_path.read_bytes(), original_bytes)
+        self.assertEqual(validate_archive(updated.archive_blobs()), set(updated.archive_blobs()))
+
     def test_singleton_flatten_preserves_order_titles_and_leaf_ids(self):
         groups = [{'id': 'root', 'parent_id': None, 'questions': []},
                   {'id': 'wrapper', 'parent_id': 'root', 'questions': []},
