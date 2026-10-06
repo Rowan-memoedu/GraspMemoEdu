@@ -156,6 +156,7 @@ def register_review_routes(app, identity, admission_lock, limits, schedule, outs
                     limits.record(quota_key)
             if result['status'] == 'pending':
                 schedule(learner, result['submission_id'], review=True)
+                result = backend.submission(result['submission_id'])
         return public_submission(result, access, learner)
 
     @app.post('/api/review/sessions/{session_id}/reveal')

@@ -325,6 +325,13 @@ class AtomicLearningService(LearningService):
                 raise DomainError('locked_step', '未掌握的卡片暂不可查看。', 403)
             return self._submission_public(row, state)
 
+    def instant_submission(self, submission_id):
+        from .judging import instant_question
+        with closing(self._connect()) as con:
+            row = con.execute('SELECT question FROM submissions WHERE id=? AND learner=? AND topic=?',
+                              (submission_id, *self.key)).fetchone()
+            return bool(row and instant_question(self.questions[row['question']]))
+
     def process_submission(self, submission_id):
         with self._transaction() as con:
             row = con.execute("SELECT * FROM submissions WHERE id=? AND learner=? AND topic=? AND status='pending'", (submission_id, *self.key)).fetchone()

@@ -246,6 +246,13 @@ class TrainingService:
         con.execute("UPDATE training_attempts SET phase='done',completed_at=?,result=? WHERE id=?",
                     (now.isoformat(), packed(result), row['id']))
 
+    def instant_submission(self, submission_id):
+        from .judging import instant_question
+        with closing(self._connect()) as con:
+            row = con.execute('SELECT attempt FROM training_submissions WHERE id=? AND learner=?',
+                              (submission_id, self.learner_id)).fetchone()
+            return bool(row and instant_question(json.loads(self._attempt(con, row['attempt'])['snapshot'])))
+
     def process_submission(self, submission_id):
         with self.transaction() as con:
             submission = con.execute("SELECT * FROM training_submissions WHERE id=? AND learner=? AND status='pending'",

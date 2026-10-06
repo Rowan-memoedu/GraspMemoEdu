@@ -609,6 +609,13 @@ class LearningService:
                 raise DomainError('unknown_submission', '未找到此提交。', 404)
             return self._submission_public(row, self._load(con))
 
+    def instant_submission(self, submission_id):
+        from .judging import instant_question
+        with closing(self._connect()) as con:
+            row = con.execute('SELECT step FROM submissions WHERE id=? AND learner=? AND topic=?',
+                              (submission_id, *self.key)).fetchone()
+            return bool(row and instant_question(self.question_for_step(self._step(self._load(con), row['step']))))
+
     def process_submission(self, submission_id):
         with self._transaction() as con:
             row = con.execute('SELECT * FROM submissions WHERE id=? AND learner=? AND topic=?', (submission_id, *self.key)).fetchone()

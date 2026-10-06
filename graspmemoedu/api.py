@@ -323,6 +323,11 @@ def create_app(settings: Settings | None = None, service: LearningService | None
             row = con.execute(f'SELECT status FROM {table} WHERE id=?', (submission_id,)).fetchone()
         if not row or row['status'] != 'pending':
             return
+        backend = learner.review_backend if review else learner
+        if backend.instant_submission(submission_id):
+            # Mechanical answers never wait behind an AI worker or a browser poll.
+            backend.process_submission(submission_id)
+            return
         scheduled_submissions.add(key)
 
         def run():
@@ -749,6 +754,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                     public_limits.record(quota_key)
             if result['status'] == 'pending':
                 schedule(learner, result['submission_id'])
+                result = learner.submission(result['submission_id'])
         return public_submission(result, access, learner)
 
     @app.post('/api/reveal')

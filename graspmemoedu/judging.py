@@ -1,5 +1,10 @@
 """The existing judge contract shared by Lesson and review submissions."""
-from .question_types import deterministic_verdict, semantic_arguments
+from .question_types import deterministic_verdict, semantic_arguments, is_reproduction
+
+
+def instant_question(question):
+    """Classify the server's pinned question without grading or exposing its key."""
+    return not is_reproduction(question)
 
 
 def judge_answer(judge, question, answer):

@@ -585,6 +585,12 @@ class ReviewBackend:
                 self._save_session(con, state)
         return self._public(state)
 
+    def instant_submission(self, submission_id):
+        from .judging import instant_question
+        with closing(self.learning._connect()) as con:
+            row = self._submission(con, submission_id)
+            return instant_question(self.question_for_session(self._session(con, row['session']), row['question']))
+
     def process_submission(self, submission_id):
         """Worker entry point, sharing the exact Lesson judging contract."""
         with self.learning._transaction() as con:

@@ -421,6 +421,18 @@ class PaperService:
                         (data['request_id'], packed(paper['metadata']), paper['id']))
         return data['request_id']
 
+    def instant_submission(self, submission_id):
+        from .judging import instant_question
+        with closing(self._connect()) as con:
+            job = con.execute('SELECT * FROM paper_submissions WHERE id=? AND learner=?',
+                              (submission_id, self.learner_id)).fetchone()
+            if not job:
+                return False
+            paper = self._row(con, job['paper'])
+            verdicts = json.loads(job['verdicts'])
+            return all(str(i) in verdicts or instant_question(paper['items'][i]['question'])
+                       for i in json.loads(job['items']))
+
     def process_submission(self, submission_id):
         with self.transaction() as con:
             job = con.execute('SELECT * FROM paper_submissions WHERE id=? AND learner=?', (submission_id, self.learner_id)).fetchone()
