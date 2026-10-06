@@ -24,7 +24,7 @@ foreach ($name in $vendor.files.Keys) {
 $expected += @($vendor.files.Keys)
 $chat = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'scripts/chat-assets.json') -Raw | ConvertFrom-Json -AsHashtable
 foreach ($name in $chat.files.Keys) {
-    if ($name -notmatch '^vendor/chat/(chat\.js(?:\.LEGAL\.txt)?|LICENSES\.txt|katex\.min\.css|fonts/KaTeX_[A-Za-z-]+\.woff2)$') { throw 'Invalid chat asset path.' }
+    if ($name -notmatch '^vendor/chat/(chat\.js(?:\.LEGAL\.txt)?|LICENSES\.txt|katex\.min\.css|fonts/KaTeX_[A-Za-z0-9-]+\.woff2)$') { throw 'Invalid chat asset path.' }
     $actual = (Get-FileHash -LiteralPath (Join-Path $PSScriptRoot ('web/' + $name)) -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($actual -ne $chat.files[$name]) { throw ('Chat source differs from pinned build: ' + $name) }
 }
