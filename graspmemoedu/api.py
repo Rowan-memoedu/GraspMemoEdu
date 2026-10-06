@@ -517,7 +517,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
             elif path not in ('/api/access/guest', '/api/access/login'):
                 try:
                     access = access_store.resolve(request.headers.get('x-learning-identity'))
-                    if (path in ADMIN_PAUSE_PATHS or student_read) and not access.get('is_admin'):
+                    if (path in ADMIN_PAUSE_PATHS or student_read and path.startswith('/api/admin/')) and not access.get('is_admin'):
                         return deny('feature_forbidden', '此页面仅供管理员使用。')
                 except DomainError as exc:
                     return deny(exc.code, exc.message, exc.status_code)

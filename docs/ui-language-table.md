@@ -2,7 +2,7 @@
 
 本表从当前界面词库自动生成。修改以词库为准，随后重新生成并检查本表。术语约定见 [界面语言规范](ui-language.md)。
 
-共 863 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
+共 867 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
 
 不包括作者课程正文、题目、答案、解析或用户输入。首页的学科双语副标题按约定保留。
 
@@ -701,6 +701,10 @@
 | Open Topic | 打开 主题 |
 | Choose Topic… | 选择 主题… |
 | Fit width | 适应宽度 |
+| My learning progress | 个人学习情况 |
+| View your course progress, question banks, notebook, answer history and review schedule. | 查看自己的课程进度、题库、错题本、作答记录与复习排程。 |
+| Students can view their own learning records here. | 个人学习情况仅供学员查看本人记录。 |
+| This atomic card remains locked until mastered. | 未掌握的原子卡片暂不可查看，掌握后可展开内容。 |
 | Clear selection | 清除选择 |
 
 ## 题库训练

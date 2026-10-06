@@ -58,6 +58,14 @@ state = atoms.advance(case.action(state))
 submission = atoms.submit(case.action(state, answer='错误', elapsed_ms=12000))
 atoms.process_submission(submission['submission_id'])
 case.store.set_enabled(case.second, False)
+# Match an established profile before checking that report browsing is read-only.
+case.app.state.dashboard_store.update_profile(case.store.resolve(case.headers['X-Learning-Identity']), {'timezone': 'Asia/Shanghai'})
+with case.store._transaction() as con:
+    con.execute('UPDATE access_principals SET admin_name=?,display_name=? WHERE learner_id=?',
+                ('Private roster name', 'Learner nickname', case.student))
+case.app.state.admin_students.catalog.courses['math']['units'] = [
+    {'id': 'math', 'title': 'Math fixture', 'parent_id': None, 'topic_ids': []},
+    {'id': 'chapter', 'title': 'Real chapter', 'parent_id': 'math', 'topic_ids': [case.course['id']]}]
 
 def snapshot(request):
     # Learner-owned rows only; administrator authentication does not count as learning.
@@ -73,7 +81,7 @@ def snapshot(request):
 case.app.router.routes.insert(0, Route('/qa/snapshot', snapshot))
 case.app.router.routes.insert(0, Route('/deployment.json', lambda request: JSONResponse({'api_origin': ''})))
 identities = {role: {'identity_token': headers['X-Learning-Identity'], 'access': case.store.resolve(headers['X-Learning-Identity'])}
-              for role, headers in [('admin', case.admin_headers), ('ordinary', case.normal_headers)]}
+              for role, headers in [('admin', case.admin_headers), ('ordinary', case.normal_headers), ('student', case.headers)]}
 identities.update(target=case.student, empty_target=case.second)
 (args.output / 'auth.private.json').write_text(json.dumps(identities), encoding='utf-8')
 (args.output / 'fixture.json').write_text(json.dumps({'data_dir': str(case.root), 'port': args.port}), encoding='utf-8')

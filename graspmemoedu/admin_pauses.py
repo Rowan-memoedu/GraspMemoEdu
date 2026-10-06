@@ -37,7 +37,7 @@ class AdminPauses:
             raise DomainError('feature_forbidden', '此页面仅供管理员使用。', 403)
 
     def _owned(self, con, admin_id, learner_id=None):
-        scope = '''SELECT p.learner_id,p.display_name,t.topic,t.version,t.body
+        scope = '''SELECT p.learner_id,COALESCE(NULLIF(p.admin_name,''),p.display_name) AS display_name,t.topic,t.version,t.body
             FROM access_principals p JOIN topics t ON t.learner=p.learner_id
             LEFT JOIN help_admin_assignments a ON a.learner_id=p.learner_id
             LEFT JOIN help_admin_config c ON c.id=1

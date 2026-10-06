@@ -323,6 +323,8 @@ def main():
     rotate.add_argument('--learner', required=True)
     rotate.add_argument('--output', type=Path, required=True)
     sub.add_parser('account-list', help='查看账号及当前 Topic/功能权限，不显示邀请码')
+    admin_names = sub.add_parser('account-sync-admin-names', help='从标准输入的私密摘要清单同步管理员备注名；不修改学员昵称')
+    admin_names.add_argument('--dry-run', action='store_true')
     usage_report = sub.add_parser('judge-usage-report', help='只读查询每日判题用量，包含零用量账号和游客，不显示邀请码')
     usage_report.add_argument('--day', help='北京时间日期 YYYY-MM-DD；默认今天')
     usage_report.add_argument('--role', choices=('all', 'account', 'guest'), default='all')
@@ -447,6 +449,9 @@ def main():
             output(AccountAdmin(make_access_store(settings)).rotate(args.learner, output=args.output))
         elif args.command == 'account-list':
             output({'accounts': make_access_store(settings).list_principals(accounts_only=True)})
+        elif args.command == 'account-sync-admin-names':
+            from .admin_names import sync_admin_names
+            output(sync_admin_names(make_access_store(settings), json.load(sys.stdin), args.dry_run))
         elif args.command == 'judge-usage-report':
             from .public_limits import judge_usage_report
             output(judge_usage_report(settings.data_dir, day=args.day, role=args.role, learner_id=args.learner))

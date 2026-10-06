@@ -13,6 +13,7 @@ from .question_bank import QuestionBank
 from .training_content import TrainingCatalog, permission_id
 from .feedback_selection import FeedbackContent, content_hash, normalize_selection, validate_selection
 from .help_threads import HelpThreads, HelpMessage, HelpThreadRead
+from .access import admin_display_name
 
 
 class HelpContext(BaseModel):
@@ -135,7 +136,7 @@ class HelpRequestStore:
     def assignments(self):
         with closing(self.access_store._connect()) as con:
             default = con.execute('SELECT admin_id FROM help_admin_config WHERE id=1').fetchone()
-            rows = con.execute('''SELECT p.learner_id,p.display_name,COALESCE(a.admin_id,c.admin_id) AS admin_id,
+            rows = con.execute('''SELECT p.learner_id,COALESCE(NULLIF(p.admin_name,''),p.display_name) AS display_name,COALESCE(a.admin_id,c.admin_id) AS admin_id,
                 a.admin_id IS NULL AS uses_default FROM access_principals p
                 LEFT JOIN help_admin_assignments a ON a.learner_id=p.learner_id
                 LEFT JOIN help_admin_config c ON c.id=1
@@ -288,7 +289,7 @@ class HelpRequestStore:
             total = con.execute('SELECT COUNT(*) ' + scope, parameters).fetchone()[0]
         return {'items': [{**{key: value for key, value in json.loads(row['body']).items()
                               if key not in ('content_html', 'math_css')}, 'id': row['id'], 'learner_id': row['learner_id'],
-                           'created_at': row['created_at']} for row in rows[:limit]],
+                           'created_at': row['created_at'], 'display_name': self._admin_name(row['learner_id'])} for row in rows[:limit]],
                 'total': total, 'next_offset': offset + limit if len(rows) > limit else None}
 
     def content(self, access, report_id):
@@ -303,7 +304,12 @@ class HelpRequestStore:
                 (report_id, access['learner_id'])).fetchone()
         if not row or not self.access_store.test_materials.snapshot_visible(json.loads(row['body'])['request']['topic_id'], access):
             raise DomainError('unknown_help_request', '未找到此提交记录。', 404)
-        return self._render_record(row)
+        return {**self._render_record(row), 'display_name': self._admin_name(row['learner_id'])}
+
+    def _admin_name(self, learner_id):
+        with closing(self.access_store._connect()) as con:
+            row = con.execute('SELECT display_name,admin_name FROM access_principals WHERE learner_id=?', (learner_id,)).fetchone()
+        return admin_display_name(row) if row else learner_id
 
     def _render_record(self, row):
         body = json.loads(row['body'])
@@ -374,7 +380,8 @@ class HelpRequestStore:
             for row in rows[:limit]:
                 reply = ({'message': row['reply_message'], 'revision': row['revision'], 'created_at': row['replied_at']}
                          if row['revision'] is not None else None)
-                items.append({**self._render_record(row), 'reply': reply, **self.threads.state(con, row, access)})
+                items.append({**self._render_record(row), **({'display_name': self._admin_name(row['learner_id'])} if viewer == 'admin' else {}),
+                              'reply': reply, **self.threads.state(con, row, access)})
         return {**result, 'items': items, 'next_offset': offset + limit if not report_id and len(rows) > limit else None}
 
     def reply(self, access, values):

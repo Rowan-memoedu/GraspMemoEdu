@@ -15,10 +15,11 @@ from .atomic_content import GAP_SECONDS
 from .service import DomainError
 from .training_content import permission_id
 from .student_reports import StudentReport, time_zone
+from .access import admin_display_name
 
 
 def public_route(path):
-    return bool(re.fullmatch(r'/api/admin/students(?:/[A-Za-z0-9_-]{1,128}(?:/(?:questions|history))?)?', path))
+    return bool(re.fullmatch(r'/api/(?:admin/students(?:/[A-Za-z0-9_-]{1,128}(?:/(?:questions|history))?)?|student-report(?:/(?:questions|history))?)', path))
 
 
 class AdminStudents:
@@ -33,9 +34,17 @@ class AdminStudents:
             raise DomainError('feature_forbidden', '此页面仅供管理员使用。', 403)
 
     @staticmethod
-    def student(row):
-        return {key: row[key] for key in ('learner_id', 'display_name', 'purpose')} | {
+    def student(row, own=False):
+        return {key: row[key] for key in ('learner_id', 'purpose')} | {
+            'display_name': row['display_name'] if own else admin_display_name(row),
             'enabled': bool(row['enabled']), 'is_advanced_learner': bool(row['is_advanced_learner'])}
+
+    def require_viewer(self, access, learner_id, own=False):
+        if not own:
+            self.require_admin(access)
+        elif (access.get('role') != 'account' or not access.get('is_student') or access.get('is_admin')
+              or learner_id != access.get('learner_id')):
+            raise DomainError('feature_forbidden', '个人学习情况仅供学员查看本人记录。', 403)
 
     @staticmethod
     def started(state):
@@ -52,10 +61,10 @@ class AdminStudents:
             where = "role='account' AND is_student=1 AND is_admin=0"
             args = []
             if query:
-                where += ' AND instr(lower(display_name),lower(?))>0'; args.append(query)
+                where += " AND instr(lower(COALESCE(NULLIF(admin_name,''),display_name)),lower(?))>0"; args.append(query)
             total = con.execute('SELECT COUNT(*) FROM access_principals WHERE ' + where, args).fetchone()[0]
             rows = con.execute('SELECT * FROM access_principals WHERE ' + where +
-                               ' ORDER BY display_name,learner_id LIMIT ? OFFSET ?', (*args, limit, offset)).fetchall()
+                               " ORDER BY COALESCE(NULLIF(admin_name,''),display_name),learner_id LIMIT ? OFFSET ?", (*args, limit, offset)).fetchall()
             items = []
             for row in rows:
                 item = self.student(row)
@@ -123,8 +132,8 @@ class AdminStudents:
             item['started_at'] = min((a.get('created_at') or a.get('started_at') or '' for a in state['attempts']), default=None) or None
         return item
 
-    def detail(self, access, learner_id, days=30, timezone='UTC'):
-        self.require_admin(access)
+    def detail(self, access, learner_id, days=30, timezone='UTC', own=False):
+        self.require_viewer(access, learner_id, own)
         time_zone(timezone)
         current = self.clock()
         with closing(self.access._connect()) as con:
@@ -189,14 +198,22 @@ class AdminStudents:
                         'blockers': blocked[:], 'bundle': len(point_dates) > 1})
             training_learned, training_reviews = self.training_records(con, student, tables, current, access)
             reviews.extend(training_reviews)
-            analytics = StudentReport(self, con, access, student, rows, tables, current).build(reviews, days, timezone)
+            analytics = StudentReport(self, con, access, student, rows, tables, current, own).build(reviews, days, timezone)
+            if own:
+                for item in learned:
+                    for point in item['points']:
+                        if not point['mastered']: point['text'] = point['id']
+                for item in reviews:
+                    if item['kind'] == 'atomic_point' and not item['mastered']: item['title'] = item['id']
+                for item in cards:
+                    if not all(point['mastered'] for point in item['points']): item['title'] = item['id']
         reviews.sort(key=lambda r: (r['due_at'] or '', r['kind'], r['id']))
         learned.sort(key=lambda r: (r['started_at'] or '', r['topic_id']), reverse=True)
-        return {'student': self.student(row), 'generated_at': current.isoformat(), 'learned': learned,
+        return {'student': self.student(row, own), 'generated_at': current.isoformat(), 'learned': learned,
                 'reviews': reviews, 'atomic_cards': cards, 'training_learned': training_learned, 'analytics': analytics}
 
-    def report(self, access, learner_id, view, **options):
-        self.require_admin(access)
+    def report(self, access, learner_id, view, *, own=False, **options):
+        self.require_viewer(access, learner_id, own)
         with closing(self.access._connect()) as con:
             con.execute('PRAGMA query_only=ON')
             con.execute('BEGIN')
@@ -206,7 +223,7 @@ class AdminStudents:
             rows = {r['topic']: r for r in con.execute('SELECT topic,version,body FROM topics WHERE learner=?', (learner_id,))
                     if self.access.test_materials.topic_visible(r['topic'], access)}
             report = StudentReport(self, con, access, self.access._public(row), rows,
-                                   self.dashboard.dependency_policy.tables(con), self.clock())
+                                   self.dashboard.dependency_policy.tables(con), self.clock(), own)
             kind, container = options['kind'], options.get('container')
             if container and not report.visible('training' if kind == 'notebook' else kind, container):
                 raise DomainError('unknown_material', '未找到此内容。', 404)
@@ -266,6 +283,31 @@ class AdminStudents:
 def register_admin_student_routes(app, catalog, access_store, subjects, dashboard, training, clock=None):
     store = AdminStudents(catalog, access_store, subjects, dashboard, training, clock)
     app.state.admin_students = store
+
+    @app.get('/api/student-report')
+    def personal_detail(request: Request, days: int = Query(default=30, ge=1, le=366),
+                        timezone: str = Query(default='UTC', max_length=100)):
+        access = access_store.resolve(request.headers.get('x-learning-identity'))
+        return store.detail(access, access['learner_id'], days, timezone, own=True)
+
+    @app.get('/api/student-report/questions')
+    def personal_questions(request: Request, kind: Literal['topic', 'training', 'notebook'],
+                           container: str | None = Query(default=None, max_length=128), group: str | None = Query(default=None, max_length=128),
+                           state: Literal['all', 'due', 'stopped', 'unanswered', 'wrong'] = 'all',
+                           q: str = Query(default='', max_length=100), offset: int = Query(default=0, ge=0, le=1000000),
+                           limit: int = Query(default=30, ge=1, le=100)):
+        access = access_store.resolve(request.headers.get('x-learning-identity'))
+        return store.report(access, access['learner_id'], 'questions', own=True,
+                            kind=kind, container=container, group=group, state=state, q=q, offset=offset, limit=limit)
+
+    @app.get('/api/student-report/history')
+    def personal_history(request: Request, kind: Literal['topic', 'training'],
+                         container: str = Query(min_length=1, max_length=128), question: str | None = Query(default=None, max_length=128),
+                         version: str | None = Query(default=None, max_length=128), offset: int = Query(default=0, ge=0, le=1000000),
+                         point: str | None = Query(default=None, max_length=128), limit: int = Query(default=10, ge=1, le=30)):
+        access = access_store.resolve(request.headers.get('x-learning-identity'))
+        return store.report(access, access['learner_id'], 'history', own=True,
+                            kind=kind, container=container, question=question, version=version, point=point, offset=offset, limit=limit)
 
     @app.get('/api/admin/students')
     def students(request: Request, limit: int = Query(default=25, ge=1, le=100),

@@ -1,8 +1,8 @@
-import {t, locale, learningTitle, translateMessage} from './i18n.js?v=62c00484c1f3316c';
-import {renderTaskTree, createOutlineGroup} from './task-tree.js?v=62c00484c1f3316c';
-import {questionInput, choiceTypeField} from './question-input.js?v=62c00484c1f3316c';
-import {submittedAnswer, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=62c00484c1f3316c';
-import {enhanceTopicContent} from './topic-content.js?v=62c00484c1f3316c';
+import {t, locale, learningTitle, translateMessage} from './i18n.js?v=5ed0a69081654e02';
+import {renderTaskTree, createOutlineGroup} from './task-tree.js?v=5ed0a69081654e02';
+import {questionInput, choiceTypeField} from './question-input.js?v=5ed0a69081654e02';
+import {submittedAnswer, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=5ed0a69081654e02';
+import {enhanceTopicContent} from './topic-content.js?v=5ed0a69081654e02';
 
 const el = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text != null) n.textContent = text; return n; };
 const button = (text, action, cls = 'secondaryButton') => { const n = el('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
@@ -105,6 +105,7 @@ export function createStudentDashboard(data, {request, formatDate, timezone, day
     card.append(el('p', 'studentVerdict ' + (assessment ? 'self' : item.correct ? 'correct' : 'incorrect'),
       assessment ? t('students.selfRatingValue', {rating: item.self_rating}) : t('students.' + (item.correct ? 'correctAnswer' : 'wrongAnswer'))));
     if (item.elapsed_ms != null) card.append(hint(t('students.attemptTime', {seconds: number(Math.round(item.elapsed_ms / 1000))})));
+    if (item.locked) { card.append(hint(t('students.lockedHistory'))); return card; }
     if (item.content_available) {
       const style = el('style'); style.textContent = item.math_css || ''; card.append(style);
       const stem = el('div', 'courseContent studentQuestion'); stem.innerHTML = item.html;

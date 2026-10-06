@@ -956,6 +956,10 @@ export const portalMessages = {
     "适应宽度",
     "Fit width"
   ],
+  "students.personalTitle": ["个人学习情况", "My learning progress"],
+  "students.personalHint": ["查看自己的课程进度、题库、错题本、作答记录与复习排程。", "View your course progress, question banks, notebook, answer history and review schedule."],
+  "students.studentOnly": ["个人学习情况仅供学员查看本人记录。", "Students can view their own learning records here."],
+  "students.lockedHistory": ["未掌握的原子卡片暂不可查看，掌握后可展开内容。", "This atomic card remains locked until mastered."],
   "graph.clear": [
     "清除选择",
     "Clear selection"

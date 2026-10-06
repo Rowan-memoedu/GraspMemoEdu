@@ -53,6 +53,11 @@ def credential_digest(kind, value):
     return hashlib.sha256((kind + '\0' + value).encode('utf-8')).hexdigest()
 
 
+def admin_display_name(row):
+    """Private roster label; never include it in identity/profile projections."""
+    return (row['admin_name'] if 'admin_name' in row.keys() else '') or row['display_name']
+
+
 class AccessStore:
     """Identity tables share the learning DB so backups preserve their mapping."""
 
@@ -101,6 +106,9 @@ class AccessStore:
                 con.execute('ALTER TABLE access_principals ADD COLUMN is_advanced_learner INTEGER NOT NULL DEFAULT 0 CHECK(is_advanced_learner IN (0,1))')
             if 'is_student' not in columns:
                 con.execute('ALTER TABLE access_principals ADD COLUMN is_student INTEGER NOT NULL DEFAULT 0 CHECK(is_student IN (0,1))')
+            if 'admin_name' not in columns:
+                con.execute("ALTER TABLE access_principals ADD COLUMN admin_name TEXT NOT NULL DEFAULT ''")
+                con.execute("UPDATE access_principals SET admin_name=display_name WHERE role='account'")
             # Legacy lists were explicit snapshots. Never infer that an old
             # all-current-topics list authorized future content or features.
             for name in ('topics_default', 'features_default'):
@@ -279,10 +287,10 @@ class AccessStore:
         invitation = invitation or 'MLW-' + secrets.token_urlsafe(24)
         now = timestamp()
         con.execute('''INSERT INTO access_principals
-            (learner_id,role,display_name,features,topic_ids,invitation_digest,created_at,updated_at,purpose,batch_id,topics_default,features_default,is_admin,is_advanced_learner,is_student)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+            (learner_id,role,display_name,features,topic_ids,invitation_digest,created_at,updated_at,purpose,batch_id,topics_default,features_default,is_admin,is_advanced_learner,is_student,admin_name)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
             (learner_id, 'account', display_name.strip(), json.dumps(features), json.dumps(topic_ids),
-             credential_digest('invitation', invitation), now, now, purpose, batch_id, int(topics_default), int(features_default), int(is_admin), int(is_advanced_learner), int(is_student)))
+             credential_digest('invitation', invitation), now, now, purpose, batch_id, int(topics_default), int(features_default), int(is_admin), int(is_advanced_learner), int(is_student), display_name.strip()))
         row = con.execute('SELECT * FROM access_principals WHERE learner_id=?', (learner_id,)).fetchone()
         return {'account': self._public(row), 'invitation_code': invitation,
                 'notice': '邀请码可重复登录同一账号，请通过可信方式交付给对应学习者。'}

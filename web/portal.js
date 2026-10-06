@@ -1,20 +1,20 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=62c00484c1f3316c";
-import { createReviewView } from "./review.js?v=62c00484c1f3316c";
-import { renderCourseGraph } from "./course-graph.js?v=62c00484c1f3316c";
-import {questionInput, choiceTypeField} from './question-input.js?v=62c00484c1f3316c';
-import {enhanceTopicContent} from './topic-content.js?v=62c00484c1f3316c';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=62c00484c1f3316c';
-import {createCatalogPicker} from './catalog-picker.js?v=62c00484c1f3316c';
-import {createAtomicView} from './atomic.js?v=62c00484c1f3316c';
-import {createTrainingView} from './training.js?v=62c00484c1f3316c';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=62c00484c1f3316c";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=5ed0a69081654e02";
+import { createReviewView } from "./review.js?v=5ed0a69081654e02";
+import { renderCourseGraph } from "./course-graph.js?v=5ed0a69081654e02";
+import {questionInput, choiceTypeField} from './question-input.js?v=5ed0a69081654e02';
+import {enhanceTopicContent} from './topic-content.js?v=5ed0a69081654e02';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=5ed0a69081654e02';
+import {createCatalogPicker} from './catalog-picker.js?v=5ed0a69081654e02';
+import {createAtomicView} from './atomic.js?v=5ed0a69081654e02';
+import {createTrainingView} from './training.js?v=5ed0a69081654e02';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=5ed0a69081654e02";
 
-import {createPaperView} from './review-papers.js?v=62c00484c1f3316c';
+import {createPaperView} from './review-papers.js?v=5ed0a69081654e02';
 
-import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=62c00484c1f3316c';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=62c00484c1f3316c';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=62c00484c1f3316c';
-import {createStudentDashboard} from './student-dashboard.js?v=62c00484c1f3316c';
+import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=5ed0a69081654e02';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=5ed0a69081654e02';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=5ed0a69081654e02';
+import {createStudentDashboard} from './student-dashboard.js?v=5ed0a69081654e02';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -181,6 +181,7 @@ export function initPortal(bridge) {
     void refreshHelpSummary();
     $('pauseInboxLink').hidden = !current?.is_admin;
     $('studentsLink').hidden = !current?.is_admin;
+    $('personalProgressLink').hidden = current?.role !== 'account' || !current?.is_student || current?.is_admin;
     helpReporting?.refresh();
     $('adminLearningNotice').hidden = expired || !current?.is_admin;
     $("menuAccountPurpose").hidden = current?.role !== "account" || current?.purpose !== "test";
@@ -348,6 +349,9 @@ export function initPortal(bridge) {
       } else if (path === '/admin/students') {
         document.title = pageTitle(t('students.title'));
         await renderStudents(ticket, params.get('learner'));
+      } else if (path === '/progress') {
+        document.title = pageTitle(t('students.personalTitle'));
+        await renderStudents(ticket, bridge.getAccess()?.learner_id, true);
       } else if (path === "/settings") {
         document.title = pageTitle(t("nav.settings")); await renderSettings();
       } else if (/^\/courses\/[^/]+\/progress$/.test(path)) {
@@ -1294,18 +1298,21 @@ export function initPortal(bridge) {
     }
     await load(true);
   }
-  async function renderStudents(ticket, learnerId) {
+  async function renderStudents(ticket, learnerId, own = false) {
     const page = node('section', 'studentOverview');
-    page.append(node('h1', 'portalPageTitle', t('students.title')), node('p', 'inputHint', t('students.hint')));
+    page.append(node('h1', 'portalPageTitle', t(own ? 'students.personalTitle' : 'students.title')), node('p', 'inputHint', t(own ? 'students.personalHint' : 'students.hint')));
     root.replaceChildren(page);
-    if (!bridge.getAccess()?.is_admin) { page.append(emptyBox(t('students.adminOnly'))); return; }
+    if (own ? bridge.getAccess()?.role !== 'account' || !bridge.getAccess()?.is_student || bridge.getAccess()?.is_admin : !bridge.getAccess()?.is_admin) {
+      page.append(emptyBox(t(own ? 'students.studentOnly' : 'students.adminOnly'))); return;
+    }
     const statusNames = {completed: t('students.completed'), in_progress: t('students.inProgress'),
       paused: t('students.paused'), not_started: t('students.notStarted')};
     const blockedNames = {account_disabled: t('students.accountDisabled'), topic_forbidden: t('students.topicForbidden'),
       feature_forbidden: t('students.featureForbidden'), old_version: t('students.oldVersion'),
       paused: t('students.paused'), prerequisites: t('students.prerequisites'), initial_learning: t('students.initialLearning'),
       another_review_active: t('students.otherActive'), stopped: t('students.stopped')};
-    const current = () => ticket === sequence && currentRoute?.path === '/admin/students';
+    const current = () => ticket === sequence && currentRoute?.path === (own ? '/progress' : '/admin/students');
+    const reportEndpoint = own ? 'student-report' : 'admin/students/' + encode(learnerId);
     const date = value => value ? apiDate(value, true) : t('students.unscheduled');
     const stateLabel = value => statusNames[value] || t('students.notStarted');
     if (!learnerId) {
@@ -1342,24 +1349,26 @@ export function initPortal(bridge) {
       await load(true);
       return;
     }
-    page.append(link(t('students.back'), '/admin/students', 'subjectBack'));
+    if (!own) page.append(link(t('students.back'), '/admin/students', 'subjectBack'));
     const detail = node('div'); page.append(detail);
     const refresh = control(t('pause.refresh'), 'secondaryButton', loadDetail); page.append(refresh);
     let busy = false, reportDays = 30;
     async function loadDetail() {
       if (busy) return; busy = true; refresh.disabled = true;
       try {
-        const data = await bridge.request('admin/students/' + encode(learnerId) + `?days=${reportDays}&timezone=${encode(timezone())}`);
+        const data = await bridge.request(reportEndpoint + `?days=${reportDays}&timezone=${encode(timezone())}`);
         if (!current()) return;
         detail.replaceChildren(node('h2', '', data.student.display_name),
           node('p', 'inputHint', t('students.updated', {time: date(data.generated_at)})));
         if (!data.student.enabled) detail.append(node('p', 'fieldError', t('students.accountDisabled')));
         const report = createStudentDashboard(data, {
-          request: path => bridge.request('admin/students/' + encode(learnerId) + '/' + path),
+          request: path => bridge.request(reportEndpoint + '/' + path),
           formatDate: date, timezone: timezone(), days: reportDays,
           onDaysChange: days => { reportDays = days; void loadDetail(); },
           subjectName: id => subjectLabel(subjects?.find(subject => subject.id === id) || {id, title: id, title_en: id}),
-          materialHref: item => item.kind === 'training'
+          materialHref: item => own ? (item.kind === 'training'
+            ? subjectHref(item.subject_id, '/training')
+            : subjectHref(item.subject_id || 'math', '/topic/' + encode(item.container))) : item.kind === 'training'
             ? subjectHref(item.subject_id, '/topic/' + encode('training.' + item.container) + '/content') + '?' + new URLSearchParams({bank_id: item.container, group_id: item.group_id, block: 'question:' + item.question, version: item.version})
             : subjectHref(item.subject_id || 'math', '/topic/' + encode(item.container) + '/content') + (item.question ? '?block=' + encode('question:' + item.question) : ''),
         });
