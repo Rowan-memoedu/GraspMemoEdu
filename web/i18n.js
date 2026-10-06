@@ -1,10 +1,10 @@
 // UI strings only. Course HTML, names, answers and explanations never enter this module.
-import {trainingMessages} from './training-messages.js?v=0da1084cc9b59bb4';
-import {readerMessages} from './reader-messages.js?v=0da1084cc9b59bb4';
-import {portalMessages} from './portal-messages.js?v=0da1084cc9b59bb4';
-import {staticMessages} from './static-messages.js?v=0da1084cc9b59bb4';
+import {trainingMessages} from './training-messages.js?v=906c9c4fd7f20cfe';
+import {readerMessages} from './reader-messages.js?v=906c9c4fd7f20cfe';
+import {portalMessages} from './portal-messages.js?v=906c9c4fd7f20cfe';
+import {staticMessages} from './static-messages.js?v=906c9c4fd7f20cfe';
 
-import {paperMessages} from './review-paper-messages.js?v=0da1084cc9b59bb4';
+import {paperMessages} from './review-paper-messages.js?v=906c9c4fd7f20cfe';
 
 export const LANGUAGE_KEY = 'graspmemoedu:ui-language';
 // Read the previous namespace once on the same origin. Renaming the public
@@ -130,6 +130,7 @@ const errors = {
   '答疑页面仅供学员和管理员使用。': 'Q&A is available to students and administrators only.',
   '仅管理员可以回复答疑。': 'Only administrators can reply to questions.',
   '请填写回复内容。': 'Enter a reply.',
+  '只能修改自己发出的回复。': 'You can edit only your own replies.',
   '该回复已在其他页面更新，请重新载入后再提交。': 'This reply was updated elsewhere. Reload before submitting again.',
   '仅学员可以标记自己的答疑回复。': 'Students can mark only their own replies as read.',
   '未找到此答疑回复。': 'This reply was not found.',

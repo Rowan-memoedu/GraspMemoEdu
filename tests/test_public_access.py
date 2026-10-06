@@ -589,6 +589,7 @@ class PublicAccessAcceptanceTests(unittest.TestCase):
                    "/api/subjects", "/api/catalog", "/api/catalog/select", "/api/dashboard", "/api/profile", "/api/feedback",
                    "/api/atomic/reviews", "/api/help-requests", "/api/admin/pauses", "/api/admin/pauses/unlock", "/api/admin/pauses/skip-policy",
                    "/api/help-center", "/api/help-replies", "/api/help-replies/read", "/api/help-requests/preview",
+                   "/api/help-messages", "/api/help-messages/read", "/api/help-content",
                    "/api/admin/students", "/api/admin/students/{learner_id}",
                    "/api/admin/students/{learner_id}/questions", "/api/admin/students/{learner_id}/history",
                    "/api/materials", "/api/materials/open", "/api/materials/content",

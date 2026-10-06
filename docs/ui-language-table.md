@@ -2,7 +2,7 @@
 
 本表从当前界面词库自动生成。修改以词库为准，随后重新生成并检查本表。术语约定见 [界面语言规范](ui-language.md)。
 
-共 845 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
+共 863 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
 
 不包括作者课程正文、题目、答案、解析或用户输入。首页的学科双语副标题按约定保留。
 
@@ -437,6 +437,23 @@
 | Student question | 学员的问题 |
 | My question | 我的问题 |
 | Administrator reply | 管理员回复 |
+| Conversation | 对话记录 |
+| Administrator | 管理员 |
+| Student | 学员 |
+| Continue the conversation | 继续回复 |
+| Reply to this message | 回复这条 |
+| Edit | 修改 |
+| Editing your reply | 正在修改自己的回复 |
+| Replying to the selected message | 回复选中的消息 |
+| Cancel and write a new reply | 取消，继续新回复 |
+| Edited | 已修改 |
+| New messages or content updates | 有新消息或内容更新 |
+| Updated | 有更新 |
+| This topic has been updated. Your original submitted content is retained. | 此主题已有更新，仍可查看你提交时的内容。 |
+| View the updated block | 查看更新后的对应内容 |
+| Updated content | 更新后的内容 |
+| Hide updated content | 收起更新内容 |
+| Your reply was saved. Refresh to view the conversation. | 回复已保存，请刷新查看最新对话。 |
 | Write a reply | 填写回复 |
 | Send reply | 发送回复 |
 | Update reply | 更新回复 |
@@ -445,7 +462,7 @@
 | Awaiting reply | 等待回复 |
 | Replied | 已回复 |
 | New reply | 新回复 |
-| Q&A, {count} unread replies | 答疑，{count} 条未读回复 |
+| Q&A, {count} unread conversations or content updates | 答疑，{count} 条未读对话或内容更新 |
 | Refresh Q&A | 刷新答疑 |
 | The sent reply has changed. Review it before submitting your draft. | 已发送的回复发生了变化，请核对后再提交当前草稿。 |
 | Mark as read | 标为已读 |
@@ -871,6 +888,7 @@
 | Q&A is available to students and administrators only. | 答疑页面仅供学员和管理员使用。 |
 | Only administrators can reply to questions. | 仅管理员可以回复答疑。 |
 | Enter a reply. | 请填写回复内容。 |
+| You can edit only your own replies. | 只能修改自己发出的回复。 |
 | This reply was updated elsewhere. Reload before submitting again. | 该回复已在其他页面更新，请重新载入后再提交。 |
 | Students can mark only their own replies as read. | 仅学员可以标记自己的答疑回复。 |
 | This reply was not found. | 未找到此答疑回复。 |

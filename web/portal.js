@@ -1,20 +1,20 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=0da1084cc9b59bb4";
-import { createReviewView } from "./review.js?v=0da1084cc9b59bb4";
-import { renderCourseGraph } from "./course-graph.js?v=0da1084cc9b59bb4";
-import {questionInput, choiceTypeField} from './question-input.js?v=0da1084cc9b59bb4';
-import {enhanceTopicContent} from './topic-content.js?v=0da1084cc9b59bb4';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=0da1084cc9b59bb4';
-import {createCatalogPicker} from './catalog-picker.js?v=0da1084cc9b59bb4';
-import {createAtomicView} from './atomic.js?v=0da1084cc9b59bb4';
-import {createTrainingView} from './training.js?v=0da1084cc9b59bb4';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=0da1084cc9b59bb4";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=906c9c4fd7f20cfe";
+import { createReviewView } from "./review.js?v=906c9c4fd7f20cfe";
+import { renderCourseGraph } from "./course-graph.js?v=906c9c4fd7f20cfe";
+import {questionInput, choiceTypeField} from './question-input.js?v=906c9c4fd7f20cfe';
+import {enhanceTopicContent} from './topic-content.js?v=906c9c4fd7f20cfe';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=906c9c4fd7f20cfe';
+import {createCatalogPicker} from './catalog-picker.js?v=906c9c4fd7f20cfe';
+import {createAtomicView} from './atomic.js?v=906c9c4fd7f20cfe';
+import {createTrainingView} from './training.js?v=906c9c4fd7f20cfe';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=906c9c4fd7f20cfe";
 
-import {createPaperView} from './review-papers.js?v=0da1084cc9b59bb4';
+import {createPaperView} from './review-papers.js?v=906c9c4fd7f20cfe';
 
-import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=0da1084cc9b59bb4';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=0da1084cc9b59bb4';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=0da1084cc9b59bb4';
-import {createStudentDashboard} from './student-dashboard.js?v=0da1084cc9b59bb4';
+import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=906c9c4fd7f20cfe';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=906c9c4fd7f20cfe';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=906c9c4fd7f20cfe';
+import {createStudentDashboard} from './student-dashboard.js?v=906c9c4fd7f20cfe';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -188,7 +188,7 @@ export function initPortal(bridge) {
   }
   function showHelpSummary(result) {
     helpSummary = result;
-    const count = result?.viewer === 'student' ? result.unread_count : 0;
+    const count = result?.unread_count || 0;
     $('qaUnreadCount').hidden = !count;
     $('qaUnreadCount').textContent = count > 99 ? '99+' : String(count || '');
     $('qaNavLink').setAttribute('aria-label', count ? t('help.unreadCount', {count}) : t('help.pageTitle'));
@@ -202,9 +202,9 @@ export function initPortal(bridge) {
     try {
       const result = await scopedRequest('help-center?summary=true', undefined, subject);
       if (learner !== bridge.getAccess()?.learner_id || subject !== activeSubject?.id || !canUseHelp()) return;
-      const changed = helpSummary && result.latest_reply_at !== helpSummary.latest_reply_at;
+      const changed = helpSummary && result.activity_key !== helpSummary.activity_key;
       showHelpSummary(result); helpSummaryAt = Date.now();
-      if (changed && result.viewer === 'student') helpFeedRefresh?.();
+      if (changed) helpFeedRefresh?.();
     } catch { /* Keep the last known count; the page exposes retry errors. */ }
     finally { helpSummaryBusy = false; }
   }
@@ -1050,50 +1050,108 @@ export function initPortal(bridge) {
       `/topic/${encode(item.request.topic_id)}/content?${query({block: item.request.content_block_id,
         version: item.request.content_version, bank_id: item.request.bank_id, group_id: item.request.group_id, report: item.id})}`), 'textButton'));
     else if (!detail) context.append(link(t('help.openContent'), subjectHref(item.subject_id, '/qa/' + encode(item.id)), 'textButton'));
-    answer.append(node('h3', '', t('help.answerLabel')));
-    const status = node('p', 'helpReplyStatus', t(item.unread ? 'help.replyUnread' : item.reply ? 'help.replyReceived' : 'help.replyPending'));
-    const date = node('p', 'inputHint', item.reply ? apiDate(item.reply.created_at, true) : '');
-    const body = node('div', 'helpReplyText', item.reply?.message || '');
-    answer.append(status, date, body);
-    if (viewer === 'admin') {
-      const form = node('form', 'helpReplyForm'), label = node('label', '', t('help.replyInput'));
-      const input = node('textarea'); input.id = 'help-reply-' + item.id; label.htmlFor = input.id;
-      input.required = true; input.maxLength = 4000; input.rows = 7;
-      const draft = replyDrafts.get(item.id); input.value = draft?.message ?? item.reply?.message ?? '';
-      let revision = item.reply?.revision || 0, pending = draft?.revision === revision ? draft?.pending : null, busy = false;
-      const feedback = node('p', 'feedbackStatus'); feedback.setAttribute('role', 'status');
-      if (draft && draft.revision !== revision) feedback.textContent = t('help.replyChanged');
-      const submit = node('button', 'primaryButton', t(revision ? 'help.updateReply' : 'help.sendReply')); submit.type = 'submit';
-      input.addEventListener('input', () => { pending = null; replyDrafts.set(item.id, {message: input.value, revision}); });
-      form.append(label, input, submit, feedback);
-      const owner = bridge.getAccess()?.learner_id;
-      form.addEventListener('submit', async event => {
-        event.preventDefault(); if (busy || !input.value.trim() || owner !== bridge.getAccess()?.learner_id) return;
-        busy = true; submit.disabled = input.disabled = true; feedback.textContent = t('help.sendingReply');
-        pending ||= {report_id: item.id, request_id: crypto.randomUUID(), expected_revision: revision, message: input.value.trim()};
-        replyDrafts.set(item.id, {message: input.value, revision, pending});
+    if (item.content_updated) {
+      const update = node('div', 'helpContentUpdate');
+      update.append(node('strong', 'helpUpdateBadge', t('help.contentUpdated')), node('p', 'inputHint', t('help.contentUpdatedHint')));
+      const current = node('div', 'helpCurrentContent'); current.hidden = true;
+      const open = control(t('help.viewUpdated'), 'textButton', async () => {
+        if (open.disabled) return;
+        if (!current.hidden) { current.hidden = true; open.textContent = t('help.viewUpdated'); return; }
+        open.disabled = true;
         try {
-          const result = await call('help-replies', {method: 'POST', body: pending});
-          if (ticket !== sequence || owner !== bridge.getAccess()?.learner_id) return;
-          if (result.status !== 'saved') throw new Error(t('portal.feedback.was.not.confirmed.as.saved.please.try.again.129'));
-          revision = result.reply.revision; pending = null; replyDrafts.delete(item.id);
-          body.textContent = result.reply.message; date.textContent = apiDate(result.reply.created_at, true);
-          status.textContent = t('help.replyReceived'); feedback.textContent = t('help.replySent'); submit.textContent = t('help.updateReply');
-          void refreshHelpSummary(true);
-        } catch (error) { if (ticket === sequence) feedback.textContent = translateMessage(error.message); }
-        finally { busy = false; submit.disabled = input.disabled = false; }
+          const data = await call('help-content?report_id=' + encode(item.id));
+          if (ticket !== sequence) return;
+          const style = node('style'); style.textContent = data.math_css || '';
+          current.replaceChildren(style, node('h3', '', t('help.updatedContent')), trustedContent(data.content_html));
+          current.dataset.contentVersion = data.content_version; current.hidden = false;
+          open.textContent = t('help.hideUpdated');
+        } catch (error) { current.replaceChildren(errorBox(translateMessage(error.message))); current.hidden = false; }
+        finally { open.disabled = false; }
       });
-      answer.append(form);
-    } else if (item.unread && item.reply) {
+      update.append(open, current); context.append(update);
+    }
+    installHelpThread(answer, item, viewer, ticket, async () => {
+      const data = await call('help-center?report_id=' + encode(item.id));
+      if (ticket !== sequence || !card.isConnected) return;
+      card.replaceWith(helpConversation(data.items[0], data.viewer, ticket, detail));
+      void refreshHelpSummary(true);
+    });
+    card.append(context, answer);
+    return card;
+  }
+  function installHelpThread(panel, item, viewer, ticket, refresh) {
+    const messages = item.messages || [], owner = bridge.getAccess()?.learner_id;
+    panel.append(node('h3', '', t('help.conversation')));
+    const status = node('p', 'helpReplyStatus', t(item.unread ? 'help.newActivity' : messages.length ? 'help.replyReceived' : 'help.replyPending'));
+    const list = node('div', 'helpMessageList'); panel.append(status, list);
+    const form = node('form', 'helpReplyForm'), label = node('label', '', t('help.replyInput'));
+    const input = node('textarea'); input.id = 'help-reply-' + item.id; label.htmlFor = input.id;
+    input.required = true; input.maxLength = 4000; input.rows = 5;
+    const target = node('p', 'helpComposerTarget'); target.setAttribute('aria-live', 'polite');
+    const feedback = node('p', 'feedbackStatus'); feedback.setAttribute('role', 'status');
+    const submit = node('button', 'primaryButton', t('help.sendReply')); submit.type = 'submit';
+    let draft = replyDrafts.get(item.id) || {message: '', message_id: null, reply_to: null, revision: 0, pending: null}, busy = false;
+    const cancel = control(t('help.cancelEdit'), 'textButton', () => {
+      draft = {message: '', message_id: null, reply_to: null, revision: 0, pending: null};
+      replyDrafts.delete(item.id); syncComposer();
+    });
+    function syncComposer() {
+      input.value = draft.message;
+      submit.textContent = t(draft.message_id ? 'help.updateReply' : 'help.sendReply');
+      target.textContent = draft.message_id ? t('help.editingReply') : draft.reply_to ? t('help.replyingTo') : t('help.continueReply');
+      cancel.hidden = !draft.message_id && !draft.reply_to;
+      const original = messages.find(message => message.id === draft.message_id);
+      feedback.textContent = original && original.revision !== draft.revision ? t('help.replyChanged') : '';
+    }
+    function choose(message, edit) {
+      if (busy) return;
+      draft = {message: edit ? message.message : '', message_id: edit ? message.id : null,
+        reply_to: edit ? null : message.id, revision: edit ? message.revision : 0, pending: null};
+      replyDrafts.set(item.id, draft); syncComposer(); input.focus();
+    }
+    for (const message of messages) {
+      const block = node('article', 'helpMessage ' + (message.author_role === 'admin' ? 'helpAdminMessage' : 'helpStudentMessage'));
+      block.dataset.messageId = message.id;
+      block.append(node('strong', '', t(message.author_role === 'admin' ? 'help.adminAuthor' : 'help.studentAuthor')),
+        node('p', 'inputHint', apiDate(message.created_at, true) + (message.revision > 1 ? ' · ' + t('help.edited') : '')));
+      const parent = messages.find(m => m.id === message.reply_to);
+      if (parent) block.append(node('blockquote', 'helpReplyQuote', parent.message));
+      block.append(node('div', 'helpReplyText', message.message));
+      const actions = node('div', 'helpMessageActions');
+      actions.append(control(t('help.replyToMessage'), 'textButton', () => choose(message, false)));
+      if (message.editable) actions.append(control(t('help.editMessage'), 'textButton', () => choose(message, true)));
+      block.append(actions); list.append(block);
+    }
+    input.addEventListener('input', () => { draft = {...draft, message: input.value, pending: null}; replyDrafts.set(item.id, draft); });
+    form.append(label, target, input, submit, cancel, feedback); syncComposer(); panel.append(form);
+    form.addEventListener('submit', async event => {
+      event.preventDefault(); if (busy || !input.value.trim() || owner !== bridge.getAccess()?.learner_id) return;
+      busy = true; submit.disabled = input.disabled = cancel.disabled = true; feedback.textContent = t('help.sendingReply');
+      draft.pending ||= {report_id: item.id, request_id: crypto.randomUUID(), message_id: draft.message_id,
+        reply_to: draft.reply_to, expected_revision: draft.revision, message: input.value.trim()};
+      replyDrafts.set(item.id, draft);
+      let saved = false;
+      try {
+        const result = await call('help-messages', {method: 'POST', body: draft.pending});
+        if (ticket !== sequence || owner !== bridge.getAccess()?.learner_id) return;
+        if (result.status !== 'saved') throw new Error(t('portal.feedback.was.not.confirmed.as.saved.please.try.again.129'));
+        saved = true; replyDrafts.delete(item.id);
+        draft = {message: '', message_id: null, reply_to: null, revision: 0, pending: null};
+        syncComposer(); feedback.textContent = t('help.replySent'); await refresh();
+      } catch (error) { if (ticket === sequence) feedback.textContent = saved ? t('help.savedRefresh') : translateMessage(error.message); }
+      finally { busy = false; submit.disabled = input.disabled = cancel.disabled = false; }
+    });
+    if (item.unread) {
       let reading = false;
-      const read = control(t('help.markRead'), 'textButton', markRead); answer.append(read);
+      const read = control(t('help.markRead'), 'textButton', markRead); panel.append(read);
       async function markRead() {
-        if (reading || ticket !== sequence || item.learner_id !== bridge.getAccess()?.learner_id) return;
+        if (reading || ticket !== sequence || owner !== bridge.getAccess()?.learner_id) return;
         reading = true; read.disabled = true;
         try {
-          await call('help-replies/read', {method: 'POST', body: {report_id: item.id, revision: item.reply.revision}});
-          if (ticket !== sequence) return;
-          status.textContent = t('help.replyReceived'); read.remove(); void refreshHelpSummary(true);
+          await call('help-messages/read', {method: 'POST', body: {report_id: item.id, sequence: item.thread_sequence,
+            content_version: item.content_update_unread ? item.current_content_version : null}});
+          if (ticket !== sequence || owner !== bridge.getAccess()?.learner_id) return;
+          status.textContent = t(messages.length ? 'help.replyReceived' : 'help.replyPending'); read.remove(); void refreshHelpSummary(true);
         } catch { reading = false; read.disabled = false; }
       }
       if (!helpReadObserver) helpReadObserver = new IntersectionObserver(entries => {
@@ -1101,11 +1159,10 @@ export function initPortal(bridge) {
           helpReadObserver?.unobserve(entry.target); entry.target.markHelpRead?.();
         }
       }, {threshold: .1});
-      body.markHelpRead = markRead;
-      queueMicrotask(() => { if (ticket === sequence && body.isConnected) helpReadObserver?.observe(body); });
+      list.markHelpRead = markRead;
+      const observed = messages.length ? list : status; observed.markHelpRead = markRead;
+      queueMicrotask(() => { if (ticket === sequence && observed.isConnected) helpReadObserver?.observe(observed); });
     }
-    card.append(context, answer);
-    return card;
   }
   async function renderHelpContent(ticket, reportId) {
     const result = await call(`help-center?report_id=${encode(reportId)}`);

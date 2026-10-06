@@ -12,6 +12,7 @@ from .content_reports import ContentText
 from .question_bank import QuestionBank
 from .training_content import TrainingCatalog, permission_id
 from .feedback_selection import FeedbackContent, content_hash, normalize_selection, validate_selection
+from .help_threads import HelpThreads, HelpMessage, HelpThreadRead
 
 
 class HelpContext(BaseModel):
@@ -97,6 +98,7 @@ class HelpRequestStore:
                     report_id TEXT PRIMARY KEY REFERENCES help_requests(id),
                     learner_id TEXT NOT NULL REFERENCES access_principals(learner_id),
                     revision INTEGER NOT NULL CHECK(revision>0), read_at TEXT NOT NULL);''')
+        self.threads = HelpThreads(self)
 
     @staticmethod
     def _require_admin(con, admin_id):
@@ -192,9 +194,11 @@ class HelpRequestStore:
                 raise PublicLimitError('help_rate_limited', '答疑请求过于频繁，请稍后重试。', 60)
             body = {'request': payload, 'display_name': access['display_name'], **context,
                     'content_text': ''.join(ContentText(html).parts), 'content_html': html}
+            body['source_version'] = self.threads.current_version(body)
             request_id = str(uuid.uuid4())
             con.execute('INSERT INTO help_requests VALUES (?,?,?,?,?)',
                         (request_id, access['learner_id'], payload['request_id'], json.dumps(body, ensure_ascii=False), created))
+            self.threads.baseline(con, request_id, body)
         return {'id': request_id, 'status': 'saved', 'created_at': created}
 
     def _content(self, payload):
@@ -349,32 +353,28 @@ class HelpRequestStore:
             parameters += (subject_id,)
         with closing(self.access_store._connect()) as con:
             con.execute('BEGIN')
-            counts = con.execute('''SELECT COUNT(*) total,
-                COALESCE(SUM(reply.revision IS NULL),0) pending_count,
-                COALESCE(SUM(reply.revision>COALESCE(seen.revision,0)),0) unread_count,
-                MAX(reply.created_at) latest_reply_at ''' + scope,
-                parameters).fetchone()
-            result = {'viewer': viewer, **dict(counts)}
-            if viewer == 'admin':
-                result['unread_count'] = 0
-            if summary:
-                return result
             fields = '''SELECT r.id,r.learner_id,r.body,r.created_at,reply.message reply_message,
                 reply.revision,reply.created_at replied_at,COALESCE(seen.revision,0) seen_revision '''
+            all_rows = con.execute(fields + scope, parameters).fetchall()
+            states = {row['id']: self.threads.state(con, row, access, include_messages=False) for row in all_rows}
+            result = {'viewer': viewer, 'total': len(all_rows),
+                      'pending_count': sum(not con.execute("SELECT 1 FROM help_messages WHERE report_id=? AND author_role='admin'", (row['id'],)).fetchone() for row in all_rows),
+                      'unread_count': sum(state['unread'] for state in states.values()),
+                      'latest_reply_at': max((state['latest_activity_at'] for state in states.values()), default=None),
+                      'activity_key': self.threads.activity_key([{'id': ident, **state} for ident, state in states.items()])}
+            if summary:
+                return result
             if report_id:
-                rows = con.execute(fields + scope + ' AND r.id=?', (*parameters, report_id)).fetchall()
+                rows = [row for row in all_rows if row['id'] == report_id]
                 if not rows:
                     raise DomainError('unknown_help_request', '未找到此提交记录。', 404)
             else:
-                rows = con.execute(fields + scope +
-                    ' ORDER BY COALESCE(reply.created_at,r.created_at) DESC,r.id DESC LIMIT ? OFFSET ?',
-                    (*parameters, limit + 1, offset)).fetchall()
-        items = []
-        for row in rows[:limit]:
-            reply = ({'message': row['reply_message'], 'revision': row['revision'], 'created_at': row['replied_at']}
-                     if row['revision'] is not None else None)
-            items.append({**self._render_record(row), 'reply': reply,
-                          'unread': viewer == 'student' and bool(reply and row['revision'] > row['seen_revision'])})
+                rows = sorted(all_rows, key=lambda row: (states[row['id']]['latest_activity_at'], row['id']), reverse=True)[offset:offset + limit + 1]
+            items = []
+            for row in rows[:limit]:
+                reply = ({'message': row['reply_message'], 'revision': row['revision'], 'created_at': row['replied_at']}
+                         if row['revision'] is not None else None)
+                items.append({**self._render_record(row), 'reply': reply, **self.threads.state(con, row, access)})
         return {**result, 'items': items, 'next_offset': offset + limit if not report_id and len(rows) > limit else None}
 
     def reply(self, access, values):
@@ -399,11 +399,14 @@ class HelpRequestStore:
                 return {'status': 'saved', 'reply': {key: existing[key] for key in ('message', 'revision', 'created_at')}}
             revision = con.execute('SELECT COALESCE(MAX(revision),0) FROM help_replies WHERE report_id=?',
                 (values['report_id'],)).fetchone()[0]
-            if values['expected_revision'] != revision:
+            thread_revision = con.execute('SELECT MAX(revision) FROM help_message_versions WHERE message_id=?',
+                                          ('legacy-' + values['report_id'],)).fetchone()[0]
+            if values['expected_revision'] != revision or (thread_revision and thread_revision != revision):
                 raise DomainError('help_reply_conflict', '该回复已在其他页面更新，请重新载入后再提交。', 409)
             created = now()
             con.execute('INSERT INTO help_replies VALUES (?,?,?,?,?,?,?)',
                 (str(uuid.uuid4()), values['report_id'], access['learner_id'], values['request_id'], message, revision + 1, created))
+            self.threads.sync_legacy(con, values['report_id'])
         return {'status': 'saved', 'reply': {'message': message, 'revision': revision + 1, 'created_at': created}}
 
     def mark_read(self, access, values):
@@ -421,6 +424,24 @@ class HelpRequestStore:
                 revision=MAX(help_reply_reads.revision,excluded.revision),read_at=excluded.read_at''',
                 (values['report_id'], access['learner_id'], values['revision'], now()))
         return {'status': 'read', 'revision': values['revision']}
+
+    def current_content(self, access, report_id, subject_id=None):
+        # Only the submitted block is exposed; no learner-progress bypass for
+        # arbitrary blocks, hidden answers or a different Topic.
+        with closing(self.access_store._connect()) as con:
+            row, _ = self.threads.authorized(con, access, report_id)
+            body = json.loads(row['body'])
+        self.subjects.authorize_subject(access, subject_id)
+        if subject_id and body['subject_id'] != subject_id:
+            raise DomainError('unknown_help_request', '未找到此提交记录。', 404)
+        payload = HelpContext.model_validate({key: body['request'][key] for key in HelpContext.model_fields if key in body['request']}).model_dump()
+        self._authorize_context(access, payload, subject_id)
+        version = self.threads.current_version(body)
+        if not version:
+            raise DomainError('unknown_help_request', '未找到此提交记录。', 404)
+        payload['content_version'] = version
+        html, context = self._content(payload)
+        return {**context, 'content_html': html, 'content_version': version, 'content_block_id': payload['content_block_id']}
 
 
 def register_help_routes(app, catalog, access_store, subjects):
@@ -464,3 +485,24 @@ def register_help_routes(app, catalog, access_store, subjects):
         if subject:
             store.center(access, report_id=payload.report_id, subject_id=subject)
         return store.mark_read(access, payload.model_dump())
+
+    @app.post('/api/help-messages')
+    def send_message(payload: HelpMessage, request: Request):
+        access = access_store.resolve(request.headers.get('x-learning-identity'))
+        subject = request.query_params.get('subject_id')
+        if subject:
+            store.center(access, report_id=payload.report_id, subject_id=subject)
+        return store.threads.send(access, payload.model_dump())
+
+    @app.post('/api/help-messages/read')
+    def read_messages(payload: HelpThreadRead, request: Request):
+        access = access_store.resolve(request.headers.get('x-learning-identity'))
+        subject = request.query_params.get('subject_id')
+        if subject:
+            store.center(access, report_id=payload.report_id, subject_id=subject)
+        return store.threads.read(access, payload.model_dump())
+
+    @app.get('/api/help-content')
+    def current_help_content(request: Request, report_id: str = Query(min_length=1, max_length=128)):
+        return store.current_content(access_store.resolve(request.headers.get('x-learning-identity')),
+                                     report_id, request.query_params.get('subject_id'))

@@ -450,6 +450,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
             return response
         public_paths = {'/api/health', '/api/access', '/api/access/guest', '/api/access/login', '/api/access/logout',
                         '/api/help-center', '/api/help-replies', '/api/help-replies/read', '/api/help-requests/preview',
+                        '/api/help-messages', '/api/help-messages/read', '/api/help-content',
                         '/api/materials', '/api/materials/open', '/api/materials/content',
                         '/api/state', '/api/demo-answer', '/api/guest/reset', '/api/choose', '/api/continue', '/api/select', '/api/pause', '/api/skip', '/api/submit', '/api/reveal',
                         '/api/subjects', '/api/catalog', '/api/catalog/select', '/api/dashboard', '/api/profile', '/api/feedback', '/api/help-requests', '/api/guide', '/api/atomic/reviews'}

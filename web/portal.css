@@ -308,6 +308,15 @@ body.portalModalOpen { overflow: hidden; }
 .helpReplyForm button { margin-top: 12px; }
 .helpReplyText { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.75; }
 .helpReplyStatus { color: var(--link-color); font-size: 13px; }
+.helpMessage { margin: 12px 0; padding: 14px; border: 1px solid var(--ma-border); border-radius: 4px; }
+.helpAdminMessage { background: #f4f8fb; }
+.helpStudentMessage { background: #fafafa; }
+.helpMessageActions { display: flex; gap: 20px; margin-top: 10px; }
+.helpReplyQuote { margin: 8px 0; padding: 6px 12px; border-left: 3px solid #bdc8d1; color: #646464; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 120px; overflow: auto; }
+.helpComposerTarget { color: #646464; font-size: 13px; }
+.helpContentUpdate { margin-top: 20px; padding: 14px; border: 1px solid #d69a2d; background: #fff9ed; }
+.helpUpdateBadge { display: inline-block; color: #875600; }
+.helpCurrentContent { margin-top: 14px; background: white; padding: 12px; }
 .helpToolbar { display: flex; justify-content: flex-end; margin: 0 0 18px; }
 .mainNavigation #qaNavLink { position: relative; }
 .helpUnreadBadge { position: absolute; top: 5px; right: -4px; min-width: 15px; padding: 0 3px; border-radius: 9px; background: #c62828; color: white; font-size: 10px; line-height: 15px; text-align: center; }

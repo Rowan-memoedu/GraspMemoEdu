@@ -1,15 +1,15 @@
-import {t, translateMessage} from './i18n.js?v=0da1084cc9b59bb4';
-import {answerReady, answerEmpty} from './question-input.js?v=0da1084cc9b59bb4';
-import {createLearningCache} from './learning-cache.js?v=0da1084cc9b59bb4';
-import {helpableContent} from './content-report.js?v=0da1084cc9b59bb4';
-import {ratingChoices} from './self-assessment.js?v=0da1084cc9b59bb4';
+import {t, translateMessage} from './i18n.js?v=906c9c4fd7f20cfe';
+import {answerReady, answerEmpty} from './question-input.js?v=906c9c4fd7f20cfe';
+import {createLearningCache} from './learning-cache.js?v=906c9c4fd7f20cfe';
+import {helpableContent} from './content-report.js?v=906c9c4fd7f20cfe';
+import {ratingChoices} from './self-assessment.js?v=906c9c4fd7f20cfe';
 
 const node = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const button = (text, cls, action) => { const n = node('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
 const encode = encodeURIComponent;
 const query = fields => new URLSearchParams(fields).toString();
 const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy', 'training.retire'];
-import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation} from './learning-ui.js?v=0da1084cc9b59bb4';
+import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation} from './learning-ui.js?v=906c9c4fd7f20cfe';
 
 export function createTrainingView(bridge) {
   const {root, request, href, formatDate, getAccess} = bridge;
