@@ -154,7 +154,7 @@ class ReviewSources:
                 (id,learner,bank,group_id,question,version,snapshot,mode,memory_revision,phase,created_at,submission_id)
                 VALUES (?,?,?,?,?,?,?,?,?,'answer',?,?)''',
                 (request_id, self.learner, source['container'], source['group_id'], local, source['version'],
-                 json.dumps(item['question']), 'review' if memory['mastered'] else 'initial', memory['revision'],
+                 json.dumps(item['question']), 'review' if memory['mastered'] or memory['card_json'] is None else 'initial', memory['revision'],
                  paper['created_at'], request_id))
             con.execute('INSERT INTO training_submissions VALUES (?,?,?,?,?,?,?,?)',
                         (request_id, self.learner, request_id, fingerprint(item['answer']), item['answer'],

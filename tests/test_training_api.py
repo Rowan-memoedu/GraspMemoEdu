@@ -100,6 +100,32 @@ class TrainingAPITests(unittest.TestCase):
         fixed = self.open('boolean'); self.assertFalse(fixed['can_self_rate'])
         self.call('POST', '/api/training/reveal', {'attempt_id': fixed['attempt_id']}, status=403)
 
+    def test_unlearned_notebook_backup_restores_without_fsrs_or_completed_answers(self):
+        state = self.open('exact')
+        self.call('POST', '/api/training/notebook', {'attempt_id': state['attempt_id']})
+        backup = self.root / 'unlearned.zip'; backup_site(self.settings, backup)
+        destination = self.root / 'unlearned-restored'; restore_site(backup, destination)
+        backend = TrainingService(TrainingCatalog(destination), destination, self.guest['access']['learner_id'],
+                                  clock=lambda: self.when)
+        self.assertEqual(len(backend.reviews([self.bank])['items']), 1)
+        self.assertTrue(backend.state(state['attempt_id'])['awaiting_first_learning'])
+        with closing(backend._connect()) as con:
+            self.assertEqual(con.execute('SELECT COUNT(*) FROM training_ratings').fetchone()[0], 0)
+
+    def test_notebook_endpoint_visible_before_first_answer_and_permissions_checked(self):
+        state = self.open('exact')
+        payload = {'attempt_id': state['attempt_id']}
+        added = self.call('POST', '/api/training/notebook?subject_id=math', payload)
+        self.assertTrue(added['in_error_notebook']); self.assertTrue(added['awaiting_first_learning'])
+        self.assertEqual(added['phase'], 'answer'); self.assertIsNone(added['result'])
+        self.assertEqual(len(self.call('GET', '/api/training/reviews?subject_id=math')['items']), 1)
+        self.call('POST', '/api/training/notebook?subject_id=physics', payload, 403)
+        self.call('POST', '/api/training/notebook', payload)
+        result, _ = self.answer(added)
+        self.assertEqual(result['result']['rating'], 3); self.assertFalse(result['stopped'])
+        self.account(features=['submit_answer'])
+        self.call('POST', '/api/training/notebook', payload, 403)
+
     def test_explicit_permissions_fail_closed_and_revocation_blocks_history(self):
         login = self.account(topic_ids=['atomic-english'])
         self.assertEqual(self.call('GET', '/api/training/catalog')['banks'], [])

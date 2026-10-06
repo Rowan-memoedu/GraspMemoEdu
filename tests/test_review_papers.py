@@ -227,6 +227,26 @@ class PaperTests(unittest.TestCase):
         self.account()
         self.call('GET', '/api/review-papers/state?paper_id=' + paper['id'], status=404)
 
+    def test_unlearned_notebook_questions_form_papers_without_fsrs_then_initialize_once(self):
+        backend = self.service()
+        for qid in ('choice', 'blank'):
+            attempt = backend.open(self.bank['id'], 'group-a', qid, str(uuid.uuid4()))
+            backend.add_to_notebook(attempt)
+        self.app.state.review_paper_types = [{'id': 'small', 'title': '待学题卷', 'subject': 'math',
+            'enabled': True, 'requirements': {'choice': 1, 'fill_blank': 1}}]
+        before = self.memories()
+        self.assertTrue(all(m['card_json'] is None and m['revision'] == 0 for m in before))
+        self.assertEqual(self.inbox()['due_count'], 2)
+        paper = self.open_paper()
+        self.assertEqual(self.memories(), before)
+        result, payload = self.submit_paper(self.draft(paper))
+        self.assertTrue(all(m['card_json'] is not None and m['revision'] == 1 for m in self.memories()))
+        self.assertTrue(all(item['result']['rating'] == 3 for item in result['items']))
+        saved = self.memories()
+        self.call('POST', '/api/review-papers/submit', payload)
+        self.assertEqual(saved, self.memories())
+        self.assertEqual(self.inbox()['due_count'], 0)
+
     def test_history_permissions_and_public_boundary(self):
         self.account(features=['learn', 'submit_answer']); self.prime()
         first, _ = self.submit_paper(self.draft(self.open_paper()))

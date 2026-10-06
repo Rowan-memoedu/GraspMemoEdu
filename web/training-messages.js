@@ -41,6 +41,8 @@ export const trainingMessages = {
   'training.retry': ['重试', 'Retry'],
   'training.saved': ['已保存作答', 'Answer saved'],
   'training.reviewCards': ['我的错题本', 'My error notebook'],
+  'training.addToNotebook': ['加入错题本', 'Add to error notebook'],
+  'training.notebookAdded': ['已加入错题本', 'Added to error notebook'],
   'training.noDue': ['错题本中暂无到期题目。', 'No questions in your error notebook are due.'],
   'training.review': ['复习此题', 'Review question'],
   'training.finishRating': ['已显示答案，等待选择熟练度', 'Answer revealed; awaiting rating'],

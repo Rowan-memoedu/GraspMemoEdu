@@ -1,15 +1,15 @@
-import {t, translateMessage} from './i18n.js?v=82d46e20de08f529';
-import {answerReady, answerEmpty} from './question-input.js?v=82d46e20de08f529';
-import {createLearningCache} from './learning-cache.js?v=82d46e20de08f529';
-import {helpableContent} from './content-report.js?v=82d46e20de08f529';
-import {ratingChoices} from './self-assessment.js?v=82d46e20de08f529';
+import {t, translateMessage} from './i18n.js?v=221c916259ceae8b';
+import {answerReady, answerEmpty} from './question-input.js?v=221c916259ceae8b';
+import {createLearningCache} from './learning-cache.js?v=221c916259ceae8b';
+import {helpableContent} from './content-report.js?v=221c916259ceae8b';
+import {ratingChoices} from './self-assessment.js?v=221c916259ceae8b';
 
 const node = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const button = (text, cls, action) => { const n = node('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
 const encode = encodeURIComponent;
 const query = fields => new URLSearchParams(fields).toString();
 const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy', 'training.retire'];
-import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation} from './learning-ui.js?v=82d46e20de08f529';
+import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation} from './learning-ui.js?v=221c916259ceae8b';
 
 export function createTrainingView(bridge) {
   const {root, request, href, formatDate, getAccess} = bridge;
@@ -205,7 +205,34 @@ export function createTrainingView(bridge) {
       counter: t('reader.modulePosition', {current: index + 1, total: group.questions.length}),
       showSubmittedInteraction: state.phase !== 'answer', submittedId: 'trainingSubmittedInteraction',
       showAnswer: Boolean(state.answer_display && state.phase === 'done'), feedback, feedbackClass: 'trainingVerdict',
-      referenceSource: state, decorate: (body, kind) => helpableContent(body, reportContext, `${kind}:${state.question_id}`, state.version)});
+      referenceSource: state, decorate: (body, kind) => {
+        helpableContent(body, reportContext, `${kind}:${state.question_id}`, state.version);
+        if (kind === 'question' && state.can_learn) {
+          const actions = node('div', 'trainingNotebookActions'); actions.dataset.helpAction = 'notebook';
+          const add = button('', 'textButton trainingNotebookButton', async () => {
+            add.disabled = true;
+            try {
+              const next = await post('notebook', {attempt_id: state.attempt_id});
+              if (!alive(e, s)) return;
+              // Keep the current input, submission and elapsed-time clock intact.
+              for (const key of ['in_error_notebook', 'awaiting_first_learning', 'can_review_early', 'due_at']) current[key] = next[key];
+              refreshNotebook();
+            } catch (failure) { if (alive(e, s)) {
+              refreshNotebook();
+              const message = node('p', 'fieldError', translateMessage(failure.message)); message.setAttribute('role', 'alert');
+              actions.querySelector('.fieldError')?.remove(); actions.append(message);
+            } }
+          });
+          const refreshNotebook = () => {
+            add.replaceChildren();
+            const icon = node('span', 'trainingNotebookIcon', '⊕'); icon.setAttribute('aria-hidden', 'true');
+            add.append(icon, document.createTextNode(t(state.stopped ? 'training.stopped' : state.in_error_notebook ? 'training.notebookAdded' : 'training.addToNotebook')));
+            add.disabled = Boolean(state.in_error_notebook || state.stopped);
+          };
+          refreshNotebook(); actions.append(add); body.prepend(actions);
+        }
+        return body;
+      }});
     reader.refs.footerPosition.textContent = t('reader.modulePosition', {current: index + 1, total: group.questions.length});
     reader.refs.saveStatus.textContent = t(state.submission_status === 'pending' || state.submission_status === 'running' ? '答案已提交，正在判题' : '学习进度已保存');
     let primary; const extra = [];

@@ -118,7 +118,9 @@ class TrainingService:
             memory = self._memory(con, bank_id, question_id, bank['version'])
             require_unreserved(con, self.learner_id, 'training', bank_id, bank['version'], question_id, now=utc_time(self.clock()).isoformat())
             now = utc_time(self.clock())
+            enrolled = bool(memory and memory['revision'] == 0 and memory['card_json'] is None)
             mode = ('practice' if self._stopped(con, bank_id, question_id, bank['version']) else
+                    'review' if enrolled else
                     'initial' if not memory or not memory['mastered'] else
                     'review' if utc_time(memory['due_at']) <= now else 'practice')
             question = present_choice(question, request_id)
@@ -128,6 +130,24 @@ class TrainingService:
                 (request_id, self.learner_id, bank_id, group_id, question_id, bank['version'], packed(question),
                  mode, memory['revision'] if memory else 0, now.isoformat()))
         return request_id
+
+    def add_to_notebook(self, attempt_id):
+        """Enroll a seen question as due, without inventing an answer or FSRS card."""
+        with self.transaction() as con:
+            row = self._attempt(con, attempt_id)
+            if self._stopped(con, row['bank'], row['question'], row['version']):
+                raise DomainError('training_reviews_stopped', '此题已停止后续推送。', 409)
+            if self._memory(con, row['bank'], row['question'], row['version']) is None:
+                now = utc_time(self.clock()).isoformat()
+                require_unreserved(con, self.learner_id, 'training', row['bank'], row['version'],
+                                   row['question'], now=now)
+                # Revision zero matches an unanswered attempt. The first valid answer
+                # goes through the existing review policy, scheduling from card=None.
+                con.execute('INSERT INTO training_memory VALUES (?,?,?,?,0,0,NULL,?)',
+                            (self.learner_id, row['bank'], row['question'], row['version'], now))
+                bank = self.catalog.bank(row['bank'])
+                register_point(con, 'training', row['bank'], row['version'], row['question'],
+                               bank['subject_id'], now)
 
     def state(self, attempt_id, *, history=True, self_rating=False):
         with closing(self._connect()) as con:
@@ -162,6 +182,8 @@ class TrainingService:
                 'answer_display': display_answer(question, submission['answer']) if submission else '',
                 'error': submission['reason'] if submission and submission['status'] == 'error' else None,
                 'result': result, 'stopped': stopped, 'can_review_early': memory is not None or stopped,
+                'in_error_notebook': memory is not None and not stopped,
+                'awaiting_first_learning': bool(memory and memory['card_json'] is None and not stopped),
                 'due_at': memory['due_at'] if memory and not stopped else None}
 
     @staticmethod
@@ -220,7 +242,11 @@ class TrainingService:
         due = memory['due_at'] if memory else None
         if eligible:
             mastery = rating if rating is not None else 1 if not correct else 5 if memory is None else 3
-            mastered = bool(memory and memory['mastered'] or (rating > 1 if rating is not None else correct))
+            # A manually enrolled due card follows review semantics even on its
+            # first wrong answer; later attempts must respect its new due date.
+            mastered = bool(row['mode'] == 'review' or memory and memory['mastered']
+                            or (memory and memory['revision'] == 0 and memory['card_json'] is None)
+                            or (rating > 1 if rating is not None else correct))
             if mastery == 5:
                 # FSRS accepts 1-4; use the persistent suspension for score 5.
                 con.execute('INSERT INTO training_suspensions VALUES (?,?,?,?,?)',

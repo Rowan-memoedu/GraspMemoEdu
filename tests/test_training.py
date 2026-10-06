@@ -62,6 +62,50 @@ class TrainingTests(unittest.TestCase):
             self.assertEqual(saved, self.memory())
         self.assertEqual(len(self.service.history(self.bank['id'], 'essay')['items']), 5)
 
+    def test_manual_notebook_enrollment_has_no_learning_or_fsrs_and_is_idempotent(self):
+        attempt = self.open()
+        self.service.add_to_notebook(attempt)
+        saved = self.memory()
+        self.assertEqual((saved['mastered'], saved['revision'], saved['card_json']), (0, 0, None))
+        self.assertTrue(self.service.state(attempt)['awaiting_first_learning'])
+        self.assertIsNone(self.service.state(attempt)['explanation_html'])
+        self.assertEqual(len(self.service.reviews([self.bank])['items']), 1)
+        with closing(self.service._connect()) as con:
+            for table in ('training_ratings', 'training_submissions'):
+                self.assertEqual(con.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0], 0)
+            self.assertEqual(con.execute("SELECT COUNT(*) FROM training_attempts WHERE phase='done'").fetchone()[0], 0)
+            self.assertEqual(con.execute('SELECT COUNT(*) FROM review_points').fetchone()[0], 1)
+        self.now += timedelta(hours=1)
+        self.service.add_to_notebook(attempt)
+        self.assertEqual(saved, self.memory())
+        restarted = TrainingService(self.catalog, self.root, 'learner', self.service.judge, clock=lambda: self.now)
+        self.assertEqual(len(restarted.reviews([self.bank])['items']), 1)
+        state, _ = self.answer(attempt)
+        self.assertEqual(state['result']['rating'], 3)
+        self.assertTrue(state['result']['scheduled']); self.assertFalse(state['stopped'])
+        self.assertFalse(state['awaiting_first_learning'])
+        self.assertIsNotNone(self.memory()['card_json'])
+        saved = self.memory(); self.service.add_to_notebook(attempt)
+        self.assertEqual(saved, self.memory())
+
+    def test_manual_notebook_wrong_first_answer_initializes_review_and_is_user_scoped(self):
+        attempt = self.open(); self.service.add_to_notebook(attempt)
+        other = TrainingService(self.catalog, self.root, 'other', self.service.judge, clock=lambda: self.now)
+        with self.assertRaises(DomainError): other.add_to_notebook(attempt)
+        self.assertEqual(other.reviews([self.bank])['items'], [])
+        state, _ = self.answer(attempt, 'wrong')
+        self.assertEqual(state['result']['rating'], 1)
+        self.assertIsNotNone(self.memory()['card_json'])
+        self.assertEqual(self.service.state(self.open())['mode'], 'practice')
+        self.now = datetime.fromisoformat(state['due_at']) + timedelta(seconds=1)
+        self.assertEqual(self.service.state(self.open())['mode'], 'review')
+
+    def test_notebook_does_not_reactivate_stopped_question(self):
+        attempt = self.open(); self.answer(attempt)
+        saved = self.memory()
+        with self.assertRaises(DomainError): self.service.add_to_notebook(attempt)
+        self.assertEqual(saved, self.memory())
+
     def test_wrong_then_correct_rates_three_and_due_review_binary_rating(self):
         state, _ = self.answer(self.open(), 'wrong')
         self.assertEqual(state['result']['rating'], 1)

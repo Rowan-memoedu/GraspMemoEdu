@@ -12,7 +12,7 @@ from .access import feature_eligible
 
 PUBLIC_PATHS = {'/api/training/' + name for name in (
     'catalog', 'bank', 'group', 'open', 'state', 'submit', 'submission', 'reveal', 'rate',
-    'history', 'reviews', 'preferences', 'stop')}
+    'history', 'reviews', 'preferences', 'stop', 'notebook')}
 
 
 class OpenQuestion(BaseModel):
@@ -143,6 +143,12 @@ def register_training_routes(app, training, access_store, subjects, service_for,
                 if request.state.public_transport:
                     limits.record(key)
             schedule(backend, submission_id)
+        return state(request, access, backend, payload.attempt_id)
+
+    @app.post('/api/training/notebook')
+    def add_to_notebook(payload: AttemptAction, request: Request):
+        access, backend = attempt_context(request, payload.attempt_id, 'learn')
+        backend.add_to_notebook(payload.attempt_id)
         return state(request, access, backend, payload.attempt_id)
 
     @app.get('/api/training/submission')

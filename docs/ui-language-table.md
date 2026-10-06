@@ -2,7 +2,7 @@
 
 本表从当前界面词库自动生成。修改以词库为准，随后重新生成并检查本表。术语约定见 [界面语言规范](ui-language.md)。
 
-共 769 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
+共 771 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
 
 不包括作者课程正文、题目、答案、解析或用户输入。首页的学科双语副标题按约定保留。
 
@@ -658,6 +658,8 @@
 | Retry | 重试 |
 | Answer saved | 已保存作答 |
 | My error notebook | 我的错题本 |
+| Add to error notebook | 加入错题本 |
+| Added to error notebook | 已加入错题本 |
 | No questions in your error notebook are due. | 错题本中暂无到期题目。 |
 | Review question | 复习此题 |
 | Answer revealed; awaiting rating | 已显示答案，等待选择熟练度 |
