@@ -124,11 +124,13 @@ class HelpThreads:
             FROM help_thread_events WHERE report_id=?''', (viewer, report, viewer, 'legacy-' + report, report, viewer, report)).fetchone()
         result = {'thread_sequence': events['sequence'], 'latest_activity_at': events['latest_at'] or row['created_at'],
                   'content_updated': updated, 'current_content_version': current,
-                  'content_update_unread': bool(update_unread), 'unread': bool(events['unread'] or update_unread)}
+                  'content_update_unread': bool(update_unread), 'message_unread': bool(events['unread']),
+                  'unread': bool(events['unread'] or update_unread)}
         if include_messages:
-            messages = con.execute('''SELECT m.*,v.message,v.revision,v.created_at updated_at
+            messages = con.execute('''SELECT m.*,v.message,v.revision,v.created_at updated_at,e.sequence event_sequence
                 FROM help_messages m JOIN help_message_versions v ON v.message_id=m.id
                     AND v.revision=(SELECT MAX(revision) FROM help_message_versions WHERE message_id=m.id)
+                JOIN help_thread_events e ON e.message_id=m.id AND e.revision=v.revision
                 WHERE m.report_id=? ORDER BY (SELECT MIN(sequence) FROM help_thread_events WHERE message_id=m.id),m.id''', (report,)).fetchall()
             result['messages'] = [{**dict(m), 'editable': m['author_id'] == viewer} for m in messages]
         return result

@@ -1,20 +1,20 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=906c9c4fd7f20cfe";
-import { createReviewView } from "./review.js?v=906c9c4fd7f20cfe";
-import { renderCourseGraph } from "./course-graph.js?v=906c9c4fd7f20cfe";
-import {questionInput, choiceTypeField} from './question-input.js?v=906c9c4fd7f20cfe';
-import {enhanceTopicContent} from './topic-content.js?v=906c9c4fd7f20cfe';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=906c9c4fd7f20cfe';
-import {createCatalogPicker} from './catalog-picker.js?v=906c9c4fd7f20cfe';
-import {createAtomicView} from './atomic.js?v=906c9c4fd7f20cfe';
-import {createTrainingView} from './training.js?v=906c9c4fd7f20cfe';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=906c9c4fd7f20cfe";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=62c00484c1f3316c";
+import { createReviewView } from "./review.js?v=62c00484c1f3316c";
+import { renderCourseGraph } from "./course-graph.js?v=62c00484c1f3316c";
+import {questionInput, choiceTypeField} from './question-input.js?v=62c00484c1f3316c';
+import {enhanceTopicContent} from './topic-content.js?v=62c00484c1f3316c';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=62c00484c1f3316c';
+import {createCatalogPicker} from './catalog-picker.js?v=62c00484c1f3316c';
+import {createAtomicView} from './atomic.js?v=62c00484c1f3316c';
+import {createTrainingView} from './training.js?v=62c00484c1f3316c';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=62c00484c1f3316c";
 
-import {createPaperView} from './review-papers.js?v=906c9c4fd7f20cfe';
+import {createPaperView} from './review-papers.js?v=62c00484c1f3316c';
 
-import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=906c9c4fd7f20cfe';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=906c9c4fd7f20cfe';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=906c9c4fd7f20cfe';
-import {createStudentDashboard} from './student-dashboard.js?v=906c9c4fd7f20cfe';
+import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=62c00484c1f3316c';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=62c00484c1f3316c';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=62c00484c1f3316c';
+import {createStudentDashboard} from './student-dashboard.js?v=62c00484c1f3316c';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -1070,7 +1070,7 @@ export function initPortal(bridge) {
       });
       update.append(open, current); context.append(update);
     }
-    installHelpThread(answer, item, viewer, ticket, async () => {
+    installHelpThread(answer, item, viewer, ticket, context.querySelector('.helpUpdateBadge'), async () => {
       const data = await call('help-center?report_id=' + encode(item.id));
       if (ticket !== sequence || !card.isConnected) return;
       card.replaceWith(helpConversation(data.items[0], data.viewer, ticket, detail));
@@ -1079,7 +1079,7 @@ export function initPortal(bridge) {
     card.append(context, answer);
     return card;
   }
-  function installHelpThread(panel, item, viewer, ticket, refresh) {
+  function installHelpThread(panel, item, viewer, ticket, updateBadge, refresh) {
     const messages = item.messages || [], owner = bridge.getAccess()?.learner_id;
     panel.append(node('h3', '', t('help.conversation')));
     const status = node('p', 'helpReplyStatus', t(item.unread ? 'help.newActivity' : messages.length ? 'help.replyReceived' : 'help.replyPending'));
@@ -1142,26 +1142,41 @@ export function initPortal(bridge) {
       finally { busy = false; submit.disabled = input.disabled = cancel.disabled = false; }
     });
     if (item.unread) {
-      let reading = false;
-      const read = control(t('help.markRead'), 'textButton', markRead); panel.append(read);
-      async function markRead() {
-        if (reading || ticket !== sequence || owner !== bridge.getAccess()?.learner_id) return;
-        reading = true; read.disabled = true;
+      const reading = new Set();
+      let unreadMessages = item.message_unread, unreadContent = item.content_update_unread;
+      const read = control(t('help.markRead'), 'textButton', () => markRead('all')); panel.append(read);
+      async function markRead(mode) {
+        if (reading.has(mode) || ticket !== sequence || owner !== bridge.getAccess()?.learner_id) return;
+        reading.add(mode); read.disabled = true;
         try {
-          await call('help-messages/read', {method: 'POST', body: {report_id: item.id, sequence: item.thread_sequence,
-            content_version: item.content_update_unread ? item.current_content_version : null}});
+          await call('help-messages/read', {method: 'POST', body: {report_id: item.id,
+            sequence: mode === 'content' ? 0 : item.thread_sequence,
+            content_version: mode !== 'messages' && unreadContent ? item.current_content_version : null}});
           if (ticket !== sequence || owner !== bridge.getAccess()?.learner_id) return;
-          status.textContent = t(messages.length ? 'help.replyReceived' : 'help.replyPending'); read.remove(); void refreshHelpSummary(true);
-        } catch { reading = false; read.disabled = false; }
+          if (mode !== 'content') unreadMessages = false;
+          if (mode !== 'messages') unreadContent = false;
+          if (!unreadMessages && !unreadContent) {
+            status.textContent = t(messages.length ? 'help.replyReceived' : 'help.replyPending'); read.remove();
+          }
+          void refreshHelpSummary(true);
+        } catch { /* Manual confirmation remains available after a failed read. */ }
+        finally { reading.delete(mode); read.disabled = reading.size > 0; }
       }
       if (!helpReadObserver) helpReadObserver = new IntersectionObserver(entries => {
         for (const entry of entries) if (entry.isIntersecting && !document.hidden) {
           helpReadObserver?.unobserve(entry.target); entry.target.markHelpRead?.();
         }
       }, {threshold: .1});
-      list.markHelpRead = markRead;
-      const observed = messages.length ? list : status; observed.markHelpRead = markRead;
-      queueMicrotask(() => { if (ticket === sequence && observed.isConnected) helpReadObserver?.observe(observed); });
+      const incoming = messages.filter(message => message.author_id !== owner)
+        .sort((a, b) => b.event_sequence - a.event_sequence)[0];
+      const observed = incoming && list.querySelector(`[data-message-id="${CSS.escape(incoming.id)}"]`);
+      if (observed && unreadMessages) observed.markHelpRead = () => markRead('messages');
+      if (updateBadge && unreadContent) updateBadge.markHelpRead = () => markRead('content');
+      queueMicrotask(() => {
+        if (ticket !== sequence) return;
+        if (observed?.isConnected && unreadMessages) helpReadObserver?.observe(observed);
+        if (updateBadge?.isConnected && unreadContent) helpReadObserver?.observe(updateBadge);
+      });
     }
   }
   async function renderHelpContent(ticket, reportId) {
