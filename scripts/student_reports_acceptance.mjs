@@ -7,6 +7,9 @@ import {createRequire} from 'node:module';
 const [base, artifactRoot, publicBase] = process.argv.slice(2);
 assert.equal(new URL(base).hostname, '127.0.0.1');
 const auth = JSON.parse(await fs.readFile(path.join(artifactRoot, 'auth.private.json'), 'utf8'));
+const publicApi = publicBase ? JSON.parse(await fs.readFile(path.join(artifactRoot, 'pages/deployment.json'), 'utf8')).api_origin : null;
+const fixtureSession = publicBase ? await (await fetch(base + '/api/session', {headers: {Origin: base}})).json() : null;
+if (publicBase) assert.ok(fixtureSession.session_token);
 const out = path.join(artifactRoot, publicBase ? 'published-browser' : 'browser'); await fs.mkdir(out, {recursive: true});
 const require = createRequire(path.join(os.homedir(), '.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/_entry.cjs'));
 const {chromium} = require('playwright');
@@ -24,19 +27,21 @@ async function pageFor(role, mobile = false) {
   const page = await context.newPage(); page.setDefaultTimeout(15000); page.on('pageerror', error => errors.push(error.message));
   if (publicBase) {
     // Published static UI is exercised against isolated records, never production learners.
-    await page.route('**/deployment.json*', route => route.fulfill({json: {api_origin: ''}}));
     await page.route('**/api/**', async route => {
       const request = route.request(), url = new URL(request.url());
-      const headers = {...request.headers()}; delete headers.host; delete headers.origin; delete headers.referer;
+      const headers = {...request.headers()}; delete headers.host; delete headers.referer;
+      headers.origin = base; headers['x-learning-session'] = fixtureSession.session_token;
       if (headers['x-learning-identity']) headers['x-learning-identity'] = auth[role].identity_token;
       else if (!url.pathname.endsWith('/session')) headers['x-learning-identity'] = auth[role].identity_token;
       const response = await fetch(base + url.pathname + url.search, {method: request.method(), headers,
         body: ['GET', 'HEAD'].includes(request.method()) ? undefined : request.postData()});
-      await route.fulfill({status: response.status, contentType: response.headers.get('content-type') || 'application/json', body: Buffer.from(await response.arrayBuffer())});
+      await route.fulfill({status: response.status, contentType: response.headers.get('content-type') || 'application/json',
+        headers: {'Access-Control-Allow-Origin': new URL(publicBase).origin, 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, X-Learning-Identity'}, body: Buffer.from(await response.arrayBuffer())});
     });
     await context.addInitScript(({origin, token, role}) => {
       localStorage.setItem('graspmemoedu:identity:' + origin, token); localStorage.setItem('graspmemoedu:identity-role:' + origin, role);
-    }, {origin: new URL(publicBase).origin, token: auth[role].identity_token, role: auth[role].access.role});
+    }, {origin: publicApi, token: auth[role].identity_token, role: auth[role].access.role});
   }
   return page;
 }
