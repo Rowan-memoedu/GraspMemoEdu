@@ -120,7 +120,10 @@ button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke
 .contentReportActions > .requestHelpButton { color: #0874b9; }
 .contentReportActions > .contentQualityButton { color: #c62828; }
 .trainingNotebookActions { display: flex; flex-direction: column; align-items: flex-end; margin-bottom: 12px; }
-.trainingNotebookButton { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; line-height: 1.5; padding: 0; }
+.trainingNotebookButton { display: inline-flex; align-items: center; gap: 6px; color: #7e22ce; font-size: 13px; line-height: 1.5; padding: 0 0 2px; border-bottom: 1px solid transparent; border-radius: 0; }
+.trainingNotebookButton:is(:hover, :focus-visible, :active, :disabled) { color: #7e22ce; text-decoration: none; opacity: 1; }
+.trainingNotebookButton:is(:hover, :focus-visible, :active, .isAdded) { border-bottom-color: currentColor; }
+.trainingNotebookButton:focus-visible { outline: 2px solid #c4b5fd; outline-offset: 4px; }
 .trainingNotebookIcon { font-size: 1.2em; }
 .courseContent h1, .courseContent h2, .courseContent h3, .courseContent h4 { color: var(--ma-navy); line-height: 1.5; }
 .courseContent h1, .courseContent h2 { font-size: 19px; margin: 28px 0 14px; }

@@ -1,19 +1,19 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=221c916259ceae8b";
-import { createReviewView } from "./review.js?v=221c916259ceae8b";
-import { renderCourseGraph } from "./course-graph.js?v=221c916259ceae8b";
-import {questionInput, choiceTypeField} from './question-input.js?v=221c916259ceae8b';
-import {enhanceTopicContent} from './topic-content.js?v=221c916259ceae8b';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=221c916259ceae8b';
-import {createCatalogPicker} from './catalog-picker.js?v=221c916259ceae8b';
-import {createAtomicView} from './atomic.js?v=221c916259ceae8b';
-import {createTrainingView} from './training.js?v=221c916259ceae8b';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=221c916259ceae8b";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=bd5a901caca49899";
+import { createReviewView } from "./review.js?v=bd5a901caca49899";
+import { renderCourseGraph } from "./course-graph.js?v=bd5a901caca49899";
+import {questionInput, choiceTypeField} from './question-input.js?v=bd5a901caca49899';
+import {enhanceTopicContent} from './topic-content.js?v=bd5a901caca49899';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=bd5a901caca49899';
+import {createCatalogPicker} from './catalog-picker.js?v=bd5a901caca49899';
+import {createAtomicView} from './atomic.js?v=bd5a901caca49899';
+import {createTrainingView} from './training.js?v=bd5a901caca49899';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=bd5a901caca49899";
 
-import {createPaperView} from './review-papers.js?v=221c916259ceae8b';
+import {createPaperView} from './review-papers.js?v=bd5a901caca49899';
 
-import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=221c916259ceae8b';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=221c916259ceae8b';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=221c916259ceae8b';
+import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=bd5a901caca49899';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=bd5a901caca49899';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=bd5a901caca49899';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {

@@ -1,15 +1,15 @@
-import {t, translateMessage} from './i18n.js?v=221c916259ceae8b';
-import {answerReady, answerEmpty} from './question-input.js?v=221c916259ceae8b';
-import {createLearningCache} from './learning-cache.js?v=221c916259ceae8b';
-import {helpableContent} from './content-report.js?v=221c916259ceae8b';
-import {ratingChoices} from './self-assessment.js?v=221c916259ceae8b';
+import {t, translateMessage} from './i18n.js?v=bd5a901caca49899';
+import {answerReady, answerEmpty} from './question-input.js?v=bd5a901caca49899';
+import {createLearningCache} from './learning-cache.js?v=bd5a901caca49899';
+import {helpableContent} from './content-report.js?v=bd5a901caca49899';
+import {ratingChoices} from './self-assessment.js?v=bd5a901caca49899';
 
 const node = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const button = (text, cls, action) => { const n = node('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
 const encode = encodeURIComponent;
 const query = fields => new URLSearchParams(fields).toString();
 const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy', 'training.retire'];
-import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation} from './learning-ui.js?v=221c916259ceae8b';
+import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation} from './learning-ui.js?v=bd5a901caca49899';
 
 export function createTrainingView(bridge) {
   const {root, request, href, formatDate, getAccess} = bridge;
@@ -228,6 +228,7 @@ export function createTrainingView(bridge) {
             const icon = node('span', 'trainingNotebookIcon', '⊕'); icon.setAttribute('aria-hidden', 'true');
             add.append(icon, document.createTextNode(t(state.stopped ? 'training.stopped' : state.in_error_notebook ? 'training.notebookAdded' : 'training.addToNotebook')));
             add.disabled = Boolean(state.in_error_notebook || state.stopped);
+            add.classList.toggle('isAdded', Boolean(state.in_error_notebook));
           };
           refreshNotebook(); actions.append(add); body.prepend(actions);
         }
