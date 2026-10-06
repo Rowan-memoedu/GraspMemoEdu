@@ -1,19 +1,20 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=bd5a901caca49899";
-import { createReviewView } from "./review.js?v=bd5a901caca49899";
-import { renderCourseGraph } from "./course-graph.js?v=bd5a901caca49899";
-import {questionInput, choiceTypeField} from './question-input.js?v=bd5a901caca49899';
-import {enhanceTopicContent} from './topic-content.js?v=bd5a901caca49899';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=bd5a901caca49899';
-import {createCatalogPicker} from './catalog-picker.js?v=bd5a901caca49899';
-import {createAtomicView} from './atomic.js?v=bd5a901caca49899';
-import {createTrainingView} from './training.js?v=bd5a901caca49899';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=bd5a901caca49899";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=0da1084cc9b59bb4";
+import { createReviewView } from "./review.js?v=0da1084cc9b59bb4";
+import { renderCourseGraph } from "./course-graph.js?v=0da1084cc9b59bb4";
+import {questionInput, choiceTypeField} from './question-input.js?v=0da1084cc9b59bb4';
+import {enhanceTopicContent} from './topic-content.js?v=0da1084cc9b59bb4';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=0da1084cc9b59bb4';
+import {createCatalogPicker} from './catalog-picker.js?v=0da1084cc9b59bb4';
+import {createAtomicView} from './atomic.js?v=0da1084cc9b59bb4';
+import {createTrainingView} from './training.js?v=0da1084cc9b59bb4';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=0da1084cc9b59bb4";
 
-import {createPaperView} from './review-papers.js?v=bd5a901caca49899';
+import {createPaperView} from './review-papers.js?v=0da1084cc9b59bb4';
 
-import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=bd5a901caca49899';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=bd5a901caca49899';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=bd5a901caca49899';
+import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=0da1084cc9b59bb4';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=0da1084cc9b59bb4';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=0da1084cc9b59bb4';
+import {createStudentDashboard} from './student-dashboard.js?v=0da1084cc9b59bb4';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -1272,15 +1273,25 @@ export function initPortal(bridge) {
     page.append(link(t('students.back'), '/admin/students', 'subjectBack'));
     const detail = node('div'); page.append(detail);
     const refresh = control(t('pause.refresh'), 'secondaryButton', loadDetail); page.append(refresh);
-    let busy = false;
+    let busy = false, reportDays = 30;
     async function loadDetail() {
       if (busy) return; busy = true; refresh.disabled = true;
       try {
-        const data = await bridge.request('admin/students/' + encode(learnerId));
+        const data = await bridge.request('admin/students/' + encode(learnerId) + `?days=${reportDays}&timezone=${encode(timezone())}`);
         if (!current()) return;
         detail.replaceChildren(node('h2', '', data.student.display_name),
           node('p', 'inputHint', t('students.updated', {time: date(data.generated_at)})));
         if (!data.student.enabled) detail.append(node('p', 'fieldError', t('students.accountDisabled')));
+        const report = createStudentDashboard(data, {
+          request: path => bridge.request('admin/students/' + encode(learnerId) + '/' + path),
+          formatDate: date, timezone: timezone(), days: reportDays,
+          onDaysChange: days => { reportDays = days; void loadDetail(); },
+          subjectName: id => subjectLabel(subjects?.find(subject => subject.id === id) || {id, title: id, title_en: id}),
+          materialHref: item => item.kind === 'training'
+            ? subjectHref(item.subject_id, '/topic/' + encode('training.' + item.container) + '/content') + '?' + new URLSearchParams({bank_id: item.container, group_id: item.group_id, block: 'question:' + item.question, version: item.version})
+            : subjectHref(item.subject_id || 'math', '/topic/' + encode(item.container) + '/content') + (item.question ? '?block=' + encode('question:' + item.question) : ''),
+        });
+        detail.append(report.root);
         const learned = node('section', 'studentSection'); learned.append(node('h2', '', t('students.learned')));
         if (!data.learned.length && !data.training_learned.length) learned.append(emptyBox(t('students.noLearning')));
         for (const topic of data.learned) {
@@ -1303,14 +1314,15 @@ export function initPortal(bridge) {
             node('p', 'inputHint', t('students.trainingAttempts', {count: item.attempts, time: date(item.completed_at)})));
           learned.append(card);
         }
-        detail.append(learned);
+        const prior = node('details', 'studentFold');
+        prior.append(node('summary', '', t('students.learned')), learned); report.overview.append(prior);
         const schedule = node('section', 'studentSection');
         schedule.append(node('h2', '', t('students.schedule')), node('p', 'inputHint', t('students.scheduleHint')));
         const filter = node('select'); filter.setAttribute('aria-label', t('students.filter'));
         for (const [value, key] of [['all', 'students.all'], ['due', 'students.overdue'], ['future', 'students.future'], ['blocked', 'students.blocked']]) {
           const option = node('option', '', t(key)); option.value = value; filter.append(option);
         }
-        const list = node('div', 'studentSchedule'); schedule.append(filter, list); detail.append(schedule);
+        const list = node('div', 'studentSchedule'); schedule.append(filter, list); report.schedule.append(schedule);
         function showSchedule() {
           list.replaceChildren();
           const rows = data.reviews.filter(item => filter.value === 'all' ||
@@ -1341,7 +1353,7 @@ export function initPortal(bridge) {
           for (const reason of item.blockers) card.append(node('p', 'studentBlocked', blockedNames[reason]));
           atoms.append(card);
         }
-        detail.append(atoms);
+        report.schedule.append(atoms);
       } catch (error) { if (current()) detail.replaceChildren(errorBox(translateMessage(error.message), loadDetail)); }
       finally { busy = false; refresh.disabled = false; }
     }

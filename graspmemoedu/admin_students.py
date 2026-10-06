@@ -7,16 +7,18 @@ from contextlib import closing
 from datetime import datetime, timedelta, timezone
 import json
 import re
+from typing import Literal
 
 from fastapi import Query, Request
 
 from .atomic_content import GAP_SECONDS
 from .service import DomainError
 from .training_content import permission_id
+from .student_reports import StudentReport, time_zone
 
 
 def public_route(path):
-    return bool(re.fullmatch(r'/api/admin/students(?:/[A-Za-z0-9_-]{1,128})?', path))
+    return bool(re.fullmatch(r'/api/admin/students(?:/[A-Za-z0-9_-]{1,128}(?:/(?:questions|history))?)?', path))
 
 
 class AdminStudents:
@@ -121,8 +123,9 @@ class AdminStudents:
             item['started_at'] = min((a.get('created_at') or a.get('started_at') or '' for a in state['attempts']), default=None) or None
         return item
 
-    def detail(self, access, learner_id):
+    def detail(self, access, learner_id, days=30, timezone='UTC'):
         self.require_admin(access)
+        time_zone(timezone)
         current = self.clock()
         with closing(self.access._connect()) as con:
             con.execute('PRAGMA query_only=ON')
@@ -186,10 +189,39 @@ class AdminStudents:
                         'blockers': blocked[:], 'bundle': len(point_dates) > 1})
             training_learned, training_reviews = self.training_records(con, student, tables, current, access)
             reviews.extend(training_reviews)
+            analytics = StudentReport(self, con, access, student, rows, tables, current).build(reviews, days, timezone)
         reviews.sort(key=lambda r: (r['due_at'] or '', r['kind'], r['id']))
         learned.sort(key=lambda r: (r['started_at'] or '', r['topic_id']), reverse=True)
         return {'student': self.student(row), 'generated_at': current.isoformat(), 'learned': learned,
-                'reviews': reviews, 'atomic_cards': cards, 'training_learned': training_learned}
+                'reviews': reviews, 'atomic_cards': cards, 'training_learned': training_learned, 'analytics': analytics}
+
+    def report(self, access, learner_id, view, **options):
+        self.require_admin(access)
+        with closing(self.access._connect()) as con:
+            con.execute('PRAGMA query_only=ON')
+            con.execute('BEGIN')
+            row = con.execute("SELECT * FROM access_principals WHERE learner_id=? AND role='account' AND is_student=1 AND is_admin=0", (learner_id,)).fetchone()
+            if not row:
+                raise DomainError('student_not_found', '未找到该学员。', 404)
+            rows = {r['topic']: r for r in con.execute('SELECT topic,version,body FROM topics WHERE learner=?', (learner_id,))
+                    if self.access.test_materials.topic_visible(r['topic'], access)}
+            report = StudentReport(self, con, access, self.access._public(row), rows,
+                                   self.dashboard.dependency_policy.tables(con), self.clock())
+            kind, container = options['kind'], options.get('container')
+            if container and not report.visible('training' if kind == 'notebook' else kind, container):
+                raise DomainError('unknown_material', '未找到此内容。', 404)
+            if view == 'history':
+                return report.history(**options)
+            entries = report.question_rows(None if kind == 'notebook' else kind, container, notebook=kind == 'notebook')
+            state, query = options['state'], options['q'].casefold()
+            entries = [e for e in entries if (not query or query in (e['title'] + ' ' + e['group_title'] + ' ' + e['container_title']).casefold())
+                       and (not options.get('group') or e['group_id'] == options['group'])
+                       and (state == 'all' or state == 'due' and e['due'] or state == 'stopped' and e['stopped']
+                            or state == 'unanswered' and not e['stats']['attempts']
+                            or state == 'wrong' and (e['stats']['wrong'] or e['stats']['self_rated'] > e['stats']['self_passed']))]
+            offset, limit = options['offset'], options['limit']
+            return {'items': entries[offset:offset + limit], 'total': len(entries),
+                    'next_offset': offset + limit if offset + limit < len(entries) else None}
 
     def training_records(self, con, student, tables, current, access):
         learned, reviews = [], []
@@ -241,5 +273,24 @@ def register_admin_student_routes(app, catalog, access_store, subjects, dashboar
         return store.students(access_store.resolve(request.headers.get('x-learning-identity')), limit, offset, q)
 
     @app.get('/api/admin/students/{learner_id}')
-    def detail(learner_id: str, request: Request):
-        return store.detail(access_store.resolve(request.headers.get('x-learning-identity')), learner_id)
+    def detail(learner_id: str, request: Request, days: int = Query(default=30, ge=1, le=366),
+               timezone: str = Query(default='UTC', max_length=100)):
+        return store.detail(access_store.resolve(request.headers.get('x-learning-identity')), learner_id, days, timezone)
+
+    @app.get('/api/admin/students/{learner_id}/questions')
+    def questions(learner_id: str, request: Request, kind: Literal['topic', 'training', 'notebook'],
+                  container: str | None = Query(default=None, max_length=128), group: str | None = Query(default=None, max_length=128),
+                  state: Literal['all', 'due', 'stopped', 'unanswered', 'wrong'] = 'all',
+                  q: str = Query(default='', max_length=100), offset: int = Query(default=0, ge=0, le=1000000),
+                  limit: int = Query(default=30, ge=1, le=100)):
+        return store.report(access_store.resolve(request.headers.get('x-learning-identity')), learner_id, 'questions',
+                            kind=kind, container=container, group=group, state=state, q=q, offset=offset, limit=limit)
+
+    @app.get('/api/admin/students/{learner_id}/history')
+    def history(learner_id: str, request: Request, kind: Literal['topic', 'training'],
+                container: str = Query(min_length=1, max_length=128), question: str | None = Query(default=None, max_length=128),
+                version: str | None = Query(default=None, max_length=128), offset: int = Query(default=0, ge=0, le=1000000),
+                point: str | None = Query(default=None, max_length=128),
+                limit: int = Query(default=10, ge=1, le=30)):
+        return store.report(access_store.resolve(request.headers.get('x-learning-identity')), learner_id, 'history',
+                            kind=kind, container=container, question=question, version=version, point=point, offset=offset, limit=limit)

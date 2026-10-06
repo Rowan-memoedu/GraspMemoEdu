@@ -2,7 +2,7 @@
 
 本表从当前界面词库自动生成。修改以词库为准，随后重新生成并检查本表。术语约定见 [界面语言规范](ui-language.md)。
 
-共 771 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
+共 845 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
 
 不包括作者课程正文、题目、答案、解析或用户输入。首页的学科双语副标题按约定保留。
 
@@ -267,7 +267,81 @@
 | English | 中文 |
 |---|---|
 | Student learning overview | 学员学习情况 |
-| View every student’s learned content and complete review schedule. This page is read-only. | 查看全站所有学员的已学内容与完整复习排程。此页面只读取记录。 |
+| View students’ course progress, banks, error notebooks, submitted answers and review schedules. This page is read-only. | 查看全站学员的课程进度、题库、错题本、作答记录与复习排程。此页面只读取记录。 |
+| Student report sections | 学员数据分类 |
+| Overview | 概览 |
+| All Topics | 全部 Topic |
+| Question banks | 题库 |
+| Error notebook | 错题本 |
+| {value} minutes | {value} 分钟 |
+| {done} / {total} | {done} / {total} |
+| {attempts} valid attempts · Graded accuracy {accuracy} · {self} self-assessments | 有效作答 {attempts} 次 · 系统判题正确率 {accuracy} · 自主评分 {self} 次 |
+| Show answer history | 展开作答历史 |
+| {count} completed answers | 共 {count} 条已完成作答 |
+| Loading… | 正在读取… |
+| Review attempt | 复习作答 |
+| Learning attempt | 学习作答 |
+| Self-assessment: {rating} | 自主评分：{rating} |
+| Correct | 正确 |
+| Incorrect | 错误 |
+| Recorded answer time: {seconds} seconds | 已记录作答用时：{seconds} 秒 |
+| The original question content is unavailable. The saved answer and result are preserved below. | 此记录的原版本正文已不可用，以下保留当时提交的答案与结果。 |
+| Student’s submitted answer | 学员提交的答案 |
+| No text answer was submitted (self-assessment or unanswered at the time limit). | 未提交文字答案（自主评分或限时未答）。 |
+| Search questions or chapters | 搜索题目或章节 |
+| Filter question status | 题目状态筛选 |
+| All questions | 全部题目 |
+| Previously incorrect | 曾经答错 |
+| Due | 已到期 |
+| Not answered | 尚未作答 |
+| Delivery stopped | 已停止推送 |
+| Filter | 筛选 |
+| {count} questions | 共 {count} 道题 |
+| Latest result: {result} | 最近结果：{result} |
+| Completed / all Topics | 已完成 Topic / 全部 Topic |
+| Bank questions answered | 题库已做题数 |
+| {count} currently due | 其中 {count} 项已到期 |
+| Activity period | 统计时间范围 |
+| Last {days} days | 最近 {days} 天 |
+| Learning activity | 学习活动 |
+| Days with completed answers | 有效作答天数 |
+| Completed attempts | 有效作答次数 |
+| Graded accuracy | 系统判题正确率 |
+| {count} self-assessments, counted separately | 自主评分 {count} 次，单独统计 |
+| Recorded answer time | 已记录作答用时 |
+| {count} / {total} attempts include timing | {count} / {total} 次作答有用时记录 |
+| Counts completed, valid answers. Judge failures, retries and unsubmitted drafts are excluded. Self-assessments are separate from graded accuracy. Recorded time excludes reading and unmeasured time. | 统计已完成且有效的作答；判题失败、重复请求、未提交草稿不计入。自主评分不混入系统判题正确率。用时不包含阅读和未记录的时间。 |
+| Answer activity calendar | 作答日历 |
+| Daily accuracy trend | 每日正确率趋势 |
+| Select a day to view its answer count. | 点击日期查看当日作答量。 |
+| {count} attempts · Accuracy {accuracy} | 作答 {count} 次 · 正确率 {accuracy} |
+| Only days with graded answers are plotted. Missing days are not treated as 0%. | 仅显示有系统判题记录的日期；无记录日期不按 0% 计算。 |
+| No graded answers in this period. | 此时间段暂无系统判题记录。 |
+| View chart data | 查看图表数据 |
+| Review calendar | 复习日历 |
+| Review month | 复习月份 |
+| Counts scheduled memory points or paradigm modules, including blocked items. Dates do not guarantee delivery. Select a date for details. | 数字表示已有排程的记忆点或范式模块数，包含受阻项；日期不代表保证推送。点击日期查看详情。 |
+| {count} scheduled, {blocked} blocked | {count} 项排程，其中 {blocked} 项受阻 |
+| Repeatedly missed knowledge | 反复出错的知识点 |
+| Ranks up to 20 points by incorrect answers or self-assessment 1. Variants of the same point are combined. | 按累计错误或自主评分 1 的次数排列，展示最多 20 项。同一记忆点的变式合并统计。 |
+| No points with two or more incorrect attempts. | 暂无累计错误两次及以上的知识点。 |
+| {count} incorrect attempts | 累计出错 {count} 次 |
+| {graded} graded incorrect · {self} self-assessed incorrect | 系统判错 {graded} 次 · 自评做错 {self} 次 |
+| Access and learning blockers | 权限与学习受阻状态 |
+| Access to {count} Topics · {features} features | 已开放 {count} 个 Topic · {features} 项功能 |
+| Account enabled | 账号正常启用 |
+| Skipped, awaiting catch-up | 已跳过，待补学 |
+| Filter subject | 学科筛选 |
+| All subjects | 全部学科 |
+| Filter Topic status | Topic 状态筛选 |
+| All states | 全部状态 |
+| Search Topics or courses | 搜索 Topic 或课程 |
+| Progress counts completed modules, atomic points or introduction sections. Skipped modules are incomplete. Older records are preserved but do not count toward a new version. | 进度按范式模块、原子记忆点或引论的指导段落计算；跳过不算完成。旧版本记录保留，不计入新版本进度。 |
+| {count} Topics | 共 {count} 个 Topic |
+| Questions and answer history | 题目与作答记录 |
+| Progress counts distinct questions with valid completed answers in the current bank, not mastery. Expand chapters for questions and history. | 进度表示当前题库中已经有效作答的不同题目数，不代表掌握率。展开章节可查看题目与历史。 |
+| No question banks available. | 暂无可查看的题库。 |
+| Uses the student’s existing notebook enrollment, including manually added, untrained and delivery-stopped questions. Filter previously incorrect or due questions. | 沿用学员现有错题本的收录规则，包含手动加入、待首次训练和已停止推送的记录。可筛选曾答错或已到期的题目。 |
 | This page is for administrators only. | 此页面仅供管理员使用。 |
 | Search students | 搜索学员 |
 | Search by student name | 按学员名称搜索 |

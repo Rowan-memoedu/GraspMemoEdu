@@ -1,5 +1,5 @@
-import {t} from './i18n.js?v=bd5a901caca49899';
-import {prepareLiteralMath} from './math-presentation.js?v=bd5a901caca49899';
+import {t} from './i18n.js?v=0da1084cc9b59bb4';
+import {prepareLiteralMath} from './math-presentation.js?v=0da1084cc9b59bb4';
 
 const node = (tag, cls, text) => {
   const element = document.createElement(tag); element.className = cls;

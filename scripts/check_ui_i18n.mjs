@@ -10,7 +10,7 @@ for (const [key,pair] of Object.entries(messages)) {
   assert.ok(pair.every(value=>typeof value === 'string' && value.trim()),key);
   assert.deepEqual(placeholders(pair[0]),placeholders(pair[1]),`Interpolation mismatch: ${key}`);
 }
-for (const file of ['app.js','portal.js','review.js','atomic.js','training.js','learning-ui.js','subjects.js','course-graph.js','question-input.js','content-report.js','help-feedback.js','catalog-picker.js','review-papers.js','review-directory.js']) {
+for (const file of ['app.js','portal.js','review.js','atomic.js','training.js','learning-ui.js','subjects.js','course-graph.js','question-input.js','content-report.js','help-feedback.js','catalog-picker.js','review-papers.js','review-directory.js','student-dashboard.js']) {
   const source = await fs.readFile(new URL(`../web/${file}`,import.meta.url),'utf8');
   for (const match of source.matchAll(/\bt\("([^"\\]*(?:\\.[^"\\]*)*)"\s*(?=[,)])/g)) {
     const key=JSON.parse(`"${match[1]}"`); assert.ok(key in messages,`Missing UI key in ${file}: ${key}`);
