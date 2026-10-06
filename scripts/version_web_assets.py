@@ -6,7 +6,7 @@ import hashlib
 import re
 
 WEB = Path(__file__).resolve().parents[1] / 'web'
-URL = re.compile(r'''(\./(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_-]+\.(?:m?js|css|svg))(?:\?v=[a-f0-9]+)?(?=["'])''')
+URL = re.compile(r'''(\./(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_.-]+\.(?:m?js|css|svg))(?:\?v=[a-f0-9]+)?(?=["'])''')
 
 
 def main():

@@ -1,0 +1,2 @@
+# Keep pinned chat bundles, licenses and fonts byte-identical across checkouts.
+/web/vendor/chat/** -text

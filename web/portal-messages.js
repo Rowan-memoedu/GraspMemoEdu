@@ -960,6 +960,14 @@ export const portalMessages = {
   "students.personalHint": ["查看自己的课程进度、题库、错题本、作答记录与复习排程。", "View your course progress, question banks, notebook, answer history and review schedule."],
   "students.studentOnly": ["个人学习情况仅供学员查看本人记录。", "Students can view their own learning records here."],
   "students.lockedHistory": ["未掌握的原子卡片暂不可查看，掌握后可展开内容。", "This atomic card remains locked until mastered."],
+  "help.mainConversation": ["主对话", "Main conversation"],
+  "help.chooseStudent": ["选择学员", "Choose a student"],
+  "help.editorHint": ["支持 Markdown 与 LaTeX：$公式$、$$独立公式$$。Tab 缩进，Shift+Tab 取消缩进；Esc 后按 Tab 可移出编辑器。", "Markdown and LaTeX: $inline$ and $$display$$. Tab indents; Shift+Tab unindents. Press Esc then Tab to leave the editor."],
+  "help.editorBold": ["加粗", "Bold"],
+  "help.editorItalic": ["斜体", "Italic"],
+  "help.editorList": ["列表", "List"],
+  "help.editorMath": ["公式", "Math"],
+  "help.editorPreview": ["预览", "Preview"],
   "graph.clear": [
     "清除选择",
     "Clear selection"

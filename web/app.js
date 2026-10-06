@@ -1,11 +1,11 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=5ed0a69081654e02";
-import {answerReady} from './question-input.js?v=5ed0a69081654e02';
-import {reportableContent} from './content-report.js?v=5ed0a69081654e02';
-import {createLearningCache} from './learning-cache.js?v=5ed0a69081654e02';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=e7fd9184f3d00382";
+import {answerReady} from './question-input.js?v=e7fd9184f3d00382';
+import {reportableContent} from './content-report.js?v=e7fd9184f3d00382';
+import {createLearningCache} from './learning-cache.js?v=e7fd9184f3d00382';
 
-import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState} from './learning-ui.js?v=5ed0a69081654e02';
-import {selfAssessment} from './self-assessment.js?v=5ed0a69081654e02';
-import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=5ed0a69081654e02';
+import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState} from './learning-ui.js?v=e7fd9184f3d00382';
+import {selfAssessment} from './self-assessment.js?v=e7fd9184f3d00382';
+import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=e7fd9184f3d00382';
 
 applyStaticTranslations();
 
@@ -1431,7 +1431,7 @@ async function openTopic(id, subjectId) {
   }
 }
 
-const { initPortal } = await import("./portal.js?v=5ed0a69081654e02");
+const { initPortal } = await import("./portal.js?v=e7fd9184f3d00382");
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {
     try { return await fetchGuideAsset(url, subjectId); }

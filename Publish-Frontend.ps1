@@ -22,6 +22,13 @@ foreach ($name in $vendor.files.Keys) {
     if ($actual -ne $vendor.files[$name]) { throw ('Vendor source differs from pinned build: ' + $name) }
 }
 $expected += @($vendor.files.Keys)
+$chat = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'scripts/chat-assets.json') -Raw | ConvertFrom-Json -AsHashtable
+foreach ($name in $chat.files.Keys) {
+    if ($name -notmatch '^vendor/chat/(chat\.js(?:\.LEGAL\.txt)?|LICENSES\.txt|katex\.min\.css|fonts/KaTeX_[A-Za-z-]+\.woff2)$') { throw 'Invalid chat asset path.' }
+    $actual = (Get-FileHash -LiteralPath (Join-Path $PSScriptRoot ('web/' + $name)) -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actual -ne $chat.files[$name]) { throw ('Chat source differs from pinned build: ' + $name) }
+}
+$expected += @($chat.files.Keys)
 $relativeFiles = @($files | ForEach-Object { [IO.Path]::GetRelativePath($ExportDirectory, $_.FullName).Replace('\','/') })
 if (@(Compare-Object ($expected | Sort-Object) ($relativeFiles | Sort-Object)).Count -ne 0) { throw 'Unexpected files in static publication directory.' }
 foreach ($name in $expected | Where-Object { $_ -notin @('.nojekyll', 'deployment.json') }) {
@@ -71,10 +78,17 @@ $parent = $reference.object.sha
 $commit = Invoke-Api GET ('repos/' + $Repository + '/git/commits/' + $parent)
 $priorTree = Invoke-Api GET ('repos/' + $Repository + '/git/trees/' + $commit.tree.sha + '?recursive=1')
 $allowedPrior = if ($created) { @('README.md') } else { $expected }
-if ($priorTree.truncated -or @($priorTree.tree | Where-Object { ($_.type -eq 'blob' -and $_.path -notin $allowedPrior) -or ($_.type -eq 'tree' -and $_.path -notin @('vendor','vendor/mermaid')) -or $_.type -notin @('blob','tree') }).Count) {
+if ($priorTree.truncated -or @($priorTree.tree | Where-Object { ($_.type -eq 'blob' -and $_.path -notin $allowedPrior) -or ($_.type -eq 'tree' -and $_.path -notin @('vendor','vendor/mermaid','vendor/chat','vendor/chat/fonts')) -or $_.type -notin @('blob','tree') }).Count) {
     throw 'Existing repository contains files outside the frontend allowlist. Publication stopped.'
 }
-$treeItems = @($files | ForEach-Object { @{path=[IO.Path]::GetRelativePath($ExportDirectory, $_.FullName).Replace('\','/');mode='100644';type='blob';content=[IO.File]::ReadAllText($_.FullName)} })
+$treeItems = @($files | ForEach-Object {
+    $entry = @{path=[IO.Path]::GetRelativePath($ExportDirectory, $_.FullName).Replace('\','/');mode='100644';type='blob'}
+    if ($_.Extension -eq '.woff2') {
+        $blob = Invoke-Api POST ('repos/' + $Repository + '/git/blobs') @{content=[Convert]::ToBase64String([IO.File]::ReadAllBytes($_.FullName));encoding='base64'}
+        $entry.sha = $blob.sha
+    } else { $entry.content = [IO.File]::ReadAllText($_.FullName) }
+    $entry
+})
 $tree = Invoke-Api POST ('repos/' + $Repository + '/git/trees') @{tree=$treeItems}
 $published = Invoke-Api POST ('repos/' + $Repository + '/git/commits') @{message='Publish verified learning frontend';tree=$tree.sha;parents=@($parent)}
 $verifiedTree = Invoke-Api GET ('repos/' + $Repository + '/git/trees/' + $published.tree.sha + '?recursive=1')

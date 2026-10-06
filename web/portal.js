@@ -1,20 +1,21 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=5ed0a69081654e02";
-import { createReviewView } from "./review.js?v=5ed0a69081654e02";
-import { renderCourseGraph } from "./course-graph.js?v=5ed0a69081654e02";
-import {questionInput, choiceTypeField} from './question-input.js?v=5ed0a69081654e02';
-import {enhanceTopicContent} from './topic-content.js?v=5ed0a69081654e02';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=5ed0a69081654e02';
-import {createCatalogPicker} from './catalog-picker.js?v=5ed0a69081654e02';
-import {createAtomicView} from './atomic.js?v=5ed0a69081654e02';
-import {createTrainingView} from './training.js?v=5ed0a69081654e02';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=5ed0a69081654e02";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=e7fd9184f3d00382";
+import { createReviewView } from "./review.js?v=e7fd9184f3d00382";
+import { renderCourseGraph } from "./course-graph.js?v=e7fd9184f3d00382";
+import {questionInput, choiceTypeField} from './question-input.js?v=e7fd9184f3d00382';
+import {enhanceTopicContent} from './topic-content.js?v=e7fd9184f3d00382';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=e7fd9184f3d00382';
+import {createCatalogPicker} from './catalog-picker.js?v=e7fd9184f3d00382';
+import {createAtomicView} from './atomic.js?v=e7fd9184f3d00382';
+import {createTrainingView} from './training.js?v=e7fd9184f3d00382';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=e7fd9184f3d00382";
 
-import {createPaperView} from './review-papers.js?v=5ed0a69081654e02';
+import {createPaperView} from './review-papers.js?v=e7fd9184f3d00382';
 
-import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=5ed0a69081654e02';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=5ed0a69081654e02';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=5ed0a69081654e02';
-import {createStudentDashboard} from './student-dashboard.js?v=5ed0a69081654e02';
+import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=e7fd9184f3d00382';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=e7fd9184f3d00382';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=e7fd9184f3d00382';
+import {attachChatEditor, renderChatMarkdown} from './vendor/chat/chat.js?v=e7fd9184f3d00382';
+import {createStudentDashboard} from './student-dashboard.js?v=e7fd9184f3d00382';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -34,7 +35,7 @@ const roundButton = (text, action) => control(text, "portalStart", action);
 export function initPortal(bridge) {
   const root = $("portalContent");
   let catalog = null, profile = null, identity = null, selectedCourse = null;
-  let subjects = null, catalogSubject = null, activeSubject = null;
+  let subjects = null, catalogSubject = null, activeSubject = null, navigationSubjectId = 'math';
   let sequence = 0, currentHash = "", currentRoute = null, busyCourse = false;
   let expandedTask = null, paging = false, historyError = null, guideVersion = null, guideLoaded = false;
   const expandedUnits = new Map();
@@ -44,6 +45,10 @@ export function initPortal(bridge) {
   let graphScroll = 0, feedbackContext = {}, feedbackBusy = false, renderedDay = null;
   let helpReporting = null;
   let helpSummary = null, helpSummaryBusy = false, helpSummaryAt = 0, helpFeedRefresh = null, helpReadObserver = null;
+  const chatEditors = new Set();
+  function pruneChatEditors(all = false) {
+    for (const editor of chatEditors) if (all || !editor.host.isConnected) {editor.destroy(); chatEditors.delete(editor);}
+  }
   const replyDrafts = new Map();
   const dashboards = new Map(), scrolls = new Map(), answerCache = new Map();
   const routeKey = () => location.hash || "#/";
@@ -82,7 +87,7 @@ export function initPortal(bridge) {
   const learnHref = () => subjectHref(currentRoute?.subjectId || "math", "/learn");
   const localHref = (path) => {
     const raw = path.replace(/^#/, "");
-    return /^\/(learn|courses|banks|guide|topic|review|reviews|qa)(\/|\?|$)/.test(raw)
+    return /^\/(learn|courses|banks|guide|topic|review|reviews)(\/|\?|$)/.test(raw)
       ? subjectHref(currentRoute?.subjectId || "math", raw) : `#${raw}`;
   };
   const link = (text, href, className = "") => { const item = node("a", className, text); item.href = localHref(href); return item; };
@@ -143,6 +148,7 @@ export function initPortal(bridge) {
     }
   }
   function updateSubjectContext(subject) {
+    if (subject) navigationSubjectId = subject.id;
     const changed = activeSubject?.id !== subject?.id;
     activeSubject = subject;
     if (changed) { showHelpSummary(null); helpSummaryAt = 0; }
@@ -160,8 +166,8 @@ export function initPortal(bridge) {
     context.href = subject ? subjectHref(subject.id) : "#/";
     for (const item of document.querySelectorAll(".mainNavigation [data-navigation]")) {
       const section = item.dataset.navigation;
-      item.hidden = !subject || section === 'qa' && !canUseHelp();
-      item.href = subjectHref(section === 'qa' ? subject?.id : subject?.id || "math", `/${section}`);
+      item.hidden = section === 'qa' ? !canUseHelp() : !subject && !currentRoute?.path.startsWith('/qa');
+      item.href = section === 'qa' ? '#/qa' : subjectHref(subject?.id || navigationSubjectId, `/${section}`);
     }
     $("topicHomeLink").href = learnHref();
     if (changed && subject) void refreshHelpSummary(true);
@@ -177,7 +183,8 @@ export function initPortal(bridge) {
     $("userMenuButton").setAttribute("aria-label", t("portal.userMenu", { name }));
     $("menuDisplayName").textContent = name;
     $("menuRole").textContent = expired ? t("portal.session.expired.14") : current?.is_admin ? t('admin.identity') : current?.role === 'account' ? t(current.is_advanced_learner ? 'account.advancedLearner' : 'account.standardLearner') + ' · ' + t(current.is_student ? 'account.student' : 'account.nonStudent') : t("portal.guest.16");
-    $('qaNavLink').hidden = !activeSubject || !canUseHelp();
+    $('qaNavLink').hidden = !canUseHelp();
+    $('qaNavLink').href = '#/qa';
     void refreshHelpSummary();
     $('pauseInboxLink').hidden = !current?.is_admin;
     $('studentsLink').hidden = !current?.is_admin;
@@ -195,14 +202,13 @@ export function initPortal(bridge) {
     $('qaNavLink').setAttribute('aria-label', count ? t('help.unreadCount', {count}) : t('help.pageTitle'));
   }
   async function refreshHelpSummary(force = false) {
-    if (!activeSubject || !canUseHelp()) { showHelpSummary(null); helpSummaryAt = 0; return; }
+    if (!canUseHelp()) { showHelpSummary(null); helpSummaryAt = 0; return; }
     if (helpSummaryBusy || document.hidden || (!force && Date.now() - helpSummaryAt < 15000)) return;
     const learner = bridge.getAccess()?.learner_id;
-    const subject = activeSubject.id;
     helpSummaryBusy = true;
     try {
-      const result = await scopedRequest('help-center?summary=true', undefined, subject);
-      if (learner !== bridge.getAccess()?.learner_id || subject !== activeSubject?.id || !canUseHelp()) return;
+      const result = await bridge.request('help-center?summary=true');
+      if (learner !== bridge.getAccess()?.learner_id || !canUseHelp()) return;
       const changed = helpSummary && result.activity_key !== helpSummary.activity_key;
       showHelpSummary(result); helpSummaryAt = Date.now();
       if (changed) helpFeedRefresh?.();
@@ -279,13 +285,14 @@ export function initPortal(bridge) {
     dashboards.set(id, merged); return merged;
   }
   function releaseGuideAssets() { for (const url of guideObjectUrls) URL.revokeObjectURL(url); guideObjectUrls = []; }
-  function stopPageWork() { clearTimeout(refreshTimer); clearTimeout(pageTimer); releaseGuideAssets(); review.stop(); atomic.stop(); training.stop(); papers.stop(); hidePopovers(); helpFeedRefresh = null; helpReadObserver?.disconnect(); helpReadObserver = null; }
+  function stopPageWork() { pruneChatEditors(true); clearTimeout(refreshTimer); clearTimeout(pageTimer); releaseGuideAssets(); review.stop(); atomic.stop(); training.stop(); papers.stop(); hidePopovers(); helpFeedRefresh = null; helpReadObserver?.disconnect(); helpReadObserver = null; }
   async function route() {
     if (currentHash) scrolls.set(currentHash, window.scrollY);
     currentRoute = parseRoute();
     if (/^\/help-requests(?:\/|$)/.test(currentRoute.path)) {
       currentRoute.path = currentRoute.path.replace('/help-requests', '/qa');
-      currentRoute.canonicalHash = subjectHref(currentRoute.subjectId, currentRoute.path);
+      currentRoute.subjectId = null;
+      currentRoute.canonicalHash = '#' + currentRoute.path;
     }
     if (currentRoute.canonicalHash && currentRoute.canonicalHash !== location.hash) history.replaceState(null, "", currentRoute.canonicalHash);
     currentHash = routeKey();
@@ -305,7 +312,6 @@ export function initPortal(bridge) {
       await basics(ticket, currentRoute.subjectId);
       if (ticket !== sequence) return;
       const { path, params, subjectId } = currentRoute;
-      if (!subjectId && /^\/qa(\/|$)/.test(path)) { location.replace('#/'); return; }
       const subject = subjects.find(item => item.id === subjectId);
       if (subjectId && !subject) throw new Error(t("platform.unknownSubject"));
       updateSubjectContext(subject || null);
@@ -1009,18 +1015,43 @@ export function initPortal(bridge) {
     const page = node('section', 'helpInbox'); page.append(node('h1', 'portalPageTitle', t('help.pageTitle')));
     const toolbar = node('div', 'helpToolbar');
     const refresh = control(t('help.refresh'), 'textButton', () => load(true)); toolbar.append(refresh); page.append(toolbar);
+    const selectorLabel = node('label', 'helpStudentSelector', t('help.chooseStudent'));
+    const selector = node('select'); selector.setAttribute('aria-label', t('help.chooseStudent'));
+    selectorLabel.append(selector); selectorLabel.hidden = true; toolbar.prepend(selectorLabel);
+    const main = node('div', 'helpMainConversationHost'); page.append(main);
     const list = node('div', 'helpRequestList'); page.append(list); root.replaceChildren(page);
     let offset = 0, busy = false, styles = new Set(), ids = new Set();
+    let selected = currentRoute.params.get('learner_id') || '';
+    selector.addEventListener('change', () => {
+      selected = selector.value;
+      history.replaceState(null, '', '#/qa?learner_id=' + encode(selected));
+      void load(true);
+    });
     const hint = node('p', 'inputHint'); toolbar.before(hint);
     const more = control(t('help.more'), 'secondaryButton', () => load(false)); more.hidden = true; page.append(more);
     helpFeedRefresh = () => { void load(true); };
     async function load(reset = false) {
-      if (busy) return; busy = true; more.disabled = refresh.disabled = true;
+      if (busy) return; busy = true; more.disabled = refresh.disabled = selector.disabled = true;
       try {
-        const result = await call(`help-center?offset=${reset ? 0 : offset}`);
+        let result = await bridge.request(`help-center?offset=${reset ? 0 : offset}${selected ? '&learner_id=' + encode(selected) : ''}`);
+        if (result.viewer === 'admin') {
+          selectorLabel.hidden = false;
+          selector.replaceChildren(...result.students.map(student => {
+            const option = node('option', '', student.display_name + (student.main_unread ? ' · ' + t('help.newActivity') : ''));
+            option.value = student.learner_id; return option;
+          }));
+          if (!selected && result.students.length) {
+            selected = result.students[0].learner_id;
+            result = await bridge.request('help-center?learner_id=' + encode(selected));
+          }
+          selector.value = selected;
+        }
         if (ticket !== sequence) return;
-        showHelpSummary(result); helpSummaryAt = Date.now();
+        void refreshHelpSummary(true);
         if (reset) { list.replaceChildren(); offset = 0; styles = new Set(); ids = new Set(); helpReadObserver?.disconnect(); helpReadObserver = null; }
+        if (reset || !main.children.length) {
+          main.replaceChildren(...(result.main_thread ? [mainConversation(result.main_thread, result.viewer, ticket)] : []));
+        }
         hint.textContent = t(result.viewer === 'admin' ? 'help.adminHint' : 'help.studentHint');
         if (!result.items.length && !offset) list.append(emptyBox(t('help.empty')));
         for (const item of result.items) {
@@ -1029,11 +1060,27 @@ export function initPortal(bridge) {
           list.append(helpConversation(item, result.viewer, ticket));
         }
         mathStyle([...styles].join('\n'));
+        pruneChatEditors();
         offset = result.next_offset; more.hidden = offset === null;
       } catch (error) { if (ticket === sequence) list.append(errorBox(translateMessage(error.message), () => load(reset))); }
-      finally { busy = false; more.disabled = refresh.disabled = false; }
+      finally { busy = false; more.disabled = refresh.disabled = selector.disabled = false; }
     }
     await load();
+  }
+  function mainConversation(item, viewer, ticket) {
+    item = {...item, id: 'main:' + item.learner_id};
+    const card = node('article', 'courseChoice helpRequest helpConversation helpMainConversation');
+    card.dataset.learnerId = item.learner_id;
+    const panel = node('div', 'helpReplyPanel');
+    card.append(node('h2', '', t('help.mainConversation')), panel);
+    installHelpThread(panel, item, viewer, ticket, null, async () => {
+      const data = await bridge.request('help-center?learner_id=' + encode(item.learner_id));
+      if (ticket !== sequence || !card.isConnected) return;
+      card.replaceWith(mainConversation(data.main_thread, data.viewer, ticket));
+      pruneChatEditors();
+      void refreshHelpSummary(true);
+    });
+    return card;
   }
   function helpConversation(item, viewer, ticket, detail = false) {
     const card = node('article', 'courseChoice helpRequest helpConversation'); card.dataset.reportId = item.id;
@@ -1049,11 +1096,11 @@ export function initPortal(bridge) {
     const content = item.content_fidelity === 'text_snapshot' ? node('div', 'courseContent helpContentText', item.content_text) : trustedContent(item.highlighted_html || item.content_html);
     content.dataset.contentBlock = item.request.content_block_id; content.dataset.contentVersion = item.request.content_version;
     context.append(content, node('h3', '', t(viewer === 'admin' ? 'help.questionLabel' : 'help.myQuestion')),
-      node('p', 'helpRequestMessage', item.request.message || t('help.noMessage')));
+      renderChatMarkdown(node('div', 'helpRequestMessage helpReplyText'), item.request.message || t('help.noMessage')));
     if (viewer === 'admin') context.append(link(t('help.openContent'), subjectHref(item.subject_id,
       `/topic/${encode(item.request.topic_id)}/content?${query({block: item.request.content_block_id,
         version: item.request.content_version, bank_id: item.request.bank_id, group_id: item.request.group_id, report: item.id})}`), 'textButton'));
-    else if (!detail) context.append(link(t('help.openContent'), subjectHref(item.subject_id, '/qa/' + encode(item.id)), 'textButton'));
+    else if (!detail) context.append(link(t('help.openContent'), '#/qa/' + encode(item.id), 'textButton'));
     if (item.content_updated) {
       const update = node('div', 'helpContentUpdate');
       update.append(node('strong', 'helpUpdateBadge', t('help.contentUpdated')), node('p', 'inputHint', t('help.contentUpdatedHint')));
@@ -1078,6 +1125,7 @@ export function initPortal(bridge) {
       const data = await call('help-center?report_id=' + encode(item.id));
       if (ticket !== sequence || !card.isConnected) return;
       card.replaceWith(helpConversation(data.items[0], data.viewer, ticket, detail));
+      pruneChatEditors();
       void refreshHelpSummary(true);
     });
     card.append(context, answer);
@@ -1090,6 +1138,7 @@ export function initPortal(bridge) {
     const list = node('div', 'helpMessageList'); panel.append(status, list);
     const form = node('form', 'helpReplyForm'), label = node('label', '', t('help.replyInput'));
     const input = node('textarea'); input.id = 'help-reply-' + item.id; label.htmlFor = input.id;
+    label.id = input.id + '-label'; let editor;
     input.required = true; input.maxLength = 4000; input.rows = 5;
     const target = node('p', 'helpComposerTarget'); target.setAttribute('aria-live', 'polite');
     const feedback = node('p', 'feedbackStatus'); feedback.setAttribute('role', 'status');
@@ -1101,6 +1150,7 @@ export function initPortal(bridge) {
     });
     function syncComposer() {
       input.value = draft.message;
+      editor?.setValue(draft.message);
       submit.textContent = t(draft.message_id ? 'help.updateReply' : 'help.sendReply');
       target.textContent = draft.message_id ? t('help.editingReply') : draft.reply_to ? t('help.replyingTo') : t('help.continueReply');
       cancel.hidden = !draft.message_id && !draft.reply_to;
@@ -1111,7 +1161,7 @@ export function initPortal(bridge) {
       if (busy) return;
       draft = {message: edit ? message.message : '', message_id: edit ? message.id : null,
         reply_to: edit ? null : message.id, revision: edit ? message.revision : 0, pending: null};
-      replyDrafts.set(item.id, draft); syncComposer(); input.focus();
+      replyDrafts.set(item.id, draft); syncComposer(); editor.focus();
     }
     for (const message of messages) {
       const block = node('article', 'helpMessage ' + (message.author_role === 'admin' ? 'helpAdminMessage' : 'helpStudentMessage'));
@@ -1119,8 +1169,8 @@ export function initPortal(bridge) {
       block.append(node('strong', '', t(message.author_role === 'admin' ? 'help.adminAuthor' : 'help.studentAuthor')),
         node('p', 'inputHint', apiDate(message.created_at, true) + (message.revision > 1 ? ' · ' + t('help.edited') : '')));
       const parent = messages.find(m => m.id === message.reply_to);
-      if (parent) block.append(node('blockquote', 'helpReplyQuote', parent.message));
-      block.append(node('div', 'helpReplyText', message.message));
+      if (parent) block.append(renderChatMarkdown(node('blockquote', 'helpReplyQuote helpReplyText'), parent.message));
+      block.append(renderChatMarkdown(node('div', 'helpReplyText'), message.message));
       const actions = node('div', 'helpMessageActions');
       actions.append(control(t('help.replyToMessage'), 'textButton', () => choose(message, false)));
       if (message.editable) actions.append(control(t('help.editMessage'), 'textButton', () => choose(message, true)));
@@ -1128,22 +1178,26 @@ export function initPortal(bridge) {
     }
     input.addEventListener('input', () => { draft = {...draft, message: input.value, pending: null}; replyDrafts.set(item.id, draft); });
     form.append(label, target, input, submit, cancel, feedback); syncComposer(); panel.append(form);
+    editor = attachChatEditor(input, {editor: t('help.replyInput'), hint: t('help.editorHint'),
+      bold: t('help.editorBold'), italic: t('help.editorItalic'), list: t('help.editorList'),
+      math: t('help.editorMath'), preview: t('help.editorPreview')}); chatEditors.add(editor);
     form.addEventListener('submit', async event => {
       event.preventDefault(); if (busy || !input.value.trim() || owner !== bridge.getAccess()?.learner_id) return;
       busy = true; submit.disabled = input.disabled = cancel.disabled = true; feedback.textContent = t('help.sendingReply');
-      draft.pending ||= {report_id: item.id, request_id: crypto.randomUUID(), message_id: draft.message_id,
-        reply_to: draft.reply_to, expected_revision: draft.revision, message: input.value.trim()};
+      editor.setDisabled(true);
+      draft.pending ||= {report_id: item.is_main ? item.learner_id : item.id, request_id: crypto.randomUUID(), message_id: draft.message_id,
+        reply_to: draft.reply_to, expected_revision: draft.revision, message: input.value};
       replyDrafts.set(item.id, draft);
       let saved = false;
       try {
-        const result = await call('help-messages', {method: 'POST', body: draft.pending});
+        const result = await bridge.request(item.is_main ? 'help-main/messages' : 'help-messages', {method: 'POST', body: draft.pending});
         if (ticket !== sequence || owner !== bridge.getAccess()?.learner_id) return;
         if (result.status !== 'saved') throw new Error(t('portal.feedback.was.not.confirmed.as.saved.please.try.again.129'));
         saved = true; replyDrafts.delete(item.id);
         draft = {message: '', message_id: null, reply_to: null, revision: 0, pending: null};
         syncComposer(); feedback.textContent = t('help.replySent'); await refresh();
       } catch (error) { if (ticket === sequence) feedback.textContent = saved ? t('help.savedRefresh') : translateMessage(error.message); }
-      finally { busy = false; submit.disabled = input.disabled = cancel.disabled = false; }
+      finally { busy = false; submit.disabled = input.disabled = cancel.disabled = false; if (editor.host.isConnected) editor.setDisabled(false); }
     });
     if (item.unread) {
       const reading = new Set();
@@ -1153,7 +1207,7 @@ export function initPortal(bridge) {
         if (reading.has(mode) || ticket !== sequence || owner !== bridge.getAccess()?.learner_id) return;
         reading.add(mode); read.disabled = true;
         try {
-          await call('help-messages/read', {method: 'POST', body: {report_id: item.id,
+          await bridge.request(item.is_main ? 'help-main/read' : 'help-messages/read', {method: 'POST', body: {report_id: item.is_main ? item.learner_id : item.id,
             sequence: mode === 'content' ? 0 : item.thread_sequence,
             content_version: mode !== 'messages' && unreadContent ? item.current_content_version : null}});
           if (ticket !== sequence || owner !== bridge.getAccess()?.learner_id) return;
@@ -1189,7 +1243,7 @@ export function initPortal(bridge) {
     const item = result.items[0]; showHelpSummary(result);
     mathStyle(item.math_css);
     const page = node('section', 'helpContentPage');
-    page.append(link(t('help.pageTitle'), subjectHref(item.subject_id, '/qa'), 'textButton'),
+    page.append(link(t('help.pageTitle'), '#/qa', 'textButton'),
       node('h1', 'portalPageTitle', item.content_block_title || t('help.context')));
     const block = helpConversation(item, result.viewer, ticket, true); block.classList.add('helpContentBlock');
     block.dataset.contentBlock = item.request.content_block_id;

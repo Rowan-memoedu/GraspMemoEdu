@@ -24,6 +24,21 @@ class HelpThreadRead(BaseModel):
 
 
 class HelpThreads:
+    tables = {'messages': 'help_messages', 'versions': 'help_message_versions',
+              'events': 'help_thread_events', 'reads': 'help_thread_reads'}
+
+    def query(self, con, sql, values=()):
+        # Identifiers come only from these fixed class constants, never requests.
+        return con.execute(sql.format(**self.tables), values)
+
+    def messages(self, con, report, viewer):
+        rows = self.query(con, '''SELECT m.*,v.message,v.revision,v.created_at updated_at,e.sequence event_sequence
+            FROM {messages} m JOIN {versions} v ON v.message_id=m.id
+                AND v.revision=(SELECT MAX(revision) FROM {versions} WHERE message_id=m.id)
+            JOIN {events} e ON e.message_id=m.id AND e.revision=v.revision
+            WHERE m.report_id=? ORDER BY (SELECT MIN(sequence) FROM {events} WHERE message_id=m.id),m.id''', (report,)).fetchall()
+        return [{**dict(row), 'editable': row['author_id'] == viewer} for row in rows]
+
     def __init__(self, store):
         self.store = store
         with store.access_store._transaction() as con:
@@ -127,49 +142,46 @@ class HelpThreads:
                   'content_update_unread': bool(update_unread), 'message_unread': bool(events['unread']),
                   'unread': bool(events['unread'] or update_unread)}
         if include_messages:
-            messages = con.execute('''SELECT m.*,v.message,v.revision,v.created_at updated_at,e.sequence event_sequence
-                FROM help_messages m JOIN help_message_versions v ON v.message_id=m.id
-                    AND v.revision=(SELECT MAX(revision) FROM help_message_versions WHERE message_id=m.id)
-                JOIN help_thread_events e ON e.message_id=m.id AND e.revision=v.revision
-                WHERE m.report_id=? ORDER BY (SELECT MIN(sequence) FROM help_thread_events WHERE message_id=m.id),m.id''', (report,)).fetchall()
-            result['messages'] = [{**dict(m), 'editable': m['author_id'] == viewer} for m in messages]
+            result['messages'] = self.messages(con, report, viewer)
         return result
 
     def send(self, access, values):
         values = HelpMessage.model_validate(values).model_dump()
-        message = values['message'].strip()
-        if not message or '\x00' in message:
+        message = values['message']
+        if not message.strip() or '\x00' in message:
             raise DomainError('invalid_help_reply', '请填写回复内容。', 422)
         values['message'] = message
         operation = json.dumps(values, ensure_ascii=False, sort_keys=True)
         with self.store.access_store._transaction() as con:
             row, viewer = self.authorized(con, access, values['report_id'])
-            existing = con.execute('''SELECT v.*,m.report_id FROM help_message_versions v JOIN help_messages m ON m.id=v.message_id
+            existing = self.query(con, '''SELECT v.*,m.report_id FROM {versions} v JOIN {messages} m ON m.id=v.message_id
                 WHERE v.author_id=? AND v.request_id=?''', (access['learner_id'], values['request_id'])).fetchone()
             if existing:
                 if existing['operation'] != operation:
-                    raise DomainError('request_conflict', '同一请求标识不能用于不同内容。', 409)
+                    legacy = json.dumps({**values, 'message': message.strip()}, ensure_ascii=False, sort_keys=True)
+                    if existing['operation'] != legacy:
+                        raise DomainError('request_conflict', '同一请求标识不能用于不同内容。', 409)
                 return {'status': 'saved', 'message': self.result(existing)}
             ident, revision = values['message_id'], values['expected_revision']
             created = now()
             if ident:
-                original = con.execute('SELECT * FROM help_messages WHERE id=? AND report_id=?', (ident, row['id'])).fetchone()
+                original = self.query(con, 'SELECT * FROM {messages} WHERE id=? AND report_id=?', (ident, row['id'])).fetchone()
                 if not original or original['author_id'] != access['learner_id']:
                     raise DomainError('help_message_forbidden', '只能修改自己发出的回复。', 403)
-                current = con.execute('SELECT MAX(revision) FROM help_message_versions WHERE message_id=?', (ident,)).fetchone()[0]
+                current = self.query(con, 'SELECT MAX(revision) FROM {versions} WHERE message_id=?', (ident,)).fetchone()[0]
                 if revision != current or values['reply_to'] is not None:
                     raise DomainError('help_reply_conflict', '该回复已在其他页面更新，请重新载入后再提交。', 409)
             else:
                 if revision:
                     raise DomainError('help_reply_conflict', '该回复已在其他页面更新，请重新载入后再提交。', 409)
                 parent = values['reply_to']
-                if parent and not con.execute('SELECT 1 FROM help_messages WHERE id=? AND report_id=?', (parent, row['id'])).fetchone():
+                if parent and not self.query(con, 'SELECT 1 FROM {messages} WHERE id=? AND report_id=?', (parent, row['id'])).fetchone():
                     raise DomainError('unknown_help_request', '未找到此提交记录。', 404)
                 ident = str(uuid.uuid4())
-                con.execute('INSERT INTO help_messages VALUES (?,?,?,?,?,?)', (ident, row['id'], access['learner_id'], viewer, parent, created))
-            con.execute('INSERT INTO help_message_versions VALUES (?,?,?,?,?,?,?)',
+                self.query(con, 'INSERT INTO {messages} VALUES (?,?,?,?,?,?)', (ident, row['id'], access['learner_id'], viewer, parent, created))
+            self.query(con, 'INSERT INTO {versions} VALUES (?,?,?,?,?,?,?)',
                         (ident, revision + 1, access['learner_id'], values['request_id'], message, created, operation))
-            con.execute('INSERT INTO help_thread_events(report_id,author_id,message_id,revision,created_at) VALUES (?,?,?,?,?)',
+            self.query(con, 'INSERT INTO {events}(report_id,author_id,message_id,revision,created_at) VALUES (?,?,?,?,?)',
                         (row['id'], access['learner_id'], ident, revision + 1, created))
         return {'status': 'saved', 'message': {'id': ident, 'message': message, 'revision': revision + 1, 'updated_at': created}}
 
@@ -182,13 +194,13 @@ class HelpThreads:
         with self.store.access_store._transaction() as con:
             row, _ = self.authorized(con, access, values['report_id'])
             sequence = values['sequence']
-            if sequence and not con.execute('SELECT 1 FROM help_thread_events WHERE report_id=? AND sequence=?', (row['id'], sequence)).fetchone():
+            if sequence and not self.query(con, 'SELECT 1 FROM {events} WHERE report_id=? AND sequence=?', (row['id'], sequence)).fetchone():
                 raise DomainError('unknown_help_request', '未找到此答疑回复。', 404)
-            con.execute('''INSERT INTO help_thread_reads VALUES (?,?,?) ON CONFLICT(report_id,viewer_id)
+            self.query(con, '''INSERT INTO {reads} VALUES (?,?,?) ON CONFLICT(report_id,viewer_id)
                 DO UPDATE SET sequence=MAX(sequence,excluded.sequence)''', (row['id'], access['learner_id'], sequence))
             version = values['content_version']
             # Stale receipts must never replace the current version's receipt.
-            if version and version == self.current_version(json.loads(row['body'])):
+            if version and not getattr(self, 'is_main', False) and version == self.current_version(json.loads(row['body'])):
                 con.execute('''INSERT INTO help_content_reads VALUES (?,?,?) ON CONFLICT(report_id,viewer_id)
                     DO UPDATE SET version=excluded.version''', (row['id'], access['learner_id'], version))
         return {'status': 'read', 'sequence': sequence}

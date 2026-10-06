@@ -1,4 +1,4 @@
-import { getLanguage, t } from './i18n.js?v=5ed0a69081654e02';
+import { getLanguage, t } from './i18n.js?v=e7fd9184f3d00382';
 
 const element = (tag, className, text) => {
   const node = document.createElement(tag);
@@ -102,6 +102,10 @@ export function parsePlatformRoute(hash = '#/') {
   if (match) {
     const subjectId = decode(match[1]);
     const localPath = !match[2] || match[2] === '/' ? '/learn' : match[2];
+    if (/^\/(qa|help-requests)(\/|$)/.test(localPath)) {
+      const globalPath = localPath.replace('/help-requests', '/qa');
+      return {subjectId: null, path: globalPath, params, canonicalHash: '#' + globalPath + search};
+    }
     return { subjectId, path: localPath, params,
       ...(!match[2] || match[2] === '/' ? { canonicalHash: subjectHref(subjectId, '/learn') + search } : {}) };
   }
@@ -185,7 +189,7 @@ export function applySubjectTheme(subject, { home = false } = {}) {
 }
 
 export function subjectLogo(subject) {
-  if (!subject) return './favicon.svg?v=5ed0a69081654e02';
+  if (!subject) return './favicon.svg?v=e7fd9184f3d00382';
   const color = subjectPalette(subject.id)[subjectMarks[subject.id] ? '--link-color' : '--ma-navy'];
   const mark = subjectMarks[subject.id]
     ? '<g stroke="' + color + '" color="' + color + '" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + subjectMarks[subject.id] + '</g>'

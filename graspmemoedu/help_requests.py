@@ -13,6 +13,7 @@ from .question_bank import QuestionBank
 from .training_content import TrainingCatalog, permission_id
 from .feedback_selection import FeedbackContent, content_hash, normalize_selection, validate_selection
 from .help_threads import HelpThreads, HelpMessage, HelpThreadRead
+from .help_main import MainHelpThreads
 from .access import admin_display_name
 
 
@@ -100,6 +101,7 @@ class HelpRequestStore:
                     learner_id TEXT NOT NULL REFERENCES access_principals(learner_id),
                     revision INTEGER NOT NULL CHECK(revision>0), read_at TEXT NOT NULL);''')
         self.threads = HelpThreads(self)
+        self.main_threads = MainHelpThreads(self)
 
     @staticmethod
     def _require_admin(con, admin_id):
@@ -348,7 +350,7 @@ class HelpRequestStore:
             LEFT JOIN help_reply_reads seen ON seen.report_id=r.id AND seen.learner_id=r.learner_id
             WHERE ''' + ('COALESCE(a.admin_id,c.admin_id)=?' if viewer == 'admin' else 'r.learner_id=?')
 
-    def center(self, access, limit=10, offset=0, summary=False, report_id=None, subject_id=None):
+    def center(self, access, limit=10, offset=0, summary=False, report_id=None, subject_id=None, learner_id=None):
         viewer = self._viewer(access)
         self.subjects.authorize_subject(access, subject_id)
         scope = self._center_scope(viewer)
@@ -359,6 +361,10 @@ class HelpRequestStore:
             parameters += (subject_id,)
         with closing(self.access_store._connect()) as con:
             con.execute('BEGIN')
+            if learner_id:
+                self.main_threads.authorized(con, access, learner_id)
+                scope += ' AND r.learner_id=?'
+                parameters += (learner_id,)
             fields = '''SELECT r.id,r.learner_id,r.body,r.created_at,reply.message reply_message,
                 reply.revision,reply.created_at replied_at,COALESCE(seen.revision,0) seen_revision '''
             all_rows = con.execute(fields + scope, parameters).fetchall()
@@ -368,8 +374,22 @@ class HelpRequestStore:
                       'unread_count': sum(state['unread'] for state in states.values()),
                       'latest_reply_at': max((state['latest_activity_at'] for state in states.values()), default=None),
                       'activity_key': self.threads.activity_key([{'id': ident, **state} for ident, state in states.items()])}
+            roster = self.main_threads.roster(con, access)
+            main_states = {r['id']: self.main_threads.state(con, r, access, False) for r in roster}
+            # Main-conversation notifications are independent of subject filters.
+            result['unread_count'] += sum(s['unread'] for s in main_states.values())
+            result['activity_key'] = self.threads.activity_key(
+                [{'id': ident, **state} for ident, state in states.items()] +
+                [{**state, 'id': 'main:' + ident} for ident, state in main_states.items()])
             if summary:
                 return result
+            if viewer == 'admin':
+                result['students'] = [{'learner_id': r['id'], 'display_name': self._admin_name(r['id']),
+                                       'main_unread': main_states[r['id']]['unread']} for r in roster]
+            selected = learner_id or (access['learner_id'] if viewer == 'student' else None)
+            if selected:
+                row, _ = self.main_threads.authorized(con, access, selected)
+                result['main_thread'] = self.main_threads.state(con, row, access)
             if report_id:
                 rows = [row for row in all_rows if row['id'] == report_id]
                 if not rows:
@@ -473,9 +493,20 @@ def register_help_routes(app, catalog, access_store, subjects):
     @app.get('/api/help-center')
     def help_center(request: Request, limit: int = Query(default=10, ge=1, le=25),
                     offset: int = Query(default=0, ge=0, le=1000000), summary: bool = False,
-                    report_id: str | None = Query(default=None, min_length=1, max_length=128)):
+                    report_id: str | None = Query(default=None, min_length=1, max_length=128),
+                    learner_id: str | None = Query(default=None, min_length=1, max_length=128)):
         return store.center(access_store.resolve(request.headers.get('x-learning-identity')), limit, offset, summary, report_id,
-                            request.query_params.get('subject_id'))
+                            request.query_params.get('subject_id'), learner_id)
+
+    @app.post('/api/help-main/messages')
+    def send_main_message(payload: HelpMessage, request: Request):
+        return store.main_threads.send(access_store.resolve(request.headers.get('x-learning-identity')), payload.model_dump())
+
+    @app.post('/api/help-main/read')
+    def read_main_messages(payload: HelpThreadRead, request: Request):
+        if payload.content_version:
+            raise DomainError('invalid_help_reply', '主对话不包含内容版本。', 422)
+        return store.main_threads.read(access_store.resolve(request.headers.get('x-learning-identity')), payload.model_dump())
 
     @app.post('/api/help-replies')
     def reply_help(payload: HelpReply, request: Request):
