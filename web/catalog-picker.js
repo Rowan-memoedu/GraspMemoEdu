@@ -1,5 +1,5 @@
-import {t, translateMessage} from './i18n.js?v=6a737386373f84cd';
-import {subjectLabel, subjectPalette} from './subjects.js?v=6a737386373f84cd';
+import {t, translateMessage} from './i18n.js?v=5612a275692d1be5';
+import {subjectLabel, subjectPalette} from './subjects.js?v=5612a275692d1be5';
 
 const node = (tag, cls, text) => {
   const item = document.createElement(tag); item.className = cls;

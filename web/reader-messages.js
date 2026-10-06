@@ -1,5 +1,6 @@
 // Explicit reader UI catalog. Course text, question titles, answers, and judge feedback are excluded.
 export const readerMessages = {
+  "reader.finishLearning": ["完成学习，返回主页", "Finish learning and return home"],
   'reader.studentOnly': ['该功能仅对学员开放', 'This feature is available only to students'],
   'reader.skipped': ['已跳过，等待补学', 'Skipped; awaiting catch-up learning'],
   'reader.skipDone': ['已跳过当前模块', 'Current module skipped'],

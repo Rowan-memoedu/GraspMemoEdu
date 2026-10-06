@@ -1,4 +1,5 @@
-import {t} from './i18n.js?v=6a737386373f84cd';
+import {t} from './i18n.js?v=5612a275692d1be5';
+import {prepareLiteralMath} from './math-presentation.js?v=5612a275692d1be5';
 
 const node = (tag, cls, text) => {
   const element = document.createElement(tag); element.className = cls;
@@ -36,6 +37,7 @@ export function questionInput(spec, {id, value = '', stem, disabled = false, for
   const optionContent = (element, item) => {
     if (item?.html) element.innerHTML = item.html; // Compiled with the existing safe Markdown/MathJax importer.
     else element.textContent = item?.text || '';
+    prepareLiteralMath(element);
   };
   const normalize = () => {
     if (spec.type === 'matching') {

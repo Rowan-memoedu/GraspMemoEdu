@@ -1,19 +1,19 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=6a737386373f84cd";
-import { createReviewView } from "./review.js?v=6a737386373f84cd";
-import { renderCourseGraph } from "./course-graph.js?v=6a737386373f84cd";
-import {questionInput, choiceTypeField} from './question-input.js?v=6a737386373f84cd';
-import {enhanceTopicContent} from './topic-content.js?v=6a737386373f84cd';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=6a737386373f84cd';
-import {createCatalogPicker} from './catalog-picker.js?v=6a737386373f84cd';
-import {createAtomicView} from './atomic.js?v=6a737386373f84cd';
-import {createTrainingView} from './training.js?v=6a737386373f84cd';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=6a737386373f84cd";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=5612a275692d1be5";
+import { createReviewView } from "./review.js?v=5612a275692d1be5";
+import { renderCourseGraph } from "./course-graph.js?v=5612a275692d1be5";
+import {questionInput, choiceTypeField} from './question-input.js?v=5612a275692d1be5';
+import {enhanceTopicContent} from './topic-content.js?v=5612a275692d1be5';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=5612a275692d1be5';
+import {createCatalogPicker} from './catalog-picker.js?v=5612a275692d1be5';
+import {createAtomicView} from './atomic.js?v=5612a275692d1be5';
+import {createTrainingView} from './training.js?v=5612a275692d1be5';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=5612a275692d1be5";
 
-import {createPaperView} from './review-papers.js?v=6a737386373f84cd';
+import {createPaperView} from './review-papers.js?v=5612a275692d1be5';
 
-import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=6a737386373f84cd';
-import {referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=6a737386373f84cd';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=6a737386373f84cd';
+import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=5612a275692d1be5';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=5612a275692d1be5';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=5612a275692d1be5';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -796,7 +796,10 @@ export function initPortal(bridge) {
     if (answer.explanation_html) explanation.append(prepareAnswerContent(reportableContent(trustedContent(answer.explanation_html, references), reportContext,
       `explanation:${answer.question_id}`, answer.content_version))); else explanation.append(node("p", "", t("portal.no.explanation.is.available.for.this.question.86")));
     if (answer.reason) explanation.append(node('p', 'feedbackReason', answer.reason));
-    if (answer.correct !== true) { explanation.append(node("h3", "", t("portal.your.answer.87")), node("pre", "historyYourAnswer", answer.answer == null || answer.answer === "" ? t("portal.unanswered.85") : answer.answer_display ?? answer.answer)); }
+    if (answer.correct !== true) {
+      const submitted = submittedAnswer(answer, answer.answer, answer.answer == null || answer.answer === "" ? t("portal.unanswered.85") : answer.answer_display ?? answer.answer);
+      submitted.classList.add('historyYourAnswer'); explanation.append(node("h3", "", t("portal.your.answer.87")), submitted);
+    }
     const toggle = control(t("portal.show.explanation.88"), "answerExplanationToggle textButton", () => { explanation.hidden = !explanation.hidden; toggle.textContent = explanation.hidden ? t("portal.show.explanation.88") : t("portal.hide.explanation.89"); toggle.setAttribute("aria-expanded", String(!explanation.hidden)); }); toggle.setAttribute("aria-expanded", "false");
     question.addEventListener("click", (event) => { if (!event.target.closest("a,button")) toggle.click(); });
     wrapper.append(head, question, meta, toggle, explanation); return wrapper;
@@ -1432,7 +1435,7 @@ export function initPortal(bridge) {
     },
     permissionsChanged() { catalogPicker.reset(); catalog = null; dashboards.clear(); answerCache.clear(); },
     async identityChanged() { review.reset(); atomic.reset(); subjects = null; catalog = null; profile = null; dashboards.clear(); answerCache.clear(); scrolls.clear(); await route(); },
-    progressChanged() { /* Returning to Learn reads current server progress without changing it. */ },
+    progressChanged() { dashboards.clear(); answerCache.clear(); },
     showFeedback,
   };
 }

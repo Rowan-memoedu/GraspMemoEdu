@@ -2,7 +2,7 @@
 
 本表从当前界面词库自动生成。修改以词库为准，随后重新生成并检查本表。术语约定见 [界面语言规范](ui-language.md)。
 
-共 767 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
+共 769 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
 
 不包括作者课程正文、题目、答案、解析或用户输入。首页的学科双语副标题按约定保留。
 
@@ -89,6 +89,7 @@
 
 | English | 中文 |
 |---|---|
+| Finish learning and return home | 完成学习，返回主页 |
 | This feature is available only to students | 该功能仅对学员开放 |
 | Skipped; awaiting catch-up learning | 已跳过，等待补学 |
 | Current module skipped | 已跳过当前模块 |
@@ -618,6 +619,7 @@
 | Question banks | 题库 |
 | Train | 训练 |
 | Start training | 开始训练 |
+| Guidance | 指导 |
 | Question groups | 题组 |
 | No question banks have been added to this subject yet. | 此学科暂未导入题库。 |
 | Back to question banks | 返回题库 |

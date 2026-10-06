@@ -1,11 +1,11 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=6a737386373f84cd";
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=6a737386373f84cd';
-import {reportableContent} from './content-report.js?v=6a737386373f84cd';
-import {createLearningCache} from './learning-cache.js?v=6a737386373f84cd';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=5612a275692d1be5";
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=5612a275692d1be5';
+import {reportableContent} from './content-report.js?v=5612a275692d1be5';
+import {createLearningCache} from './learning-cache.js?v=5612a275692d1be5';
 
-import {answerEditor} from './learning-ui.js?v=6a737386373f84cd';
-import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=6a737386373f84cd';
-import {enhanceTopicContent, mountTopicBacklinks, focusContentNode} from './topic-content.js?v=6a737386373f84cd';
+import {answerEditor} from './learning-ui.js?v=5612a275692d1be5';
+import {selfAssessment, referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=5612a275692d1be5';
+import {enhanceTopicContent, mountTopicBacklinks, focusContentNode} from './topic-content.js?v=5612a275692d1be5';
 
 applyStaticTranslations();
 
@@ -1157,7 +1157,7 @@ function renderStep(step) {
   }
   if (step.answer !== null && step.answer !== undefined && step.answer !== "") {
     const answer = el("details", "submittedAnswer");
-    answer.append(el("summary", "", t("查看已提交答案")), el("pre", "", step.answer_display ?? step.answer));
+    answer.append(el("summary", "", t("查看已提交答案")), submittedAnswer(step, step.answer, step.answer_display ?? step.answer));
     target.append(answer);
   }
   if (step.feedback) {
@@ -1238,6 +1238,11 @@ function renderStepNavigation(target, step, actions) {
     area.append(continueButton);
   } else if (actions.includes("submit")) {
     area.append(target.querySelector("#submitButton"));
+  } else if (step.kind === 'completion') {
+    area.append(button(t(state.skipped_modules?.length ? 'nav.backHome' : 'reader.finishLearning'), 'primaryButton', () => {
+      portal?.progressChanged();
+      location.hash = `/subjects/${topicSubjectId || 'math'}/learn`;
+    }));
   } else if (next && can("review_history")) {
     const forward = el("nav", "historyPagination");
     forward.setAttribute("aria-label", t("已学内容翻页"));
@@ -1512,7 +1517,7 @@ async function openTopic(id, subjectId) {
   }
 }
 
-const { initPortal } = await import("./portal.js?v=6a737386373f84cd");
+const { initPortal } = await import("./portal.js?v=5612a275692d1be5");
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {
     try { return await fetchGuideAsset(url, subjectId); }

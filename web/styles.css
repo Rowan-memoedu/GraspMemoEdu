@@ -168,6 +168,9 @@ mjx-container[jax="SVG"] text { font-family: "Microsoft YaHei", sans-serif; }
 .feedbackReason { line-height: 1.65; white-space: pre-wrap; }
 .submittedAnswer { margin: 22px 0 0; color: #777; font-size: 12px; }
 .submittedAnswer summary { cursor: pointer; width: fit-content; }
+.submittedAnswerBody { color: var(--ma-ink); background: #fafafa; border-left: 2px solid var(--subtle-accent-border); margin: 9px 0 0; padding: 9px 12px; font-size: 13px; }
+.submittedAnswerBody p { margin: 0; }
+.literalMath { font-size: 1em; }
 .submittedAnswer pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ma-ink); background: #fafafa; border-left: 2px solid var(--subtle-accent-border); margin: 9px 0 0; padding: 9px 12px; font: inherit; font-size: 13px; }
 .waiting { display: flex; align-items: center; gap: 10px; margin-top: 22px; color: #657787; font-size: 13px; }
 .waiting .spinner { width: 15px; height: 15px; border-width: 2px; }

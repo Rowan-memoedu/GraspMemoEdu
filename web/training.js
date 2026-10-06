@@ -1,8 +1,8 @@
-import {t, translateMessage} from './i18n.js?v=6a737386373f84cd';
-import {questionInput, answerReady, answerEmpty, choiceTypeField} from './question-input.js?v=6a737386373f84cd';
-import {createLearningCache} from './learning-cache.js?v=6a737386373f84cd';
-import {helpableContent} from './content-report.js?v=6a737386373f84cd';
-import {referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=6a737386373f84cd';
+import {t, translateMessage} from './i18n.js?v=5612a275692d1be5';
+import {questionInput, answerReady, answerEmpty, choiceTypeField} from './question-input.js?v=5612a275692d1be5';
+import {createLearningCache} from './learning-cache.js?v=5612a275692d1be5';
+import {helpableContent} from './content-report.js?v=5612a275692d1be5';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=5612a275692d1be5';
 
 const node = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const button = (text, cls, action) => { const n = node('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
@@ -10,7 +10,7 @@ const encode = encodeURIComponent;
 const query = fields => new URLSearchParams(fields).toString();
 const html = (content, cls = 'courseContent') => { const n = node('div', cls); n.innerHTML = content || ''; return n; };
 const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy', 'training.retire'];
-import {answerEditor, readerFrame} from './learning-ui.js?v=6a737386373f84cd';
+import {answerEditor, readerFrame} from './learning-ui.js?v=5612a275692d1be5';
 
 export function createTrainingView(bridge) {
   const {root, request, href, formatDate, getAccess} = bridge;
@@ -256,7 +256,7 @@ export function createTrainingView(bridge) {
     }
     if (state.answer_display && state.phase === 'done') {
       const answer = node('details', 'submittedAnswer');
-      answer.append(node('summary', '', t('查看已提交答案')), node('pre', '', state.answer_display)); main.append(answer);
+      answer.append(node('summary', '', t('查看已提交答案')), submittedAnswer(state.question, state.answer, state.answer_display)); main.append(answer);
     }
     if (state.phase === 'done') {
       save('draft', state.attempt_id, null); save('submission', state.attempt_id, null); save('elapsed', state.attempt_id, null); clockKey = null;

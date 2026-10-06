@@ -1,5 +1,6 @@
-import {t} from './i18n.js?v=6a737386373f84cd';
-import {answerEmpty} from './question-input.js?v=6a737386373f84cd';
+import {t} from './i18n.js?v=5612a275692d1be5';
+import {answerEmpty} from './question-input.js?v=5612a275692d1be5';
+import {prepareLiteralMath} from './math-presentation.js?v=5612a275692d1be5';
 
 const element = (tag, cls, text) => {
   const node = document.createElement(tag); node.className = cls;
@@ -9,6 +10,7 @@ const element = (tag, cls, text) => {
 
 let mathFragment = 0;
 export function prepareAnswerContent(root) {
+  prepareLiteralMath(root);
   // Each mounted SVG fragment must resolve its own glyphs, even when the same
   // explanation appears elsewhere in history or in another hidden reader.
   const ids = new Map();
@@ -27,6 +29,22 @@ export function prepareAnswerContent(root) {
     }
   }
   return root;
+}
+
+export function submittedAnswer(question, answer, display = answer) {
+  const spec = question.interaction || question.question?.interaction;
+  let value; try { value = JSON.parse(answer); } catch { /* Keep literal free answers. */ }
+  const selected = spec?.type === 'choice' ? new Set(spec.multiple ? value?.selected || [] : [value?.selected]) : new Set();
+  const options = spec?.options?.filter(option => selected.has(option.id)) || [];
+  if (!options.length) return element('pre', '', display || '');
+  const body = element('div', 'submittedAnswerBody');
+  for (const option of options) {
+    const row = element('div', 'choiceAnswer');
+    if (option.html) row.innerHTML = option.html;
+    else row.textContent = option.text;
+    body.append(row);
+  }
+  return prepareAnswerContent(body);
 }
 
 export function referenceAnswer(question) {

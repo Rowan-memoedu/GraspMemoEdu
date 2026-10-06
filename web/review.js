@@ -1,9 +1,9 @@
-import { t, translateMessage, learningTitle } from './i18n.js?v=6a737386373f84cd';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=6a737386373f84cd';
-import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=6a737386373f84cd';
-import {reportableContent} from './content-report.js?v=6a737386373f84cd';
-import {createLearningCache} from './learning-cache.js?v=6a737386373f84cd';
-import {enhanceTopicContent} from './topic-content.js?v=6a737386373f84cd';
+import { t, translateMessage, learningTitle } from './i18n.js?v=5612a275692d1be5';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=5612a275692d1be5';
+import {selfAssessment, referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=5612a275692d1be5';
+import {reportableContent} from './content-report.js?v=5612a275692d1be5';
+import {createLearningCache} from './learning-cache.js?v=5612a275692d1be5';
+import {enhanceTopicContent} from './topic-content.js?v=5612a275692d1be5';
 
 const node = (tag, cls = '', text) => {
   const item = document.createElement(tag); item.className = cls;
@@ -212,7 +212,7 @@ export function createReviewView(bridge) {
     if (structured && !editable) card.append(questionInput(question.interaction, {id: 'reviewSubmittedInteraction',
       stem, value: answer?.answer || (isCurrent ? read(draftKey()) || '' : ''), disabled: true}).element);
     if (answer) {
-      const submitted = node('details', 'submittedAnswer'); submitted.append(node('summary', '', t('查看已提交答案')), node('pre', '', answer.answer_display ?? answer.answer)); card.append(submitted);
+      const submitted = node('details', 'submittedAnswer'); submitted.append(node('summary', '', t('查看已提交答案')), submittedAnswer(question, answer.answer, answer.answer_display ?? answer.answer)); card.append(submitted);
     }
     const feedback = isCurrent ? state.feedback : answer?.feedback || answer;
     if (feedback && typeof feedback.correct === 'boolean') {
