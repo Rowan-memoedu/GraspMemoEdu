@@ -1,16 +1,15 @@
-import {t, translateMessage} from './i18n.js?v=5612a275692d1be5';
-import {questionInput, answerReady, answerEmpty, choiceTypeField} from './question-input.js?v=5612a275692d1be5';
-import {createLearningCache} from './learning-cache.js?v=5612a275692d1be5';
-import {helpableContent} from './content-report.js?v=5612a275692d1be5';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=5612a275692d1be5';
+import {t, translateMessage} from './i18n.js?v=82d46e20de08f529';
+import {answerReady, answerEmpty} from './question-input.js?v=82d46e20de08f529';
+import {createLearningCache} from './learning-cache.js?v=82d46e20de08f529';
+import {helpableContent} from './content-report.js?v=82d46e20de08f529';
+import {ratingChoices} from './self-assessment.js?v=82d46e20de08f529';
 
 const node = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const button = (text, cls, action) => { const n = node('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
 const encode = encodeURIComponent;
 const query = fields => new URLSearchParams(fields).toString();
-const html = (content, cls = 'courseContent') => { const n = node('div', cls); n.innerHTML = content || ''; return n; };
 const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy', 'training.retire'];
-import {answerEditor, readerFrame} from './learning-ui.js?v=5612a275692d1be5';
+import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation} from './learning-ui.js?v=82d46e20de08f529';
 
 export function createTrainingView(bridge) {
   const {root, request, href, formatDate, getAccess} = bridge;
@@ -74,7 +73,8 @@ export function createTrainingView(bridge) {
       const containers = bank.groups.filter(g => bank.groups.some(child => child.parent_id === g.id));
       const data = {course: {id: bank.id, title: bank.title, progress: count ? completed / count * 100 : 0},
         tasks: bank.groups.filter(g => g.question_count || g.introduction_count).map(g => ({id: g.id, topic_id: g.id, type: 'Lesson',
-          title: g.title, question_count: g.question_count, progress: g.question_count ? g.completed_count / g.question_count * 100 : 0})),
+          title: g.title, topic_kind: g.question_count ? 'lesson' : 'introduction',
+          question_count: g.question_count, progress: g.question_count ? g.completed_count / g.question_count * 100 : 0})),
         pending_hierarchy: containers.map(g => ({...g, topic_ids: bank.groups.filter(child => (child.question_count || child.introduction_count)
           && (child.id === g.id || child.parent_id === g.id && !containers.some(c => c.id === child.id))).map(child => child.id)}))};
       const layout = node('div', 'dashboardLayout'), tasks = node('div', 'dashboardTasks');
@@ -100,7 +100,7 @@ export function createTrainingView(bridge) {
       refs.topicHomeLink.href = href(`/banks/${encode(group.bank_id)}`); refs.topicHomeLink.textContent = '← ' + t('training.back');
       refs.topicFeedbackButton.hidden = true;
       refs.lessonTitle.textContent = group.title;
-      reader.frame.querySelector('.eyebrow').textContent = t('training.groups');
+      reader.frame.querySelector('.eyebrow').textContent = t(group.questions.length ? 'lesson.topic' : 'reader.introductionTask');
       reader.frame.querySelector('.lessonToolbar').hidden = true;
       renderSidebar();
       visibilityHandler = () => { flushClock(); if (!document.hidden && current?.phase === 'answer' && !current.submission_id) activeSince = performance.now(); };
@@ -117,52 +117,53 @@ export function createTrainingView(bridge) {
   function renderSidebar() {
     sidebar.replaceChildren();
     group.questions.forEach((q, index) => {
-      const section = node('section', 'historyGroup'), header = node('div', 'historyGroupHeader');
-      section.dataset.contentId = q.id;
-      const title = t('training.exercise', {number: index + 1});
-      header.append(node('span', 'moduleName', title), node('span', `historyStatus${q.completed_count ? ' completed' : ''}`,
-        q.completed_count ? t('training.completed', {count: q.completed_count}) : t('training.unanswered')));
-      const items = node('div', 'historyItems');
-      const item = button(q.title, 'historyItem trainingQuestionLink', () => select(q.id));
-      item.dataset.questionId = q.id;
-      if (current?.question_id === q.id && current.attempt_id === q.latest_attempt_id) item.setAttribute('aria-current', 'step');
-      items.append(item); section.append(header, items); sidebar.append(section);
-      if (current?.question_id === q.id && getAccess()?.features?.includes('review_history'))
-        void loadHistory(items, epoch, selection, q.id);
+      const {group: section, items} = readerHistoryGroup({contentId: q.id,
+        title: t('training.exercise', {number: index + 1}),
+        status: q.completed_count ? t('training.completed', {count: q.completed_count}) : t('training.unanswered'),
+        className: q.completed_count ? 'completed' : '', items: [{label: q.title, className: 'trainingQuestionLink',
+          onSelect: () => select(q.id), dataset: {questionId: q.id},
+          selected: current?.question_id === q.id && current.attempt_id === q.latest_attempt_id}]});
+      sidebar.append(section);
+      if (current?.question_id === q.id && getAccess()?.features?.includes('review_history')) void loadHistory(items, epoch, selection, q.id);
     });
     for (const intro of group.introductions || []) {
-      const section = node('section', 'historyGroup'); section.dataset.contentId = intro.id;
-      const label = intro.title === 'Introduction' ? t('training.guidance') : intro.title;
-      const item = button(label, 'historyItem trainingIntroductionLink', () => selectIntroduction(intro.id));
-      item.dataset.introductionId = intro.id;
-      if (selectedIntroduction === intro.id) item.setAttribute('aria-current', 'step');
-      section.append(item); sidebar.append(section);
+      const label = readerStepTitle({...intro, kind: 'introduction'});
+      const {group: section} = readerHistoryGroup({contentId: intro.id, title: label,
+        status: selectedIntroduction === intro.id ? t('阅读中') : '', items: [{
+          label, className: 'trainingIntroductionLink', onSelect: () => selectIntroduction(intro.id),
+          dataset: {introductionId: intro.id}, selected: selectedIntroduction === intro.id}]});
+      sidebar.append(section);
     }
     if (group.content_order) for (const item of group.content_order) {
       const section = [...sidebar.children].find(n => n.dataset.contentId === item.id);
       if (section) sidebar.append(section);
     }
     const completed = group.questions.filter(q => q.completed_count).length;
-    const refs = reader.refs;
-    refs.progressCaption.hidden = group.questions.length === 0;
-    refs.progressCaption.replaceChildren(node('span', '', t('reader.modulesCompleted', {completed, total: group.questions.length})),
-      node('span', '', t(completed === group.questions.length ? 'training.finished' : 'training.inProgress')));
-    refs.lessonProgress.hidden = group.questions.length === 0;
-    refs.lessonProgress.setAttribute('aria-valuenow', String(Math.round(100 * completed / (group.questions.length || 1))));
-    refs.lessonProgress.replaceChildren(...group.questions.map(q => node('span', `progressSegment ${q.completed_count ? 'completed' : q.latest_attempt_id ? 'in_progress' : 'not_started'}`)));
+    readerProgress(reader.refs, {label: t('reader.modulesCompleted', {completed, total: group.questions.length}),
+      status: t(completed === group.questions.length ? 'training.finished' : 'training.inProgress'),
+      hidden: group.questions.length === 0, percent: Math.round(100 * completed / (group.questions.length || 1)),
+      segments: group.questions.map(q => ({title: q.title, status: q.completed_count ? 'completed' : q.latest_attempt_id ? 'in_progress' : 'not_started'}))});
+  }
+  function navigationFor(id, primary, extra = []) {
+    const pages = (group.content_order || group.questions.map(q => ({type: 'question', id: q.id}))).map(item => {
+      const value = item.type === 'introduction' ? group.introductions.find(i => i.id === item.id)
+        : group.questions.find(q => q.id === item.id);
+      return {...value, kind: item.type};
+    });
+    const index = pages.findIndex(item => item.id === id);
+    readerNavigation(main, {previous: index > 0 ? pages[index - 1] : null, next: index >= 0 ? pages[index + 1] : null,
+      idPrefix: 'training', primary, nextAsPrimary: pages[index]?.kind === 'introduction', extra,
+      onSelect: page => page.kind === 'introduction' ? selectIntroduction(page.id) : select(page.id)});
   }
   function selectIntroduction(id) {
     const intro = group.introductions?.find(i => i.id === id); if (!intro) return;
     flushClock(); clockKey = null; clearTimeout(timer); ++selection; current = null;
     selectedIntroduction = id; reader.closeOnMobile(); renderSidebar();
-    const label = intro.title === 'Introduction' ? t('training.guidance') : intro.title;
-    const title = node('h2', 'stepTitle', label); title.id = 'trainingStepTitle'; title.tabIndex = -1;
-    main.setAttribute('aria-labelledby', title.id); main.replaceChildren(title, html(intro.html));
-    reader.refs.footerPosition.textContent = label; reader.refs.saveStatus.textContent = '';
+    const step = {...intro, kind: 'introduction'};
+    renderReaderStep(main, step, {titleId: 'trainingStepTitle', counter: t('阅读')});
+    reader.refs.footerPosition.textContent = readerStepTitle(step); reader.refs.saveStatus.textContent = '';
     history.replaceState(null, '', href(groupPath(group.bank_id, group.id) + '?introduction=' + encode(id)));
-    const next = group.content_order?.[group.content_order.findIndex(item => item.id === id) + 1];
-    if (next) main.append(button(t('training.start'), 'primaryButton', () =>
-      next.type === 'introduction' ? selectIntroduction(next.id) : select(next.id)));
+    navigationFor(id);
   }
   async function select(questionId, fresh = false, attemptId = null) {
     flushClock(); clockKey = null; clearTimeout(timer);
@@ -191,17 +192,23 @@ export function createTrainingView(bridge) {
   function renderQuestion() {
     const state = current, e = epoch, s = selection;
     const index = group.questions.findIndex(q => q.id === state.question_id);
-    const heading = node('div', 'stepHeader'), title = node('h2', 'stepTitle', t('training.exercise', {number: index + 1}));
-    title.id = 'trainingStepTitle'; title.tabIndex = -1; main.setAttribute('aria-labelledby', title.id);
-    heading.append(title, node('span', 'stepCounter', t('reader.modulePosition', {current: index + 1, total: group.questions.length})));
     const reportContext = {topic_id: 'training.' + state.bank_id, bank_id: state.bank_id,
       group_id: state.group_id, question_id: state.question_id};
-    const stem = helpableContent(html(state.question.html), reportContext, `question:${state.question_id}`, state.version);
-    main.replaceChildren(heading, stem);
-    const typeField = choiceTypeField(state.question.interaction); if (typeField) heading.after(typeField);
+    const result = state.phase === 'done' ? state.result : null;
+    const feedback = result ? {correct: Boolean(result.stop_requested || result.self_rating > 1 || result.correct),
+      title: result.stop_requested ? t('training.stopped') : result.self_rating ? t('training.selfResult', {rating: t(ratingKeys[result.self_rating])}) : t(result.correct ? 'training.correct' : 'training.incorrect'),
+      reason: result.reason, details: [
+        state.stopped && !result.stop_requested ? t('training.stopped') : result.practice_only && !state.stopped ? t('training.practice') : null,
+        state.due_at ? t('training.nextDue', {time: formatDate(state.due_at)}) : null]} : null;
+    const {stem} = renderReaderStep(main, {...state.question, answer: state.answer, answer_display: state.answer_display,
+      explanation_html: state.explanation_html}, {titleId: 'trainingStepTitle', title: t('training.exercise', {number: index + 1}),
+      counter: t('reader.modulePosition', {current: index + 1, total: group.questions.length}),
+      showSubmittedInteraction: state.phase !== 'answer', submittedId: 'trainingSubmittedInteraction',
+      showAnswer: Boolean(state.answer_display && state.phase === 'done'), feedback, feedbackClass: 'trainingVerdict',
+      referenceSource: state, decorate: (body, kind) => helpableContent(body, reportContext, `${kind}:${state.question_id}`, state.version)});
     reader.refs.footerPosition.textContent = t('reader.modulePosition', {current: index + 1, total: group.questions.length});
     reader.refs.saveStatus.textContent = t(state.submission_status === 'pending' || state.submission_status === 'running' ? '答案已提交，正在判题' : '学习进度已保存');
-    const navigation = node('div', 'stepNavigation'), continueRow = node('div', 'continueRow');
+    let primary; const extra = [];
     if (state.phase === 'answer') {
       let savedPayload = null;
       try { savedPayload = JSON.parse(read('submission', state.attempt_id)); } catch {}
@@ -218,7 +225,7 @@ export function createTrainingView(bridge) {
         submit.disabled = pending || !state.can_submit || (!failed && !savedPayload && !show && !answerReady(input));
       };
       disable(pending || failed || Boolean(savedPayload) || !state.can_submit);
-      form.append(bottom); main.append(form); continueRow.append(submit);
+      form.append(bottom); main.append(form); primary = submit;
       input.addEventListener('input', () => { save('draft', state.attempt_id, input.value); refresh(); });
       input.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && !event.isComposing) { event.preventDefault(); form.requestSubmit(); } });
       form.addEventListener('submit', async event => {
@@ -251,55 +258,28 @@ export function createTrainingView(bridge) {
         timer = setTimeout(() => poll(e, s, state), 700);
       }
     }
-    if (state.phase !== 'answer' && state.question.interaction && state.question.interaction.type !== 'text') {
-      main.append(questionInput(state.question.interaction, {id: 'trainingSubmittedInteraction', stem, value: state.answer, disabled: true}).element);
-    }
-    if (state.answer_display && state.phase === 'done') {
-      const answer = node('details', 'submittedAnswer');
-      answer.append(node('summary', '', t('查看已提交答案')), submittedAnswer(state.question, state.answer, state.answer_display)); main.append(answer);
-    }
     if (state.phase === 'done') {
       save('draft', state.attempt_id, null); save('submission', state.attempt_id, null); save('elapsed', state.attempt_id, null); clockKey = null;
-      const result = state.result;
-      const label = result.stop_requested ? t('training.stopped') : result.self_rating ? t('training.selfResult', {rating: t(ratingKeys[result.self_rating])}) : t(result.correct ? 'training.correct' : 'training.incorrect');
-      const correct = result.stop_requested || result.self_rating > 1 || result.correct;
-      const verdict = node('div', `feedback trainingVerdict ${correct ? 'correct' : 'incorrect'}`); verdict.setAttribute('role', 'status');
-      const body = node('div'); body.append(node('span', 'feedbackTitle', label));
-      if (result.reason) body.append(node('div', 'feedbackReason', result.reason));
-      if (state.stopped && !result.stop_requested) body.append(node('div', 'feedbackReason', t('training.stopped')));
-      else if (result.practice_only && !state.stopped) body.append(node('div', 'feedbackReason', t('training.practice')));
-      if (state.due_at) body.append(node('div', 'feedbackReason', t('training.nextDue', {time: formatDate(state.due_at)})));
-      verdict.append(node('span', 'feedbackIcon', correct ? '✓' : '!'), body); main.append(verdict);
     }
-    const reference = referenceAnswer(state); if (reference) main.append(reference);
-    if (state.explanation_html)
-      main.append(node('h3', 'exampleExplanationHeader', t('Explanation · 解析')),
-        prepareAnswerContent(helpableContent(html(state.explanation_html, 'courseContent trainingExplanation'), reportContext, `explanation:${state.question_id}`, state.version)));
     if (state.phase === 'shown' || state.phase === 'done' && (state.result.self_rating || state.result.stop_requested)) {
-      const ratings = node('div', 'trainingRatings');
-      for (let rating = 1; rating <= 5; rating++) {
-        const item = button('', `trainingRating rating${rating}`, async () => {
-          for (const b of ratings.children) b.disabled = true;
+      const ratings = ratingChoices({labels: ratingKeys.slice(1),
+        selected: state.result?.stop_requested ? 5 : state.result?.self_rating,
+        disabled: state.phase === 'done' || !state.can_self_rate || !state.can_submit,
+        onRate: async rating => {
           try {
             const next = rating === 5 ? await post('stop', {attempt_id: state.attempt_id})
               : await post('rate', {attempt_id: state.attempt_id, rating, elapsed_ms: flushClock()});
             if (!alive(e, s)) return;
             current = next; await refreshGroup(e, s); if (alive(e, s)) renderQuestion();
-          } catch (failure) { if (alive(e, s)) { error(main, failure); for (const b of ratings.children) b.disabled = !state.can_self_rate || !state.can_submit; } }
-        });
-        item.append(node('span', '', String(rating)), node('small', '', t(ratingKeys[rating])));
-        item.disabled = state.phase === 'done' || !state.can_self_rate || !state.can_submit;
-        item.setAttribute('aria-pressed', String(state.result?.self_rating === rating || rating === 5 && Boolean(state.result?.stop_requested)));
-        item.dataset.rating = rating; ratings.append(item);
-      }
+          } catch (failure) { if (alive(e, s)) error(main, failure); }
+        }});
       main.append(ratings);
     }
     if (state.can_learn && state.can_review_early) {
       const redo = button(t('training.redo'), 'secondaryButton trainingRedo', () => select(state.question_id, true));
-      redo.disabled = ['pending', 'running'].includes(state.submission_status); navigation.append(redo);
+      redo.disabled = ['pending', 'running'].includes(state.submission_status); extra.push(redo);
     }
-    if (continueRow.childElementCount) navigation.append(continueRow);
-    main.append(navigation);
+    navigationFor(state.question_id, primary, extra);
   }
   async function refreshGroup(e, s) {
     const updated = await request('training/group?' + query({bank_id: group.bank_id, group_id: group.id}));

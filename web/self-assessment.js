@@ -1,6 +1,6 @@
-import {t} from './i18n.js?v=5612a275692d1be5';
-import {answerEmpty} from './question-input.js?v=5612a275692d1be5';
-import {prepareLiteralMath} from './math-presentation.js?v=5612a275692d1be5';
+import {t} from './i18n.js?v=82d46e20de08f529';
+import {answerEmpty} from './question-input.js?v=82d46e20de08f529';
+import {prepareLiteralMath} from './math-presentation.js?v=82d46e20de08f529';
 
 const element = (tag, cls, text) => {
   const node = document.createElement(tag); node.className = cls;
@@ -60,6 +60,23 @@ export function referenceAnswer(question) {
   box.append(prepareAnswerContent(body)); return box;
 }
 
+export function ratingChoices({labels, selected, disabled = false, onRate}) {
+  const ratings = element('div', 'trainingRatings');
+  labels.forEach((label, index) => {
+    const rating = index + 1, control = element('button', `trainingRating rating${rating}`);
+    control.type = 'button'; control.disabled = disabled; control.dataset.rating = rating;
+    control.setAttribute('aria-pressed', String(selected === rating));
+    control.append(element('span', '', String(rating)), element('small', '', t(label)));
+    control.addEventListener('click', async () => {
+      for (const child of ratings.children) child.disabled = true;
+      try { await onRate(rating); }
+      finally { if (ratings.isConnected) for (const child of ratings.children) child.disabled = disabled; }
+    });
+    ratings.append(control);
+  });
+  return ratings;
+}
+
 // Shared controls; each reader keeps its original submission and grading policy.
 export function selfAssessment(question, input, {disabled = false, reveal, rate, explanation} = {}) {
   if (!question.can_self_rate) return null;
@@ -74,19 +91,7 @@ export function selfAssessment(question, input, {disabled = false, reveal, rate,
   }
   const reference = referenceAnswer(question); if (reference) box.append(reference);
   if (explanation) box.append(element('h3', 'exampleExplanationHeader', t('Explanation · 解析')), prepareAnswerContent(explanation));
-  const ratings = element('div', 'trainingRatings');
   const labels = ['training.again', 'training.hard', 'training.good', 'training.easy'];
-  labels.forEach((label, index) => {
-    const rating = index + 1, control = element('button', `trainingRating rating${rating}`);
-    control.type = 'button'; control.disabled = disabled;
-    control.dataset.rating = rating;
-    control.setAttribute('aria-pressed', String(question.self_rating === rating));
-    control.append(element('span', '', String(rating)), element('small', '', t(label)));
-    control.addEventListener('click', async () => {
-      for (const child of ratings.children) child.disabled = true;
-      try { await rate(rating); } finally { if (ratings.isConnected) for (const child of ratings.children) child.disabled = disabled; }
-    });
-    ratings.append(control);
-  });
+  const ratings = ratingChoices({labels, disabled, selected: question.self_rating, onRate: rate});
   box.append(ratings); return box;
 }

@@ -1,19 +1,19 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=5612a275692d1be5";
-import { createReviewView } from "./review.js?v=5612a275692d1be5";
-import { renderCourseGraph } from "./course-graph.js?v=5612a275692d1be5";
-import {questionInput, choiceTypeField} from './question-input.js?v=5612a275692d1be5';
-import {enhanceTopicContent} from './topic-content.js?v=5612a275692d1be5';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=5612a275692d1be5';
-import {createCatalogPicker} from './catalog-picker.js?v=5612a275692d1be5';
-import {createAtomicView} from './atomic.js?v=5612a275692d1be5';
-import {createTrainingView} from './training.js?v=5612a275692d1be5';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=5612a275692d1be5";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=82d46e20de08f529";
+import { createReviewView } from "./review.js?v=82d46e20de08f529";
+import { renderCourseGraph } from "./course-graph.js?v=82d46e20de08f529";
+import {questionInput, choiceTypeField} from './question-input.js?v=82d46e20de08f529';
+import {enhanceTopicContent} from './topic-content.js?v=82d46e20de08f529';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=82d46e20de08f529';
+import {createCatalogPicker} from './catalog-picker.js?v=82d46e20de08f529';
+import {createAtomicView} from './atomic.js?v=82d46e20de08f529';
+import {createTrainingView} from './training.js?v=82d46e20de08f529';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=82d46e20de08f529";
 
-import {createPaperView} from './review-papers.js?v=5612a275692d1be5';
+import {createPaperView} from './review-papers.js?v=82d46e20de08f529';
 
-import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=5612a275692d1be5';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=5612a275692d1be5';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=5612a275692d1be5';
+import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=82d46e20de08f529';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=82d46e20de08f529';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=82d46e20de08f529';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -576,7 +576,7 @@ export function initPortal(bridge) {
     if (task.cooldown_until) details.append(node('p', 'taskStatusNote', t('reader.cooldown', {time: apiDate(task.cooldown_until, true)})));
     if (view.training || view.review) {
       const info = node('div', 'taskPrerequisites');
-      if (task.question_count != null) info.append(infoRow(t('portal.questions.49'), Number(task.question_count).toLocaleString(locale())));
+      if (task.question_count != null && task.topic_kind !== 'introduction') info.append(infoRow(t('portal.questions.49'), Number(task.question_count).toLocaleString(locale())));
       if (task.time_limit_minutes != null) info.append(infoRow(t('portal.time.limit.48'), t('portal.minutes', {count: task.time_limit_minutes})));
       details.append(info);
     } else if (["Quiz", "Exam"].includes(task.type)) {

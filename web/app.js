@@ -1,11 +1,11 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=5612a275692d1be5";
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=5612a275692d1be5';
-import {reportableContent} from './content-report.js?v=5612a275692d1be5';
-import {createLearningCache} from './learning-cache.js?v=5612a275692d1be5';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=82d46e20de08f529";
+import {answerReady} from './question-input.js?v=82d46e20de08f529';
+import {reportableContent} from './content-report.js?v=82d46e20de08f529';
+import {createLearningCache} from './learning-cache.js?v=82d46e20de08f529';
 
-import {answerEditor} from './learning-ui.js?v=5612a275692d1be5';
-import {selfAssessment, referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=5612a275692d1be5';
-import {enhanceTopicContent, mountTopicBacklinks, focusContentNode} from './topic-content.js?v=5612a275692d1be5';
+import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState} from './learning-ui.js?v=82d46e20de08f529';
+import {selfAssessment} from './self-assessment.js?v=82d46e20de08f529';
+import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=82d46e20de08f529';
 
 applyStaticTranslations();
 
@@ -46,11 +46,7 @@ function button(text, className, action, disabled = false) {
   return node;
 }
 function content(html) {
-  const node = el("div", "courseContent");
-  // Course HTML is generated and sanitized by the trusted local course importer.
-  node.innerHTML = html || "";
-  enhanceTopicContent(node, state?.content_references);
-  return node;
+  return readerContent(html, state?.content_references);
 }
 
 let apiBase = "";
@@ -117,10 +113,7 @@ const activeStep = () => state?.steps?.find((step) => step.id === state.active_s
 const readingStatus = () => state?.topic_kind === 'introduction' ? state.reading_status : state?.status;
 // Translate system names and structural heading prefixes; preserve authored title text.
 function readerStepTitle(step) {
-  if (step?.kind === "introduction") return state?.topic_format_version === 2
-    ? step.title.replace(/^(?:Introduction|引论)(?=\s*[:：]|$)/i, t("Introduction")) : t("Introduction");
-  if (step?.kind === "completion") return t("学习结果");
-  return learningTitle(step?.title || "");
+  return sharedReaderStepTitle(step, {formatVersion: state?.topic_format_version});
 }
 function readingSteps() {
   const visited = (state?.steps || []).filter((step) => step.visited && step.unlocked);
@@ -996,29 +989,19 @@ function renderPageNotice() {
 }
 
 function renderProgress() {
+  const refs = {progressCaption: $('progressCaption'), lessonProgress: $('lessonProgress')};
   if (state.topic_kind === 'introduction') {
     const progress = Math.round(state.reading_progress || 0), status = readingStatus();
     const label = t('reader.readingProgress', {progress});
-    $('progressCaption').replaceChildren(el('span', '', label), el('span', '', status === 'paused' ? t('已暂停') : status === 'completed' ? t('学习完成') : t('阅读中')));
-    const target = $('lessonProgress'), fill = el('span', 'introProgressFill');
-    fill.style.width = `${progress}%`;
-    target.setAttribute('aria-valuenow', String(progress)); target.setAttribute('aria-valuetext', label);
-    target.replaceChildren(fill); target.hidden = $('progressCaption').hidden = false;
+    readerProgress(refs, {label, percent: progress, reading: true,
+      status: status === 'paused' ? t('已暂停') : status === 'completed' ? t('学习完成') : t('阅读中')});
     return;
   }
   const completed = state.modules.filter((module) => module.status === "completed").length;
-  const caption = $("progressCaption");
-  caption.hidden = false;
-  caption.replaceChildren(el("span", "", t("reader.modulesCompleted", { completed, total: state.modules.length })), el("span", "", state.status === "paused" ? t("已暂停") : state.status === "completed" ? state.skipped_modules?.length ? t('reader.roundEnded') : t("学习完成") : t("学习中")));
-  const target = $("lessonProgress");
-  target.hidden = false;
-  target.setAttribute("aria-valuenow", String(Math.round(100 * completed / (state.modules.length || 1))));
-  target.setAttribute("aria-valuetext", t("reader.modulesCompleted", { completed, total: state.modules.length }));
-  target.replaceChildren(...state.modules.map((module) => {
-    const segment = el("span", `progressSegment ${module.status}`);
-    segment.title = learningTitle(module.title);
-    return segment;
-  }));
+  readerProgress(refs, {label: t('reader.modulesCompleted', {completed, total: state.modules.length}),
+    status: state.status === 'paused' ? t('已暂停') : state.status === 'completed' ? state.skipped_modules?.length ? t('reader.roundEnded') : t('学习完成') : t('学习中'),
+    percent: Math.round(100 * completed / (state.modules.length || 1)),
+    segments: state.modules.map(module => ({status: module.status, title: learningTitle(module.title)}))});
 }
 
 function renderPause() {
@@ -1067,25 +1050,15 @@ function renderHistory() {
   target.replaceChildren(...nodes);
 }
 function historyGroup(title, status, steps, className = "", currentAttempt = null) {
-  const group = el("section", "historyGroup");
-  const heading = el("div", "historyGroupHeader");
-  heading.append(el("span", "moduleName", title), el("span", `historyStatus ${className}`, status));
-  group.append(heading);
-  if (steps.length) {
-    const items = el("div", "historyItems");
-    const attempts = [...new Set(steps.map((step) => step.attempt_id).filter(Boolean))];
-    for (const step of steps) {
+    const attempts = [...new Set(steps.map(step => step.attempt_id).filter(Boolean))];
+    return readerHistoryGroup({title, status, className, items: steps.map(step => {
       let label = step.kind === "introduction" ? readerStepTitle(step) : step.kind === "completion" ? t("学习结果") : step.kind === "example" ? t("Example") : learningTitle(step.title);
       if (step.kind === "example" && step.phase === "reading") label += t(" · 讲解");
-      const item = button(label, "historyItem", () => selectStep(step.id), actionBusy);
-      if (step.id === state.current_step_id) item.setAttribute("aria-current", "step");
-      if (step.id === state.active_step_id && readingStatus() !== "completed") item.append(el("span", "historyMark", t("当前")));
-      else if (currentAttempt && step.attempt_id !== currentAttempt && step.kind !== "introduction") item.append(el("span", "historyMark", t("reader.historyAttempt", { attempt: attempts.indexOf(step.attempt_id) + 1 })));
-      items.append(item);
-    }
-    group.append(items);
-  }
-  return group;
+      const marks = [];
+      if (step.id === state.active_step_id && readingStatus() !== 'completed') marks.push(t('当前'));
+      else if (currentAttempt && step.attempt_id !== currentAttempt && step.kind !== 'introduction') marks.push(t('reader.historyAttempt', {attempt: attempts.indexOf(step.attempt_id) + 1}));
+      return {label, onSelect: () => selectStep(step.id), disabled: actionBusy, selected: step.id === state.current_step_id, marks};
+    })}).group;
 }
 function selectStep(id) {
   if (actionBusy || pauseBusy || !readingSteps().some((step) => step.id === id)) return;
@@ -1097,14 +1070,8 @@ function selectStep(id) {
 
 function setHistoryOpen(open, { focus = false } = {}) {
   historyOpen = open;
-  $("appLayout").classList.toggle("historyCollapsed", !open);
-  $("historyButton").setAttribute("aria-expanded", String(open));
-  $("historyButton").setAttribute("aria-label", open ? t("收起学习记录") : t("展开学习记录"));
-  $("historyDrawerToggle").setAttribute("aria-expanded", String(open));
-  $("historyPanel").hidden = !open;
-  $("historyScrim").hidden = !open || !narrowLayout.matches;
-  document.body.classList.toggle("historyDrawerOpen", !$("appLayout").hidden && open && narrowLayout.matches);
-  if (focus && narrowLayout.matches) (open ? $("historyButton") : $("historyDrawerToggle")).focus({ preventScroll: true });
+  readerDrawerState($('appLayout'), {historyButton: $('historyButton'), historyDrawerToggle: $('historyDrawerToggle'),
+    historyPanel: $('historyPanel'), historyScrim: $('historyScrim')}, open, {narrow: narrowLayout.matches, focus});
 }
 
 function renderReview(step) {
@@ -1136,45 +1103,19 @@ function renderStep(step) {
     mountTopicBacklinks(target, state.content_references);
     return;
   }
-  const heading = el("div", "stepHeader");
-  const title = el("h2", "stepTitle", readerStepTitle(step));
-  title.id = "stepTitle";
-  title.tabIndex = -1;
-  heading.append(title);
-  const module = state.modules.find((item) => item.id === step.module_id);
-  if (step.kind === "practice" && module) heading.append(el("span", "stepCounter", module.attempt_id && module.attempt_id !== step.attempt_id ? t("历史作答") : t("reader.practiceCompleted", { completed: module.practice_answered_count, total: module.practice_target_count })));
-  else if (step.kind === "introduction") heading.append(el("span", "stepCounter", state.introduction_read ? t("已读") : t("阅读")));
-  const stem = content(step.html);
-  const reportContext = {topic_id: state.topic_id, ...(step.question_id ? {question_id: step.question_id} : {})};
-  reportableContent(stem, reportContext, step.question_id ? `question:${step.question_id}` : step.introduction_id ? `introduction:${step.introduction_id}` : 'introduction', step.content_version || state.course_version);
+  const module = state.modules.find(item => item.id === step.module_id);
   const actions = Array.isArray(step.actions) ? step.actions : [];
-  target.append(heading, stem);
-  const typeField = choiceTypeField(step.interaction); if (typeField) heading.after(typeField);
-  if (state.reread_pending) heading.after(el('p', 'introductionUpdateNotice', t('reader.updatedNotice')));
-  if (step.interaction && step.interaction.type !== 'text' && !actions.includes('submit')) {
-    target.append(questionInput(step.interaction, {id: 'submittedInteraction', stem,
-      value: step.answer || (step.id === state.active_step_id ? draftValue(step) : ''), disabled: true}).element);
-  }
-  if (step.answer !== null && step.answer !== undefined && step.answer !== "") {
-    const answer = el("details", "submittedAnswer");
-    answer.append(el("summary", "", t("查看已提交答案")), submittedAnswer(step, step.answer, step.answer_display ?? step.answer));
-    target.append(answer);
-  }
-  if (step.feedback) {
-    const feedback = el("div", `feedback ${step.feedback.correct ? "correct" : "incorrect"}`);
-    feedback.setAttribute("role", "status");
-    feedback.append(el("span", "feedbackIcon", step.feedback.correct ? "✓" : "!"));
-    const body = el("div");
-    body.append(el("span", "feedbackTitle", step.feedback.correct ? t("回答正确") : t("本题回答有误")));
-    if (step.feedback.reason) body.append(el("div", "feedbackReason", step.feedback.reason));
-    feedback.append(body);
-    target.append(feedback);
-  }
-  if (step.explanation_html && !(step.revealed && actions.includes('submit'))) {
-    const explanation = reportableContent(content(step.explanation_html), reportContext, `explanation:${step.question_id}`, step.content_version || state.course_version);
-    const reference = referenceAnswer(step); if (reference) target.append(reference);
-    target.append(el("h3", "exampleExplanationHeader", t("Explanation · 解析")), prepareAnswerContent(explanation));
-  }
+  const reportContext = {topic_id: state.topic_id, ...(step.question_id ? {question_id: step.question_id} : {})};
+  const counter = step.kind === 'practice' && module
+    ? module.attempt_id && module.attempt_id !== step.attempt_id ? t('历史作答') : t('reader.practiceCompleted', {completed: module.practice_answered_count, total: module.practice_target_count})
+    : step.kind === 'introduction' ? t(state.introduction_read ? '已读' : '阅读') : null;
+  const {stem} = renderReaderStep(target, step, {title: readerStepTitle(step), counter, references: state.content_references,
+    showSubmittedInteraction: !actions.includes('submit'),
+    submittedValue: step.answer || (step.id === state.active_step_id ? draftValue(step) : ''),
+    showExplanation: Boolean(step.explanation_html) && !(step.revealed && actions.includes('submit')),
+    notice: state.reread_pending ? t('reader.updatedNotice') : null,
+    decorate: (body, kind) => reportableContent(body, reportContext, kind === 'explanation' ? `explanation:${step.question_id}`
+      : step.question_id ? `question:${step.question_id}` : step.introduction_id ? `introduction:${step.introduction_id}` : 'introduction', step.content_version || state.course_version)});
   if (state.dependency_ready === false && !actions.length) target.append(el("p", "featureNotice", translateMessage("请先完成前置知识的学习和待复习内容，并解除前置知识的暂停状态。")));
   if (state.status === "in_progress" && step.id === state.active_step_id) {
     if (!can("learn")) target.append(el("p", "featureNotice", featureMessage("learn")));
@@ -1213,44 +1154,17 @@ function renderStep(step) {
 }
 
 function renderStepNavigation(target, step, actions) {
-  const pages = readingSteps();
-  const index = pages.findIndex((item) => item.id === step.id);
-  const previous = index > 0 ? pages[index - 1] : null;
-  const next = index >= 0 ? pages[index + 1] : null;
-  const footer = el("div", "stepNavigation");
-  const navigation = el("nav", "historyPagination");
-  navigation.setAttribute("aria-label", t("已学内容翻页"));
-  function pageControl(label, id, page) {
-    const control = button(label, "secondaryButton pageButton", () => selectStep(page.id));
-    control.id = id;
-    control.dataset.navAvailable = "true";
-    control.title = t("reader.pageControlTitle", { label, title: readerStepTitle(page) });
-    return control;
-  }
-  if (previous && can("review_history")) {
-    navigation.append(pageControl(t("上一页"), "previousPageButton", previous));
-    footer.append(navigation);
-  }
-  const area = el("div", "continueRow");
-  if (actions.includes("continue")) {
-    const continueButton = button(t("下一页"), "primaryButton", () => mutate("continue", mutationPayload()));
-    continueButton.setAttribute("aria-label", t("Continue，继续学习"));
-    area.append(continueButton);
-  } else if (actions.includes("submit")) {
-    area.append(target.querySelector("#submitButton"));
-  } else if (step.kind === 'completion') {
-    area.append(button(t(state.skipped_modules?.length ? 'nav.backHome' : 'reader.finishLearning'), 'primaryButton', () => {
-      portal?.progressChanged();
-      location.hash = `/subjects/${topicSubjectId || 'math'}/learn`;
-    }));
-  } else if (next && can("review_history")) {
-    const forward = el("nav", "historyPagination");
-    forward.setAttribute("aria-label", t("已学内容翻页"));
-    forward.append(pageControl(t("下一页"), "nextPageButton", next));
-    area.append(forward);
-  }
-  if (area.childElementCount) footer.append(area);
-  if (footer.childElementCount) target.append(footer);
+  const pages = readingSteps(), index = pages.findIndex(item => item.id === step.id);
+  let primary;
+  if (actions.includes('continue')) {
+    primary = button(t('下一页'), 'primaryButton', () => mutate('continue', mutationPayload()));
+    primary.setAttribute('aria-label', t('Continue，继续学习'));
+  } else if (actions.includes('submit')) primary = target.querySelector('#submitButton');
+  else if (step.kind === 'completion') primary = button(t(state.skipped_modules?.length ? 'nav.backHome' : 'reader.finishLearning'), 'primaryButton', () => {
+    portal?.progressChanged(); location.hash = `/subjects/${topicSubjectId || 'math'}/learn`;
+  });
+  readerNavigation(target, {previous: index > 0 ? pages[index - 1] : null, next: index >= 0 ? pages[index + 1] : null,
+    onSelect: page => selectStep(page.id), canNavigate: can('review_history'), titleOf: readerStepTitle, primary});
 }
 
 function answerForm(step, stem) {
@@ -1517,7 +1431,7 @@ async function openTopic(id, subjectId) {
   }
 }
 
-const { initPortal } = await import("./portal.js?v=5612a275692d1be5");
+const { initPortal } = await import("./portal.js?v=82d46e20de08f529");
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {
     try { return await fetchGuideAsset(url, subjectId); }
