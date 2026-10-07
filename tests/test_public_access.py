@@ -591,6 +591,7 @@ class PublicAccessAcceptanceTests(unittest.TestCase):
                    "/api/help-center", "/api/help-replies", "/api/help-replies/read", "/api/help-requests/preview",
                    "/api/help-messages", "/api/help-messages/read", "/api/help-content",
                    "/api/help-main/messages", "/api/help-main/read",
+                   "/api/help-images",
                    "/api/admin/students", "/api/admin/students/{learner_id}",
                    "/api/admin/students/{learner_id}/questions", "/api/admin/students/{learner_id}/history",
                    "/api/student-report", "/api/student-report/questions", "/api/student-report/history",
@@ -619,9 +620,13 @@ class PublicAccessAcceptanceTests(unittest.TestCase):
         self._assert_error(self.client.get('/api/atomic/reviews', headers=self._headers()), 401, 'identity_required')
         self.assertEqual(self.client.get('/api/atomic/reviews', headers=self._headers(identity)).status_code, 200)
         self.assertEqual(self.client.post('/api/atomic/reviews', json={}, headers=self._headers(identity)).status_code, 405)
+        self._assert_error(self.client.get('/api/help-images?image_id=' + '0' * 32,
+            headers=self._headers(identity)), 403, 'feature_forbidden')
+        self._assert_error(self.client.post('/api/help-images', headers=self._headers(identity),
+            json={'report_id': 'missing', 'is_main': True, 'data': 'eA=='}), 403, 'feature_forbidden')
         for path in ["/api/admin/accounts", "/api/unlock", "/api/reset", "/api/access/permissions",
                      "/api/graphs/admin/import", "/learning.sqlite3", "/settings.json", "/pairing.json", "/.env",
-                     "/graphs/rigid-constraints.json"]:
+                     "/graphs/rigid-constraints.json", "/help-images/private.png"]:
             with self.subTest(path=path):
                 response = self.client.get(path, headers=self._headers(identity))
                 if path.startswith("/api/"):
