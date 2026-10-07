@@ -1,21 +1,21 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=e7fd9184f3d00382";
-import { createReviewView } from "./review.js?v=e7fd9184f3d00382";
-import { renderCourseGraph } from "./course-graph.js?v=e7fd9184f3d00382";
-import {questionInput, choiceTypeField} from './question-input.js?v=e7fd9184f3d00382';
-import {enhanceTopicContent} from './topic-content.js?v=e7fd9184f3d00382';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=e7fd9184f3d00382';
-import {createCatalogPicker} from './catalog-picker.js?v=e7fd9184f3d00382';
-import {createAtomicView} from './atomic.js?v=e7fd9184f3d00382';
-import {createTrainingView} from './training.js?v=e7fd9184f3d00382';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=e7fd9184f3d00382";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=469fc84de6dd9665";
+import { createReviewView } from "./review.js?v=469fc84de6dd9665";
+import { renderCourseGraph } from "./course-graph.js?v=469fc84de6dd9665";
+import {questionInput, choiceTypeField} from './question-input.js?v=469fc84de6dd9665';
+import {enhanceTopicContent} from './topic-content.js?v=469fc84de6dd9665';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=469fc84de6dd9665';
+import {createCatalogPicker} from './catalog-picker.js?v=469fc84de6dd9665';
+import {createAtomicView} from './atomic.js?v=469fc84de6dd9665';
+import {createTrainingView} from './training.js?v=469fc84de6dd9665';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=469fc84de6dd9665";
 
-import {createPaperView} from './review-papers.js?v=e7fd9184f3d00382';
+import {createPaperView} from './review-papers.js?v=469fc84de6dd9665';
 
-import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=e7fd9184f3d00382';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=e7fd9184f3d00382';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=e7fd9184f3d00382';
-import {attachChatEditor, renderChatMarkdown} from './vendor/chat/chat.js?v=e7fd9184f3d00382';
-import {createStudentDashboard} from './student-dashboard.js?v=e7fd9184f3d00382';
+import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=469fc84de6dd9665';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=469fc84de6dd9665';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=469fc84de6dd9665';
+import {attachChatEditor, renderChatMarkdown, configureChatImages} from './vendor/chat/chat.js?v=469fc84de6dd9665';
+import {createStudentDashboard} from './student-dashboard.js?v=469fc84de6dd9665';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -33,6 +33,7 @@ const statusNames = { not_started: t("portal.not.started.3"), in_progress: t("po
 const roundButton = (text, action) => control(text, "portalStart", action);
 
 export function initPortal(bridge) {
+  configureChatImages(ident => bridge.request('help-images?image_id=' + encode(ident)));
   const root = $("portalContent");
   let catalog = null, profile = null, identity = null, selectedCourse = null;
   let subjects = null, catalogSubject = null, activeSubject = null, navigationSubjectId = 'math';
@@ -1031,6 +1032,7 @@ export function initPortal(bridge) {
     const more = control(t('help.more'), 'secondaryButton', () => load(false)); more.hidden = true; page.append(more);
     helpFeedRefresh = () => { void load(true); };
     async function load(reset = false) {
+      if ([...chatEditors].some(editor => editor.isUploading())) return;
       if (busy) return; busy = true; more.disabled = refresh.disabled = selector.disabled = true;
       try {
         let result = await bridge.request(`help-center?offset=${reset ? 0 : offset}${selected ? '&learner_id=' + encode(selected) : ''}`);
@@ -1158,7 +1160,7 @@ export function initPortal(bridge) {
       feedback.textContent = original && original.revision !== draft.revision ? t('help.replyChanged') : '';
     }
     function choose(message, edit) {
-      if (busy) return;
+      if (busy || editor?.isUploading()) return;
       draft = {message: edit ? message.message : '', message_id: edit ? message.id : null,
         reply_to: edit ? null : message.id, revision: edit ? message.revision : 0, pending: null};
       replyDrafts.set(item.id, draft); syncComposer(); editor.focus();
@@ -1180,9 +1182,16 @@ export function initPortal(bridge) {
     form.append(label, target, input, submit, cancel, feedback); syncComposer(); panel.append(form);
     editor = attachChatEditor(input, {editor: t('help.replyInput'), hint: t('help.editorHint'),
       bold: t('help.editorBold'), italic: t('help.editorItalic'), list: t('help.editorList'),
-      math: t('help.editorMath'), preview: t('help.editorPreview')}); chatEditors.add(editor);
+      math: t('help.editorMath'), preview: t('help.editorPreview'), uploading: t('help.imageUploading'),
+      invalidImage: t('help.imageInvalid'), tooMany: t('help.imagesTooMany'), tooLong: t('help.imageTextTooLong')}, {
+      dropTarget: panel,
+      upload: data => bridge.request('help-images', {method: 'POST', body: {
+        report_id: item.is_main ? item.learner_id : item.id, is_main: !!item.is_main, data}}),
+      onUploading: value => {submit.disabled = cancel.disabled = value;
+        root.querySelectorAll('.helpStudentSelector select,.helpToolbar button').forEach(button => button.disabled = value);}
+    }); chatEditors.add(editor);
     form.addEventListener('submit', async event => {
-      event.preventDefault(); if (busy || !input.value.trim() || owner !== bridge.getAccess()?.learner_id) return;
+      event.preventDefault(); if (busy || editor.isUploading() || !input.value.trim() || owner !== bridge.getAccess()?.learner_id) return;
       busy = true; submit.disabled = input.disabled = cancel.disabled = true; feedback.textContent = t('help.sendingReply');
       editor.setDisabled(true);
       draft.pending ||= {report_id: item.is_main ? item.learner_id : item.id, request_id: crypto.randomUUID(), message_id: draft.message_id,
@@ -1250,7 +1259,7 @@ export function initPortal(bridge) {
     block.dataset.contentVersion = item.request.content_version;
     block.tabIndex = -1;
     page.append(block); root.replaceChildren(page);
-    helpFeedRefresh = () => { void renderHelpContent(ticket, reportId); };
+    helpFeedRefresh = () => { if (![...chatEditors].some(editor => editor.isUploading())) void renderHelpContent(ticket, reportId); };
     requestAnimationFrame(() => { if (ticket === sequence) block.focus({preventScroll: true}); });
   }
   async function renderAllContent(ticket, topicId, params) {

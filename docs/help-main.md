@@ -8,6 +8,8 @@
 
 输入框采用 CodeMirror 6，保留发送、引用回复、修改、冲突检查及草稿机制；提供加粗、斜体、列表、公式和预览。Tab / Shift+Tab 缩进，支持撤销；Esc 后按 Tab 可离开编辑器。最长仍为 4000 字符。
 
+所有对话编辑框支持粘贴或拖入图片，一次最多 10 张；加入后自动预览，消息可以仅含图片。浏览器将常见图片转成最大边长 2048 的 PNG，单张上传上限 2 MB。`/api/help-images` 沿用身份与当前对话授权，不提供公开图片 URL；消息仅保存 `![](help-image:<id>)` 引用。后端用 Pillow 解码并重新编码，丢弃元数据与额外负载；跨对话引用拒绝提交。图片在私密数据目录 `help-images/` 持久保存，备份根据同一数据库快照逐个绑定哈希，恢复验证图片与数据库完全对应，旧备份仍兼容。修改消息或取消草稿不删除图片，以保留消息历史版本。
+
 依赖固定在 `scripts/chat-dependencies/package-lock.json`。在独立缓存目录安装锁定依赖后，用 `GRASPMEMOEDU_CHAT_RUNTIME` 指定目录并执行 `node scripts/build_chat_editor.mjs`。生成的 `web/vendor/chat` 不依赖 CDN；发布脚本核对 `scripts/chat-assets.json` 的完整清单与哈希，许可证随资源发布。
 
 参考：[CodeMirror Tab](https://codemirror.net/examples/tab/)、[Marked](https://marked.js.org/)、[KaTeX 配置](https://katex.org/docs/options.html)。

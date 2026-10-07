@@ -14,6 +14,7 @@ from .training_content import TrainingCatalog, permission_id
 from .feedback_selection import FeedbackContent, content_hash, normalize_selection, validate_selection
 from .help_threads import HelpThreads, HelpMessage, HelpThreadRead
 from .help_main import MainHelpThreads
+from .help_images import HelpImages, HelpImageUpload
 from .access import admin_display_name
 
 
@@ -102,6 +103,7 @@ class HelpRequestStore:
                     revision INTEGER NOT NULL CHECK(revision>0), read_at TEXT NOT NULL);''')
         self.threads = HelpThreads(self)
         self.main_threads = MainHelpThreads(self)
+        self.images = HelpImages(self)
 
     @staticmethod
     def _require_admin(con, admin_id):
@@ -501,6 +503,14 @@ def register_help_routes(app, catalog, access_store, subjects):
     @app.post('/api/help-main/messages')
     def send_main_message(payload: HelpMessage, request: Request):
         return store.main_threads.send(access_store.resolve(request.headers.get('x-learning-identity')), payload.model_dump())
+
+    @app.post('/api/help-images')
+    def upload_help_image(payload: HelpImageUpload, request: Request):
+        return store.images.upload(access_store.resolve(request.headers.get('x-learning-identity')), payload.model_dump())
+
+    @app.get('/api/help-images')
+    def get_help_image(request: Request, image_id: str = Query(pattern='^[0-9a-f]{32}$')):
+        return store.images.get(access_store.resolve(request.headers.get('x-learning-identity')), image_id)
 
     @app.post('/api/help-main/read')
     def read_main_messages(payload: HelpThreadRead, request: Request):

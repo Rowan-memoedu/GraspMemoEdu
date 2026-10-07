@@ -161,6 +161,12 @@ def _validate_payload(manifest, blobs):
     topics, expected_files = {}, {'catalog.json', 'learning.sqlite3'}
     if 'judge-daily-quota.sqlite3' in blobs:
         expected_files.add('judge-daily-quota.sqlite3')
+    from .help_images import MAX_BYTES as HELP_IMAGE_MAX
+    for name, raw in blobs.items():
+        if name.startswith('help-images/'):
+            if not re.fullmatch(r'help-images/[0-9a-f]{32}\.png', name) or len(raw) > HELP_IMAGE_MAX:
+                raise ValueError('Invalid help image attachment')
+            expected_files.add(name)
     from .test_materials import FILENAME as TEST_MATERIALS, MAX_BYTES as TEST_POLICY_MAX, validate as validate_test_materials
     if TEST_MATERIALS in blobs:
         if len(blobs[TEST_MATERIALS]) > TEST_POLICY_MAX:
@@ -268,6 +274,8 @@ def backup_site(settings, destination=None):
                 from .question_bank import validate_saved_revisions
                 validate_saved_revisions(snapshot, catalog.topics, settings.data_dir)
                 validate_training_saved(snapshot, training_catalog)
+                from .help_images import archive_images
+                blobs.update(archive_images(snapshot, settings.data_dir))
         from .topic_runtime import is_introduction
         introduction_versions = {}
         for topic_id, version in saved_versions:
@@ -451,6 +459,10 @@ def restore_site(backup, destination):
                 from .training_content import TrainingCatalog, validate_saved as validate_training_saved
                 training_catalog = TrainingCatalog(staged)
                 validate_training_saved(con, training_catalog)
+                from .help_images import archive_images
+                saved_images = archive_images(con, staged)
+                if set(saved_images) != {name for name in blobs if name.startswith('help-images/')}:
+                    raise ValueError('Help image archive differs from database')
                 retired = _retired_versions(manifest, topics)
                 historical = _introduction_versions(manifest, topics)
                 archived_rows = {(topic_id, version) for _, topic_id, version in rows if topic_id not in topics}

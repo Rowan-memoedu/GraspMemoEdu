@@ -154,6 +154,7 @@ class HelpThreads:
         operation = json.dumps(values, ensure_ascii=False, sort_keys=True)
         with self.store.access_store._transaction() as con:
             row, viewer = self.authorized(con, access, values['report_id'])
+            self.store.images.validate_message(con, message, row['id'], getattr(self, 'is_main', False))
             existing = self.query(con, '''SELECT v.*,m.report_id FROM {versions} v JOIN {messages} m ON m.id=v.message_id
                 WHERE v.author_id=? AND v.request_id=?''', (access['learner_id'], values['request_id'])).fetchone()
             if existing:

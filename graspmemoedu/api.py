@@ -380,7 +380,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
 
     app = FastAPI(title='GraspMemoEdu', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     # The subsequently registered boundary middleware wraps this body limiter.
-    app.add_middleware(BodyLimitMiddleware, maximum=16384, path_limits={'/api/help-requests': 65536})
+    app.add_middleware(BodyLimitMiddleware, maximum=16384, path_limits={'/api/help-requests': 65536, '/api/help-images': 3 * 1024 * 1024})
     app.state.service = service
     app.state.settings = settings
     app.state.access_store = access_store
@@ -452,6 +452,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                         '/api/help-center', '/api/help-replies', '/api/help-replies/read', '/api/help-requests/preview',
                         '/api/help-messages', '/api/help-messages/read', '/api/help-content',
                         '/api/help-main/messages', '/api/help-main/read',
+                        '/api/help-images',
                         '/api/materials', '/api/materials/open', '/api/materials/content',
                         '/api/state', '/api/demo-answer', '/api/guest/reset', '/api/choose', '/api/continue', '/api/select', '/api/pause', '/api/skip', '/api/submit', '/api/reveal',
                         '/api/subjects', '/api/catalog', '/api/catalog/select', '/api/dashboard', '/api/profile', '/api/feedback', '/api/help-requests', '/api/guide', '/api/atomic/reviews'}
@@ -494,7 +495,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
             if request.method == 'POST' and not request.headers.get('content-type', '').lower().startswith('application/json'):
                 return deny('json_required', '需要 JSON 请求。', 415)
             size = request.headers.get('content-length', '0')
-            if not size.isdigit() or int(size) > (65536 if path == '/api/help-requests' else 16384):
+            if not size.isdigit() or int(size) > {'/api/help-requests': 65536, '/api/help-images': 3 * 1024 * 1024}.get(path, 16384):
                 return deny('request_too_large', '请求过大。', 413)
             # Enforce permissions before parsing a mutation body; hiding controls is not authorization.
             if request.method == 'POST' and (path == '/api/pause' or path.startswith('/api/review/sessions/') and path.endswith('/pause')):
