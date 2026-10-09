@@ -2,7 +2,7 @@
 
 本表从当前界面词库自动生成。修改以词库为准，随后重新生成并检查本表。术语约定见 [界面语言规范](ui-language.md)。
 
-共 867 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
+共 887 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
 
 不包括作者课程正文、题目、答案、解析或用户输入。首页的学科双语副标题按约定保留。
 
@@ -266,6 +266,14 @@
 
 | English | 中文 |
 |---|---|
+| Today’s online activity | 今日在线情况 |
+| {date} · Beijing time | {date} · 北京时间 |
+| Today online: {minutes} min {seconds} sec | 今日在线时长：{minutes} 分 {seconds} 秒 |
+| Counts time with the page visible. Background time and disconnected gaps are excluded; overlapping tabs count once. Updates about every 30 seconds; refresh to read the latest records. | 累计页面在前台打开的时间；后台、断线和重叠标签页不重复计时。数据约每 30 秒更新，点击刷新可读取最新记录。 |
+| Visit tracking began at {time}. Earlier online time is unavailable. | 访问记录自 {time} 起采集，之前的在线时长无法追溯。 |
+| Topics visited today ({count}) | 今日访问的 Topic（{count}） |
+| No recorded Topic visits today. | 今日暂无已记录的 Topic 访问。 |
+| First visit: {first} · Latest visit: {last} | 首次访问：{first} · 最近访问：{last} |
 | Student learning overview | 学员学习情况 |
 | View students’ course progress, banks, error notebooks, submitted answers and review schedules. This page is read-only. | 查看全站学员的课程进度、题库、错题本、作答记录与复习排程。此页面只读取记录。 |
 | Student report sections | 学员数据分类 |
@@ -705,6 +713,18 @@
 | View your course progress, question banks, notebook, answer history and review schedule. | 查看自己的课程进度、题库、错题本、作答记录与复习排程。 |
 | Students can view their own learning records here. | 个人学习情况仅供学员查看本人记录。 |
 | This atomic card remains locked until mastered. | 未掌握的原子卡片暂不可查看，掌握后可展开内容。 |
+| Main conversation | 主对话 |
+| Choose a student | 选择学员 |
+| Paste or drop images. Markdown and LaTeX: $inline$ and $$display$$. Tab indents; Shift+Tab unindents. Press Esc then Tab to leave the editor. | 支持粘贴或拖入图片，以及 Markdown 与 LaTeX：$公式$、$$独立公式$$。Tab 缩进，Shift+Tab 取消缩进；Esc 后按 Tab 可移出编辑器。 |
+| Adding images… | 正在加入图片… |
+| Use PNG, JPEG, WebP, GIF or BMP, or reduce the image size and retry. | 无法加入图片，请使用 PNG、JPEG、WebP、GIF 或 BMP 图片，或缩小图片后重试。 |
+| Add up to 10 images at a time. | 一次最多加入 10 张图片。 |
+| Shorten the message before adding images. | 消息过长，请缩短文字后重新加入图片。 |
+| Bold | 加粗 |
+| Italic | 斜体 |
+| List | 列表 |
+| Math | 公式 |
+| Preview | 预览 |
 | Clear selection | 清除选择 |
 
 ## 题库训练

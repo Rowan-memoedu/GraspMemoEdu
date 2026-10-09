@@ -1,4 +1,12 @@
 export const portalMessages = {
+  'students.today': ['今日在线情况', 'Today’s online activity'],
+  'students.todayDate': ['{date} · 北京时间', '{date} · Beijing time'],
+  'students.onlineTime': ['今日在线时长：{minutes} 分 {seconds} 秒', 'Today online: {minutes} min {seconds} sec'],
+  'students.onlineRules': ['累计页面在前台打开的时间；后台、断线和重叠标签页不重复计时。数据约每 30 秒更新，点击刷新可读取最新记录。', 'Counts time with the page visible. Background time and disconnected gaps are excluded; overlapping tabs count once. Updates about every 30 seconds; refresh to read the latest records.'],
+  'students.trackingSince': ['访问记录自 {time} 起采集，之前的在线时长无法追溯。', 'Visit tracking began at {time}. Earlier online time is unavailable.'],
+  'students.visitedTopics': ['今日访问的 Topic（{count}）', 'Topics visited today ({count})'],
+  'students.noVisits': ['今日暂无已记录的 Topic 访问。', 'No recorded Topic visits today.'],
+  'students.visitTimes': ['首次访问：{first} · 最近访问：{last}', 'First visit: {first} · Latest visit: {last}'],
   'students.title': ['学员学习情况', 'Student learning overview'],
   'students.hint': ['查看全站学员的课程进度、题库、错题本、作答记录与复习排程。此页面只读取记录。', 'View students’ course progress, banks, error notebooks, submitted answers and review schedules. This page is read-only.'],
   'students.sections': ['学员数据分类', 'Student report sections'],

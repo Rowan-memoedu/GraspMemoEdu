@@ -20,6 +20,7 @@ from tests.test_student_reports import StudentReportsTests
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--port', type=int, default=18870)
+parser.add_argument('--presence', action='store_true', help='Seed isolated visit history and a Q&A content snapshot')
 args = parser.parse_args()
 args.output.mkdir(parents=True, exist_ok=True)
 with socket.socket() as probe:
@@ -72,17 +73,32 @@ def snapshot(request):
     with closing(sqlite3.connect(case.root / 'learning.sqlite3')) as con:
         data = {}
         for (name,) in con.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall():
+            if name.startswith('presence_'): continue  # Visit telemetry is independent of learning records.
             columns = [r[1] for r in con.execute('PRAGMA table_info("' + name + '")')]
             field = 'learner' if 'learner' in columns else 'learner_id' if 'learner_id' in columns else None
             if field:
                 data[name] = con.execute('SELECT * FROM "' + name + '" WHERE "' + field + '" IN (?,?) ORDER BY rowid', (case.student, case.second)).fetchall()
-    return JSONResponse({'hash': hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()})
+        presence_active = con.execute('SELECT COUNT(*) FROM presence_sessions WHERE learner=? AND active=1', (case.student,)).fetchone()[0]
+    return JSONResponse({'hash': hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest(), 'presence_active': presence_active})
 
 case.app.router.routes.insert(0, Route('/qa/snapshot', snapshot))
 case.app.router.routes.insert(0, Route('/deployment.json', lambda request: JSONResponse({'api_origin': ''})))
 identities = {role: {'identity_token': headers['X-Learning-Identity'], 'access': case.store.resolve(headers['X-Learning-Identity'])}
               for role, headers in [('admin', case.admin_headers), ('ordinary', case.normal_headers), ('student', case.headers)]}
 identities.update(target=case.student, empty_target=case.second)
+if args.presence:
+    from graspmemoedu.presence import PresencePulse
+    now = datetime.now(timezone.utc)
+    case.app.state.presence.clock = lambda: now - timedelta(seconds=30)
+    student = case.store.resolve(case.headers['X-Learning-Identity'])
+    case.app.state.presence.pulse(student, PresencePulse(stream_id='a' * 32, sequence=1, visible=True, topic_ids=[case.course['id']]))
+    case.app.state.presence.clock = lambda: now
+    case.app.state.presence.pulse(student, PresencePulse(stream_id='a' * 32, sequence=2, visible=False))
+    case.app.state.presence.clock = lambda: datetime.now(timezone.utc)
+    case.app.state.admin_students.clock = lambda: datetime.now(timezone.utc)
+    saved = case.app.state.help_requests.save(student, {'request_id': 'isolated-content-reader', 'message': '',
+        'topic_id': case.course['id'], 'content_block_id': 'introduction', 'content_version': case.course['version']})
+    identities['report_id'] = saved['id']
 (args.output / 'auth.private.json').write_text(json.dumps(identities), encoding='utf-8')
 (args.output / 'fixture.json').write_text(json.dumps({'data_dir': str(case.root), 'port': args.port}), encoding='utf-8')
 case.client.__exit__(None, None, None)

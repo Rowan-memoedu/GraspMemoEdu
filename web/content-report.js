@@ -1,8 +1,13 @@
-import {t} from './i18n.js?v=fdf8075df78da5d0';
+import {t} from './i18n.js?v=93ae0d5253afa2c0';
 
 const blocks = new WeakMap();
 const helpBlocks = new WeakMap();
 let helpPolicy = null, showHelp = null;
+export function visibleContentTopics() {
+  return [...new Set([...document.querySelectorAll('[data-help-block]')]
+    .filter(element => !element.closest('[hidden]') && element.getClientRects().length)
+    .map(element => helpBlocks.get(element)?.topic_id).filter(Boolean))];
+}
 export function helpableContent(element, context, contentBlockId, contentVersion) {
   if (!contentVersion || !context.topic_id) return element;
   element.dataset.helpBlock = contentBlockId;

@@ -16,6 +16,7 @@ from .service import DomainError
 from .training_content import permission_id
 from .student_reports import StudentReport, time_zone
 from .access import admin_display_name
+from .presence import today_presence
 
 
 def public_route(path):
@@ -199,6 +200,7 @@ class AdminStudents:
             training_learned, training_reviews = self.training_records(con, student, tables, current, access)
             reviews.extend(training_reviews)
             analytics = StudentReport(self, con, access, student, rows, tables, current, own).build(reviews, days, timezone)
+            presence = today_presence(con, learner_id, current, access, self.context, self.access.test_materials)
             if own:
                 for item in learned:
                     for point in item['points']:
@@ -210,7 +212,8 @@ class AdminStudents:
         reviews.sort(key=lambda r: (r['due_at'] or '', r['kind'], r['id']))
         learned.sort(key=lambda r: (r['started_at'] or '', r['topic_id']), reverse=True)
         return {'student': self.student(row, own), 'generated_at': current.isoformat(), 'learned': learned,
-                'reviews': reviews, 'atomic_cards': cards, 'training_learned': training_learned, 'analytics': analytics}
+                'reviews': reviews, 'atomic_cards': cards, 'training_learned': training_learned, 'analytics': analytics,
+                'presence': presence}
 
     def report(self, access, learner_id, view, *, own=False, **options):
         self.require_viewer(access, learner_id, own)

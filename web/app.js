@@ -1,11 +1,11 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=fdf8075df78da5d0";
-import {answerReady} from './question-input.js?v=fdf8075df78da5d0';
-import {reportableContent} from './content-report.js?v=fdf8075df78da5d0';
-import {createLearningCache} from './learning-cache.js?v=fdf8075df78da5d0';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=93ae0d5253afa2c0";
+import {answerReady} from './question-input.js?v=93ae0d5253afa2c0';
+import {reportableContent} from './content-report.js?v=93ae0d5253afa2c0';
+import {createLearningCache} from './learning-cache.js?v=93ae0d5253afa2c0';
 
-import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, readerHistorySteps, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState} from './learning-ui.js?v=fdf8075df78da5d0';
-import {selfAssessment} from './self-assessment.js?v=fdf8075df78da5d0';
-import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=fdf8075df78da5d0';
+import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, readerHistorySteps, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState} from './learning-ui.js?v=93ae0d5253afa2c0';
+import {selfAssessment} from './self-assessment.js?v=93ae0d5253afa2c0';
+import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=93ae0d5253afa2c0';
 
 applyStaticTranslations();
 
@@ -1426,7 +1426,10 @@ async function openTopic(id, subjectId) {
   }
 }
 
-const { initPortal } = await import("./portal.js?v=fdf8075df78da5d0");
+const { initPortal } = await import("./portal.js?v=93ae0d5253afa2c0");
+const {startPresence} = await import('./presence.js?v=93ae0d5253afa2c0');
+const {visibleContentTopics} = await import('./content-report.js?v=93ae0d5253afa2c0');
+startPresence({getAccess: () => identityProblem ? null : access, request, getTopics: visibleContentTopics});
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {
     try { return await fetchGuideAsset(url, subjectId); }

@@ -56,6 +56,11 @@
 .studentList { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(260px,100%),1fr)); gap: 16px; }
 .studentOverview .courseChoice { min-width: 0; margin: 14px 0; overflow-wrap: anywhere; }
 .studentSection { margin: 32px 0; }
+/* Hallmark · component critique: P4 H4 E4 S4 R5 V3; existing report layout retained. */
+.studentToday { margin: 24px 0; padding-bottom: 16px; border-bottom: 1px solid #dce4e8; }
+.studentVisitList { padding-left: 22px; overflow-wrap: anywhere; }
+.studentVisitList li { margin: 16px 0; }
+.studentVisitList .inputHint { margin: 4px 0; }
 .studentSection .courseChoice { min-height: 0; }
 .studentSection .studentAtomicCard { display: block; }
 .studentSection h2 { margin-bottom: 16px; }

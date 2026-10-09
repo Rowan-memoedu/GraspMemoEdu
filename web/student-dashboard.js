@@ -1,8 +1,8 @@
-import {t, locale, learningTitle, translateMessage} from './i18n.js?v=fdf8075df78da5d0';
-import {renderTaskTree, createOutlineGroup} from './task-tree.js?v=fdf8075df78da5d0';
-import {questionInput, choiceTypeField} from './question-input.js?v=fdf8075df78da5d0';
-import {submittedAnswer, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=fdf8075df78da5d0';
-import {enhanceTopicContent} from './topic-content.js?v=fdf8075df78da5d0';
+import {t, locale, learningTitle, translateMessage} from './i18n.js?v=93ae0d5253afa2c0';
+import {renderTaskTree, createOutlineGroup} from './task-tree.js?v=93ae0d5253afa2c0';
+import {questionInput, choiceTypeField} from './question-input.js?v=93ae0d5253afa2c0';
+import {submittedAnswer, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=93ae0d5253afa2c0';
+import {enhanceTopicContent} from './topic-content.js?v=93ae0d5253afa2c0';
 
 const el = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text != null) n.textContent = text; return n; };
 const button = (text, action, cls = 'secondaryButton') => { const n = el('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
@@ -173,6 +173,23 @@ export function createStudentDashboard(data, {request, formatDate, timezone, day
   }
 
   const overview = panels.overview;
+  if (data.presence) {
+    const today = data.presence, section = el('section', 'studentToday');
+    section.append(title(t('students.today'), 'h2'), hint(t('students.todayDate', {date: today.date})),
+      el('p', '', t('students.onlineTime', {minutes: number(Math.floor(today.online_ms / 60000)), seconds: number(Math.floor(today.online_ms / 1000) % 60)})),
+      hint(t('students.onlineRules')), hint(t('students.trackingSince', {time: formatDate(today.recording_since)})),
+      title(t('students.visitedTopics', {count: today.topics.length})));
+    if (!today.topics.length) section.append(hint(t('students.noVisits')));
+    const list = el('ul', 'studentVisitList');
+    for (const visit of today.topics) {
+      const row = el('li');
+      row.append(el('strong', '', learningTitle(visit.topic_title)),
+        hint([subjectName(visit.subject_id), visit.course_title].filter(Boolean).join(' · ')),
+        hint(t('students.visitTimes', {first: formatDate(visit.first_at), last: formatDate(visit.last_at)})));
+      list.append(row);
+    }
+    section.append(list); overview.append(section);
+  }
   const metrics = el('div', 'studentMetrics');
   metrics.append(metric(t('students.completedTopics'), `${a.topics.filter(x => x.status === 'completed' && x.version_current).length} / ${a.topics.length}`),
     metric(t('students.answeredQuestions'), number(a.banks.reduce((sum, bank) => sum + bank.answered, 0))),

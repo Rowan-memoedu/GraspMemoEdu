@@ -591,7 +591,7 @@ class PublicAccessAcceptanceTests(unittest.TestCase):
                    "/api/help-center", "/api/help-replies", "/api/help-replies/read", "/api/help-requests/preview",
                    "/api/help-messages", "/api/help-messages/read", "/api/help-content",
                    "/api/help-main/messages", "/api/help-main/read",
-                   "/api/help-images",
+                   "/api/help-images", "/api/presence",
                    "/api/admin/students", "/api/admin/students/{learner_id}",
                    "/api/admin/students/{learner_id}/questions", "/api/admin/students/{learner_id}/history",
                    "/api/student-report", "/api/student-report/questions", "/api/student-report/history",

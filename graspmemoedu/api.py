@@ -452,7 +452,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                         '/api/help-center', '/api/help-replies', '/api/help-replies/read', '/api/help-requests/preview',
                         '/api/help-messages', '/api/help-messages/read', '/api/help-content',
                         '/api/help-main/messages', '/api/help-main/read',
-                        '/api/help-images',
+                        '/api/help-images', '/api/presence',
                         '/api/materials', '/api/materials/open', '/api/materials/content',
                         '/api/state', '/api/demo-answer', '/api/guest/reset', '/api/choose', '/api/continue', '/api/select', '/api/pause', '/api/skip', '/api/submit', '/api/reveal',
                         '/api/subjects', '/api/catalog', '/api/catalog/select', '/api/dashboard', '/api/profile', '/api/feedback', '/api/help-requests', '/api/guide', '/api/atomic/reviews'}
@@ -777,6 +777,8 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     from .materials import register_material_routes
     register_help_routes(app, catalog, access_store, subjects)
     register_admin_pause_routes(app, catalog, access_store, subjects, service_for)
+    from .presence import register_presence_route
+    register_presence_route(app, access_store, catalog, atomic_clock)
     register_admin_student_routes(app, catalog, access_store, subjects, dashboard_store, training, atomic_clock)
     register_material_routes(app, catalog, access_store, subjects, identity, public_state)
     register_atomic_routes(app, catalog, access_store, subjects, dependency_policy, clock=atomic_clock)

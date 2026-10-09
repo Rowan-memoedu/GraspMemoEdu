@@ -1,21 +1,21 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=fdf8075df78da5d0";
-import { createReviewView } from "./review.js?v=fdf8075df78da5d0";
-import { renderCourseGraph } from "./course-graph.js?v=fdf8075df78da5d0";
-import {questionInput, choiceTypeField} from './question-input.js?v=fdf8075df78da5d0';
-import {enhanceTopicContent} from './topic-content.js?v=fdf8075df78da5d0';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=fdf8075df78da5d0';
-import {createCatalogPicker} from './catalog-picker.js?v=fdf8075df78da5d0';
-import {createAtomicView} from './atomic.js?v=fdf8075df78da5d0';
-import {createTrainingView} from './training.js?v=fdf8075df78da5d0';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=fdf8075df78da5d0";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=93ae0d5253afa2c0";
+import { createReviewView } from "./review.js?v=93ae0d5253afa2c0";
+import { renderCourseGraph } from "./course-graph.js?v=93ae0d5253afa2c0";
+import {questionInput, choiceTypeField} from './question-input.js?v=93ae0d5253afa2c0';
+import {enhanceTopicContent} from './topic-content.js?v=93ae0d5253afa2c0';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=93ae0d5253afa2c0';
+import {createCatalogPicker} from './catalog-picker.js?v=93ae0d5253afa2c0';
+import {createAtomicView} from './atomic.js?v=93ae0d5253afa2c0';
+import {createTrainingView} from './training.js?v=93ae0d5253afa2c0';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=93ae0d5253afa2c0";
 
-import {createPaperView} from './review-papers.js?v=fdf8075df78da5d0';
+import {createPaperView} from './review-papers.js?v=93ae0d5253afa2c0';
 
-import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=fdf8075df78da5d0';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=fdf8075df78da5d0';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=fdf8075df78da5d0';
-import {attachChatEditor, renderChatMarkdown, configureChatImages} from './vendor/chat/chat.js?v=fdf8075df78da5d0';
-import {createStudentDashboard} from './student-dashboard.js?v=fdf8075df78da5d0';
+import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=93ae0d5253afa2c0';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=93ae0d5253afa2c0';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=93ae0d5253afa2c0';
+import {attachChatEditor, renderChatMarkdown, configureChatImages} from './vendor/chat/chat.js?v=93ae0d5253afa2c0';
+import {createStudentDashboard} from './student-dashboard.js?v=93ae0d5253afa2c0';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -1099,10 +1099,10 @@ export function initPortal(bridge) {
     content.dataset.contentBlock = item.request.content_block_id; content.dataset.contentVersion = item.request.content_version;
     context.append(content, node('h3', '', t(viewer === 'admin' ? 'help.questionLabel' : 'help.myQuestion')),
       renderChatMarkdown(node('div', 'helpRequestMessage helpReplyText'), item.request.message || t('help.noMessage')));
-    if (viewer === 'admin') context.append(link(t('help.openContent'), subjectHref(item.subject_id,
+    if (!detail) context.append(link(t('help.openContent'), '#/qa/' + encode(item.id), 'textButton'));
+    else if (viewer === 'admin') context.append(link(t('admin.allBlocks'), subjectHref(item.subject_id,
       `/topic/${encode(item.request.topic_id)}/content?${query({block: item.request.content_block_id,
         version: item.request.content_version, bank_id: item.request.bank_id, group_id: item.request.group_id, report: item.id})}`), 'textButton'));
-    else if (!detail) context.append(link(t('help.openContent'), '#/qa/' + encode(item.id), 'textButton'));
     if (item.content_updated) {
       const update = node('div', 'helpContentUpdate');
       update.append(node('strong', 'helpUpdateBadge', t('help.contentUpdated')), node('p', 'inputHint', t('help.contentUpdatedHint')));
