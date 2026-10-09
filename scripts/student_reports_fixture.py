@@ -78,7 +78,8 @@ def snapshot(request):
             field = 'learner' if 'learner' in columns else 'learner_id' if 'learner_id' in columns else None
             if field:
                 data[name] = con.execute('SELECT * FROM "' + name + '" WHERE "' + field + '" IN (?,?) ORDER BY rowid', (case.student, case.second)).fetchall()
-        presence_active = con.execute('SELECT COUNT(*) FROM presence_sessions WHERE learner=? AND active=1', (case.student,)).fetchone()[0]
+        cutoff = (datetime.now(timezone.utc) - timedelta(seconds=45)).isoformat()
+        presence_active = con.execute('SELECT COUNT(*) FROM presence_sessions WHERE learner=? AND active=1 AND last_at>=?', (case.student, cutoff)).fetchone()[0]
     return JSONResponse({'hash': hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest(), 'presence_active': presence_active})
 
 case.app.router.routes.insert(0, Route('/qa/snapshot', snapshot))

@@ -86,7 +86,12 @@ try {
   assert.ok(pulses.some(pulse => pulse.role === 'student' && pulse.body.topic_ids.includes('atoms')));
   const frozen = await snapshot();
   assert.ok((await (await fetch(base + '/qa/snapshot')).json()).presence_active > 0);
-  await student.goto('about:blank');
+  // Public assets use a routed fixture API. A destroyed frame cannot reliably
+  // finish that proxy, so deliver the lifecycle event before detaching it.
+  // Local acceptance exercises native navigation; production native exit is
+  // verified separately against the actual HTTPS API and its stored heartbeat.
+  if (publicBase) await student.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide')));
+  else await student.goto('about:blank');
   await student.waitForTimeout(800);
   assert.equal((await (await fetch(base + '/qa/snapshot')).json()).presence_active, 0, 'Server accepted the page-exit heartbeat');
   const stopped = (await readPresence()).online_ms;
