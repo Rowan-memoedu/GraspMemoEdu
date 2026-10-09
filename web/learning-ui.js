@@ -1,7 +1,7 @@
-import {t, learningTitle} from './i18n.js?v=469fc84de6dd9665';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=469fc84de6dd9665';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=469fc84de6dd9665';
-import {enhanceTopicContent} from './topic-content.js?v=469fc84de6dd9665';
+import {t, learningTitle} from './i18n.js?v=fdf8075df78da5d0';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=fdf8075df78da5d0';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=fdf8075df78da5d0';
+import {enhanceTopicContent} from './topic-content.js?v=fdf8075df78da5d0';
 
 const node = (tag, cls = '', text) => {
   const item = document.createElement(tag); item.className = cls;
@@ -19,6 +19,23 @@ export function readerStepTitle(step, {formatVersion = 2} = {}) {
     ? (step.title || 'Introduction').replace(/^(?:Introduction|引论)(?=\s*[:：]|$)/i, t('Introduction')) : t('Introduction');
   if (step?.kind === 'completion') return t('学习结果');
   return learningTitle(step?.title || '');
+}
+
+// Recall follows authored sections; saved steps still record actual learning order.
+export function readerHistorySteps(state) {
+  const visited = (state?.steps || []).filter(step => step.visited && step.unlocked);
+  if (state?.topic_format_version === 2) {
+    if (!state.content_order?.length) return visited;
+    const positions = new Map(state.content_order.map((section, index) => [`${section.kind}:${section.id}`, index]));
+    const position = step => step.kind === 'completion' ? state.content_order.length + 1
+      : positions.get(step.kind === 'introduction' ? `introduction:${step.introduction_id || step.module_id}`
+        : `example:${step.module_id}`) ?? state.content_order.length;
+    return visited.slice().sort((a, b) => position(a) - position(b));
+  }
+  const introductions = visited.filter(step => step.kind === 'introduction');
+  const modules = (state?.modules || []).flatMap(module => visited.filter(step => step.module_id === module.id
+    && !['introduction', 'completion'].includes(step.kind)));
+  return [...introductions, ...modules, ...visited.filter(step => step.kind === 'completion')];
 }
 
 export function readerContent(html, references) {

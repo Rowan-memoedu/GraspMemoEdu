@@ -1,11 +1,11 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=469fc84de6dd9665";
-import {answerReady} from './question-input.js?v=469fc84de6dd9665';
-import {reportableContent} from './content-report.js?v=469fc84de6dd9665';
-import {createLearningCache} from './learning-cache.js?v=469fc84de6dd9665';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=fdf8075df78da5d0";
+import {answerReady} from './question-input.js?v=fdf8075df78da5d0';
+import {reportableContent} from './content-report.js?v=fdf8075df78da5d0';
+import {createLearningCache} from './learning-cache.js?v=fdf8075df78da5d0';
 
-import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState} from './learning-ui.js?v=469fc84de6dd9665';
-import {selfAssessment} from './self-assessment.js?v=469fc84de6dd9665';
-import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=469fc84de6dd9665';
+import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, readerHistorySteps, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState} from './learning-ui.js?v=fdf8075df78da5d0';
+import {selfAssessment} from './self-assessment.js?v=fdf8075df78da5d0';
+import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=fdf8075df78da5d0';
 
 applyStaticTranslations();
 
@@ -116,12 +116,7 @@ function readerStepTitle(step) {
   return sharedReaderStepTitle(step, {formatVersion: state?.topic_format_version});
 }
 function readingSteps() {
-  const visited = (state?.steps || []).filter((step) => step.visited && step.unlocked);
-  if (state?.topic_format_version === 2) return visited;
-  const introductions = visited.filter((step) => step.kind === "introduction");
-  const modules = (state?.modules || []).flatMap((module) => visited.filter((step) => step.module_id === module.id && !["introduction", "completion"].includes(step.kind)));
-  const completions = visited.filter((step) => step.kind === "completion");
-  return [...introductions, ...modules, ...completions];
+  return readerHistorySteps(state);
 }
 const mutationPayload = (extra = {}) => ({
   request_id: uuid(),
@@ -1431,7 +1426,7 @@ async function openTopic(id, subjectId) {
   }
 }
 
-const { initPortal } = await import("./portal.js?v=469fc84de6dd9665");
+const { initPortal } = await import("./portal.js?v=fdf8075df78da5d0");
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {
     try { return await fetchGuideAsset(url, subjectId); }

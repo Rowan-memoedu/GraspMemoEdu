@@ -8,6 +8,7 @@
 - `topic_kind` 为 `lesson` 或 `introduction`，不替换既有 `training_mode`。
 - 至少一个非空 Introduction（网站显示为“指导”）。Introduction 可有多个，可与 Example 穿插；严格保留源顺序，不合并、不前移。每个 Example 及其 Practice 归属前面最近的 Introduction。
 - 内容顺序描述归属，不替换原有学习流程：普通 Topic 先显示 Example 的掌握选择；已掌握直接作答，未掌握或答错后沿用“继续学习 → 对应指导 → 例题解析 → 练习”。同一指导已读后按原机制跳过重复阅读。
+- 课程学习记录及上一页／下一页按 `content_order` 固定排列已开放内容：晚读的指导仍位于对应例题组之前，不按步骤创建时间移动位置。状态响应只补充章节种类与 ID，未读内容不因此解锁；保存的步骤、作答顺序和学习进度保持不变。题库原有排列不受影响。
 - 普通 Topic 保留连续 Example、Explanation、Interaction 和 Practice 规则。每个 Example 至少七道 Practice；5×3 编号仍展平显示，`source_practice` 保留原分组。
 - 引论是特殊 Topic，只能含自己的 Introduction，`modules=[]`，没有 Example；点开后阅读内部“指导”。“引论”是 Topic 类型，不是 Introduction 的通用名称。母节点下、子 Topic 前的 intro 导出为该母节点的独立引论；编号由上游安排，不由导入器重排其他 Topic。
 - 引论保留在课程目录中，但不属于课程知识图谱，不接受或产生前置边。导入遇到旧图谱冲突时报错，不修改图谱、账号或学习记录。

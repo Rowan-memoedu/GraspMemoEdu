@@ -156,6 +156,8 @@ class OrderedLearningService(LearningService):
     def _public(self, state):
         result = super()._public(state)
         result.update(topic_kind=self.course['topic_kind'], topic_format_version=2,
+                      content_order=[{'kind': section['kind'], 'id': section['id']}
+                                     for section in self.course['content_order']],
                       content_version=self.course['content_version'], reading_status=state.get('reading_status'),
                       reread_pending=state.get('reread_pending', False), completed_at=state.get('completed_at'))
         if state.get('reread_pending') and not state.get('pause'):

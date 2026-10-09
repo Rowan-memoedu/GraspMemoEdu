@@ -136,6 +136,40 @@ class OrderedLearningTests(unittest.TestCase):
         service.choose(payload(service, choice='unmastered'))
         self.assertEqual(active(service.advance(payload(service)))['introduction_id'], 'intro-a')
 
+    def test_late_shared_guidance_exposes_source_order_without_rewriting_progress(self):
+        topic = ordered_topic()
+        topic['content_order'] = [topic['content_order'][i] for i in (0, 1, 3, 2)]
+        service = self.service(topic)
+        service.choose(payload(service, choice='mastered'))
+        result = service.submit(payload(service, answer='correct'))
+        service.process_submission(result['submission_id'])
+        service.advance(payload(service))
+        service.choose(payload(service, choice='unmastered'))
+        state = service.advance(payload(service))
+        self.assertEqual([s['kind'] for s in state['steps']], ['example', 'example', 'introduction'])
+        self.assertEqual(active(state)['introduction_id'], 'intro-a')
+        self.assertEqual(active(state)['module_id'], 'module-2')
+        self.assertEqual(state['content_order'], topic['content_order'])
+        self.assertFalse(any(s.get('introduction_id') == 'intro-b' for s in state['steps']))
+        with service._transaction() as con:
+            saved = service._load(con)
+            before = encode(saved)
+            projected = service._public(saved)
+            projected['content_order'].reverse()
+            projected['content_order'][0]['id'] = 'not-a-course-section'
+            self.assertEqual(encode(saved), before)
+            self.assertEqual(service.course['content_order'], topic['content_order'])
+            self.assertEqual(encode(service._load(con)), before)
+        self.assertEqual(service.state()['content_order'], topic['content_order'])
+
+    def test_pure_introduction_exposes_order_without_creating_unread_steps(self):
+        topic = ordered_topic(intro_only=True)
+        service = self.service(topic)
+        state = service.state()
+        self.assertEqual(state['content_order'], topic['content_order'])
+        self.assertEqual([s['introduction_id'] for s in state['steps']], ['intro-a'])
+        self.assertTrue(all(set(section) == {'kind', 'id'} for section in state['content_order']))
+
     def legacy_reading(self, service, index=0):
         # A persisted state produced by the released standalone-guidance reader.
         with service._transaction() as con:
