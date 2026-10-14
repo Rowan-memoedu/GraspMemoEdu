@@ -24,7 +24,8 @@ class PracticePolicy:
         return cls(value['version'], tuple(value['targets']), tuple(value['ratings']))
 
 
-LESSON_POLICY = PracticePolicy('lesson-v1', (2, 3, 5, 7), (4, 3, 2, 1))
+LEGACY_LESSON_POLICY = PracticePolicy('lesson-v1', (2, 3, 5, 7), (4, 3, 2, 1))
+LESSON_POLICY = PracticePolicy('lesson-v2', (3, 5, 7, 9), (4, 3, 2, 1))
 REVIEW_POLICY = PracticePolicy('review-v1', (1, 3, 5), (4, 2, 1))
 
 

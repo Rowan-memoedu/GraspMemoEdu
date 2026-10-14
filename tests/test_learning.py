@@ -91,7 +91,7 @@ class LearningAcceptanceTests(unittest.TestCase):
             self.assertEqual(self.module(state=state)["practice_answered_count"], number)
             error_count = correctness[:number].count(False)
             self.assertEqual(self.module(state=state)["practice_error_count"], error_count)
-            self.assertEqual(self.module(state=state)["practice_target_count"], [2, 3, 5, 7][error_count])
+            self.assertEqual(self.module(state=state)["practice_target_count"], [3, 5, 7, 9][error_count])
             self.assertIsNotNone(self.active(state)["explanation_html"])
             if number < len(correctness):
                 self.assertIsNone(self.module(state=state)["mastery"])
@@ -145,6 +145,8 @@ class LearningAcceptanceTests(unittest.TestCase):
         self.advance()
         self.answer("correct")
         self.advance()
+        self.answer("correct")
+        self.advance()
         self.choose("unmastered")
         self.advance()
         self.assertEqual(self.active()["kind"], "example")
@@ -167,21 +169,21 @@ class LearningAcceptanceTests(unittest.TestCase):
         self.assertNotIn("submit", self.active()["actions"])
         self.assertEqual(self.module()["practice_error_count"], 0)
 
-    def test_two_correct_practices_score_four(self):
-        self.practice_sequence([True, True], 4)
+    def test_three_correct_practices_score_four(self):
+        self.practice_sequence([True, True, True], 4)
         self.assertNotEqual(self.module()["learning_path"], None)
 
-    def test_one_wrong_requires_three_practices_and_scores_three(self):
-        self.practice_sequence([False, True, True], 3)
+    def test_one_wrong_requires_five_practices_and_scores_three(self):
+        self.practice_sequence([False, True, True, True, True], 3)
 
-    def test_two_wrong_require_five_practices_and_score_two(self):
-        self.practice_sequence([False, False, True, True, True], 2)
+    def test_two_wrong_require_seven_practices_and_score_two(self):
+        self.practice_sequence([False, False, True, True, True, True, True], 2)
 
-    def test_three_wrong_require_seven_practices_and_score_one(self):
-        self.practice_sequence([False, False, False, True, True, True, True], 1)
+    def test_three_wrong_require_nine_practices_and_score_one(self):
+        self.practice_sequence([False, False, False, True, True, True, True, True, True], 1)
 
     def test_wrong_last_initial_question_extends_before_completion(self):
-        self.practice_sequence([True, False, True], 3)
+        self.practice_sequence([True, True, False, True, True], 3)
 
     def test_fourth_error_pauses_whole_topic_with_no_mastery(self):
         self.study()
@@ -206,15 +208,15 @@ class LearningAcceptanceTests(unittest.TestCase):
         self.service = LearningService(copy.deepcopy(self.course), self.data_dir, self.judge)
         self.assertEqual(self.service.state()["status"], "paused")
 
-    def test_fourth_error_on_seventh_question_overrides_completion(self):
+    def test_fourth_error_on_ninth_question_overrides_completion(self):
         self.study()
-        for index, correct in enumerate([False, False, False, True, True, True, False]):
+        for index, correct in enumerate([False, False, False, True, True, True, True, True, False]):
             self.answer("correct" if correct else "wrong")
-            if index < 6:
+            if index < 8:
                 self.advance()
         self.assertEqual(self.service.state()["status"], "paused")
-        self.assertEqual(self.module()["practice_answered_count"], 7)
-        self.assertEqual(self.module()["practice_target_count"], 7)
+        self.assertEqual(self.module()["practice_answered_count"], 9)
+        self.assertEqual(self.module()["practice_target_count"], 9)
         self.assertIsNone(self.module()["mastery"])
 
     def test_duplicate_submission_counts_once_and_uses_trusted_answer(self):
@@ -231,7 +233,7 @@ class LearningAcceptanceTests(unittest.TestCase):
         self.assertEqual(len(self.judge.calls), 1)
         self.assertEqual(self.judge.calls[0][1], "REFERENCE_ONLY::" + question_id)
         self.assertEqual(self.module()["practice_error_count"], 1)
-        self.assertEqual(self.module()["practice_target_count"], 3)
+        self.assertEqual(self.module()["practice_target_count"], 5)
         self.assertEqual(self.module()["practice_answered_count"], 1)
         with self.assertRaises(DomainError):
             self.service.submit(self.payload(answer="correct"))
@@ -264,7 +266,7 @@ class LearningAcceptanceTests(unittest.TestCase):
             self.assertIsNone(result["correct"])
             self.assertEqual(self.module()["practice_error_count"], 0)
             self.assertEqual(self.module()["practice_answered_count"], 0)
-            self.assertEqual(self.module()["practice_target_count"], 2)
+            self.assertEqual(self.module()["practice_target_count"], 3)
             self.assertIn("submit", self.active()["actions"])
         self.answer("correct")
         self.assertEqual(self.module()["practice_answered_count"], 1)
@@ -286,7 +288,7 @@ class LearningAcceptanceTests(unittest.TestCase):
         self.assertEqual(self.service.submission(retry["submission_id"])["status"], "judged")
         self.assertEqual(self.module()["practice_error_count"], 1)
         self.assertEqual(self.module()["practice_answered_count"], 1)
-        self.assertEqual(self.module()["practice_target_count"], 3)
+        self.assertEqual(self.module()["practice_target_count"], 5)
 
     def test_invalid_judge_output_cannot_be_misclassified_as_wrong(self):
         invalid_results = [
@@ -307,7 +309,7 @@ class LearningAcceptanceTests(unittest.TestCase):
                 self.assertIsNone(result["correct"])
                 self.assertEqual(self.module()["practice_error_count"], 0)
                 self.assertEqual(self.module()["practice_answered_count"], 0)
-                self.assertEqual(self.module()["practice_target_count"], 2)
+                self.assertEqual(self.module()["practice_target_count"], 3)
 
     def test_blank_answer_is_rejected_without_judge_call(self):
         self.choose("mastered")
@@ -444,7 +446,7 @@ class LearningAcceptanceTests(unittest.TestCase):
         self.assertEqual(self.active()["phase"], "choice")
         self.assertEqual(self.module()["practice_error_count"], 0)
         self.assertEqual(self.module()["practice_answered_count"], 0)
-        self.assertEqual(self.module()["practice_target_count"], 2)
+        self.assertEqual(self.module()["practice_target_count"], 3)
         self.assertTrue(unlocked["introduction_read"])
         self.assertTrue(old_steps.issubset({step["id"] for step in unlocked["steps"]}))
         self.service.unlock(state["topic_id"], pause["module_id"], pause["event_id"])
@@ -544,7 +546,7 @@ class LearningAcceptanceTests(unittest.TestCase):
         self.assertEqual(restored["active_step_id"], old_state["active_step_id"])
         self.assertEqual(self.active()["phase"], "feedback")
         self.assertEqual(self.active()["feedback"]["submission_id"], result["submission_id"])
-        self.assertEqual(self.module()["practice_target_count"], 3)
+        self.assertEqual(self.module()["practice_target_count"], 5)
         paused = self.service.pause({"request_id": str(uuid.uuid4())})
         self.service = LearningService(copy.deepcopy(self.course), self.data_dir, self.judge)
         self.assertEqual(self.service.state()["pause"], paused["pause"])

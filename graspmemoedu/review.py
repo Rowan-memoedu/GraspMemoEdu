@@ -345,7 +345,8 @@ class ReviewBackend:
             WHERE learner=? AND topic=? AND attempt=? AND status='judged' ''', (*self.key, attempt['id']))]
         self._record_rating(con, module_id=attempt['module_id'], mastery=attempt['mastery'],
                             source='lesson', source_id=attempt['id'],
-                            completed_at=attempt['completed_at'], policy_version='lesson-v1',
+                            completed_at=attempt['completed_at'],
+                            policy_version=attempt.get('practice_policy', {}).get('version', 'lesson-v1'),
                             duration_ms=sum(durations) if durations and all(n is not None for n in durations) else None)
 
     def due(self, *, limit=50):

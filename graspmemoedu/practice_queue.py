@@ -86,25 +86,28 @@ class PersistentPracticeQueue:
             (*self._key(module), self.learning.course['version'],
              json.dumps(state, ensure_ascii=False, sort_keys=True, separators=(',', ':'))))
 
-    def draw(self, con, module, exclude=()):
+    def draw(self, con, module, exclude=(), *, initial=None, selected=None):
         """Take the next eligible question and persist its actual exposure."""
         groups = self._groups(module)
         if groups is None:
             raise _error('unsupported_practice_queue', '此旧题库继续使用原有练习顺序。')
         all_ids = [question for group in groups for question in group]
         excluded = set(exclude)
+        if selected is not None and (selected not in all_ids or selected in excluded):
+            raise _error('invalid_practice_question', '本轮指定的练习不合法或已经推送。', 422)
         if not any(question not in excluded for question in all_ids):
             raise _error('practice_queue_exhausted', '本轮已使用全部练习，不能重复推送。')
         state = self.snapshot(con, module)
         if state is None:
             state = {'queue_version': VERSION,
-                     'pending': [self.rng.choice(group) for group in groups],
+                     'pending': list(initial) if initial is not None else [self.rng.choice(group) for group in groups],
                      'expanded_groups': [], 'sequence': 0,
                      'presented': [], 'last_presented': {}}
         pending = state['pending']
-        question = next((item for item in pending if item not in excluded), None)
+        question = selected or next((item for item in pending if item not in excluded), None)
         if question is not None:
-            pending.remove(question)
+            if question in pending:
+                pending.remove(question)
         else:
             eligible = [item for item in all_ids if item not in excluded and item not in pending]
             unseen = [item for item in eligible if item not in state['last_presented']]

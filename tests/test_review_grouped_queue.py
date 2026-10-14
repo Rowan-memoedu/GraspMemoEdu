@@ -6,6 +6,7 @@ from pathlib import Path
 import random
 import unittest
 import uuid
+from unittest.mock import patch
 
 from graspmemoedu.fsrs_engine import utc_time
 from graspmemoedu.review import ReviewBackend
@@ -75,21 +76,25 @@ class GroupedReviewTests(unittest.TestCase):
             return {'request_id': str(uuid.uuid4()), 'expected_revision': state['revision'],
                     'attempt_id': state['attempt_id'], 'step_id': state['active_step_id'], **extra}
 
+        # A prior Review initializes the unchanged five-group shared queue.
+        self.answer(self.begin())
+        lesson_clock = patch('graspmemoedu.service.now', lambda: self.time.isoformat())
+        lesson_clock.start(); self.addCleanup(lesson_clock.stop)
         self.learning.choose(lesson_payload(choice='unmastered'))
         for _ in range(3):
             self.learning.advance(lesson_payload())
-        for index in range(2):
+        for index in range(3):
             if index:
                 self.learning.advance(lesson_payload())
             item = self.learning.submit(lesson_payload(answer='correct'))
             self.learning.process_submission(item['submission_id'])
         before = self.queue()
-        self.assertEqual(before['sequence'], 2)
-        self.assertEqual(len(before['pending']), 3)
+        self.assertEqual(before['sequence'], 4)
+        self.assertGreaterEqual(len(before['pending']), 2)
         self.restart()
         state = self.begin()
         self.assertEqual(state['practice']['id'], before['pending'][0])
-        self.assertEqual(self.queue()['sequence'], 3)
+        self.assertEqual(self.queue()['sequence'], 5)
         self.assertEqual(self.queue()['pending'], before['pending'][1:])
 
     def test_wrong_group_siblings_are_appended_after_initial_five(self):

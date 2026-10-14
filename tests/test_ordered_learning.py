@@ -61,7 +61,7 @@ class OrderedLearningTests(unittest.TestCase):
         self.assertEqual(active(state)['kind'], 'example')
         self.assertIsNotNone(active(state)['explanation_html'])
         service.advance(payload(service))
-        for index in range(2):
+        for index in range(3):
             result = service.submit(payload(service, answer='correct'))
             service.process_submission(result['submission_id'])
             service.advance(payload(service))
@@ -115,7 +115,7 @@ class OrderedLearningTests(unittest.TestCase):
         self.assertEqual(active(service.advance(payload(service)))['introduction_id'], 'intro-a')
         service.advance(payload(service))
         service.advance(payload(service))
-        for _ in range(2):
+        for _ in range(3):
             result = service.submit(payload(service, answer='correct'))
             service.process_submission(result['submission_id'])
             service.advance(payload(service))

@@ -11,7 +11,7 @@ import threading
 import uuid
 
 from .judging import judge_answer
-from .practice import LESSON_POLICY, apply_practice_result
+from .practice import LESSON_POLICY, LEGACY_LESSON_POLICY, PracticePolicy, apply_practice_result
 from .practice_queue import PersistentPracticeQueue
 from .question_types import validate_interaction, public_interaction, parse_answer, display_answer
 from .question_bank import QuestionBank
@@ -187,12 +187,14 @@ class LearningService:
 
     def _new_attempt(self, state, index):
         module = self.course['modules'][index]
+        grouped = self.practice_queue.supported(module)
+        policy = LESSON_POLICY if grouped else LEGACY_LESSON_POLICY
         attempt = {'id': str(uuid.uuid4()), 'module_id': module['id'], 'module_index': index,
                    'status': 'in_progress', 'mastery': None, 'learning_path': None,
                    'practice_error_count': 0, 'practice_answered_count': 0,
-                   'practice_target_count': 2, 'example_result': None,
+                   'practice_target_count': policy.targets[0], 'practice_policy': policy.to_dict(), 'example_result': None,
                    'created_at': now(), 'completed_at': None, 'paused_at': None, 'pause_reason': None}
-        if self.practice_queue.supported(module):
+        if grouped:
             attempt['practice_queue_version'] = self.practice_queue.VERSION
         state['attempts'].append(attempt)
         state['attempt_id'] = attempt['id']
@@ -283,7 +285,8 @@ class LearningService:
                        ['status', 'mastery', 'learning_path', 'practice_error_count',
                         'practice_answered_count', 'practice_target_count', 'example_result', 'completed_at', 'paused_at', 'pause_reason']}
             if not last:
-                summary.update(status='locked', practice_error_count=0, practice_answered_count=0, practice_target_count=2)
+                summary.update(status='locked', practice_error_count=0, practice_answered_count=0,
+                               practice_target_count=LESSON_POLICY.targets[0] if self.practice_queue.supported(module) else LEGACY_LESSON_POLICY.targets[0])
             summary.update(id=module['id'], title=module['title'], attempt_id=last['id'] if last else None)
             modules.append(summary)
         steps = []
@@ -476,7 +479,13 @@ class LearningService:
         if attempt.get('practice_queue_version') == self.practice_queue.VERSION:
             shown = [step['question_id'] for step in state['steps']
                      if step['attempt_id'] == attempt['id'] and step['kind'] == 'practice']
-            question_id = self.practice_queue.draw(con, module, exclude=shown)
+            options = {}
+            if attempt.get('practice_policy', {}).get('version') == LESSON_POLICY.version:
+                seeds = [group[0] for group in self.practice_queue._groups(module)[:3]]
+                options['initial'] = seeds
+                if len(shown) < len(seeds):
+                    options['selected'] = seeds[len(shown)]
+            question_id = self.practice_queue.draw(con, module, exclude=shown, **options)
             return self.questions[question_id]
         # A round started before this upgrade keeps its original question order.
         return module['practices'][attempt['practice_answered_count']]
@@ -657,10 +666,12 @@ class LearningService:
                         if correct:
                             self._complete(con, state, 4)
                     else:
-                        if attempt.get('practice_queue_version') == self.practice_queue.VERSION:
+                        policy = PracticePolicy.from_dict(attempt['practice_policy']) if 'practice_policy' in attempt else LEGACY_LESSON_POLICY
+                        must_pause, mastery = apply_practice_result(attempt, correct, policy)
+                        if (attempt.get('practice_queue_version') == self.practice_queue.VERSION
+                                and (not must_pause or policy.version == LEGACY_LESSON_POLICY.version)):
                             self.practice_queue.record_result(con, self.course['modules'][attempt['module_index']],
                                                               item['question'], correct)
-                        must_pause, mastery = apply_practice_result(attempt, correct, LESSON_POLICY)
                         if must_pause:
                             self._pause(con, state, 'practice_error_limit', submission={**item, 'correct': correct, 'reason': reason})
                         elif mastery is not None:

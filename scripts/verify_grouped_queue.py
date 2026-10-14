@@ -95,9 +95,9 @@ def main():
     while active()['kind'] != 'practice':
         learning.advance(payload())
     initial_body = json.loads(queue()['rows'][0]['body'])
-    initial_five = [active()['question_id'], *initial_body['pending']]
-    assert len(initial_five) == 5 and len(set(map(group, initial_five))) == 5
-    for _ in range(2):
+    initial_three = [active()['question_id'], *initial_body['pending']]
+    assert initial_three == ['q-1', 'q-4', 'q-7']
+    for _ in range(3):
         qid = active()['question_id']
         delivered.append(qid)
         submission = learning.submit(payload(answer=learning.questions[qid]['reference_answer']))
@@ -107,7 +107,7 @@ def main():
         snapshots.append(queue())
         learning.advance(payload())
     assert learning.state()['status'] == 'completed'
-    assert len(set(map(group, delivered))) == 2
+    assert len(set(map(group, delivered))) == 3
     initial = queue()
     learning, review = services()
     assert queue() == initial, 'Restart changed persistent queue'
@@ -115,18 +115,19 @@ def main():
     wrong_in_group = 0
     # Continue due pushes until every question has been delivered at least once.
     # Each group representative and later siblings are observed, never predicted.
-    while len(set(delivered)) < 15:
-        assert len(rounds) < 20
+    while len(set(delivered)) < 15 or wrong_in_group < 2:
+        assert len(rounds) < 40
         clock[0] = utc_time(review.next_due_at())
         state = review.begin('addition', request_id=str(uuid.uuid4()))
         sequence = []
         while state['status'] == 'in_progress':
             qid = state['practice']['id']
             assert qid not in sequence, 'Duplicate within one round'
-            assert qid not in delivered, 'Repeated before exhausting all fifteen questions'
+            if len(set(delivered)) < 15:
+                assert qid not in delivered, 'Repeated before exhausting all fifteen questions'
             sequence.append(qid)
             delivered.append(qid)
-            if first_wrong_group is None:
+            if first_wrong_group is None and sum(group(item) == group(qid) for item in delivered) == 1:
                 first_wrong_group = group(qid)
             wrong = group(qid) == first_wrong_group and wrong_in_group < 2 and not state['practice_error_count']
             if wrong:
@@ -159,11 +160,13 @@ def main():
         assert state['mastery'] == (2 if state['practice_error_count'] else 4)
         rounds.append({'questions': sequence, 'mastery': state['mastery']})
     assert wrong_in_group == 2
-    assert len(set(map(group, delivered[:5]))) == 5
-    assert len(delivered) == 15
+    assert delivered[:3] == ['q-1', 'q-4', 'q-7']
+    assert len(set(delivered[:15])) == 15
+    last_positions = {question: index for index, question in enumerate(delivered)}
+    oldest = sorted(last_positions, key=last_positions.get)
     clock[0] = utc_time(review.next_due_at())
     state = review.begin('addition', request_id=str(uuid.uuid4()))
-    assert state['practice']['id'] == delivered[0], 'Exhausted pool must use oldest delivery first'
+    assert state['practice']['id'] == oldest[0], 'Exhausted pool must use oldest delivery first'
     before_pause = queue()
     paused = review.pause(state['session_id'], request_id=str(uuid.uuid4()))
     assert paused['status'] == 'paused' and paused['mastery'] is None
@@ -173,7 +176,7 @@ def main():
     learning, review = services()
     assert queue() == before_pause
     state = review.begin('addition', request_id=str(uuid.uuid4()))
-    assert state['practice']['id'] == delivered[1], 'Next push must continue the oldest-delivery order'
+    assert state['practice']['id'] == oldest[1], 'Next push must continue the oldest-delivery order'
     unchanged = queue()
     try:
         review.advance(state['session_id'], {'request_id': str(uuid.uuid4()),
@@ -200,7 +203,7 @@ def main():
         assert learning.practice_queue.snapshot(con, course['modules'][0]) is None
         assert other.practice_queue.snapshot(con, course['modules'][0]) == other_before
     receipt = {'status': 'passed', 'real_judge_requested': args.real_judge,
-               'calls': calls, 'unique_first_pass': delivered, 'rounds': rounds,
+               'calls': calls, 'unique_first_pass': delivered[:15], 'all_deliveries': delivered, 'rounds': rounds,
                'snapshots': snapshots, 'persistent_queue': current_queue,
                'restart_pause_unlock_backup_verified': True,
                'stale_action_and_identity_scoped_reset_verified': True,
