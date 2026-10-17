@@ -66,13 +66,13 @@ class AdminPauses:
                 state = json.loads(row['body'])
                 if row['topic'] in self.catalog.topics:
                     topic = self.catalog.topic(row['topic'])
-                    course = self.catalog.courses[self.catalog.topic_courses[row['topic']]]
+                    course = self.catalog.course_context(row['topic'])
                     skipped = state.get('skipped_modules', {})
                     for module_id, record in skipped.items():
                         module = next((m for m in topic['modules'] if m['id'] == module_id), None)
                         items.append({'learner_id': row['learner_id'], 'display_name': row['display_name'],
                             'topic_id': row['topic'], 'topic_title': topic['title'], 'course_title': course['title'],
-                            'subject_id': self.subjects.course_subjects[course['id']], 'module_id': module_id,
+                            'subject_id': self.subjects.topic_subject(row['topic']), 'module_id': module_id,
                             'module_title': module.get('title', module_id) if module else module_id,
                             'pause_event_id': record['event_id'], 'reason': 'module_skipped',
                             'paused_at': record['created_at'], 'released': record['released'],
@@ -83,13 +83,13 @@ class AdminPauses:
                 if not pause or row['topic'] not in self.catalog.topics:
                     continue
                 topic = self.catalog.topic(row['topic'])
-                course = self.catalog.courses[self.catalog.topic_courses[row['topic']]]
+                course = self.catalog.course_context(row['topic'])
                 event = con.execute('SELECT created_at FROM events WHERE id=?', (pause['event_id'],)).fetchone()
                 module_id = pause.get('module_id')
                 module = next((m for m in topic.get('modules', []) if m['id'] == module_id), None)
                 items.append({'learner_id': row['learner_id'], 'display_name': row['display_name'],
                     'topic_id': row['topic'], 'topic_title': topic['title'], 'course_title': course['title'],
-                    'subject_id': self.subjects.course_subjects[course['id']], 'module_id': module_id,
+                    'subject_id': self.subjects.topic_subject(row['topic']), 'module_id': module_id,
                     'module_title': module.get('title', module_id) if module else module_id,
                     'pause_event_id': pause['event_id'], 'reason': pause['reason'],
                     'paused_at': pause.get('created_at') or (event['created_at'] if event else None),

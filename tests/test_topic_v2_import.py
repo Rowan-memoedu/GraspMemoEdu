@@ -200,7 +200,7 @@ class TopicV2ImportTests(unittest.TestCase):
             'topics': [{'topic_id': topic['id'], 'package': str(package)}]})
         self.assertEqual(result['status'], 'installed')
         loaded = Catalog.load(settings)
-        self.assertEqual(loaded.topic_courses[topic['id']], 'new-course')
+        self.assertEqual(loaded.topic_courses[topic['id']], {'new-course'})
         source_index = json.loads(loaded.topic_paths[topic['id']].with_name('topic.sources.json').read_bytes())
         self.assertEqual(Path(source_index['source_path']).read_bytes(), (package / 'source.json').read_bytes())
 

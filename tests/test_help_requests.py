@@ -159,7 +159,7 @@ class HelpRequestTests(unittest.TestCase):
         self.assertEqual(items[0]['learner_id'], self.student)
         self.assertEqual(items[0]['request']['message'], payload['message'].strip())
         self.assertIn('INTRODUCTION_ONLY', items[0]['content_text'])
-        self.assertEqual(items[0]['course_id'], self.app.state.catalog.topic_courses[self.course['id']])
+        self.assertEqual({items[0]['course_id']}, self.app.state.catalog.topic_courses[self.course['id']])
         self.assertNotIn('identity_token', inbox.text); self.assertNotIn('invitation', inbox.text)
         self.assertNotIn('REFERENCE_ONLY', inbox.text)
         self.assertEqual(self.client.get('/api/state', headers=self.headers).json(), before)

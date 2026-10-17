@@ -27,7 +27,9 @@ def validate(raw):
 
 class TestMaterials:
     def __init__(self, data_dir, catalog=None):
-        path = Path(data_dir) / FILENAME
+        from .content_bundle import content_root
+        path = getattr(catalog, 'content_dir', None) or content_root(data_dir)
+        path = path / FILENAME
         try:
             if path.exists() or path.is_symlink():
                 if not path.is_file() or path.is_symlink() or path.stat().st_size > MAX_BYTES:

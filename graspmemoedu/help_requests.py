@@ -261,10 +261,10 @@ class HelpRequestStore:
                 html, block_title = chunk['html'], chunk.get('title', chunk['id'])
         if html is None:
             raise DomainError('invalid_help_context', '未找到此答疑请求对应的内容。', 422)
-        course = self.catalog.courses[self.catalog.topic_courses[topic_id]]
+        course = self.catalog.course_context(topic_id)
         return html, {'course_id': course['id'], 'course_title': course['title'], 'topic_title': topic['title'],
                 'math_css': topic.get('math_css', '') + ('\n' + bank.load(revision)['math_css'] if bank_question else ''),
-                'subject_id': self.subjects.course_subjects[course['id']],
+                'subject_id': self.subjects.topic_subject(topic_id),
                 'content_block_type': block_type, 'content_block_title': block_title}
 
     def visible_scope(self, scope, parameters, access):

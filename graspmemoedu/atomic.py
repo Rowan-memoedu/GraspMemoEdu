@@ -260,7 +260,7 @@ class AtomicLearningService(LearningService):
             if not active or state['phase'] != 'answer':
                 raise DomainError('invalid_step', '当前没有可提交的卡片。')
             answer = payload.get('answer')
-            if not isinstance(answer, str) or not answer.strip() or len(answer) > 2000:
+            if not isinstance(answer, str) or not answer.strip() or len(answer) > 16384:
                 raise DomainError('invalid_answer', '请填写完整答案。', 422)
             from .self_assessment import answer as assessed_answer
             try:

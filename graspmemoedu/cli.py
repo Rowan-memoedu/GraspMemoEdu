@@ -391,7 +391,7 @@ def main():
                     Subjects(settings, catalog).authorize_course(args.subject, args.course)
                     if args.topic_id in catalog.topics:
                         from .topic_runtime import is_introduction
-                        if not (is_introduction(catalog.topics[args.topic_id]) and catalog.topic_courses[args.topic_id] == args.course):
+                        if not (is_introduction(catalog.topics[args.topic_id]) and args.course in catalog.topic_courses[args.topic_id]):
                             raise ValueError('Topic ID already exists; use author-install with the approved package to check idempotency')
                 stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')
                 folder = args.run_dir or Path('D:/Artifacts/GraspMemoEdu/author-import/runs') / (args.topic_id + '-' + stamp)

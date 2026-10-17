@@ -533,8 +533,8 @@ class ReviewBackend:
     def submit(self, session_id, payload):
         submission_id = self._request_id(payload.get('request_id'))
         answer = payload.get('answer')
-        if not isinstance(answer, str) or not answer.strip() or len(answer) > 2000:
-            raise DomainError('invalid_answer', '请输入有效答案（最多 2000 字）。', 422)
+        if not isinstance(answer, str) or not answer.strip() or len(answer) > 16384:
+            raise DomainError('invalid_answer', '请输入有效答案。', 422)
         elapsed = payload.get('elapsed_ms')
         if elapsed is not None and (type(elapsed) is not int or not 0 <= elapsed <= 86400000):
             raise DomainError('invalid_elapsed_time', '作答用时必须为 0 至 86400000 毫秒的整数。', 422)

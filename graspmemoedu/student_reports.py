@@ -266,7 +266,8 @@ class StudentReport:
             status = state.get('status', 'not_started') if started else 'not_started'
             if current and status == 'completed' and done < total:
                 status = 'in_progress'
-            result.append(context | {'course_id': self.owner.catalog.topic_courses.get(tid),
+            result.append(context | {'course_id': self.owner.catalog.course_context(tid)['id'] if tid in self.owner.catalog.topics else None,
+                'course_ids': sorted(self.owner.catalog.topic_courses.get(tid, ())),
                 'version': version, 'version_current': current, 'total': total, 'done': done, 'unit': unit,
                 'status': status,
                 'started_at': state.get('started_at'), 'completed_at': state.get('completed_at'),

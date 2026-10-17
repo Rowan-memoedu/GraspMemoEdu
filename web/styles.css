@@ -309,6 +309,30 @@ mjx-container[jax="SVG"] text { font-family: "Microsoft YaHei", sans-serif; }
 .statementBody, .statementBody .outlineNode, .statementBody p { display: inline; }
 .srOnly { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .questionTypeField { margin: 0 0 16px; color: var(--muted); font-size: 14px; }
+/* Hallmark · component: composite-answer · existing learning tokens */
+.compositeInteraction, .compositeSection, .sourceReadingBlock { min-width: 0; max-width: 100%; }
+.compositeControl { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; margin: 4px 2px; vertical-align: middle; }
+.compositeLabel { color: var(--muted); font-size: 13px; }
+.compositeField { min-width: 3em; max-width: min(100%, 32em); min-height: 44px; padding: 8px; border: 1px solid var(--control-border); border-radius: 3px; background: var(--answer-background); color: var(--ma-ink); font: inherit; }
+.compositeField:hover { border-color: var(--control-hover-border); }
+.compositeField:focus-visible { outline: 2px solid var(--link-color); outline-offset: 2px; }
+.compositeField:active { border-color: var(--button-active); }
+.compositeField:disabled { opacity: .65; cursor: not-allowed; }
+.compositeField[aria-invalid="true"] { border-color: var(--amber); }
+.correct .compositeField { border-color: var(--green); }
+[aria-busy="true"] .compositeField { cursor: progress; }
+.compositeNext { margin-top: 16px; }
+.compositeSection + .compositeSection { margin-top: 24px; border-top: 1px solid var(--ma-border); padding-top: 16px; }
+.courseContent table { max-width: 100%; border-collapse: collapse; }
+.courseContent td, .courseContent th { padding: 6px; overflow-wrap: anywhere; }
+.courseContent pre { overflow-x: auto; max-width: 100%; white-space: pre; }
+.courseContent .mathDisplay { display: block; max-width: 100%; overflow-x: auto; margin: 12px 0; }
+.courseContent img { max-width: 100%; height: auto; }
+.sourceReferences a { display: block; overflow-wrap: anywhere; }
+.sourceReadingBlock .mjpage { display: inline-block; max-width: 100%; overflow-x: auto; overflow-y: hidden; vertical-align: middle; }
+.sourceReadingBlock .mjpage__block { display: block; margin: 12px 0; }
+.sourceReadingBlock .mjpage svg { max-width: none; }
+.sourceReadingBlock .courseContent table { display: block; overflow-x: auto; }
 @media (max-width: 600px) {
   .matchingRow { gap: 8px; grid-template-columns: minmax(0,1fr); }
   .matchingArrow { transform: rotate(90deg); line-height: 24px; }
@@ -316,3 +340,6 @@ mjx-container[jax="SVG"] text { font-family: "Microsoft YaHei", sans-serif; }
   .matchingBanks { gap: 12px; }
   .matchingSlot, .matchingOption { padding: 8px; font-size: 14px; }
 }
+.compositeOptions { margin: 8px 0; }
+.compositeOptions summary { cursor: pointer; font-size: 13px; }
+.compositeOptions li { padding: 6px 0; overflow-x: auto; }

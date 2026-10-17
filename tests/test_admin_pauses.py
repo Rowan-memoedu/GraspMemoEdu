@@ -153,7 +153,7 @@ class AdminPauseTests(unittest.TestCase):
     def test_atomic_pause_is_listed_and_unlocked_even_after_initial_completion(self):
         topic = atomic_topic()
         self.app.state.catalog.topics[topic['id']] = topic
-        self.app.state.catalog.topic_courses[topic['id']] = next(iter(self.app.state.catalog.courses))
+        self.app.state.catalog.topic_courses[topic['id']] = frozenset({next(iter(self.app.state.catalog.courses))})
         learner = AtomicLearningService(topic, self.root, learner_id=self.student)
         with learner._transaction() as con:
             state = learner._load(con); state['completed_at'] = '2026-10-04T00:00:00+00:00'

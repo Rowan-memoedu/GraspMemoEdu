@@ -32,7 +32,7 @@ class AuthorCourseTests(unittest.TestCase):
         result = install_course(self.settings, self.plan())
         self.assertEqual(result['topics'], 1)
         catalog = Catalog.load(self.settings)
-        self.assertEqual(catalog.topic_courses['imported-physics'], 'new-physics')
+        self.assertEqual(catalog.topic_courses['imported-physics'], {'new-physics'})
         Subjects(self.settings, catalog).authorize_course('physics', 'new-physics')
         current = json.loads((self.data / 'catalog.json').read_bytes())
         self.assertEqual(current['courses'][:2], self.original_catalog['courses'])

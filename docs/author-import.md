@@ -1,5 +1,7 @@
 # 作者导入：Markdown / JSON → Topic
 
+Math Academy 的两个 ZIP 使用独立[来源适配与批次安装入口](mathacademy-import.md)，允许保存和阅读不满足训练条件的原材料。本文普通作者稿的审核、题量与答案要求保持。
+
 正式后端已迁至腾讯云。本文本机命令用于准备来源包与隔离验收；正式安装必须将已验收包传到服务器，并在 `/opt/graspmemoedu/app` 使用 CLI 指定 `/var/lib/graspmemoedu`。本机原数据目录已是回滚快照，修改它不会更新正式网站。见 [腾讯云运维](tencent-deployment.md)。
 
 Topic 内容与课程图谱独立导入。此入口不创建或覆盖图谱关系；图谱使用 `Import-Graph.ps1` / `graph-import`，可反复整体更新，详见 [图谱格式与工作流](course-graph.md)。两者通过稳定的 `topic_id` 关联，图谱可先于正文导入。

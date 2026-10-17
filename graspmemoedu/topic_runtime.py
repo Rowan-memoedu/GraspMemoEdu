@@ -102,6 +102,8 @@ def completed_modules(topic, state):
 
 
 def learning_units(topic):
+    if not topic.get('availability', {}).get('trainable', True):
+        return max(1, len(topic.get('modules', [])))
     if is_introduction(topic):
         return 1
     if topic.get('training_mode') == 'atomic_retrieval':

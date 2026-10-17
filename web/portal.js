@@ -1,21 +1,21 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=93ae0d5253afa2c0";
-import { createReviewView } from "./review.js?v=93ae0d5253afa2c0";
-import { renderCourseGraph } from "./course-graph.js?v=93ae0d5253afa2c0";
-import {questionInput, choiceTypeField} from './question-input.js?v=93ae0d5253afa2c0';
-import {enhanceTopicContent} from './topic-content.js?v=93ae0d5253afa2c0';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=93ae0d5253afa2c0';
-import {createCatalogPicker} from './catalog-picker.js?v=93ae0d5253afa2c0';
-import {createAtomicView} from './atomic.js?v=93ae0d5253afa2c0';
-import {createTrainingView} from './training.js?v=93ae0d5253afa2c0';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=93ae0d5253afa2c0";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=895d67cb8db67e93";
+import { createReviewView } from "./review.js?v=895d67cb8db67e93";
+import { renderCourseGraph } from "./course-graph.js?v=895d67cb8db67e93";
+import {questionInput, choiceTypeField} from './question-input.js?v=895d67cb8db67e93';
+import {enhanceTopicContent} from './topic-content.js?v=895d67cb8db67e93';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=895d67cb8db67e93';
+import {createCatalogPicker} from './catalog-picker.js?v=895d67cb8db67e93';
+import {createAtomicView} from './atomic.js?v=895d67cb8db67e93';
+import {createTrainingView} from './training.js?v=895d67cb8db67e93';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=895d67cb8db67e93";
 
-import {createPaperView} from './review-papers.js?v=93ae0d5253afa2c0';
+import {createPaperView} from './review-papers.js?v=895d67cb8db67e93';
 
-import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=93ae0d5253afa2c0';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=93ae0d5253afa2c0';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=93ae0d5253afa2c0';
-import {attachChatEditor, renderChatMarkdown, configureChatImages} from './vendor/chat/chat.js?v=93ae0d5253afa2c0';
-import {createStudentDashboard} from './student-dashboard.js?v=93ae0d5253afa2c0';
+import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=895d67cb8db67e93';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=895d67cb8db67e93';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=895d67cb8db67e93';
+import {attachChatEditor, renderChatMarkdown, configureChatImages} from './vendor/chat/chat.js?v=895d67cb8db67e93';
+import {createStudentDashboard} from './student-dashboard.js?v=895d67cb8db67e93';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -698,7 +698,21 @@ export function initPortal(bridge) {
       for (const task of data.tasks.filter(task => task.type !== "Lesson")) pending.append(incompleteTask(task, data));
       taskTree(pending, data);
     } else for (const task of data.tasks) pending.append(incompleteTask(task, data));
-    if (!data.tasks.length) {
+    const readable = data.topics.filter(topic => topic.status === 'read_only');
+    if (readable.length) {
+      const reading = node('section', 'sourceCourseReading'); reading.append(node('h2', '', '课程阅读'));
+      reading.append(node('p', 'featureNotice', '以下内容已保存，可阅读原文。原材料尚不满足训练条件。'));
+      for (const unit of data.units || []) {
+        const members = readable.filter(t => unit.topic_ids.includes(t.id)); if (!members.length) continue;
+        const group = node('details', 'sourceReadingGroup'); group.open = readable.length < 20;
+        group.append(node('summary', '', unit.title));
+        const list = node('ul');
+        for (const topic of members) { const row = node('li'); row.append(link(topic.title, `/topic/${encode(topic.id)}`)); list.append(row); }
+        group.append(list); reading.append(group);
+      }
+      pending.append(reading);
+    }
+    if (!data.tasks.length && !readable.length) {
       const empty = emptyBox(percent(data.course.progress) === 100 ? t("portal.all.current.tasks.in.this.course.are.complete.65") : t("portal.no.tasks.are.available.to.start.we.will.check.again.shortly.66") );
       empty.append(control(t("portal.check.again.67"), "textButton", () => route())); pending.append(empty);
     }
@@ -828,7 +842,8 @@ export function initPortal(bridge) {
       section.append(node("h2", "", t("portal.unitCount", { title: unit.title, count: Number(unit.topic_count).toLocaleString(locale()) })), unitBar(unit, max));
       for (const topic of (data.topics || []).filter((topic) => topic.unit_id === unit.id || unit.topic_ids?.includes(topic.id))) {
         const row = node("div", "progressTopic"); row.dataset.progressId = topic.id;
-        row.append(node("span", "", topic.title), node("span", "", statusNames[topic.status] || "—"), node("span", "", percentLabel(topic.progress)));
+        row.append(topic.status === 'read_only' ? link(topic.title, `/topic/${encode(topic.id)}`) : node("span", "", topic.title),
+          node("span", "", topic.status === 'read_only' ? '可阅读 · 暂不可训练' : statusNames[topic.status] || "—"), node("span", "", percentLabel(topic.progress)));
         if (bridge.getAccess()?.is_admin) row.append(link(t('admin.allBlocks'), `/topic/${encode(topic.id)}/content`, 'textButton'));
         if (topic.id === params.get("topicId")) row.classList.add("highlighted"); section.append(row);
       }

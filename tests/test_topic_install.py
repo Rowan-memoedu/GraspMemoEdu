@@ -133,7 +133,7 @@ class TopicInstallTests(unittest.TestCase):
         sources = json.loads((destination / 'topic.sources.json').read_text())
         self.assertEqual(Path(sources['source_path']), destination / 'source.md')
         self.assertEqual(Path(sources['review_path']), destination / 'review.json')
-        self.assertEqual(Catalog.load(self.settings).topic_courses['imported-physics'], 'physics-course')
+        self.assertEqual(Catalog.load(self.settings).topic_courses['imported-physics'], {'physics-course'})
         installed_catalog = (self.data / 'catalog.json').read_bytes()
         self.assertEqual(self.install()['status'], 'already_installed')
         self.assertEqual((self.data / 'catalog.json').read_bytes(), installed_catalog)

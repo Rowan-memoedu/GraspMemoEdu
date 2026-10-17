@@ -32,7 +32,9 @@ class AdminStudentsTests(unittest.TestCase):
             {'id': 'math', 'course_ids': ['math']}, {'id': 'english', 'course_ids': ['english']}]}), encoding='utf-8')
         bank = training_bank(); (self.root / 'training-banks').mkdir()
         (self.root / 'training-banks' / (bank['id'] + '.json')).write_text(json.dumps(bank), encoding='utf-8')
-        self.time = datetime(2026, 10, 5, tzinfo=timezone.utc)
+        # Lesson completion uses the real clock; keep this fixture's future
+        # schedules relative to it rather than a date that eventually expires.
+        self.time = datetime.now(timezone.utc)
         self.app = create_app(Settings(data_dir=self.root, public_api_origin='https://api.test', allowed_origins=('https://site.test',)),
             LearningService(self.course, self.root, DeterministicJudge()), atomic_clock=lambda: self.time)
         self.client = TestClient(self.app, base_url='https://api.test'); self.client.__enter__()

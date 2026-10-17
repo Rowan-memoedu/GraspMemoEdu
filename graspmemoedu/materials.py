@@ -133,7 +133,7 @@ def register_material_routes(app, catalog, access_store, subjects, identity, pub
             access_store.authorize(access, topic_id)
             subjects.authorize_topic(subject_id, topic_id)
             topic = catalog.topic(topic_id)
-            course = catalog.courses[catalog.topic_courses[topic_id]]
+            course = catalog.course_context(topic_id)
             result = {'title': topic['title'], 'course_title': course['title'], 'version': topic['version'],
                       'math_css': topic.get('math_css', ''), 'blocks': topic_blocks(topic)}
         result['version_changed'] = bool(version and version != result['version'])

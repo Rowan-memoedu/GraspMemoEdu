@@ -157,6 +157,10 @@ class DashboardStore:
 
     def _snapshot(self, con, learner_id, topic_id):
         topic = self.catalog.topic(topic_id)
+        if not topic.get('availability', {}).get('trainable', True):
+            return {'state': None, 'status': 'read_only', 'started_at': None, 'completed_at': None,
+                    'mastery': None, 'completed_modules': 0, 'module_count': max(1, len(topic['modules'])),
+                    'progress': 0, 'availability': topic['availability']}
         row = con.execute('SELECT body,version FROM topics WHERE learner=? AND topic=?', (learner_id, topic_id)).fetchone()
         state = json.loads(row['body']) if row else None
         if row and row['version'] != topic['version'] and not is_introduction(topic):
@@ -350,10 +354,14 @@ class DashboardStore:
             missing = {topic_id: self.dependency_policy.missing_count(con, access, topic_id, dependencies, now())
                        for topic_id in snapshots}
             eligibility = {topic_id: count == 0 for topic_id, count in missing.items()}
+            parent_snapshots = dict(snapshots)
+            for parent in {p for tid in snapshots for p in dependencies.get(tid, [])} & allowed:
+                if parent not in parent_snapshots:
+                    parent_snapshots[parent] = self._snapshot(con, access['learner_id'], parent)
         def details(topic_id):
             return [{'id': parent, 'title': self.catalog.topics[parent]['title'],
-                     'progress': snapshots[parent]['progress'], 'mastery': snapshots[parent]['mastery']}
-                    for parent in dependencies.get(topic_id, []) if parent in snapshots]
+                     'progress': parent_snapshots[parent]['progress'], 'mastery': parent_snapshots[parent]['mastery']}
+                    for parent in dependencies.get(topic_id, []) if parent in parent_snapshots]
         for task in [*review_tasks, *review_history]:
             task['prerequisites'] = [parent for parent in dependencies.get(task['topic_id'], []) if parent in snapshots]
             task['prerequisite_details'] = details(task['topic_id'])
@@ -405,14 +413,15 @@ class DashboardStore:
                                   'progress': snapshot['reading_progress'], 'content_update': True,
                                   'completed_at': None, 'result': None,
                                   'started': snapshot['reading_progress'] > 0})
-            else:
+            elif snapshot['status'] != 'read_only':
                 tasks.append(task)
             topics.append({'id': topic_id, 'title': task['title'], 'status': snapshot['status'], 'progress': snapshot['progress'],
+                           **({'availability': snapshot['availability']} if 'availability' in snapshot else {}),
                            'prerequisites': task['prerequisites'],
                            'prerequisite_details': task['prerequisite_details'], 'mastery': snapshot['mastery'],
                            'dependency_ready': eligibility[topic_id],
                            'unit_id': next(unit['id'] for unit in units if topic_id in unit['topic_ids']),
-                           'frontier': snapshot['status'] != 'completed' and topic_id not in review_paused and eligibility[topic_id]})
+                           'frontier': snapshot['status'] not in ('completed', 'read_only') and topic_id not in review_paused and eligibility[topic_id]})
         # Stable ordering preserves existing Review/Lesson priority for ready tasks
         # and catalog/due order for equally blocked tasks.
         tasks.sort(key=lambda task: (not task['dependency_ready'], task['missing_prerequisite_count']))
@@ -465,7 +474,7 @@ class DashboardStore:
         if task_id.startswith('review:'):
             return self._review_answers(access, task_id, topic_id)
         topic = self.catalog.topic(topic_id)
-        course = self.catalog.courses[self.catalog.topic_courses[topic_id]]
+        course = self.catalog.course_context(topic_id)
         with closing(self.access_store._connect()) as con:
             con.execute('BEGIN')
             snapshot = self._snapshot(con, access['learner_id'], topic_id)
@@ -549,7 +558,7 @@ class DashboardStore:
                     'answered_at': answer['created_at'], 'difficulty': None,
                     'elapsed_seconds': answer['elapsed_ms'] / 1000 if answer['elapsed_ms'] is not None else None}
                    for answer in rows if answer['question'] in questions]
-        course = self.catalog.courses[self.catalog.topic_courses[topic_id]]
+        course = self.catalog.course_context(topic_id)
         return {'task': self._review_task(course, topic_id, module['id'], state=state),
                 'groups': [{'id': module['id'], 'title': module['title'], 'answers': answers}], 'math_css': topic.get('math_css', '') + bank.css([revision])}
 
@@ -566,10 +575,10 @@ class DashboardStore:
         if topic_id:
             self.catalog.topic(topic_id)
             self.access_store.authorize(access, topic_id)
-            actual_course = self.catalog.topic_courses[topic_id]
-            if course_id and course_id != actual_course:
+            actual_courses = self.catalog.topic_courses[topic_id]
+            if course_id and course_id not in actual_courses:
                 raise DomainError('invalid_feedback_context', '反馈中的课程和 Topic 不一致。', 422)
-            course_id = actual_course
+            course_id = course_id or self.catalog.course_context(topic_id)['id']
         if course_id:
             self._course(access, course_id)
         if question_id and not topic_id:

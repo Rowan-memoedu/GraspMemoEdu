@@ -21,9 +21,13 @@ class Settings:
 
     def __post_init__(self):
         self.data_dir = Path(self.data_dir)
+        from .content_bundle import content_root
+        self.content_dir = content_root(self.data_dir)
+        if self.content_dir != self.data_dir and self.catalog_path is not None and Path(self.catalog_path) == self.data_dir / 'catalog.json':
+            self.catalog_path = None
         self.judge_project = Path(self.judge_project)
         self.course_path = Path(self.course_path or self.data_dir / 'courses/digits-to-letters.json')
-        self.catalog_path = Path(self.catalog_path or self.data_dir / 'catalog.json')
+        self.catalog_path = Path(self.catalog_path or self.content_dir / 'catalog.json')
         self.guide_path = Path(self.guide_path or self.data_dir / 'guide/guide.md')
         if self.host != '127.0.0.1':
             raise ValueError('This release only binds to 127.0.0.1')

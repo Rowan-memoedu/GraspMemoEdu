@@ -58,7 +58,7 @@ class Choice(Action):
 
 
 class Answer(Action):
-    answer: str = Field(min_length=1, max_length=2000)
+    answer: str = Field(min_length=1, max_length=16384)
     elapsed_ms: int | None = Field(default=None, strict=True, ge=0, le=86400000)
     self_rating: int | None = Field(default=None, strict=True, ge=1, le=4)
 
@@ -152,7 +152,8 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     learning_services = ServiceCache(catalog.default_topic_id)
     learning_services[(service.learner_id, service.topic_id)] = service
     from .topic_runtime import is_introduction
-    if service.review_backend is None and not is_atomic(service.course) and not is_introduction(service.course):
+    from .source_content import trainable
+    if trainable(service.course) and service.review_backend is None and not is_atomic(service.course) and not is_introduction(service.course):
         ReviewBackend(service)
     services_lock = threading.Lock()
     public_limits = PublicLimits(data_dir=settings.data_dir)
@@ -189,7 +190,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                     catalog.topic(topic_id), settings.data_dir, service.judge, learner_id=learner_id,
                     **({'runtime': runtime} if runtime else {}),
                     **({'clock': atomic_clock} if is_atomic(catalog.topic(topic_id)) and atomic_clock else {}))
-                if not is_atomic(learning_services[key].course) and not is_introduction(learning_services[key].course):
+                if trainable(learning_services[key].course) and not is_atomic(learning_services[key].course) and not is_introduction(learning_services[key].course):
                     ReviewBackend(learning_services[key])
             learner = learning_services[key]
         learner.resume_due()
@@ -221,13 +222,15 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         subjects.authorize_subject(access, request.query_params.get('subject_id'))
         topic_id = requested_topic(request)
         access_store.authorize(access, topic_id, feature)
+        if not trainable(catalog.topic(topic_id)) and request.url.path != '/api/state':
+            raise DomainError('content_not_trainable', '原材料尚不满足训练条件，可阅读已保存内容。', 409)
         recover_cooldowns(access)
         path = request.url.path
         gated = path in ('/api/choose', '/api/continue', '/api/skip', '/api/submit', '/api/demo-answer', '/api/review/begin')
         gated = gated or (path.startswith('/api/review/sessions/') and path.rsplit('/', 1)[-1] in ('submit', 'continue', 'demo-answer'))
         if gated:
             dependency_policy.require(access, topic_id)
-        elif path == '/api/state' and not dependency_policy.is_ready(access, topic_id):
+        elif path == '/api/state' and trainable(catalog.topic(topic_id)) and not dependency_policy.is_ready(access, topic_id):
             with closing(access_store._connect()) as con:
                 previous = con.execute('SELECT 1 FROM topics WHERE learner=? AND topic=?',
                                        (access['learner_id'], topic_id)).fetchone()
@@ -248,11 +251,13 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                                                 (access['learner_id'],))}
         return content_references.view(
             access, learner.topic_id, snapshots,
-            lambda tid: subjects.course_subjects[catalog.topic_courses[tid]],
+            lambda tid: subjects.topic_subject(tid),
             lambda tid: dependency_policy.is_ready(access, tid))
 
     def public_state(state, access, learner):
         state['access'] = access
+        if state.get('read_only'):
+            return state
         features = set(access['features'])
         state['dependency_ready'] = dependency_policy.is_ready(access, state['topic_id'])
         if learner.review_backend is not None:

@@ -42,7 +42,7 @@ class ReviewAction(ReviewPause):
 
 
 class ReviewAnswer(ReviewAction):
-    answer: str = Field(min_length=1, max_length=2000)
+    answer: str = Field(min_length=1, max_length=16384)
     elapsed_ms: int | None = Field(default=None, strict=True, ge=0, le=86400000)
     self_rating: int | None = Field(default=None, strict=True, ge=1, le=4)
 

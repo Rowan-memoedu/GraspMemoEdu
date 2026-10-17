@@ -15,6 +15,7 @@ $expected += @('review-papers.js','review-paper-messages.js')
 $expected += @('review-directory.js','task-tree.js','content-timer.js','self-assessment.js')
 $expected += @('topic-content.js','topic-content.css','topic-callouts.css')
 $expected += @('student-dashboard.js','presence.js')
+$expected += @('composite-input.js')
 $vendor = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'scripts/topic-presentation-assets.json') -Raw | ConvertFrom-Json -AsHashtable
 foreach ($name in $vendor.files.Keys) {
     if ($name -notmatch '^vendor/(mermaid/[A-Za-z0-9_.-]+\.js|document-backlinks\.mjs)$') { throw 'Invalid vendor asset path.' }

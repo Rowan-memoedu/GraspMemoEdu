@@ -286,7 +286,7 @@ class DashboardAcceptanceTests(unittest.TestCase):
         for mutation in ('duplicate', 'unknown', 'cycle'):
             raw = copy.deepcopy(self.catalog_data)
             if mutation == 'duplicate':
-                raw['courses'][1]['topics'] = [raw['courses'][0]['topics'][0]]
+                raw['courses'][0]['topics'].append(raw['courses'][0]['topics'][0])
             elif mutation == 'unknown':
                 raw['courses'][0]['topics'][0]['prerequisites'] = ['absent-topic']
             else:

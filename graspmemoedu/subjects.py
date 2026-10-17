@@ -27,7 +27,7 @@ class Subjects:
         self.course_subjects = {}
         self.explicit_guides = set()
         if raw is None:
-            source = settings.data_dir / 'subjects.json'
+            source = settings.content_dir / 'subjects.json'
             try:
                 if source.exists():
                     if source.stat().st_size > 1024 * 1024:
@@ -70,7 +70,7 @@ class Subjects:
                 self.course_subjects.setdefault(course_id, 'math')
             for topic_id, topic in getattr(catalog, 'topics', {}).items():
                 if topic.get('training_mode') == 'atomic_retrieval':
-                    actual = self.course_subjects[catalog.topic_courses[topic_id]]
+                    actual = self.topic_subject(topic_id)
                     if actual not in ('english', 'chinese', 'biology', 'chemistry') or topic.get('subject_id') != actual:
                         raise ValueError('Atomic topic does not match its permitted subject')
         except (ValueError, TypeError) as exc:
@@ -106,7 +106,14 @@ class Subjects:
             raise DomainError('subject_course_mismatch', '此课程不属于当前学科。', 403)
 
     def authorize_topic(self, subject_id, topic_id):
-        self.authorize_course(subject_id, self.catalog.topic_courses[topic_id])
+        if subject_id is not None and subject_id not in {self.course_subjects[c] for c in self.catalog.topic_courses[topic_id]}:
+            raise DomainError('subject_course_mismatch', '此 Topic 不属于当前学科。', 403)
+
+    def topic_subject(self, topic_id):
+        subjects = {self.course_subjects[c] for c in self.catalog.topic_courses[topic_id]}
+        if len(subjects) != 1:
+            raise ValueError('Topic requires explicit subject context')
+        return next(iter(subjects))
 
     def authorize_subject(self, access, subject_id):
         if subject_id is None:

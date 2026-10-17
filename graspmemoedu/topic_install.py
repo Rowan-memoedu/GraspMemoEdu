@@ -102,12 +102,12 @@ def install_topic(settings, package, *, subject_id, course_id, unit_id=None):
             raise ValueError('Introduction Topic ID is already declared in the knowledge graph')
         updating = False
         if topic_id in catalog.topics:
-            if catalog.topics[topic_id] == topic and catalog.topic_courses[topic_id] == course_id:
+            if catalog.topics[topic_id] == topic and course_id in catalog.topic_courses[topic_id]:
                 return {'status': 'already_installed', 'topic_id': topic_id, 'course_id': course_id,
                         'subject_id': subject_id, 'reload_required': True, 'permissions_changed': False}
             previous = catalog.topics[topic_id]
             updating = (introduction and previous.get('topic_format_version') == 2
-                        and previous.get('topic_kind') == 'introduction' and catalog.topic_courses[topic_id] == course_id)
+                        and previous.get('topic_kind') == 'introduction' and course_id in catalog.topic_courses[topic_id])
             if not updating:
                 raise ValueError('Topic ID already exists; existing progress/content will not be overwritten')
         if not settings.catalog_path.is_file():

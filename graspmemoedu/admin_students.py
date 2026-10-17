@@ -80,9 +80,9 @@ class AdminStudents:
         if topic_id not in self.catalog.topics:
             return {'topic_id': topic_id, 'topic_title': topic_id, 'course_title': '', 'subject_id': None}
         topic = self.catalog.topic(topic_id)
-        course = self.catalog.courses[self.catalog.topic_courses[topic_id]]
+        course = self.catalog.course_context(topic_id)
         return {'topic_id': topic_id, 'topic_title': topic['title'], 'course_title': course['title'],
-                'subject_id': self.subjects.course_subjects[course['id']]}
+                'subject_id': self.subjects.topic_subject(topic_id)}
 
     def blockers(self, con, student, topic_id, state, version, tables, current):
         result = []

@@ -17,7 +17,7 @@ from .service import DomainError, LearningService, create_learning_service
 from .subjects import Subjects
 from scripts.verify_content import collect_questions, parse_outline, sha256
 
-MAX_ARCHIVE_BYTES = 500_000_000
+MAX_ARCHIVE_BYTES = 1_500_000_000
 
 
 def _json(value):
@@ -177,7 +177,7 @@ def _validate_payload(manifest, blobs):
         for declaration in course['topics']:
             topic_id = Catalog._identifier(declaration['id'])
             expected = f'courses/{topic_id}.json'
-            if topic_id in topics or declaration['path'] != expected or expected not in blobs:
+            if declaration['path'] != expected or expected not in blobs:
                 raise ValueError('Invalid portable topic path')
             topic = json.loads(blobs[expected])
             if not isinstance(topic, dict) or topic.get('id') != topic_id or topic.get('version') != versions.get(topic_id):
@@ -220,6 +220,12 @@ def _validate_payload(manifest, blobs):
         expected_files.update(asset_root + name for name in asset_bytes)
     from .course_graph import validate_graph_archive
     expected_files.update(validate_graph_archive(blobs))
+    for name, raw in blobs.items():
+        if name.startswith('mathacademy-sources/'):
+            if not re.fullmatch(r'mathacademy-sources/(?:topics/ma-topic-\d+|graphs/course-\d+)\.json', name):
+                raise ValueError('Invalid private source snapshot path')
+            json.loads(raw)
+            expected_files.add(name)
     guide_roots = {'guide': 'guide/guide.md'}
     if 'subjects.json' in blobs:
         if len(blobs['subjects.json']) > 1024 * 1024:
@@ -253,7 +259,7 @@ def backup_site(settings, destination=None):
     from .training_content import TrainingCatalog, validate_saved as validate_training_saved
     training_catalog = TrainingCatalog(settings.data_dir)
     subjects = Subjects(settings, catalog)
-    subject_file = settings.data_dir / 'subjects.json'
+    subject_file = settings.content_dir / 'subjects.json'
     subject_bytes = subject_file.read_bytes() if subject_file.is_file() else None
     stamp = datetime.now().strftime('%Y%m%d-%H%M%S-%f')
     target = Path(destination or settings.data_dir / 'backups' / f'learning-{stamp}.zip')
@@ -303,7 +309,7 @@ def backup_site(settings, destination=None):
             blobs['judge-daily-quota.sqlite3'] = quota_snapshot.read_bytes()
     blobs.update(training_catalog.archive_blobs())
     from .test_materials import FILENAME as TEST_MATERIALS
-    test_policy_path = settings.data_dir / TEST_MATERIALS
+    test_policy_path = settings.content_dir / TEST_MATERIALS
     if test_policy_path.is_file():
         blobs[TEST_MATERIALS] = test_policy_path.read_bytes()
     sources_index = {}
@@ -369,6 +375,8 @@ def backup_site(settings, destination=None):
     blobs['catalog.json'] = _json(portable)
     from .course_graph import graph_backup_blobs
     blobs.update(graph_backup_blobs(settings))
+    for source in (settings.content_dir / 'mathacademy-sources').rglob('*.json'):
+        blobs['mathacademy-sources/' + source.relative_to(settings.content_dir / 'mathacademy-sources').as_posix()] = source.read_bytes()
     def include_guide(source, prefix):
         if not source.is_file():
             return

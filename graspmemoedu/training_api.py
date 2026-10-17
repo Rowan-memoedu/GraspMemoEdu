@@ -30,7 +30,7 @@ class AttemptAction(BaseModel):
 
 class Answer(AttemptAction):
     request_id: str = Field(min_length=1, max_length=128)
-    answer: str = Field(min_length=1, max_length=2000)
+    answer: str = Field(min_length=1, max_length=16384)
     elapsed_ms: int | None = Field(default=None, strict=True, ge=0, le=86400000)
 
 

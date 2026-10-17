@@ -32,6 +32,25 @@ class DomainError(Exception):
         self.code, self.message, self.status_code = code, message, status_code
 
 
+STORAGE_SCHEMA = '''
+PRAGMA journal_mode=WAL;
+CREATE TABLE IF NOT EXISTS topics (learner TEXT NOT NULL, topic TEXT NOT NULL, version TEXT NOT NULL,
+    body TEXT NOT NULL, PRIMARY KEY(learner, topic));
+CREATE TABLE IF NOT EXISTS actions (learner TEXT NOT NULL, topic TEXT NOT NULL, id TEXT NOT NULL,
+    fingerprint TEXT NOT NULL, kind TEXT NOT NULL, PRIMARY KEY(learner, topic, id));
+CREATE TABLE IF NOT EXISTS submissions (id TEXT PRIMARY KEY, learner TEXT NOT NULL, topic TEXT NOT NULL,
+    attempt TEXT NOT NULL, step TEXT NOT NULL, question TEXT NOT NULL, answer TEXT NOT NULL,
+    fingerprint TEXT NOT NULL, status TEXT NOT NULL, correct INTEGER, reason TEXT,
+    created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS one_live_answer ON submissions(learner, topic, attempt, question)
+    WHERE status IN ('pending','running','judged');
+CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, learner TEXT NOT NULL, topic TEXT NOT NULL,
+    created_at TEXT NOT NULL, body TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS unlocks (pause_event TEXT PRIMARY KEY, learner TEXT NOT NULL,
+    topic TEXT NOT NULL, module TEXT NOT NULL, attempt TEXT);
+'''
+
+
 class LearningService:
     """Transactional learning state. No network call holds a database transaction."""
 
@@ -569,7 +588,7 @@ class LearningService:
             if step['phase'] != 'answer' or step['kind'] not in ('example', 'practice'):
                 raise DomainError('already_answered', '当前题目不接受再次作答。')
             answer = payload.get('answer')
-            if not isinstance(answer, str) or not answer.strip() or len(answer) > 2000:
+            if not isinstance(answer, str) or not answer.strip() or len(answer) > 16384:
                 raise DomainError('invalid_answer', '请输入有效答案（最多 2000 字）。', 422)
             from .self_assessment import answer as assessed_answer
             try:
@@ -794,6 +813,9 @@ class LearningService:
 
 
 def create_learning_service(course, data_dir, judge=None, learner_id='local', **options):
+    from .source_content import trainable, SourceReader
+    if not trainable(course):
+        return SourceReader(course, data_dir, judge, learner_id, **options)
     if course.get('training_mode') == 'atomic_retrieval':
         from .atomic import AtomicLearningService
         return AtomicLearningService(course, data_dir, judge, learner_id, **options)

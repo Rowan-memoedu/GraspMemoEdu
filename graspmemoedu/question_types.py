@@ -69,6 +69,9 @@ def _answer_spec(item):
 def validate_interaction(spec, stem=''):
     if spec is None:
         return
+    if isinstance(spec, dict) and type(spec.get('version')) is int and spec['version'] == 2:
+        from .composite_questions import validate
+        return validate(spec)
     _require(isinstance(spec, dict) and spec.get('version') == 1 and type(spec['version']) is int)
     kind = spec.get('type')
     _require(isinstance(kind, str) and kind in TYPES)
@@ -136,6 +139,9 @@ def public_interaction(question):
     spec = question.get('interaction')
     if spec is None:
         return None
+    if spec.get('version') == 2:
+        from .composite_questions import public
+        return public(spec)
     result = {k: spec[k] for k in ('version', 'type', 'grading') if k in spec}
     if spec['type'] == 'choice':
         result['options'] = [{k: row[k] for k in ('id', 'text', 'html') if k in row} for row in spec['options']]
@@ -163,6 +169,9 @@ def _unique_object(pairs):
 
 
 def parse_answer(question, answer):
+    if (question.get('interaction') or {}).get('version') == 2:
+        from .composite_questions import parse
+        return parse(question['interaction'], answer, _unique_object)
     _require(isinstance(answer, str) and bool(answer.strip()) and len(answer) <= 2000,
              'Answer must contain 1 to 2000 characters')
     spec = question.get('interaction')
@@ -222,8 +231,15 @@ def deterministic_verdict(question, answer):
     spec = question.get('interaction')
     if spec is None:
         return None
+    if spec.get('grading') == 'unavailable':
+        raise ValueError('Source answer is unavailable')
     value = parse_answer(question, answer)
     kind = spec['type']
+    if kind == 'composite':
+        if spec['grading'] == 'semantic':
+            return None
+        results = [exact(c, value['values'][c['id']]) for c in spec['controls']]
+        return all(results), _summary(results)
     if kind in ('text', 'fill_blank') and spec['grading'] == 'semantic':
         return None
     if kind == 'text':
@@ -247,7 +263,12 @@ def semantic_arguments(question, answer):
     spec = question.get('interaction')
     stem = question['question'] + '\n作答约束：' + question['constraints']
     reference = question['reference_answer']
-    if spec and spec['type'] == 'fill_blank':
+    if spec and spec['type'] == 'composite':
+        values = parse_answer(question, answer)['values']
+        answer = json.dumps({c['id']: next((o['text'] for o in c.get('options', []) if o['id'] == values[c['id']]), values[c['id']])
+                             for c in spec['controls']}, ensure_ascii=False)
+        stem += '\n分段题作为整题判分，JSON 键为原位置控件编号。'
+    elif spec and spec['type'] == 'fill_blank':
         values = parse_answer(question, answer)
         reference = json.dumps({b['id']: b['answers'] for b in spec['blanks']}, ensure_ascii=False)
         answer = json.dumps(values, ensure_ascii=False)
@@ -265,6 +286,10 @@ def demo_answer(question):
     if not spec:
         return question['reference_answer']
     kind = spec['type']
+    if kind == 'composite':
+        if spec['grading'] != 'exact':
+            return ''
+        return json.dumps({'section': len(spec['sections']) - 1, 'values': {c['id']: c['answers'][0] for c in spec['controls']}})
     if kind == 'text':
         # A wrapper regex need not accept the bare canonical answer. Explicit
         # demo support for such a question is optional; never invent a wrapper.
@@ -290,6 +315,8 @@ def display_answer(question, answer):
         return answer
     try:
         value, spec = parse_answer(question, answer), question['interaction']
+        if spec['type'] == 'composite':
+            return '\n'.join(f"{c.get('label', c['id'])}: " + next((o['text'] for o in c.get('options', []) if o['id'] == value['values'][c['id']]), value['values'][c['id']]) for c in spec['controls'])
         if spec['type'] == 'choice':
             ids = set(value['selected']) if spec.get('multiple') else {value['selected']}
             return '\n'.join(s['text'] for s in spec['options'] if s['id'] in ids)

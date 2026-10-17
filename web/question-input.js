@@ -1,5 +1,6 @@
-import {t} from './i18n.js?v=93ae0d5253afa2c0';
-import {prepareLiteralMath} from './math-presentation.js?v=93ae0d5253afa2c0';
+import {t} from './i18n.js?v=895d67cb8db67e93';
+import {prepareLiteralMath} from './math-presentation.js?v=895d67cb8db67e93';
+import {compositeInput} from './composite-input.js?v=895d67cb8db67e93';
 
 const node = (tag, cls, text) => {
   const element = document.createElement(tag); element.className = cls;
@@ -20,6 +21,7 @@ export function choiceTypeField(spec) {
 // The serialized answer uses the existing draft, retry and idempotency path.
 // This component receives presentation metadata only, never answer keys.
 export function questionInput(spec, {id, value = '', stem, disabled = false, formId} = {}) {
+  if (spec.type === 'composite') return compositeInput(spec, {id, value, disabled, formId});
   const root = node('div', 'questionInteraction');
   root.dataset.questionType = spec.type;
   const input = node('textarea', 'structuredAnswer'); input.id = id;

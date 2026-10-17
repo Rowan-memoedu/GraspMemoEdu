@@ -1,11 +1,12 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=93ae0d5253afa2c0";
-import {answerReady} from './question-input.js?v=93ae0d5253afa2c0';
-import {reportableContent} from './content-report.js?v=93ae0d5253afa2c0';
-import {createLearningCache} from './learning-cache.js?v=93ae0d5253afa2c0';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=895d67cb8db67e93";
+import {answerReady} from './question-input.js?v=895d67cb8db67e93';
+import {reportableContent} from './content-report.js?v=895d67cb8db67e93';
+import {createLearningCache} from './learning-cache.js?v=895d67cb8db67e93';
 
-import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, readerHistorySteps, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState} from './learning-ui.js?v=93ae0d5253afa2c0';
-import {selfAssessment} from './self-assessment.js?v=93ae0d5253afa2c0';
-import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=93ae0d5253afa2c0';
+import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, readerHistorySteps, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState} from './learning-ui.js?v=895d67cb8db67e93';
+import {selfAssessment} from './self-assessment.js?v=895d67cb8db67e93';
+import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=895d67cb8db67e93';
+import {renderSourceReader} from './learning-ui.js?v=895d67cb8db67e93';
 
 applyStaticTranslations();
 
@@ -735,7 +736,7 @@ function renderConnectionNotice() {
   const notice = $("connectionNotice");
   notice.replaceChildren();
   notice.hidden = !connectionIssue || !state;
-  if (state && !connectionIssue) $("saveStatus").textContent = state.pending_submission_id ? t("答案已提交，正在判题") : t("学习进度已保存");
+  if (state && !connectionIssue) $("saveStatus").textContent = state.read_only ? '阅读原材料' : state.pending_submission_id ? t("答案已提交，正在判题") : t("学习进度已保存");
   if (!connectionIssue || !state) return;
   const p = el("p");
   p.append(el("strong", "", t("服务暂不可用")));
@@ -961,7 +962,7 @@ function render() {
   renderStep(step);
   renderResult(step);
   renderBusy();
-  $("saveStatus").textContent = connectionIssue ? t("等待重新连接") : state.pending_submission_id ? t("答案已提交，正在判题") : t("学习进度已保存");
+  $("saveStatus").textContent = state.read_only ? '阅读原材料' : connectionIssue ? t("等待重新连接") : state.pending_submission_id ? t("答案已提交，正在判题") : t("学习进度已保存");
   const module = state.modules.find((item) => item.id === step?.module_id);
   const moduleIndex = state.modules.indexOf(module);
   $("footerPosition").textContent = moduleIndex >= 0 ? t("reader.modulePosition", { current: moduleIndex + 1, total: state.modules.length }) : "";
@@ -985,6 +986,7 @@ function renderPageNotice() {
 
 function renderProgress() {
   const refs = {progressCaption: $('progressCaption'), lessonProgress: $('lessonProgress')};
+  if (state.read_only) { readerProgress(refs, {label: '可阅读', status: '暂不可训练', percent: 0, hidden: true}); return; }
   if (state.topic_kind === 'introduction') {
     const progress = Math.round(state.reading_progress || 0), status = readingStatus();
     const label = t('reader.readingProgress', {progress});
@@ -1077,6 +1079,16 @@ function renderReview(step) {
 }
 
 function renderStep(step) {
+  if (state.read_only) {
+    const key = `source-reader:${state.topic_id}:${state.course_version}`;
+    const show = index => {
+      index = Math.max(0, Math.min((state.blocks?.length || 1) - 1, index));
+      storageWrite(sessionStorage, key, String(index));
+      renderSourceReader($('stepCard'), state, index, show);
+    };
+    show(Number(storageRead(sessionStorage, key, '0')) || 0);
+    return;
+  }
   const key = JSON.stringify([state.course_version, state.revision, state.current_step_id, state.pending_submission_id, state.dependency_ready, state.content_references, submissionError?.request_id, submissionError?.reason, access?.features]);
   if (key === renderedKey) return;
   renderedKey = key;
@@ -1426,9 +1438,9 @@ async function openTopic(id, subjectId) {
   }
 }
 
-const { initPortal } = await import("./portal.js?v=93ae0d5253afa2c0");
-const {startPresence} = await import('./presence.js?v=93ae0d5253afa2c0');
-const {visibleContentTopics} = await import('./content-report.js?v=93ae0d5253afa2c0');
+const { initPortal } = await import("./portal.js?v=895d67cb8db67e93");
+const {startPresence} = await import('./presence.js?v=895d67cb8db67e93');
+const {visibleContentTopics} = await import('./content-report.js?v=895d67cb8db67e93');
 startPresence({getAccess: () => identityProblem ? null : access, request, getTopics: visibleContentTopics});
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {

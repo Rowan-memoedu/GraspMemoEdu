@@ -18,7 +18,8 @@ class Catalog:
         self.topics = topics
         self.default_topic_id = default_topic_id
         self.topic_paths = topic_paths
-        self.topic_courses = {topic['id']: course['id'] for course in courses for topic in course['topics']}
+        self.topic_courses = {tid: frozenset(c['id'] for c in courses
+                             if any(t['id'] == tid for t in c['topics'])) for tid in topics}
 
     @classmethod
     def load(cls, settings, fallback_topic=None):
@@ -56,15 +57,22 @@ class Catalog:
                     if not isinstance(declaration, dict) or set(declaration) - {'id', 'path', 'prerequisites'}:
                         raise ValueError('Unknown topic field')
                     topic_id = cls._identifier(declaration.get('id'))
-                    if topic_id in topics:
-                        raise ValueError('Topic IDs must be globally unique')
+                    if any(t['id'] == topic_id for t in metadata):
+                        raise ValueError('Duplicate course member')
                     source = Path(cls._text(declaration.get('path'), 2000))
                     if not source.is_absolute():
                         source = path.parent / source
-                    topic = json.loads(source.read_text(encoding='utf-8'))
+                    if topic_id in topics:
+                        if topic_paths[topic_id] != source.resolve():
+                            raise ValueError('Shared Topic must reference the same source')
+                        topic = topics[topic_id]
+                    else:
+                        topic = json.loads(source.read_text(encoding='utf-8'))
+                        cls._validate_topic(topic)
                     if not isinstance(topic, dict) or topic.get('id') != topic_id:
                         raise ValueError('Topic source ID does not match catalog')
-                    cls._validate_topic(topic)
+                    if topic_id in topics and (topics[topic_id] != topic or topic_paths[topic_id] != source.resolve()):
+                        raise ValueError('Shared Topic must reference the same source')
                     prerequisites = declaration.get('prerequisites', [])
                     if not isinstance(prerequisites, list) or any(cls._identifier(item) == topic_id for item in prerequisites):
                         raise ValueError('Invalid prerequisites')
@@ -99,14 +107,17 @@ class Catalog:
                 raise ValueError('Catalog has no topic content')
             for course in courses:
                 ids = {topic['id'] for topic in course['topics']}
-                if any(set(topic['prerequisites']) - ids for topic in course['topics']):
-                    raise ValueError('Prerequisites must reference topics in the same course')
+                if any(set(topic['prerequisites']) - topics.keys() for topic in course['topics']):
+                    raise ValueError('Catalog prerequisites must reference imported topics')
                 from .topic_runtime import is_introduction
                 reading_ids = {tid for tid in ids if is_introduction(topics[tid])}
                 if any((topic['id'] in reading_ids and topic['prerequisites'])
                        or reading_ids.intersection(topic['prerequisites']) for topic in course['topics']):
                     raise ValueError('Introduction Topics cannot participate in prerequisite relationships')
-                graph = {topic['id']: topic['prerequisites'] for topic in course['topics']}
+                graph = {tid: set() for tid in topics}
+                for c in courses:
+                    for item in c['topics']:
+                        graph[item['id']].update(item['prerequisites'])
                 visited, pending = set(), set()
                 def visit(topic_id):
                     if topic_id in pending:
@@ -121,7 +132,9 @@ class Catalog:
                 for topic_id in graph:
                     visit(topic_id)
             preferred = fallback_topic['id'] if fallback_topic else 'digits-to-letters'
-            return cls(courses, topics, preferred if preferred in topics else next(iter(topics)), topic_paths)
+            result = cls(courses, topics, preferred if preferred in topics else next(iter(topics)), topic_paths)
+            result.content_dir = path.parent
+            return result
         except (OSError, ValueError, TypeError, KeyError) as exc:
             raise DomainError('invalid_catalog', '课程目录格式或来源无效，请由管理者检查本地目录配置。', 422) from exc
 
@@ -147,6 +160,11 @@ class Catalog:
         Catalog._text(topic.get('title'), 200)
         # Reuse the learning engine's pure content validation without creating
         # any learner progress merely because a catalog was opened.
+        if topic.get('source_adapter') == 'mathacademy':
+            from .source_content import validate_source_topic
+            validate_source_topic(topic)
+            if not topic['availability']['trainable']:
+                return
         validator = object.__new__(LearningService)
         validator.course, validator.questions = topic, {}
         validator._validate_course()
@@ -173,6 +191,22 @@ class Catalog:
             raise DomainError('unknown_course', '未找到此课程。', 404)
         return self.courses[course_id]
 
-    def metadata(self, topic_id):
-        course = self.courses[self.topic_courses[topic_id]]
-        return next(topic for topic in course['topics'] if topic['id'] == topic_id)
+    def course_context(self, topic_id, course_id=None):
+        members = self.topic_courses[topic_id]
+        if course_id is not None:
+            if course_id not in members:
+                raise DomainError('topic_course_mismatch', 'Topic 不属于当前课程。', 422)
+            return self.courses[course_id]
+        if len(members) == 1:
+            return self.courses[next(iter(members))]
+        return {'id': None, 'title': ' · '.join(self.courses[c]['title'] for c in sorted(members)),
+                'course_ids': sorted(members)}
+
+    def metadata(self, topic_id, course_id=None):
+        members = self.topic_courses[topic_id]
+        if course_id is not None:
+            course = self.course_context(topic_id, course_id)
+            return next(t for t in course['topics'] if t['id'] == topic_id)
+        return {'id': topic_id, 'course_ids': sorted(members), 'prerequisites': sorted({p
+                for cid in members for t in self.courses[cid]['topics'] if t['id'] == topic_id
+                for p in t['prerequisites']})}

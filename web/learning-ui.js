@@ -1,7 +1,7 @@
-import {t, learningTitle} from './i18n.js?v=93ae0d5253afa2c0';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=93ae0d5253afa2c0';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=93ae0d5253afa2c0';
-import {enhanceTopicContent} from './topic-content.js?v=93ae0d5253afa2c0';
+import {t, learningTitle} from './i18n.js?v=895d67cb8db67e93';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=895d67cb8db67e93';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=895d67cb8db67e93';
+import {enhanceTopicContent} from './topic-content.js?v=895d67cb8db67e93';
 
 const node = (tag, cls = '', text) => {
   const item = document.createElement(tag); item.className = cls;
@@ -41,6 +41,34 @@ export function readerHistorySteps(state) {
 export function readerContent(html, references) {
   const body = node('div', 'courseContent'); body.innerHTML = html || '';
   enhanceTopicContent(body, references); return body;
+}
+
+export function renderSourceReader(target, state, index = 0, onNavigate = () => {}) {
+  const blocks = state.blocks || [], block = blocks[index];
+  target.replaceChildren();
+  const notice = node('aside', 'featureNotice');
+  notice.append(node('strong', '', state.availability.readable ? '可阅读 · 暂不可训练' : '已保存来源 · 原材料尚无正文'));
+  const reasons = node('ul');
+  for (const reason of state.availability.reasons) reasons.append(node('li', '', reason.message || reason.code));
+  notice.append(reasons); target.append(notice);
+  if (block) {
+    const article = node('section', 'sourceReadingBlock');
+    renderReaderStep(article, block, {titleId: 'sourceReadingTitle', submittedId: 'sourceInput', showAnswer: false});
+    target.append(article);
+    const nav = node('nav', 'stepNavigation'); nav.setAttribute('aria-label', '阅读内容');
+    nav.append(action('上一页', 'secondaryButton', () => onNavigate(index - 1), index === 0),
+      node('span', 'stepCounter', `${index + 1} / ${blocks.length}`),
+      action('下一页', 'primaryButton', () => onNavigate(index + 1), index === blocks.length - 1));
+    for (const control of nav.querySelectorAll('button')) control.dataset.navAvailable = String(!control.disabled);
+    target.append(nav);
+  } else target.append(node('p', '', '原材料尚无正文。'));
+  if (state.references?.length) {
+    const refs = node('details', 'sourceReferences'); refs.append(node('summary', '', '参考资料'));
+    for (const ref of state.references) {
+      const a = node('a', '', ref.label || ref.url); a.href = ref.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; refs.append(a);
+    }
+    target.append(refs);
+  }
 }
 
 // One presentation path for prose, stems, submitted answers and explanations.
@@ -147,7 +175,7 @@ export function answerEditor(step, stem, value, {formId = 'answerForm', inputId 
   const control = structured ? questionInput(step.interaction, {id: inputId, stem, value, formId}) : null;
   const label = node(structured ? 'p' : 'label', '', t('你的答案')); label.htmlFor = inputId;
   const input = control?.input || node('textarea', 'answerInput');
-  input.id = inputId; input.name = 'answer'; input.rows = 3; input.maxLength = 2000;
+  input.id = inputId; input.name = 'answer'; input.rows = 3; input.maxLength = step.interaction?.version === 2 ? 16384 : 2000;
   input.spellcheck = false; input.autocomplete = 'off'; input.value = value;
   const error = node('p', 'inputError', t(step.interaction?.type === 'choice' ? 'question.choiceHint' : structured ? 'question.completeHint' : '请先填写答案。'));
   error.id = inputId === 'answerInput' ? 'answerError' : `${inputId}Error`; error.hidden = true;

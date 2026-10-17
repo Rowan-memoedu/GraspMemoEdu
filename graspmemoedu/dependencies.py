@@ -11,11 +11,16 @@ class DependencyPolicy:
     def __init__(self, catalog, access_store, subjects=None):
         self.catalog, self.access_store, self.subjects = catalog, access_store, subjects
 
-    def dependencies(self, course_id):
+    def dependencies(self, course_id=None):
         if self.subjects is not None:
             from .course_graph import GraphStore
-            return GraphStore(self.subjects.settings, self.catalog, self.subjects).dependencies(course_id)
-        return {item['id']: item['prerequisites'] for item in self.catalog.course(course_id)['topics']}
+            root = self.subjects.settings.content_dir / 'graphs'
+            signature = tuple((p.name, p.stat().st_mtime_ns, p.stat().st_size) for p in sorted(root.glob('*.json')))
+            if getattr(self, '_graph_signature', None) != signature:
+                self._graph_dependencies = GraphStore(self.subjects.settings, self.catalog, self.subjects).dependencies(course_id)
+                self._graph_signature = signature
+            return self._graph_dependencies
+        return {tid: self.catalog.metadata(tid)['prerequisites'] for tid in self.catalog.topics}
 
     @staticmethod
     def tables(con):
@@ -29,8 +34,7 @@ class DependencyPolicy:
             return 0
         if access.get('is_admin'):
             return 0
-        course_id = self.catalog.topic_courses[topic_id]
-        dependencies = dependencies if dependencies is not None else self.dependencies(course_id)
+        dependencies = dependencies if dependencies is not None else self.dependencies()
         allowed = {topic['id'] for topic in access['topics']}
         tables, checked, visiting = self.tables(con), {}, set()
         current = datetime.fromisoformat(current_time or now())
@@ -38,11 +42,8 @@ class DependencyPolicy:
         def healthy(node):
             if node in checked:
                 return checked[node]
-            # Both catalog and graph import currently permit same-course edges
-            # only. Do not silently treat a malformed cross-course node as a
-            # root and skip its own ancestors.
             if (node in visiting or node not in allowed or node not in self.catalog.topics
-                    or self.catalog.topic_courses.get(node) != course_id):
+                    or not self.catalog.topic(node).get('availability', {}).get('trainable', True)):
                 return False
             visiting.add(node)
             key = (access['learner_id'], node)
