@@ -28,6 +28,6 @@ Topic 使用 `ma-topic-<源ID>`，课程使用 `ma-course-<源ID>`。一个 Topi
 
 正式入口通过现有 SSH 和 `host.py run-stage` 执行，先创建已验证备份，再暂停应用完成切换并恢复健康检查。若安装或健康检查失败，恢复上一内容指针并重启原内容。过程不回滚学习数据库；应用源码发布独立于课程安装。站点备份展开保存有效目录、正文、源 JSON 和图谱，恢复无需原活动指针。
 
-带离线 SVG 的 Topic 阅读响应可达数 MB。部署模板在本应用的 API location 启用 JSON gzip，压缩传输但保持响应内容及权限检查不变；已有多站点服务器只增量应用该 location 的压缩配置，不覆盖其他站点。机器学习批次上线时服务内存上限设为 1536 MiB，具体容量仍按主机实际余量核验。
+带离线 SVG 的 Topic 阅读响应可达数 MB。部署模板在本应用的 API location 启用 JSON gzip，压缩传输但保持响应内容及权限检查不变；已有多站点服务器只增量应用该 location 的压缩配置，不覆盖其他站点。正文读取使用 60 秒上限；没有进度变更的只读原文不做训练页的周期轮询，初次打开和刷新仍读取服务器。机器学习批次上线时服务内存上限设为 1536 MiB，具体容量仍按主机实际余量核验。
 
 `tests/test_mathacademy_import.py` 使用独立完整合成题验证训练边界；`scripts/mathacademy_interaction_fixture.py` 与 `mathacademy_interaction_acceptance.mjs` 验证 10 段 23 控件、刷新与篇末完成。真实来源另行执行整批转换、共享身份、附件与备份恢复验收，不能用合成样本冒充真实资料完整。
