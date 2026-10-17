@@ -1,12 +1,12 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=895d67cb8db67e93";
-import {answerReady} from './question-input.js?v=895d67cb8db67e93';
-import {reportableContent} from './content-report.js?v=895d67cb8db67e93';
-import {createLearningCache} from './learning-cache.js?v=895d67cb8db67e93';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=588ae909ce90a9dd";
+import {answerReady} from './question-input.js?v=588ae909ce90a9dd';
+import {reportableContent} from './content-report.js?v=588ae909ce90a9dd';
+import {createLearningCache} from './learning-cache.js?v=588ae909ce90a9dd';
 
-import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, readerHistorySteps, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState} from './learning-ui.js?v=895d67cb8db67e93';
-import {selfAssessment} from './self-assessment.js?v=895d67cb8db67e93';
-import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=895d67cb8db67e93';
-import {renderSourceReader} from './learning-ui.js?v=895d67cb8db67e93';
+import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, readerHistorySteps, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState} from './learning-ui.js?v=588ae909ce90a9dd';
+import {selfAssessment} from './self-assessment.js?v=588ae909ce90a9dd';
+import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=588ae909ce90a9dd';
+import {renderSourceReader} from './learning-ui.js?v=588ae909ce90a9dd';
 
 applyStaticTranslations();
 
@@ -14,6 +14,8 @@ const $ = (id) => document.getElementById(id);
 const STORAGE_PREFIX = "graspmemoedu:";
 const REQUEST_TIMEOUT = 18000;
 const STATE_TIMEOUT = 9000;
+// Source reading responses contain the Topic's original SVGs and all sections.
+const CONTENT_TIMEOUT = 60000;
 const DEPLOYMENT_REFRESH_INTERVAL = 30000;
 
 function storageRead(storage, key, fallback = null) {
@@ -712,7 +714,7 @@ async function refreshState({ quiet = true, force = false } = {}) {
   const generation = connectionGeneration;
   stateBusy = true;
   try {
-    const next = await topicRequest("state", { timeout: STATE_TIMEOUT });
+    const next = await topicRequest("state", { timeout: CONTENT_TIMEOUT });
     if (!quiet) pageMessage = null;
     applyState(next, { force });
     renderConnectionNotice();
@@ -1438,9 +1440,9 @@ async function openTopic(id, subjectId) {
   }
 }
 
-const { initPortal } = await import("./portal.js?v=895d67cb8db67e93");
-const {startPresence} = await import('./presence.js?v=895d67cb8db67e93');
-const {visibleContentTopics} = await import('./content-report.js?v=895d67cb8db67e93');
+const { initPortal } = await import("./portal.js?v=588ae909ce90a9dd");
+const {startPresence} = await import('./presence.js?v=588ae909ce90a9dd');
+const {visibleContentTopics} = await import('./content-report.js?v=588ae909ce90a9dd');
 startPresence({getAccess: () => identityProblem ? null : access, request, getTopics: visibleContentTopics});
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {
