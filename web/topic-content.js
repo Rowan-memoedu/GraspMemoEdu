@@ -1,6 +1,6 @@
-import {mountMermaid} from './vendor/mermaid/index.js?v=4a939fc23865ab67';
-import {renderBacklinks} from './vendor/document-backlinks.mjs?v=4a939fc23865ab67';
-import {t} from './i18n.js?v=4a939fc23865ab67';
+import {mountMermaid} from './vendor/mermaid/index.js?v=2640fd47e967d834';
+import {renderBacklinks} from './vendor/document-backlinks.mjs?v=2640fd47e967d834';
+import {t} from './i18n.js?v=2640fd47e967d834';
 
 export function referenceHref(target) {
   const base = `#/subjects/${encodeURIComponent(target.subject_id)}/topic/${encodeURIComponent(target.topic_id)}`;
@@ -9,6 +9,15 @@ export function referenceHref(target) {
 
 export function enhanceTopicContent(root, references) {
   root.classList.add('reading-outline');
+  for (const callout of root.querySelectorAll('[data-callout="requirement"]')) {
+    for (const paragraph of callout.querySelectorAll(':scope > p')) {
+      if (/^Calculator\s*:\s*(?:None)?$/i.test(paragraph.textContent.trim())
+          && !paragraph.querySelector('img,svg,math,mjx-container,input,select,textarea')) paragraph.remove();
+    }
+    const body = callout.cloneNode(true);
+    body.querySelector(':scope > strong')?.remove();
+    if (!body.textContent.trim() && !body.querySelector('img,svg,math,mjx-container,video,audio,table,input,select,textarea')) callout.remove();
+  }
   for (const link of root.querySelectorAll('a.topicReference')) {
     const source = link.closest('[id^="node-"]')?.id.slice(5);
     const ref = references?.outgoing?.find(item => item.source_node_id === source && item.target_rem_id === link.dataset.targetRemId);
