@@ -45,6 +45,9 @@ class PresenceTests(unittest.TestCase):
         self.assertEqual(list(self.app.state.learning_services), services)
 
     def test_background_disconnect_resume_and_navigation(self):
+        # This case measures one day's sessions. A real start near Beijing
+        # midnight would clip earlier intervals; midnight has a separate case.
+        self.time = self.time.replace(hour=4, minute=0, second=0, microsecond=0)
         self.pulse(1)
         self.time += timedelta(seconds=12)
         self.pulse(2, visible=False)

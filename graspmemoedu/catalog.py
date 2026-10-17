@@ -20,6 +20,17 @@ class Catalog:
         self.topic_paths = topic_paths
         self.topic_courses = {tid: frozenset(c['id'] for c in courses
                              if any(t['id'] == tid for t in c['topics'])) for tid in topics}
+        for tid, topic in topics.items():
+            scope = topic.get('prerequisite_scope_course_id')
+            if scope is not None and (not isinstance(scope, str) or scope not in self.topic_courses[tid]):
+                raise ValueError('Prerequisite scope must be a course containing the Topic')
+            if 'prerequisite_scope_topic_ids' in topic:
+                members = topic['prerequisite_scope_topic_ids']
+                if (not scope or not isinstance(members, list) or not members
+                        or any(not isinstance(value, str) for value in members)
+                        or len(set(members)) != len(members) or tid not in members
+                        or not set(members) <= {row['id'] for row in self.courses[scope]['topics']}):
+                    raise ValueError('Prerequisite Topic scope must belong to the selected course')
 
     @classmethod
     def load(cls, settings, fallback_topic=None):

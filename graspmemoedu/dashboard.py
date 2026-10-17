@@ -217,7 +217,7 @@ class DashboardStore:
                 'course_id': course['id'], 'course_title': course['title'],
                 'title': self.catalog.topics[topic_id]['title'], 'progress': snapshot['progress'],
                 'started': snapshot['started_at'] is not None, 'started_at': snapshot['started_at'],
-                'status': snapshot['status'], 'prerequisites': [item for item in dependencies.get(topic_id, []) if item in allowed],
+                'status': snapshot['status'], 'prerequisites': [item for item in self.dependency_policy.required_parents(topic_id, dependencies) if item in allowed],
                 'maintenance': False}
         if snapshot['status'] == 'completed':
             task.update(completed_at=snapshot['completed_at'], result='completed')
@@ -355,15 +355,15 @@ class DashboardStore:
                        for topic_id in snapshots}
             eligibility = {topic_id: count == 0 for topic_id, count in missing.items()}
             parent_snapshots = dict(snapshots)
-            for parent in {p for tid in snapshots for p in dependencies.get(tid, [])} & allowed:
+            for parent in {p for tid in snapshots for p in self.dependency_policy.required_parents(tid, dependencies)} & allowed:
                 if parent not in parent_snapshots:
                     parent_snapshots[parent] = self._snapshot(con, access['learner_id'], parent)
         def details(topic_id):
             return [{'id': parent, 'title': self.catalog.topics[parent]['title'],
                      'progress': parent_snapshots[parent]['progress'], 'mastery': parent_snapshots[parent]['mastery']}
-                    for parent in dependencies.get(topic_id, []) if parent in parent_snapshots]
+                    for parent in self.dependency_policy.required_parents(topic_id, dependencies) if parent in parent_snapshots]
         for task in [*review_tasks, *review_history]:
-            task['prerequisites'] = [parent for parent in dependencies.get(task['topic_id'], []) if parent in snapshots]
+            task['prerequisites'] = [parent for parent in self.dependency_policy.required_parents(task['topic_id'], dependencies) if parent in snapshots]
             task['prerequisite_details'] = details(task['topic_id'])
             task['dependency_ready'] = eligibility[task['topic_id']]
             task['missing_prerequisite_count'] = missing[task['topic_id']]

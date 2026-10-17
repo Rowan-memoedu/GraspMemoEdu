@@ -19,8 +19,21 @@ class DependencyPolicy:
             if getattr(self, '_graph_signature', None) != signature:
                 self._graph_dependencies = GraphStore(self.subjects.settings, self.catalog, self.subjects).dependencies(course_id)
                 self._graph_signature = signature
-            return self._graph_dependencies
-        return {tid: self.catalog.metadata(tid)['prerequisites'] for tid in self.catalog.topics}
+            dependencies = self._graph_dependencies
+        else:
+            dependencies = {tid: self.catalog.metadata(tid)['prerequisites'] for tid in self.catalog.topics}
+        return dependencies
+
+    def scope_members(self, topic_id):
+        topic = self.catalog.topic(topic_id)
+        scope = topic.get('prerequisite_scope_course_id')
+        return (set(topic.get('prerequisite_scope_topic_ids',
+                    [row['id'] for row in self.catalog.courses[scope]['topics']])) if scope else None)
+
+    def required_parents(self, topic_id, dependencies=None):
+        dependencies = dependencies if dependencies is not None else self.dependencies()
+        members = self.scope_members(topic_id)
+        return [parent for parent in dependencies.get(topic_id, []) if members is None or parent in members]
 
     @staticmethod
     def tables(con):
@@ -35,6 +48,12 @@ class DependencyPolicy:
         if access.get('is_admin'):
             return 0
         dependencies = dependencies if dependencies is not None else self.dependencies()
+        # Scope belongs to the requested root. Filtering the cached graph would
+        # also grant this exception to ordinary downstream Topics.
+        members = self.scope_members(topic_id)
+        if members is not None:
+            dependencies = {node: [parent for parent in parents if parent in members]
+                            for node, parents in dependencies.items()}
         allowed = {topic['id'] for topic in access['topics']}
         tables, checked, visiting = self.tables(con), {}, set()
         current = datetime.fromisoformat(current_time or now())
