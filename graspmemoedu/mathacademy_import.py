@@ -6,6 +6,7 @@ import base64
 import hashlib
 import html
 import inspect
+import io
 import json
 import os
 from pathlib import Path
@@ -13,6 +14,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import zipfile
 
 from .topic_install import encoded, digest, import_lock
@@ -142,6 +144,7 @@ class SourceIndex:
 class Assets:
     def __init__(self, root, graphics):
         self.root, self.graphics = root, graphics
+        self._compile_locks = defaultdict(threading.Lock)
         root.mkdir(parents=True, exist_ok=True)
 
     def compile(self, source):
@@ -153,6 +156,10 @@ class Assets:
             source = re.sub(r'\\tkzDrawVector(s?)\s*(?:\[([^\]]*)\])?',
                 lambda m: '\\tkzDrawSegment' + m[1] + '[->' + (',' + m[2] if m[2] else '') + ']', source)
         key = digest((ADAPTER_VERSION + ':150dpi:' + source).encode())
+        with self._compile_locks[key]:
+            return self._compile_png(source, key)
+
+    def _compile_png(self, source, key):
         png = self.root / (key + '.png')
         if not png.exists():
             tectonic = os.environ.get('CODEX_TECTONIC_PATH') or shutil.which('tectonic')
@@ -169,8 +176,57 @@ class Assets:
                            check=True, capture_output=True, timeout=120)
         return 'data:image/png;base64,' + base64.b64encode(png.read_bytes()).decode('ascii')
 
-    def text(self, source, gaps):
-        source = str(source or '')
+    def compile_inline(self, source):
+        """Keep source-drawn pixels intact and omit the TeX paper's white margins."""
+        from PIL import Image, ImageChops
+        original = base64.b64decode(self.compile(source).split(',', 1)[1], validate=True)
+        target = self.root / ('inline-' + digest(original) + '-tight-v1.png')
+        with self._compile_locks[str(target)]:
+            if not target.exists():
+                with Image.open(io.BytesIO(original)) as rendered:
+                    rendered.load()
+                    bounds = ImageChops.difference(rendered.convert('RGB'), Image.new('RGB', rendered.size, 'white')).getbbox()
+                    if bounds:
+                        left, top, right, bottom = bounds
+                        bounds = (max(0, left - 5), max(0, top - 5), min(rendered.width, right + 5), min(rendered.height, bottom + 5))
+                        rendered = rendered.crop(bounds)
+                    pending = target.with_suffix('.tmp')
+                    rendered.save(pending, format='PNG'); os.replace(pending, target)
+        return 'data:image/png;base64,' + base64.b64encode(target.read_bytes()).decode('ascii')
+
+    @staticmethod
+    def visible_markup(source):
+        return re.sub(r'<!--[\s\S]*?-->', '', source or '')
+
+    @staticmethod
+    def inline_graphics(source, source_html):
+        """Pair inline drawings in two representations of the same source field.
+
+        This uses document positions, never the unrelated graphics attachment order.
+        Every explicit image must retain its identity and the complete image sequence
+        must agree before any inline TeX can be associated with rendered HTML.
+        """
+        pattern = (r'\\documentclass[\s\S]*?\\end\{document\}'
+                   r'|<img\b[^>]*\bsrc=["\']([^"\']+)["\'][^>]*>'
+                   r'|!\[[^\]]*\]\(([^)]+)\)')
+        original = list(re.finditer(pattern, Assets.visible_markup(source), re.I))
+        rendered = re.findall(r'<img\b[^>]*\bsrc=["\']([^"\']+)["\']', Assets.visible_markup(source_html), re.I)
+        if len(original) != len(rendered):
+            return {}
+        result = {}
+        for event, reference in zip(original, rendered):
+            if event[0].startswith('\\documentclass'):
+                if not re.fullmatch(r'/graphics/[A-Za-z0-9_-]+', reference):
+                    return {}
+                if reference in result and result[reference] != event[0]:
+                    raise ValueError('Conflicting inline graphic identity: ' + reference)
+                result[reference] = event[0]
+            elif html.unescape(event[1] or event[2]) != html.unescape(reference):
+                return {}
+        return result
+
+    def text(self, source, gaps, inline_graphics=None):
+        source = self.visible_markup(str(source or ''))
         source = re.sub(r'\\documentclass[\s\S]*?\\end\{document\}',
                         lambda m: '<img alt="Source diagram" src="' + self.compile(m[0]) + '">', source)
         def image(url):
@@ -179,6 +235,8 @@ class Assets:
             identity = next((key for key in self.graphics if key in url), None)
             if identity:
                 return self.compile(self.graphics[identity])
+            if inline_graphics and url in inline_graphics:
+                return self.compile_inline(inline_graphics[url])
             gaps.append({'code': 'image_missing', 'reference': url})
             return ''
         source = re.sub(r'(<img\b[^>]*\bsrc=["\'])([^"\']+)(["\'])', lambda m: m[1] + image(m[2]) + m[3], source, flags=re.I)
@@ -187,7 +245,7 @@ class Assets:
 
     def render(self, source, source_html, gaps):
         if source_html and source_html.strip():
-            return {'_render': source or '', '_html': self.text(source_html, gaps)}
+            return {'_render': source or '', '_html': self.text(source_html, gaps, self.inline_graphics(source, source_html))}
         return {'_render': self.text(source, gaps)}
 
 

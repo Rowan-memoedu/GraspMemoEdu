@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sqlite3
 import sys
 import tarfile
 import time
@@ -24,11 +25,19 @@ def main():
                 raise ValueError('Invalid prepared package member')
         archive.extractall(stage, filter='data')
     subprocess.run(['chown', '-R', 'graspmemoedu:graspmemoedu', str(stage / 'package')], check=True)
+    manifest = json.loads((stage / 'package/manifest.json').read_text(encoding='utf-8'))
+    module = 'graspmemoedu.mathacademy_graphics' if manifest.get('kind') == 'mathacademy-inline-graphics' else 'graspmemoedu.mathacademy_import'
     subprocess.run(['/usr/local/sbin/graspmemoedu-backup'], check=True)
     timer = subprocess.run(['systemctl', 'is-active', '--quiet', 'graspmemoedu-healthcheck.timer']).returncode == 0
     if timer:
         subprocess.run(['systemctl', 'stop', 'graspmemoedu-healthcheck.timer'], check=True)
     subprocess.run(['systemctl', 'stop', 'graspmemoedu'], check=True)
+    def database_state():
+        with sqlite3.connect('file:' + str(data / 'learning.sqlite3') + '?mode=ro', uri=True) as con:
+            con.execute('BEGIN')
+            names = [r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
+            return {name: hashlib.sha256(repr(con.execute('SELECT * FROM "' + name.replace('"', '""') + '" ORDER BY rowid').fetchall()).encode()).hexdigest()
+                    for name in names}
     def healthy():
         for attempt in range(90):
             try:
@@ -40,10 +49,15 @@ def main():
             time.sleep(1)
         raise RuntimeError('New content failed the running service health check')
     try:
+        before_database = database_state() if module == 'graspmemoedu.mathacademy_graphics' else None
         result = subprocess.run(['runuser', '-u', 'graspmemoedu', '--', '/opt/graspmemoedu/venv/bin/python',
-            '-m', 'graspmemoedu.mathacademy_import', '--install-package', str(stage / 'package'), '--data-dir', str(data)],
+            '-m', module, '--install-package', str(stage / 'package'), '--data-dir', str(data)],
             cwd='/opt/graspmemoedu/app', text=True, capture_output=True, check=True)
         receipt = json.loads(result.stdout.strip().splitlines()[-1])
+        if before_database is not None:
+            if database_state() != before_database:
+                raise RuntimeError('Graphics repair changed learning database rows')
+            receipt['learning_database_unchanged'] = True
         subprocess.run(['systemctl', 'start', 'graspmemoedu'], check=True)
         healthy()
         receipt.update(target='production', health='passed', pointer_sha256=hashlib.sha256(pointer.read_bytes()).hexdigest())
