@@ -114,10 +114,13 @@ def validate_atomic(topic):
         require(all(text(card.get(field)) for field in required_fields),
                 'Flashcard is missing its question, answer or explanation')
         targets = card.get('point_ids')
+        phases = card.get('learning_phases', ['learn', 'review'])
+        require(isinstance(phases, list) and bool(phases) and all(p in ('learn', 'review') for p in phases)
+                and len(phases) == len(set(phases)), 'Invalid Flashcard learning phases')
         require(isinstance(targets, list) and 1 <= len(targets) <= 20
                 and all(isinstance(p, str) for p in targets)
                 and len(set(targets)) == len(targets) and set(targets) <= point_ids, 'Unknown or repeated memory point')
-        if len(targets) == 1:
+        if len(targets) == 1 and 'learn' in phases:
             singles.add(targets[0])
         validate_interaction(card.get('interaction'), card['question'])
         questions[card['id']] = card

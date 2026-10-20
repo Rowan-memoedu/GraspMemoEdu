@@ -89,7 +89,7 @@ class AtomicLearningService(LearningService):
             return
         eligible, _ = self._eligible(state)
         cards = eligible_presentations(self.questions.values(), eligible, state['card_uses'],
-                                       singles=state['mode'] != 'review')
+                                       singles=state['mode'] != 'review', phase=state['mode'])
         if not cards:
             state['phase'] = 'waiting'
             return

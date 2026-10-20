@@ -63,7 +63,7 @@ def _validate_answers(topic, data, *, code='invalid_backup', status=422):
     rows = answers.get('answers')
     if not isinstance(rows, dict):
         raise DomainError(code, '答案表格式不正确。', status)
-    questions = [question for module in topic['modules'] for question in [module['example'], *module['practices']]]
+    questions = topic.get('flashcards', []) + [question for module in topic.get('modules', []) for question in [module['example'], *module['practices']]]
     if any(not isinstance(rows.get(question['id']), dict) or any(
             rows[question['id']].get(key) != question[key] for key in ('reference_answer', 'answer_type', 'constraints'))
            for question in questions):
@@ -97,6 +97,16 @@ def _validate_review(topic, source, answers, data, assets=None):
             or review.get('source_sha256') != sha256(source)
             or review.get('sidecar_sha256') != sha256(answers)):
         raise ValueError('Review evidence is unapproved or differs from its inputs')
+    if review.get('source_format') == 'structured-atomic-v1':
+        from .structured_atomic import validate_projection, fingerprint
+        if not mechanical or review.get('topic_fingerprint') != fingerprint(topic):
+            raise ValueError('Structured atomic compiled content changed')
+        validate_projection(topic, json.loads(source))
+        rows = json.loads(answers)['answers']
+        if set(rows) != {q['id'] for q in topic['flashcards']}:
+            raise ValueError('Structured atomic answer coverage changed')
+        _validate_answers(topic, answers)
+        return
     questions = collect_questions(parse_outline(source.decode('utf-8-sig')))
     if topic.get('topic_format_version') == 2:
         from .topic_format import parse_source, content_metadata, content_version

@@ -183,7 +183,7 @@ function applyErrata(nodes, errata) {
   return clone;
 }
 
-export async function renderer(assets = new Map(), {v2 = false, cacheGlyphs = false} = {}) {
+export async function renderer(assets = new Map(), {v2 = false, cacheGlyphs = false, literalCode = false} = {}) {
   const presentation = v2 ? await import('./topic-presentation.mjs') : null;
   const bundle = process.env.CODEX_NODE_MODULES || path.join(os.homedir(), '.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules');
   const runtime = process.env.MATH_TOPIC_PDF_RUNTIME || 'D:/Caches/MathTopicPdf/node_modules';
@@ -215,28 +215,28 @@ export async function renderer(assets = new Map(), {v2 = false, cacheGlyphs = fa
     if (cacheGlyphs) svg.clearFontCache();
     if (/(?:MATH|IMAGE|MERMAID|REFERENCE|CODE)IMPORTTOKEN\d+END/.test(raw)) throw new Error('Reserved placeholder');
     const generated = [];
-    if (v2) {
+    if (v2 || literalCode) {
       raw = raw.replace(/^(`{3,}|~{3,})([^\n]*)\n([\s\S]*?)^\1[ \t]*(?=\n|$)/gm, (_all, _fence, language, code) => {
         language = language.trim();
         if (!/^[A-Za-z0-9_-]*$/.test(language)) throw new Error('Unsupported code fence language');
         let html = `<pre><code${language ? ` class="language-${language}"` : ''}>${escape(code)}</code></pre>`;
-        if (language === 'mermaid') {
+        if (language === 'mermaid' && v2) {
           const prepared = presentation.prepareMermaidHtml(html);
           if (!prepared.diagnostics.every(d => d.status === 'prepared')) throw new Error('Mermaid was not prepared');
           diagnostics.push(...prepared.diagnostics);
           html = prepared.html;
-        } else if (/\\[A-Za-z]+|\$/.test(code)) throw new Error('Mathematics cannot be wrapped in ordinary code');
+        } else if (!literalCode && /\\[A-Za-z]+|\$/.test(code)) throw new Error('Mathematics cannot be wrapped in ordinary code');
         const token = `CODEIMPORTTOKEN${generated.length}END`;
         generated.push({token, html, block:true});
         return `\n\n${token}\n\n`;
       });
       raw = raw.replace(/(`+)([^\n]*?)\1/g, (_all, _ticks, code) => {
-        if (/\\[A-Za-z]+|\$/.test(code)) throw new Error('Mathematics cannot be wrapped in inline code');
+        if (!literalCode && /\\[A-Za-z]+|\$/.test(code)) throw new Error('Mathematics cannot be wrapped in inline code');
         const token = `CODEIMPORTTOKEN${generated.length}END`;
         generated.push({token, html:`<code>${escape(code)}</code>`});
         return token;
       });
-      raw = raw.replace(/\[\[id:([A-Za-z0-9_-]{1,128})\|([^\]\n|]+)\]\]/g, (_all, targetRemId, label) => {
+      if (v2) raw = raw.replace(/\[\[id:([A-Za-z0-9_-]{1,128})\|([^\]\n|]+)\]\]/g, (_all, targetRemId, label) => {
         const token = `REFERENCEIMPORTTOKEN${generated.length}END`;
         generated.push({token, html:presentation.renderReference({targetRemId, label})});
         return token;
@@ -273,6 +273,7 @@ export async function renderer(assets = new Map(), {v2 = false, cacheGlyphs = fa
     const plain = safe.replace(/MATHIMPORTTOKEN\d+END/g, '').replace(/^\s*\d+\.\s*/gm, '').replace(/\s/g, '');
     if (plain) prose.push({source_line:node.line, text:plain});
     let html = marked.parse(safe, {gfm:true, breaks:false});
+    if (literalCode) html = html.replace(/<a\b[^>]*>([\s\S]*?)<\/a>/gi, '$1');
     if (/<(?:script|iframe|img|a|style|link|object|embed|input|form)\b|\son\w+\s*=/i.test(html)) throw new Error('Unsupported rendered Markdown');
     for (const item of replacements) html = item.display ? html.replace(`<p>${item.token}</p>`, item.html) : html.replace(item.token, item.html);
     for (const item of images) html = html.replace(item.token, item.html);

@@ -13,6 +13,14 @@ const [sourcePath, outputPath] = process.argv.slice(2);
 if (!sourcePath || !outputPath) throw new Error('Provide a source JSON and a new output JSON path');
 try { await fs.access(outputPath); throw new Error('Output already exists'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
 const bytes = await fs.readFile(sourcePath), source = JSON.parse(bytes.toString('utf8').replace(/^\uFEFF/, ''));
+if (source.source_format === 'structured-atomic-v1') {
+  const {compileStructured} = await import('./import_structured_atomic.mjs');
+  const topic = await compileStructured(source, bytes);
+  await fs.mkdir(path.dirname(path.resolve(outputPath)), {recursive: true});
+  await fs.writeFile(outputPath, JSON.stringify(topic, null, 2) + '\n', {encoding: 'utf8', flag: 'wx'});
+  console.log('PASS compiled structured atomic Topic; catalog and progress unchanged');
+  process.exit(0);
+}
 const allText = [source.introduction?.map(s => s.text).join('\n'), source.memory_chunks?.map(c => c.content).join('\n'),
   source.flashcards?.map(q => [q.question, q.explanation].join('\n')).join('\n')].join('\n');
 const render = await renderer(await loadAssets(sourcePath, allText));

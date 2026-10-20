@@ -39,7 +39,7 @@ def _install(package, data_dir, *, extend_course=False, migration=None):
     if (data_dir / 'cloud-authoritative.json').exists():
         raise ValueError('Do not install into the local production rollback snapshot')
     manifest = json.loads((package / 'manifest.json').read_bytes())
-    if manifest.get('adapter') not in ('jetbrains-academy', 'hyperskill') or manifest.get('schema') != 1:
+    if manifest.get('adapter') not in ('jetbrains-academy', 'hyperskill', 'structured-atomic') or manifest.get('schema') != 1:
         raise ValueError('Invalid Academy package')
     for name, expected in manifest['files'].items():
         path = package / name
@@ -114,8 +114,12 @@ def _install(package, data_dir, *, extend_course=False, migration=None):
                     previous['topic_ids'] = list(dict.fromkeys(unit.get('topic_ids', []) + previous.get('topic_ids', [])))
         (batch / 'catalog.json').write_bytes(encoded({'courses': courses}))
         subjects = json.loads(baseline[old_root / 'subjects.json'])
-        cs = next((s for s in subjects['subjects'] if s['id'] == 'cs'), None)
-        if cs is None: cs = {'id': 'cs', 'course_ids': []}; subjects['subjects'].append(cs)
+        subject_id = manifest.get('subject_id', 'cs')
+        from .subject_registry import SUBJECT_IDS
+        if subject_id not in SUBJECT_IDS:
+            raise ValueError('Unknown package subject')
+        cs = next((s for s in subjects['subjects'] if s['id'] == subject_id), None)
+        if cs is None: cs = {'id': subject_id, 'course_ids': []}; subjects['subjects'].append(cs)
         cs.setdefault('course_ids', []).extend(c['id'] for c in candidate['courses'] if c['id'] not in cs['course_ids'])
         (batch / 'subjects.json').write_bytes(encoded(subjects))
         policy_path = old_root / 'test-materials.json'
@@ -154,6 +158,9 @@ def _install(package, data_dir, *, extend_course=False, migration=None):
 def install(package, data_dir, *, extend_course=False):
     manifest = json.loads((Path(package) / 'manifest.json').read_bytes())
     migration = None
+    if manifest['adapter'] == 'structured-atomic' and manifest.get('reset_reading_progress') is True:
+        from .atomic_reading_upgrade import AtomicReadingUpgrade
+        migration = AtomicReadingUpgrade(package, data_dir)
     if manifest['adapter'] == 'hyperskill' and manifest.get('topic_format_version') == 2:
         from .hyperskill_import import HyperskillImport
         migration = HyperskillImport(package, data_dir)

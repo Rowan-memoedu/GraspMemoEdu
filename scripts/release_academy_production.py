@@ -20,6 +20,7 @@ def main():
     app, data = Path('/opt/graspmemoedu/app'), Path('/var/lib/graspmemoedu')
     release = json.loads((stage / 'release.json').read_bytes())
     migration = release.get('hyperskill_migration', False)
+    atomic_reading = release.get('atomic_reading_upgrade', False)
     def digest(path): return hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
     for name, spec in release['files'].items():
         if not (app / name).resolve().is_relative_to(app) or not (stage / 'source' / name).resolve().is_relative_to(stage / 'source'):
@@ -49,7 +50,9 @@ def main():
                 raise ValueError('Bank must not be a symbolic link')
             bank_before[target] = target.read_bytes() if target.exists() else None
     timer = subprocess.run(['systemctl', 'is-active', '--quiet', 'graspmemoedu-healthcheck.timer']).returncode == 0
+    variant_worker = atomic_reading and subprocess.run(['systemctl', 'is-active', '--quiet', 'graspmemoedu-variants.service']).returncode == 0
     if timer: subprocess.run(['systemctl', 'stop', 'graspmemoedu-healthcheck.timer'], check=True)
+    if variant_worker: subprocess.run(['systemctl', 'stop', 'graspmemoedu-variants.service'], check=True)
     subprocess.run(['systemctl', 'stop', 'graspmemoedu'], check=True)
     def snapshot():
         with sqlite3.connect(f'file:{data / "learning.sqlite3"}?mode=ro', uri=True) as con:
@@ -67,7 +70,7 @@ def main():
         raise RuntimeError('Production health check failed')
     try:
         before_state = snapshot()
-        if migration:
+        if migration or atomic_reading:
             with sqlite3.connect(data / 'learning.sqlite3') as source, sqlite3.connect(database_backup) as destination:
                 source.backup(destination)
         for name, spec in release['files'].items():
@@ -99,11 +102,16 @@ def main():
             bank = json.loads((bank_root / 'hyperskill-practice.json').read_bytes())
             ids = {t['id'] for c in package_catalog['courses'] for t in c['topics']}
             transition = verify_database_transition(database_backup, data / 'learning.sqlite3', ids, bank)
+        elif atomic_reading:
+            sys.path.insert(0, str(app))
+            from graspmemoedu.atomic_reading_upgrade import verify_transition
+            ids = {t['id'] for c in package_catalog['courses'] for t in c['topics']}
+            transition = verify_transition(database_backup, data / 'learning.sqlite3', ids)
         elif snapshot() != before_state:
             raise RuntimeError('Content installation unexpectedly changed existing database rows')
         subprocess.run(['systemctl', 'start', 'graspmemoedu'], check=True); healthy()
         receipt = {'target': 'production', 'health': 'passed', 'source_commit': release['commit'],
-                   'existing_database_rows_unchanged_at_install': not migration, **transition, **installed}
+                   'existing_database_rows_unchanged_at_install': not (migration or atomic_reading), **transition, **installed}
         (data / 'content-activation-history' / (installed.get('generation', 'academy') + '.production.json')).write_text(json.dumps(receipt, indent=2))
         print(json.dumps(receipt), flush=True)
     except BaseException:
@@ -120,12 +128,13 @@ def main():
                 target.unlink(missing_ok=True)
             else:
                 target.write_bytes(previous)
-        if migration and database_backup.exists():
+        if (migration or atomic_reading) and database_backup.exists():
             with sqlite3.connect(database_backup) as source, sqlite3.connect(data / 'learning.sqlite3') as destination:
                 source.backup(destination)
         subprocess.run(['systemctl', 'start', 'graspmemoedu'], check=True); healthy()
         raise
     finally:
+        if variant_worker: subprocess.run(['systemctl', 'start', 'graspmemoedu-variants.service'], check=True)
         if timer: subprocess.run(['systemctl', 'start', 'graspmemoedu-healthcheck.timer'], check=True)
 
 

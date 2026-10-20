@@ -70,9 +70,10 @@ def attach_training_variant(con, point, question, when):
     return identifier
 
 
-def eligible_presentations(cards, points, uses, *, singles=False):
+def eligible_presentations(cards, points, uses, *, singles=False, phase='review'):
     """Used by original atomic learning and unified paper/card reviews."""
-    candidates = [c for c in cards if set(c['point_ids']) <= set(points)
+    candidates = [c for c in cards if phase in c.get('learning_phases', ['learn', 'review'])
+                  and set(c['point_ids']) <= set(points)
                   and (not singles or len(c['point_ids']) == 1)]
     return sorted(candidates, key=lambda c: (-len(c['point_ids']), uses.get(c['id'], 0)))
 
