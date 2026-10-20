@@ -246,7 +246,7 @@ class TrainingService:
         return row[0]
 
     def _complete(self, con, row, *, correct=None, reason='', rating=None, elapsed_ms=None, stop=False,
-                  self_rating=True, completed_at=None, enroll=False):
+                  self_rating=True, completed_at=None, enroll=False, first_try_correct=False):
         memory = self._memory(con, row['bank'], row['question'], row['version'])
         revision = memory['revision'] if memory else 0
         now = utc_time(completed_at or self.clock())
@@ -262,6 +262,12 @@ class TrainingService:
         due = memory['due_at'] if memory else None
         if eligible:
             mastery = rating if rating is not None else 1 if not correct else 5 if memory is None else 3
+            # External graders supply a feedback rating, but admission to review
+            # follows the same first-answer policy as a locally judged question.
+            # An explicit notebook enrollment already has a memory row.
+            if first_try_correct and correct and memory is None:
+                mastery = 5
+                reason += ' · 首次答对，未加入错题本，不安排后续复习。'
             # A manually enrolled due card follows review semantics even on its
             # first wrong answer; later attempts must respect its new due date.
             mastered = bool(enroll or row['mode'] == 'review' or memory and memory['mastered']
@@ -291,6 +297,7 @@ class TrainingService:
                      mastery, now.isoformat(), packed(fsrs) if fsrs else None))
         con.execute("UPDATE training_attempts SET phase='done',completed_at=?,result=? WHERE id=?",
                     (now.isoformat(), packed(result), row['id']))
+        return result
 
     def instant_submission(self, submission_id):
         from .judging import instant_question

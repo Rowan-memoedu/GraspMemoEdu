@@ -87,8 +87,9 @@ class AcademyTraining:
         con.execute('UPDATE training_attempts SET submission_id=? WHERE id=?', (run['id'], self.attempt_id))
         require_unreserved(con, self.learner_id, 'training', attempt['bank'], attempt['version'],
                            attempt['question'], now=utc_time(self.training.clock()).isoformat())
-        self.training._complete(con, attempt, correct=result['passed'], reason=reason, rating=rating,
-                                self_rating=manual, completed_at=now, enroll=True)
+        return self.training._complete(con, attempt, correct=result['passed'], reason=reason, rating=rating,
+            self_rating=manual, completed_at=now, enroll=True,
+            first_try_correct=not manual and result['passed'] and result['failures'] == 0)
 
     @property
     def manual(self):
@@ -131,10 +132,12 @@ class AcademyTraining:
             self.validate_check(con, run, event)
             run['events'].append(event)
             result = outcome(run['events'])
-            if result['rating'] is not None:
-                self._complete(con, attempt, run, result)
+            closed = result['rating'] is not None
+            if closed:
+                completed = self._complete(con, attempt, run, result)
+                result['rating'] = completed['rating']
             self._save(con, run)
-            return {'accepted': True, 'closed': result['rating'] is not None, **result}
+            return {'accepted': True, 'closed': closed, **result}
 
     def finish(self, rating=None):
         with self.training.transaction() as con:

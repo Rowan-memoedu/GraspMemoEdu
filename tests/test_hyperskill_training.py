@@ -92,6 +92,7 @@ class HyperskillBankTests(unittest.TestCase):
 
     def test_verdict_fsrs_and_global_receipt_replay(self):
         backend = self.native(); adapter, run = self.begin(backend)
+        backend.add_to_notebook(adapter.attempt_id)
         event = self.event()
         self.assertEqual(adapter.check_event(run['round_id'], run['step_id'], event)['rating'], 3)
         self.assertTrue(adapter.check_event(run['round_id'], run['step_id'], event)['duplicate'])
@@ -200,6 +201,7 @@ class HyperskillBankTests(unittest.TestCase):
             self.assertEqual(theory['topic_kind'], 'introduction'); self.assertNotIn('training_target', theory)
             state = call('POST', 'training/open?subject_id=cs', {'request_id':str(uuid.uuid4()),
                 'bank_id':'hyperskill-practice','group_id':self.old['id'],'question_id':self.old['flashcards'][0]['id']})
+            call('POST', 'training/notebook', {'attempt_id':state['attempt_id']})
             grant = call('POST', 'academy/training/launch', {'attempt_id':state['attempt_id']})
             plugin = {'origin':headers['origin'], 'authorization':'Bearer ' + grant['ticket']}
             binding = call('POST', 'academy/claim', {}, plugin)

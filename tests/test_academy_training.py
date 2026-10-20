@@ -207,6 +207,7 @@ class NativeAcademyTests(unittest.TestCase):
             state = call('POST', 'training/open?subject_id=cs', {'request_id': str(uuid.uuid4()),
                 'bank_id': self.course['id'], 'group_id': 'lesson', 'question_id': self.topic['id']})
             self.assertEqual(state['phase'], 'answer')
+            call('POST', 'training/notebook', {'attempt_id': state['attempt_id']})
             launch = call('POST', 'academy/training/launch?subject_id=cs', {'attempt_id': state['attempt_id']})
             plugin = {'origin': 'https://native.test', 'authorization': 'Bearer ' + launch['url'].split('ticket=')[1]}
             claim = call('POST', 'academy/claim', {}, plugin)
@@ -256,6 +257,7 @@ class NativeAcademyTests(unittest.TestCase):
         AcademyLearningService(self.topic, self.root, learner_id='archive-source')
         backend = self.native()
         adapter = self.open(backend); run = self.launch(adapter)
+        backend.add_to_notebook(adapter.attempt_id)
         self.send(adapter, run, 1, 'passed')
         pending = self.open(backend, 'manual'); active = self.launch(pending)
         saved = backend.state(adapter.attempt_id)
