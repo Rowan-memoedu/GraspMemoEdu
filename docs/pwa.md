@@ -8,6 +8,14 @@
 
 本版没有 APK、IPA 或 EXE，不需要 Apple 开发者会员。安装方式不增加离线学习或系统通知能力。首次在独立应用中打开可能需要重新登录；同账号读取云端进度，游客身份不自动跨设备合并。
 
+小米 / HyperOS 手机若在 Edge 点击安装后跳转到应用信息页，检查 Edge 的“权限 → 其他权限 → 桌面快捷方式（Home screen shortcuts）”。允许这一项后返回发布页重新安装；无需同时开启其他权限。
+
+## 安卓真机结果
+
+REDMI K90 Max / Android 16、Edge 153.0.4234.49 已完成 USB 真机验收。Edge 通过桌面固定入口运行 PWA；从真实桌面图标启动后，系统进入 `WebappActivity`，页面 `display-mode: standalone` 为真，没有生成独立 WebAPK 包。竖屏无横向溢出，系统键盘可输入且输入框可见，返回键能回到主页并退出，关闭后从图标重开仍保留同一游客身份。测试没有提交登录或学习答案；临时输入已清除，自动化辅助进程已退出，原有无障碍服务和自动旋转已恢复。
+
+本机首次安装曾被 Edge 的桌面快捷方式权限拦截，允许该项后安装成功。iOS 和 Windows 的真实系统安装仍待各自设备验收；本轮没有另行发布新网页版本来重复测试升级。
+
 ## 资源与更新
 
 `web/manifest.webmanifest` 的 id、start_url、scope 均使用相对路径，保持 GitHub Pages 子目录部署与已有身份来源一致。主页面和发布页共用 `pwa.js`，通过 HTTPS 注册同目录 `sw.js`。iOS 图标由 `apple-touch-icon` 提供；标准图标和独立 maskable 图标由 `scripts/build_pwa_icons.py` 生成。
