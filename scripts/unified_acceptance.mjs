@@ -15,11 +15,11 @@ const context = await browser.newContext({viewport: {width: 1365, height: 960}, 
 const page = await context.newPage();
 page.setDefaultTimeout(25000);
 const report = {checks: [], errors: [], synthetic_content: true, formal_data_opened: false};
-let token, session;
+let token, session, navigation = 0;
 page.on('request', request => { token = request.headers()['x-learning-identity'] || token; });
 page.on('pageerror', error => report.errors.push(error.message));
 const pass = label => { report.checks.push(label); console.log('PASS ' + label); };
-const go = topic => page.goto(`${base}/#/subjects/math/topic/${topic}`, {waitUntil: 'networkidle'});
+const go = topic => page.goto(`${base}/?qa=${++navigation}#/subjects/math/topic/${topic}`, {waitUntil: 'networkidle'});
 const api = async (route, body, qa = false) => {
   session ||= (await (await fetch(base + '/api/session', {headers: {Origin: base}})).json()).session_token;
   const response = await fetch(base + (qa ? '/__qa/' : '/api/') + route, {
@@ -36,7 +36,7 @@ const next = () => page.locator('#stepCard .stepNavigation .continueRow .primary
 const atomNext = () => page.locator('.atomicMain').getByRole('button', {name: '继续', exact: true}).click();
 const answerAtom = async value => {
   await page.locator('#atomicAnswer').fill(value);
-  await page.locator('#atomicAnswer').press('Control+Enter');
+  await page.locator('#atomicAnswerForm button[type="submit"]').click();
   await page.locator('.atomicMain .feedback.correct').waitFor({timeout: 120000});
 };
 const screenshot = name => page.screenshot({path: path.join(out, name + '.png'), fullPage: true});
@@ -46,12 +46,26 @@ try {
   await screenshot('introduction-desktop');
   await next();
   await page.locator('.atomicChunkNote').waitFor();
+  await page.getByText('请确保已理解该内容，开始训练后不可再回看知识', {exact: true}).waitFor();
+  await page.locator('.atomicHistory').getByRole('button', {name: '指导', exact: true}).click();
+  assert.equal(await page.locator('.atomicChunkNote').count(), 0);
+  await page.getByRole('button', {name: '返回当前训练', exact: true}).click();
+  await page.locator('.atomicChunkNote').waitFor();
   await screenshot('chunk-desktop');
   await page.locator('.atomicMain').getByRole('button', {name: '开始原子卡训练', exact: true}).click();
+  await page.locator('#atomicAnswer').waitFor();
+  assert.equal(await page.locator('.atomicHistory').isVisible(), false);
+  assert.equal(await page.getByText('完成整个 Topic 后可再次查看指导。', {exact: true}).count(), 0);
+  for (const width of [320, 375, 414, 768]) {
+    await page.setViewportSize({width, height: 844});
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
+    assert.equal(await page.locator('.atomicHistory').isVisible(), false);
+  }
+  await screenshot('answer-mobile');
+  await page.setViewportSize({width: 1365, height: 960});
   await answerAtom('红色');
-  await atomNext();
-  await page.locator('.atomicWaiting').waitFor();
   await tick(180);
+  await atomNext();
   await page.locator('#atomicAnswer').waitFor();
   await answerAtom('蓝色');
   await atomNext();
@@ -85,7 +99,7 @@ try {
   assert.equal(await page.locator('#answerInput').inputValue(), '5');
   for (let i = 0; i < 3; i++) {
     await page.locator('#answerInput').fill('5');
-    await page.locator('#answerInput').press('Control+Enter');
+    await page.locator('#submitButton').click();
     await page.locator('#stepCard .feedback.correct').waitFor();
     await next();
   }
@@ -93,6 +107,7 @@ try {
   await screenshot('second-introduction');
   await next();
   await page.locator('.atomicMain').getByRole('button', {name: '开始原子卡训练', exact: true}).click();
+  await page.locator('#atomicAnswer').waitFor();
   current = await state();
   assert.deepEqual(current.current.point_ids, ['c']);
   assert.equal(current.unified_history.length, 1);
@@ -101,7 +116,7 @@ try {
   await atomNext();
   await page.locator('#stepCard').getByRole('button', {name: '已掌握，试着作答', exact: true}).click();
   await page.locator('#answerInput').fill('5');
-  await page.locator('#answerInput').press('Control+Enter');
+  await page.locator('#submitButton').click();
   await page.locator('#stepCard .feedback.correct').waitFor();
   await next();
   await page.locator('#stepTitle').filter({hasText: '本主题已完成'}).waitFor();
@@ -113,6 +128,64 @@ try {
   assert.ok(audit.judge_calls.some(call => call.status === 'judged' && call.correct === true));
   await screenshot('completed');
   pass('Draft survives reload; prior-section due cards do not interrupt the next Introduction; real semantic judging passes');
+  await go('deferred-atoms');
+  await next();
+  await page.locator('.atomicMain').getByRole('button', {name: '开始原子卡训练', exact: true}).click();
+  await page.locator('#atomicAnswer').fill('wrong');
+  await page.locator('#atomicAnswerForm button[type="submit"]').click();
+  await page.locator('.atomicMain .feedback.incorrect').waitFor();
+  assert.equal(await page.locator('.atomicHistory').isVisible(), false);
+  await atomNext();
+  await page.locator('#stepTitle').filter({hasText: '第二段指导'}).waitFor();
+  await page.reload({waitUntil: 'networkidle'});
+  await page.locator('#stepTitle').filter({hasText: '第二段指导'}).waitFor();
+  await screenshot('deferred-next-introduction');
+  await next();
+  await page.locator('.atomicChunkNote').waitFor();
+  assert.equal(await page.locator('.atomicHistory').isVisible(), true);
+  await page.locator('.atomicMain').getByRole('button', {name: '开始原子卡训练', exact: true}).click();
+  await answerAtom('圆形');
+  await atomNext();
+  await page.locator('.atomicWaiting').waitFor();
+  assert.equal((await api('state?topic_id=deferred-atoms&subject_id=math')).status, 'in_progress');
+  await tick(180);
+  await page.locator('#atomicAnswer').waitFor();
+  let deferredState = await api('state?topic_id=deferred-atoms&subject_id=math');
+  await answerAtom({a: '红色', b: '蓝色'}[deferredState.current.point_ids[0]]);
+  await atomNext();
+  await page.locator('.atomicWaiting').waitFor();
+  await tick(180);
+  await page.locator('#atomicAnswer').waitFor();
+  deferredState = await api('state?topic_id=deferred-atoms&subject_id=math');
+  await answerAtom({a: '红色', b: '蓝色'}[deferredState.current.point_ids[0]]);
+  await atomNext();
+  await page.locator('#stepTitle').filter({hasText: '本主题已完成'}).waitFor();
+  pass('Wrong and not-yet-due initial cards permit the next Introduction; persisted catch-up completes them without losing scheduling');
+  pass('Guidance is accessible while reading chunks; card pages hide the directory; instruction restored; desktop and four mobile widths pass');
+  const advanced = await api('advanced', {}, true);
+  token = advanced.identity_token;
+  await page.evaluate(({base, token}) => {
+    localStorage.setItem('graspmemoedu:identity:' + base, token);
+    localStorage.setItem('graspmemoedu:identity-role:' + base, 'account');
+  }, {base, token});
+  await go('synthetic-course');
+  await next();
+  await page.locator('.atomicMain').getByRole('button', {name: '开始原子卡训练', exact: true}).click();
+  await page.locator('.showAnswer').click();
+  await page.locator('.trainingRating[data-rating="5"]').waitFor();
+  assert.equal(await page.locator('.trainingRating').count(), 5);
+  assert.ok((await page.locator('.trainingRating[data-rating="5"]').textContent()).includes('极度熟悉，不必再练'));
+  await screenshot('advanced-five-options');
+  await page.locator('.trainingRating[data-rating="5"]').click();
+  await page.locator('.atomicMain .feedback.correct').waitFor();
+  assert.ok((await page.locator('.feedback').textContent()).includes('已停止后续推送'));
+  await page.reload({waitUntil: 'networkidle'});
+  await page.locator('.atomicMain .feedback.correct').waitFor();
+  const stopped = await api('audit', undefined, true);
+  assert.ok(stopped.state.atomic.points.a.stopped_at);
+  assert.equal(stopped.state.atomic.points.a.due_at, null);
+  assert.equal(stopped.state.atomic.points.a.card_json, null);
+  pass('Advanced learners receive five choices; the fifth persists a point stop without scheduling FSRS');
   await go('legacy-paradigm');
   await page.locator('#stepCard').getByRole('button', {name: '已掌握，试着作答', exact: true}).waitFor();
   assert.equal(await page.locator('#topicAtomicProgress').count(), 0);

@@ -82,6 +82,8 @@ class UnifiedAPITests(unittest.TestCase):
             else:
                 if state['phase'] == 'waiting':
                     self.when = datetime.fromisoformat(state['next_available_at'])
+                elif state['phase'] == 'feedback':
+                    self.when += timedelta(seconds=180)
                 state = self.action('continue')
         self.fail('Atomic initial section did not end')
 
@@ -178,6 +180,32 @@ class UnifiedAPITests(unittest.TestCase):
             self.assertFalse(reserved.intersection(state['current']['point_ids']))
         else:
             self.assertEqual(active(state)['question_id'], 'module-1-practice-1')
+
+    def test_advanced_fifth_choice_uses_nested_point_state_and_preserves_section_flow(self):
+        store = self.app.state.access_store
+        created = store.create_account('Synthetic advanced learner', is_advanced_learner=True)
+        login = store.login(created['invitation_code'])
+        self.headers['X-Learning-Identity'] = login['identity_token']
+        self.learner_id = login['access']['learner_id']
+        for card in self.app.state.catalog.topics[self.topic['id']]['flashcards']:
+            card['interaction']['grading'] = 'semantic'
+        self.action('continue')
+        self.action('continue')
+        self.assertTrue(self.state()['current']['can_stop_reviews'])
+        self.action('reveal')
+        result = self.action('submit', answer='自主评分：5', self_rating=5)
+        for _ in range(100):
+            if result['status'] == 'judged':
+                break
+            time.sleep(.01)
+            result = self.call('GET', '/api/submissions/' + result['submission_id'] + self.scope)
+        self.assertTrue(result['state']['current']['stop_requested'])
+        self.assertEqual(active(self.action('continue'))['question_id'], 'module-1-example')
+        backend = self.app.state.learning_services[(self.learner_id, self.topic['id'])]
+        with closing(backend._connect()) as con:
+            saved = backend._load(con)
+        self.assertTrue(saved['atomic']['points']['a']['stopped_at'])
+        self.assertEqual(saved['atomic']['points']['a']['due_at'], None)
 
 
 if __name__ == '__main__':

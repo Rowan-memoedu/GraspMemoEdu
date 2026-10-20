@@ -331,6 +331,7 @@ class PaperService:
                           'answer_display': display_answer(question, item['answer']) if shown else '',
                           'completed': item.get('result') is not None,
                           'can_self_rate': self_rating and presentation(question, item)['reproduction'],
+                          'can_stop_reviews': self_rating and source['kind'] == 'atomic' and presentation(question, item)['reproduction'],
                           'revealed': self_rating and bool(item.get('revealed')),
                           **reference_fields(question, shown or self_rating and bool(item.get('revealed'))),
                           'self_rating': item.get('self_rating')})
@@ -366,7 +367,8 @@ class PaperService:
                 item['answer'], item['elapsed_ms'] = draft['answer'], draft.get('elapsed_ms', 0)
                 rating = draft.get('self_rating')
                 if rating is not None:
-                    if not self_rating_enabled(self.access, con) or not item.get('revealed') or type(rating) is not int or rating not in (1, 2, 3, 4):
+                    choices = (1, 2, 3, 4, 5) if item['source']['kind'] == 'atomic' else (1, 2, 3, 4)
+                    if not self_rating_enabled(self.access, con) or not item.get('revealed') or type(rating) is not int or rating not in choices:
                         raise DomainError('self_rating_forbidden', '请先显示复现题答案，再选择自主评分。', 403)
                     item['self_rating'] = rating
                 elif item.get('revealed'):
@@ -436,7 +438,7 @@ class PaperService:
                 if item.get('self_rating') is not None:
                     if not self_rating_enabled(self.access, con):
                         raise DomainError('feature_forbidden', '自主评分权限已变化。', 403)
-                    verdicts[str(i)] = [item['self_rating'] > 1, '自主评分：' + str(item['self_rating'])]
+                    verdicts[str(i)] = [item['self_rating'] > 1, '已停止后续推送' if item['self_rating'] == 5 else '自主评分：' + str(item['self_rating'])]
                     continue
                 if not self._answered(paper['items'][i]):
                     if timed_out:

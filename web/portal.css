@@ -402,11 +402,12 @@ body.portalModalOpen { overflow: hidden; }
 @media print { .topRibbon, .topicBreadcrumb, .portalStart, .answerHelp, .feedbackDialog, .graphDialog { display: none !important; } body { padding-top: 0; } }
 .catalogToggle { border: 0; border-bottom: 3px solid transparent; background: transparent; font-family: inherit; font-weight: inherit; line-height: inherit; cursor: pointer; }
 .atomicLayout { display: grid; grid-template-columns: 220px minmax(0, 760px); gap: 36px; margin: 25px auto; }
+.atomicAnswerLayout { grid-template-columns: minmax(0, 760px); justify-content: center; }
 .atomicHistory { border-right: 1px solid #ddd; padding-right: 20px; }
 .atomicHistory h2 { font-size: 17px; }
 .atomicHistory button { display: flex; flex-wrap: wrap; gap: 6px 12px; width: 100%; margin: 8px 0; text-align: left; font: inherit; font-size: 14px; padding: 9px; background: #fff; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; }
 .atomicHistory button:disabled { cursor: default; color: #666; opacity: 1; }
-.atomicLockedHint, .atomicProgress { font-size: 13px; color: #666; }
+.atomicProgress { font-size: 13px; color: #666; }
 .atomicMastered { color: #16733c; }
 .atomicUnmastered { color: #bc2525; }
 .atomicMain { min-width: 0; padding-bottom: 35px; }

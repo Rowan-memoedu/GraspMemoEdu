@@ -94,7 +94,9 @@ class AtomicTests(unittest.TestCase):
 
     def test_interleaving_and_history_are_enforced_after_reload(self):
         self.assertIsNotNone(self.service.state()['introduction'])
-        self.service.choose(self.action(choice='learn')); self.advance()
+        self.service.choose(self.action(choice='learn'))
+        self.assertIsNotNone(self.service.state()['introduction'])
+        self.advance()
         self.assertIsNone(self.service.state()['introduction'])
         old, _ = self.submit('错误标签'); self.advance()
         self.assertFalse(self.service.state()['history'][0]['viewable'])

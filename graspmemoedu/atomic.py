@@ -64,6 +64,8 @@ class AtomicLearningService(LearningService):
         with closing(self._connect()) as con:
             reserved = reserved_points(con, self.learner_id, current.isoformat())
         for point_id, memory in state['points'].items():
+            if memory.get('stopped_at'):
+                continue
             if global_point_id('atomic', self.topic_id, self.course['version'], point_id) in reserved:
                 continue
             if (state['mode'] == 'learn') == memory['mastered']:
@@ -120,6 +122,8 @@ class AtomicLearningService(LearningService):
             result.update(answer=active.get('answer'), correct=active.get('correct'), reason=active.get('reason'),
                           answer_display=display_answer(card, active.get('answer')),
                           explanation_html=card['explanation_html'], ratings=active.get('ratings', {}))
+            if active.get('stop_requested'):
+                result['stop_requested'] = True
         return result
 
     def _public(self, state):
@@ -144,7 +148,8 @@ class AtomicLearningService(LearningService):
                   'server_time': self._time().isoformat(), 'completed_at': state['completed_at'],
                   'learned_count': sum(p['mastered'] for p in state['points'].values()),
                   'point_count': len(state['points']), 'current': None, 'chunk': None,
-                  'introduction': self.course['introduction'] if learned or not state['started_at'] or state.get('preview_single_card') else None}
+                  'introduction': self.course['introduction'] if learned or not state['started_at']
+                  or state['phase'] == 'chunk' or state.get('preview_single_card') else None}
         if state['active']:
             result['current'] = self._question(state['active'], feedback=state['active']['phase'] == 'feedback')
         if state['phase'] == 'chunk' and not state['pause']:
@@ -218,10 +223,21 @@ class AtomicLearningService(LearningService):
     def _grade(self, con, state, item, correct, reason):
         active, when = state['active'], self._time()
         ratings = {}
+        assessment = active.get('self_assessment') or {}
+        stop = assessment.get('submission_id') == item['id'] and assessment.get('rating') == 5
         for point_id in active['point_ids']:
             register_point(con, 'atomic', self.topic_id, self.course['version'], point_id,
                            self.course['subject_id'], when.isoformat())
             memory = state['points'][point_id]
+            if stop:
+                # The fifth control retires the memory point; it is not an
+                # FSRS rating. Retain any existing card state for audit/history.
+                memory.update(mastered=True, first_passed_at=memory.get('first_passed_at') or when.isoformat(),
+                              stopped_at=when.isoformat(), due_at=None)
+                ratings[point_id] = None
+                self._event(con, state, 'atomic_reviews_stopped', point_id=point_id, card_id=active['card_id'],
+                            submission_id=item['id'])
+                continue
             rating = (None if correct else 1) if state['mode'] == 'learn' else (state['policy']['correct_rating'] if correct else 1)
             ratings[point_id] = rating
             if rating is not None:
@@ -240,6 +256,8 @@ class AtomicLearningService(LearningService):
                     memory['card_json'] = card.to_json()
         active.update(phase='feedback', answer=item['answer'], correct=correct, reason=reason,
                       ratings=ratings, answered_at=when.isoformat())
+        if stop:
+            active['stop_requested'] = True
         state['history'].append(dict(active))
         state['phase'] = 'feedback'
 
@@ -264,7 +282,7 @@ class AtomicLearningService(LearningService):
                 raise DomainError('invalid_answer', '请填写完整答案。', 422)
             from .self_assessment import answer as assessed_answer
             try:
-                assessed_answer(self.questions[active['card_id']], active, payload)
+                assessed_answer(self.questions[active['card_id']], active, payload, allow_stop=True)
                 if payload.get('self_rating') is None:
                     parse_answer(self.questions[active['card_id']], answer)
             except (ValueError, TypeError) as exc:

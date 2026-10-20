@@ -1,7 +1,7 @@
-import {t, learningTitle} from './i18n.js?v=bb697b0eb1be42ed';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=bb697b0eb1be42ed';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=bb697b0eb1be42ed';
-import {enhanceTopicContent} from './topic-content.js?v=bb697b0eb1be42ed';
+import {t, learningTitle} from './i18n.js?v=7a9ca1380fb8c0fe';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=7a9ca1380fb8c0fe';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=7a9ca1380fb8c0fe';
+import {enhanceTopicContent} from './topic-content.js?v=7a9ca1380fb8c0fe';
 
 const node = (tag, cls = '', text) => {
   const item = document.createElement(tag); item.className = cls;

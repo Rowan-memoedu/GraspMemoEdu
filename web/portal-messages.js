@@ -249,7 +249,7 @@ export const portalMessages = {
   'atomic.continue': ['继续', 'Continue'],
   'atomic.fromIntroduction': ['指导中的相关陈述', 'Related statements in the introduction'],
   'atomic.startCards': ['开始原子卡训练', 'Start flashcards'],
-  'atomic.introLocked': ['完成整个 Topic 后可再次查看指导。', 'The introduction unlocks after you complete this topic.'],
+  'atomic.startCardsHint': ['请确保已理解该内容，开始训练后不可再回看知识', 'Make sure you understand this content. Once training starts, you cannot return to the learning material.'],
   'atomic.cardNumber': ['原子卡 {number}', 'Flashcard {number}'],
   'atomic.mastered': ['已掌握', 'Mastered'],
   'atomic.unmastered': ['未掌握', 'Not mastered'],

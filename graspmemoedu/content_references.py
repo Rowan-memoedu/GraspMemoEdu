@@ -37,7 +37,7 @@ class ContentReferenceIndex:
                 continue
             kind = step.get('kind')
             if kind == 'introduction':
-                if state.get('atomic') and state.get('display') == 'atomic':
+                if state.get('atomic', {}).get('active') and state.get('display') == 'atomic':
                     introductions = [entry['id'] for entry in topic.get('content_order', [])
                                      if entry['kind'] == 'introduction']
                     current = introductions[state['section_index']] if introductions else 'introduction'

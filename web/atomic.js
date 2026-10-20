@@ -1,10 +1,10 @@
-import {t, translateMessage} from './i18n.js?v=bb697b0eb1be42ed';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=bb697b0eb1be42ed';
-import {selfAssessment, referenceAnswer, prepareAnswerContent, ratingChoices} from './self-assessment.js?v=bb697b0eb1be42ed';
-import {reportableContent, helpableContent} from './content-report.js?v=bb697b0eb1be42ed';
-import {createLearningCache} from './learning-cache.js?v=bb697b0eb1be42ed';
-import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=bb697b0eb1be42ed';
-import {enhanceSourceContent} from './topic-content.js?v=bb697b0eb1be42ed';
+import {t, translateMessage} from './i18n.js?v=7a9ca1380fb8c0fe';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=7a9ca1380fb8c0fe';
+import {selfAssessment, referenceAnswer, prepareAnswerContent, ratingChoices} from './self-assessment.js?v=7a9ca1380fb8c0fe';
+import {reportableContent, helpableContent} from './content-report.js?v=7a9ca1380fb8c0fe';
+import {createLearningCache} from './learning-cache.js?v=7a9ca1380fb8c0fe';
+import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=7a9ca1380fb8c0fe';
+import {enhanceSourceContent} from './topic-content.js?v=7a9ca1380fb8c0fe';
 
 const node = (tag, cls = '', text) => {
   const el = document.createElement(tag); el.className = cls;
@@ -260,7 +260,8 @@ export function createAtomicView(bridge) {
     const arrow = node('span', 'atomicArrow', '↘'); arrow.setAttribute('aria-hidden', 'true');
     const note = node('aside', 'atomicChunkNote'); note.append(helpableContent(content(chunk.html), {topic_id: topic}, `chunk:${chunk.id}`, state.course_version));
     annotation.append(source, arrow, note); box.append(annotation);
-    box.append(button(t('atomic.startCards'), () => mutate('continue'), 'primaryButton'));
+    box.append(button(t('atomic.startCards'), () => mutate('continue'), 'primaryButton'),
+      node('p', 'inputHint', t('atomic.startCardsHint')));
     return box;
   }
   function render() {
@@ -268,10 +269,14 @@ export function createAtomicView(bridge) {
     const style = document.getElementById('atomicMathStyle') || node('style'); style.id = 'atomicMathStyle';
     style.textContent = state.math_css || ''; if (!style.isConnected) document.head.append(style);
     const page = node('div', 'atomicLayout'), sidebar = node('aside', 'atomicHistory'), main = node('main', 'atomicMain');
+    if (state.current) {
+      selected = null;
+      sidebar.hidden = true;
+      page.classList.add('atomicAnswerLayout');
+    }
     sidebar.append(node('h2', '', t('history.title')));
     const intro = button(t('Introduction'), () => { selected = 'introduction'; render(); });
     intro.disabled = !state.introduction; sidebar.append(intro);
-    if (!state.introduction) sidebar.append(node('p', 'atomicLockedHint', t('atomic.introLocked')));
     for (const section of state.unified_history || []) {
       const row = button(section.title, () => { selected = section.id; render(); });
       row.dataset.historyId = section.id; sidebar.append(row);

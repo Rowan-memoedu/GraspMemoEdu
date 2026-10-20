@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import test from 'node:test';
 import {createLearningCache} from '../web/learning-cache.js';
+import * as cacheFunctions from '../web/response-cache.js';
 
 // Run the actual request/identity code with isolated storage and fake transport.
 // No public service, real credentials, learning records, or timers are touched.
@@ -23,12 +24,15 @@ function setup({ nextOrigin = 'https://new.example', status = 502, role = 'guest
   if (role === 'guest') localStorage.setItem('graspmemoedu:guest-identity:https://old.example', 'original-token');
   else localStorage.setItem('graspmemoedu:guest-identity:https://old.example', 'separate-guest-token');
   const context = vm.createContext({
-    URL, AbortController, setTimeout, clearTimeout, console, localStorage, sessionStorage, createLearningCache,
+    URL, URLSearchParams, AbortController, setTimeout, clearTimeout, console, localStorage, sessionStorage, createLearningCache,
+    ...cacheFunctions,
     Date: { now: () => clock }, t: value => value, translateMessage: value => value,
     applyStaticTranslations() {}, document: { hasFocus: () => true },
     window: { location: { origin: 'https://site.example' }, matchMedia: () => ({ matches: false }) },
     fetch: async (url, options) => {
-      url = String(url); calls.push({ url, method: options.method || 'GET', token: options.headers?.['X-Learning-Identity'] });
+      const target = new URL(url);
+      for (const key of ['content_revision', 'access_revision', 'state_revision']) target.searchParams.delete(key);
+      url = target.href; calls.push({ url, method: options.method || 'GET', token: options.headers?.['X-Learning-Identity'] });
       if (url.endsWith('deployment.json')) {
         configs += 1;
         return { ok: true, json: async () => ({ api_origin: configs === 1 ? 'https://old.example' : invalidConfig ? 'http://unsafe.example' : nextOrigin }) };

@@ -1,6 +1,6 @@
-import {t} from './i18n.js?v=bb697b0eb1be42ed';
-import {answerEmpty} from './question-input.js?v=bb697b0eb1be42ed';
-import {prepareLiteralMath} from './math-presentation.js?v=bb697b0eb1be42ed';
+import {t} from './i18n.js?v=7a9ca1380fb8c0fe';
+import {answerEmpty} from './question-input.js?v=7a9ca1380fb8c0fe';
+import {prepareLiteralMath} from './math-presentation.js?v=7a9ca1380fb8c0fe';
 
 const element = (tag, cls, text) => {
   const node = document.createElement(tag); node.className = cls;
@@ -92,6 +92,7 @@ export function selfAssessment(question, input, {disabled = false, reveal, rate,
   const reference = referenceAnswer(question); if (reference) box.append(reference);
   if (explanation) box.append(element('h3', 'exampleExplanationHeader', t('Explanation · 解析')), prepareAnswerContent(explanation));
   const labels = ['training.again', 'training.hard', 'training.good', 'training.easy'];
+  if (question.can_stop_reviews) labels.push('training.retire');
   const ratings = ratingChoices({labels, disabled, selected: question.self_rating, onRate: rate});
   box.append(ratings); return box;
 }

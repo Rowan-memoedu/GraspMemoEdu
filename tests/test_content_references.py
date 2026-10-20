@@ -55,3 +55,11 @@ class ReferenceTests(unittest.TestCase):
         access['topics'].append({'id':'c'})
         index = ContentReferenceIndex({'a':a,'b':b,'c':c})
         self.assertEqual(index.view(access,'a',state,lambda _:'math')['outgoing'][0]['status'], 'unresolved')
+
+    def test_guidance_reference_remains_visible_during_chunk_reading(self):
+        a, b, access, state = self.fixture()
+        state['a'].update(display='atomic', section_index=0, atomic={'active': None, 'phase': 'chunk'})
+        index = ContentReferenceIndex({'a': a, 'b': b})
+        self.assertEqual(len(index.view(access, 'b', state, lambda _: 'math')['backlinks']), 1)
+        state['a']['atomic'].update(active={'card_id': 'a'}, phase='answer')
+        self.assertEqual(index.view(access, 'b', state, lambda _: 'math')['backlinks'], [])

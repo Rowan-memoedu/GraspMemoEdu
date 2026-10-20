@@ -43,14 +43,15 @@ def protect(item, allowed):
         item['revealed'] = False
 
 
-def answer(question, target, payload):
+def answer(question, target, payload, *, allow_stop=False):
     from .service import DomainError
     rating = payload.get('self_rating')
     if rating is None:
         if target.get('revealed'):
             raise DomainError('invalid_rating', '显示答案后请选择自主评分。', 422)
         return payload['answer']
-    if type(rating) is not int or rating not in (1, 2, 3, 4) or not target.get('revealed') or not is_reproduction(question):
+    choices = (1, 2, 3, 4, 5) if allow_stop else (1, 2, 3, 4)
+    if type(rating) is not int or rating not in choices or not target.get('revealed') or not is_reproduction(question):
         raise DomainError('self_rating_forbidden', '请先显示复现题答案，再选择自主评分。', 403)
     target['self_assessment'] = {'submission_id': payload['request_id'], 'rating': rating}
     return payload['answer']
@@ -60,4 +61,4 @@ def verdict(target, submission_id):
     saved = target.get('self_assessment') or {}
     if saved.get('submission_id') != submission_id:
         return None
-    return saved['rating'] > 1, '自主评分：' + str(saved['rating'])
+    return saved['rating'] > 1, ('已停止后续推送' if saved['rating'] == 5 else '自主评分：' + str(saved['rating']))

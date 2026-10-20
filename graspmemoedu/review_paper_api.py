@@ -33,7 +33,7 @@ class Draft(Model):
     index: int = Field(strict=True, ge=0, le=59)
     answer: str = Field(max_length=16384)
     elapsed_ms: int = Field(default=0, strict=True, ge=0, le=86400000)
-    self_rating: int | None = Field(default=None, strict=True, ge=1, le=4)
+    self_rating: int | None = Field(default=None, strict=True, ge=1, le=5)
 
 
 class Reveal(Paper):

@@ -134,24 +134,36 @@ class UnifiedLearningService(OrderedLearningService):
     def _current_section(self, state):
         return self.sections[state['section_index']]
 
-    def _section_learned(self, state):
-        return all(state['atomic']['points'][pid]['mastered'] for pid in self._current_section(state)['point_ids'])
-
     def _atomic_next(self, state):
         """Select without advancing or consuming any normal page."""
         points = PointState(state)
-        points.update(scope_introduction=self._current_section(state)['id'],
-                      mode='review' if self._section_learned(state) else 'learn')
+        if points.get('preview_single_card'):
+            AtomicLearningService._next(self.atomic, points)
+            state.update(atomic=dict(points), display='atomic')
+            return True
+        catch_up = state.get('atomic_catch_up', False)
+        points['scope_introduction'] = None if catch_up else self._current_section(state)['id']
         if all(memory['mastered'] for memory in points['points'].values()):
             points['completed_at'] = points['completed_at'] or self.atomic._time().isoformat()
         points['started_at'] = points['started_at'] or self.atomic._time().isoformat()
-        AtomicLearningService._next(self.atomic, points)
+        # A future retry (or chunk spacing) must not hold later content hostage.
+        # Check due review cards first, then available initial learning cards.
+        for mode in (('learn',) if catch_up else ('review', 'learn')):
+            points['mode'] = mode
+            AtomicLearningService._next(self.atomic, points)
+            if points['phase'] in ('chunk', 'answer'):
+                break
         state['atomic'] = dict(points)
-        if points['phase'] == 'waiting' and points['mode'] == 'review':
+        if points['phase'] == 'completed' or points['phase'] == 'waiting' and not catch_up:
             points.update(active=None, phase='idle')
             state['atomic'] = dict(points)
             state['display'] = 'paradigm'
             return False
+        if catch_up and points['phase'] in ('chunk', 'answer'):
+            point_id = (self.chunks[points['pending_chunk']]['points'][0]['id'] if points['phase'] == 'chunk'
+                        else points['active']['point_ids'][0])
+            state['section_index'] = next(i for i, section in enumerate(self.sections)
+                                          if point_id in section['point_ids'])
         state['display'] = 'atomic'
         return True
 
@@ -170,12 +182,19 @@ class UnifiedLearningService(OrderedLearningService):
         if following is not None:
             self._start_section(state, following)
             return
-        state.setdefault('initial_completed_at', now())
         released = next((m for m in self.course['modules'] if m['id'] not in completed
                          and skipped.get(m['id'], {}).get('released')), None)
         if released:
             self._new_attempt(state, next(i for i, m in enumerate(self.course['modules']) if m['id'] == released['id']))
             return
+        # Once all later content has been visited, resume unfinished initial
+        # learning across sections. Do not discard it or mark it mastered.
+        if not all(memory['mastered'] for memory in state['atomic']['points'].values()):
+            state['atomic_catch_up'] = True
+            if self._atomic_next(state):
+                return
+        state.pop('atomic_catch_up', None)
+        state.setdefault('initial_completed_at', now())
         state.update(status='completed', reading_status='completed', display='paradigm',
                      read_content_version=self.course['content_version'])
         state.setdefault('completed_at', now())
@@ -288,8 +307,8 @@ class UnifiedLearningService(OrderedLearningService):
         if ident != section['id']:
             return ident in state['read_introductions']
         if state['display'] == 'atomic':
-            return False
-        return self._step(state)['kind'] == 'introduction' or self._section_learned(state)
+            return state['atomic']['active'] is None
+        return True
 
     def _point_history(self, state):
         records = AtomicLearningService._public(self.atomic, PointState(state))['history']
@@ -332,12 +351,11 @@ class UnifiedLearningService(OrderedLearningService):
         if state['display'] == 'atomic':
             points = PointState(state)
             atomic = AtomicLearningService._public(self.atomic, points)
-            # The atomic engine's legacy full-Topic unlock does not apply to a
-            # composed Topic. No current guidance is sent while a card is shown.
-            atomic['introduction'] = None
+            atomic['introduction'] = section['introduction'] if self._intro_open(state, section['id']) else None
             atomic['unified_history'] = [
                 {key: step.get(key) for key in ('id', 'title', 'html', 'explanation_html')}
-                for step in result['steps'] if step['kind'] == 'introduction' and step['unlocked']]
+                for step in result['steps'] if step['kind'] == 'introduction' and step['unlocked']
+                and step['introduction_id'] != section['id']]
             result = atomic
         result.update(unified_topic=True, introduction_id=section['id'],
                       atomic_progress={'completed': sum(p['mastered'] for p in state['atomic']['points'].values()),

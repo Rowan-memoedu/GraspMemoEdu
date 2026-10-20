@@ -39,7 +39,10 @@ def main():
     legacy.update(id='legacy-paradigm', subject_id='math')
     introduction = ordered_topic(True)
     introduction.update(id='legacy-introduction', subject_id='math')
-    topics = [topic, legacy, introduction, atomic_topic('math', 'legacy-atomic')]
+    deferred = composed_topic()
+    deferred.update(id='deferred-atoms', modules=[])
+    deferred['content_order'] = [item for item in deferred['content_order'] if item['kind'] == 'introduction']
+    topics = [topic, legacy, introduction, atomic_topic('math', 'legacy-atomic'), deferred]
     for item in topics:
         for module in item.get('modules', []):
             for question in [module['example'], *module['practices']]:
@@ -92,6 +95,13 @@ def main():
             saved = backend._load(con)
             return {'state': saved, 'integrity': con.execute('PRAGMA integrity_check').fetchone()[0],
                     'real_judge': args.real_judge, 'judge_calls': calls}
+
+    @harness.post('/__qa/advanced')
+    def advanced(request: Request):
+        learner(request)
+        store = app.state.access_store
+        account = store.create_account('Synthetic advanced acceptance', is_advanced_learner=True)
+        return store.login(account['invitation_code'])
 
     harness.mount('/', app)
     print('READY unified fixture; synthetic content only', flush=True)

@@ -62,7 +62,7 @@ class Choice(Action):
 class Answer(Action):
     answer: str = Field(min_length=1, max_length=16384)
     elapsed_ms: int | None = Field(default=None, strict=True, ge=0, le=86400000)
-    self_rating: int | None = Field(default=None, strict=True, ge=1, le=4)
+    self_rating: int | None = Field(default=None, strict=True, ge=1, le=5)
 
 
 class Pause(BaseModel):
@@ -286,6 +286,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                 state['topic_pause'] = state.get('pause')
             if state.get('current'):
                 protect_assessment(state['current'], self_rating)
+                state['current']['can_stop_reviews'] = state['current']['can_self_rate']
             for item in state.get('history', []):
                 protect_assessment(item, self_rating)
             if 'review_history' not in features:
