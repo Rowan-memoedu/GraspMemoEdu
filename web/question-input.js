@@ -1,6 +1,7 @@
-import {t} from './i18n.js?v=32ffeaca690540b1';
-import {prepareLiteralMath} from './math-presentation.js?v=32ffeaca690540b1';
-import {compositeInput} from './composite-input.js?v=32ffeaca690540b1';
+import {t} from './i18n.js?v=0305ca00f429330d';
+import {prepareLiteralMath} from './math-presentation.js?v=0305ca00f429330d';
+import {compositeInput} from './composite-input.js?v=0305ca00f429330d';
+import {enhanceSourceContent} from './topic-content.js?v=0305ca00f429330d';
 
 const node = (tag, cls, text) => {
   const element = document.createElement(tag); element.className = cls;
@@ -40,6 +41,7 @@ export function questionInput(spec, {id, value = '', stem, disabled = false, for
     if (item?.html) element.innerHTML = item.html; // Compiled with the existing safe Markdown/MathJax importer.
     else element.textContent = item?.text || '';
     prepareLiteralMath(element);
+    if(item?.html)enhanceSourceContent(element);
   };
   const normalize = () => {
     if (spec.type === 'matching') {

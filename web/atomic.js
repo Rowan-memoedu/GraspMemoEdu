@@ -1,9 +1,10 @@
-import {t, translateMessage} from './i18n.js?v=32ffeaca690540b1';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=32ffeaca690540b1';
-import {selfAssessment, referenceAnswer, prepareAnswerContent, ratingChoices} from './self-assessment.js?v=32ffeaca690540b1';
-import {reportableContent, helpableContent} from './content-report.js?v=32ffeaca690540b1';
-import {createLearningCache} from './learning-cache.js?v=32ffeaca690540b1';
-import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=32ffeaca690540b1';
+import {t, translateMessage} from './i18n.js?v=0305ca00f429330d';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=0305ca00f429330d';
+import {selfAssessment, referenceAnswer, prepareAnswerContent, ratingChoices} from './self-assessment.js?v=0305ca00f429330d';
+import {reportableContent, helpableContent} from './content-report.js?v=0305ca00f429330d';
+import {createLearningCache} from './learning-cache.js?v=0305ca00f429330d';
+import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=0305ca00f429330d';
+import {enhanceSourceContent} from './topic-content.js?v=0305ca00f429330d';
 
 const node = (tag, cls = '', text) => {
   const el = document.createElement(tag); el.className = cls;
@@ -13,7 +14,10 @@ const node = (tag, cls = '', text) => {
 const button = (text, action, cls = 'secondaryButton') => {
   const el = node('button', cls, text); el.type = 'button'; el.addEventListener('click', action); return el;
 };
-const content = html => { const el = node('div', 'courseContent'); el.innerHTML = html || ''; return el; };
+const content = html => {
+  const el = node('div', 'courseContent'); el.innerHTML = html || '';
+  enhanceSourceContent(el); return el;
+};
 
 export function createAtomicView(bridge) {
   const cache = createLearningCache(() => state?.access || bridge.getAccess());
@@ -132,10 +136,11 @@ export function createAtomicView(bridge) {
         const requestId=data.request_id||crypto.randomUUID();
         if(action==='submit') {data.request_id=requestId;write(hyperskillKey(),JSON.stringify(data));}
         result=await localHyperskill(action,{session:data.session,attempt_id:data.attempt_id,
-          ...(action==='submit'?{answer,request_id:requestId}:{})});
+          ...(['submit','ide'].includes(action)?{answer}:{}),...(action==='submit'?{request_id:requestId}:{})});
       }
       if(!active(ticket))return;
       write(hyperskillKey(),JSON.stringify(result));
+      if(action==='read-code'&&typeof result.draft==='string')write(draftKey(),result.draft);
       if(action==='retry')write(draftKey(),null);
       busy=false;
       const next=await call('state');

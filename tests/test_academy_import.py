@@ -48,3 +48,43 @@ class AcademyImportTests(unittest.TestCase):
         raw, positions = template('😀答案尾巴'.encode(), [{'offset': 2, 'length': 2, 'placeholder_text': 'TODO'}])
         self.assertEqual(raw.decode(), '😀TODO尾巴')
         self.assertEqual(positions, [{'offset': 2, 'length': 4}])
+
+    def test_extension_keeps_existing_topics_and_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); data = root / 'data'; package = root / 'package'
+            data.mkdir(); package.mkdir()
+            original = exercise()
+            (data / 'original.json').write_bytes(encoded(original))
+            course = {'id': 'existing', 'title': 'Existing', 'description': '',
+                      'topics': [{'id': original['id'], 'path': 'original.json', 'prerequisites': []}],
+                      'units': [{'id': 'unit', 'title': 'Unit', 'parent_id': None, 'topic_ids': [original['id']]}]}
+            (data / 'catalog.json').write_bytes(encoded({'courses': [course]}))
+            (data / 'subjects.json').write_bytes(encoded({'subjects': [{'id': 'cs', 'course_ids': ['existing']}]}))
+            marker = data / 'learning.sqlite3'; marker.write_bytes(b'unchanged learning records')
+            added = deepcopy(original); added['id'] = 'added'
+            (package / 'original.json').write_bytes(encoded(original))
+            (package / 'added.json').write_bytes(encoded(added))
+            candidate = deepcopy(course)
+            candidate['topics'].append({'id': 'added', 'path': 'added.json', 'prerequisites': []})
+            candidate['units'][0]['topic_ids'] = ['added', original['id']]
+            (package / 'catalog.json').write_bytes(encoded({'courses': [candidate]}))
+            def manifest():
+                (package / 'manifest.json').write_bytes(encoded({'schema': 1, 'adapter': 'hyperskill',
+                    'files': {n: hashlib.sha256((package / n).read_bytes()).hexdigest()
+                              for n in ('catalog.json', 'original.json', 'added.json')}}))
+            manifest()
+            with self.assertRaisesRegex(ValueError, 'existing course'):
+                install(package, data)
+            result = install(package, data, extend_course=True)
+            self.assertEqual(result['status'], 'installed')
+            catalog = Catalog.load(Settings.load(data))
+            self.assertEqual(catalog.topics[original['id']], original)
+            self.assertEqual(catalog.courses['existing']['units'][0]['topic_ids'], ['added', original['id']])
+            self.assertEqual(marker.read_bytes(), b'unchanged learning records')
+            self.assertEqual(install(package, data, extend_course=True)['status'], 'unchanged')
+            changed = deepcopy(original); changed['title'] = 'Overwritten'
+            (package / 'original.json').write_bytes(encoded(changed)); manifest()
+            pointer = (data / 'active-content.json').read_bytes()
+            with self.assertRaisesRegex(ValueError, 'existing Topic'):
+                install(package, data, extend_course=True)
+            self.assertEqual((data / 'active-content.json').read_bytes(), pointer)

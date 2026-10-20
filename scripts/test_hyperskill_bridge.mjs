@@ -16,6 +16,23 @@ assert.deepEqual(answer('string',{},'x').reply,{files:[],text:'x'});
 assert.throws(()=>answer('number',{},'NaN'));
 assert.throws(()=>answer('choice',{options:['A']},'{"selected":"7"}'));
 assert.equal(presentation('matching',{pairs:[{first:'a',second:'1'}]}).fixed[0],'0');
+const blanks={components:[{type:'text',text:'x = ▭; y = ▭;'},
+  {type:'select',options:['1','2']},{type:'input',options:[]}]};
+assert.deepEqual(answer('fill-blanks',blanks,'["2","3"]').reply,{blanks:['2','3']});
+assert.throws(()=>answer('fill-blanks',blanks,'["outside","3"]'));
+assert.deepEqual(answer('sorting',{options:['a','b']},'[1,0]').reply,{ordering:[1,0]});
+assert.throws(()=>answer('sorting',{options:['a','b']},'[1,1]'));
+const lines=[{line_number:1,level:0},{line_number:0,level:1}];
+assert.deepEqual(answer('parsons',{lines:['inside','outside']},JSON.stringify(lines)).reply,{lines});
+assert.throws(()=>answer('parsons',{lines:['a']},'[{"line_number":0,"level":11}]'));
+assert.equal(answer('parsons',{lines:['System.out.print(&quot;x&quot;);']},'[{"line_number":0,"level":0}]').display,'System.out.print("x");');
+assert.deepEqual(answer('table',{rows:['r'],columns:['a','b'],is_checkbox:false},'[[false,true]]').reply,
+  {choices:[{name_row:'r',columns:[{name:'a',answer:false},{name:'b',answer:true}]}]});
+assert.throws(()=>answer('table',{rows:['r'],columns:['a','b'],is_checkbox:false},'[[true,true]]'));
+const codeOptions={code_templates:{java25:'class Main {}'},samples:[]};
+assert.deepEqual(answer('code',{},'{"language":"java25","code":"class Main {}"}',codeOptions).reply,
+  {language:'java25',code:'class Main {}\n'});
+assert.throws(()=>answer('code',{},'{"language":"outside","code":"x"}',codeOptions));
 const directory=await fs.mkdtemp(path.join(os.tmpdir(),'hyperskill-test-'));
 try {
   let attempts=0,posts=0,delivered=0,lost=true,cloudLost=true;
@@ -47,5 +64,20 @@ try {
   await assert.rejects(bridge.submit(initial.session,1,'{"selected":"1"}','request-000000002'),/实例已变化/);
   const done=await bridge.submit(initial.session,2,'{"selected":"1"}','request-000000002');
   assert.equal(done.last.status,'correct');assert.equal(posts,2);
-  console.log('PASS four reply types, stale dataset, lost upstream response, durable cloud ACK replay, retry');
+  const codeDir=path.join(directory,'code-test');
+  let opened;
+  const codeBridge=new Bridge({directory:codeDir,openEditor:async file=>{opened=file;},
+    cloud:async(route)=>route==='claim'?{provider:'hyperskill',step_id:20,topic_id:1,mode:'learn',type:'code',round_id:'code-round',next_sequence:1}:{},
+    hyperskill:async(_,route)=>route==='/steps/20'?{steps:[{id:20,block:{name:'code',options:codeOptions}}]}:
+      {attempts:[{id:20,step:20,dataset:{}}]}});
+  const codeRun=await codeBridge.open('y'.repeat(43));
+  assert.equal(codeRun.interaction.type,'hyperskill_code');
+  const raw='{"language":"java25","code":"public class Example {}"}';
+  await codeBridge.editor(codeRun.session,raw);
+  assert.equal(path.basename(opened),'Example.java');
+  await fs.writeFile(opened,'public class Example { /* saved in editor */ }');
+  await codeBridge.editor(codeRun.session,raw); // Opening again must not overwrite learner work.
+  const saved=await codeBridge.editor(codeRun.session,null,true);
+  assert.match(JSON.parse(saved.draft).code,/saved in editor/);
+  console.log('PASS nine reply types, malformed answers, stale dataset, lost responses, durable replay, preserved IDEA draft');
 } finally {await fs.rm(directory,{recursive:true,force:true});}

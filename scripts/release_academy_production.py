@@ -1,5 +1,6 @@
 """Guarded, reversible release step inside the existing server maintenance wrapper."""
 import hashlib
+import grp
 import json
 import os
 from pathlib import Path
@@ -56,8 +57,12 @@ def main():
         if release.get('question_bank_id'):
             operation = ['-m', 'graspmemoedu.bank_placement', '--container-id', release['question_bank_id']]
         else:
+            os.chown(stage, -1, grp.getgrnam('graspmemoedu').gr_gid)
+            stage.chmod(0o750)
             subprocess.run(['chown', '-R', 'graspmemoedu:graspmemoedu', str(stage / 'package')], check=True)
             operation = ['-m', 'graspmemoedu.academy_import', '--package', str(stage / 'package')]
+            if release.get('extend_course'):
+                operation.append('--extend-course')
         result = subprocess.run(['runuser', '-u', 'graspmemoedu', '--', '/opt/graspmemoedu/venv/bin/python',
             *operation, '--data-dir', str(data)],
             cwd=app, text=True, capture_output=True, check=True)

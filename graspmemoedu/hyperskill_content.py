@@ -1,6 +1,6 @@
 """Bindings contain public problem identities, never sessions or answer keys."""
 
-SUPPORTED = {'choice', 'matching', 'number', 'string'}
+SUPPORTED = {'choice', 'matching', 'number', 'string', 'fill-blanks', 'sorting', 'parsons', 'table', 'code'}
 
 
 def validate_binding(topic):

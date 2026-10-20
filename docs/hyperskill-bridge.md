@@ -2,7 +2,11 @@
 
 一个 Topic 对应一个 `atomic_retrieval` Topic。译文 HTML 进入 Introduction；`memory_chunks` 为空，`memory_points` 为每道 problem 建立一个独立点，每个点仅绑定一张原子卡。源路径保存在课程 `units.parent_id`；不把路径当作学习前置。导入保留题目身份，不导入旧进度、不伪造参考答案。
 
-`prepare_hyperskill.mjs` 从本地译文和已认证读取的 practice 生成确定性来源包。HTML 使用现有安全渲染器的 HTML 入口，避免 Markdown 解析改变代码里的星号和下划线。`academy_import` 验证包、目录和测试材料策略后原子切换，已有课程与学习记录保留。当前试验支持 choice、matching、number、string；其他题型阻止导入。
+`prepare_hyperskill.mjs` 从本地译文和已认证读取的 practice 生成确定性来源包，`prepare_hyperskill_branch.mjs` 按源目录合并完整分支。HTML 使用安全渲染器的 HTML 入口，避免 Markdown 解析改变代码里的星号和下划线。图片复用 Hyperskill→RemNote 的下载、哈希与 SVG 转 PNG 路径，优先复用本地已校验图片；原附件和来源 JSON 随包保存，网页内嵌图片。`academy_import --extend-course` 允许向同一课程追加新 Topic，拒绝覆盖已有 Topic 或改变已有父子关系；重复安装幂等，学习记录不变。
+
+当前支持 choice、matching、number、string、fill-blanks、sorting、parsons、table、code。填空保留题内空格，排序保留选项身份，Parsons 同时提交行顺序与缩进，表格按实际行列名称提交。代码题保留源模板和公开输入输出示例，语言以 Hyperskill 返回值为准。未知题型停止导入，不能静默删题。
+
+原子页按源标题等级构建可折叠正文层级，学习卡身份不随展开收起变化；代码字符、缩进、列表编号和图片出现顺序保留。代码块可横向滚动，正文适应窄屏。代码题支持网页编辑或打开已安装的 IDEA；本机每轮只创建一个独立代码文件，再次打开保留编辑结果。IDEA 保存后，通过网页“读取 IDEA 已保存代码”取回，再点击提交。该入口只编辑代码，最终判题仍由 Hyperskill 完成；既有 Academy 题库插件流程保留。
 
 网页复用 `atomic.js`、共享输入控件与 Academy 的轮次授权。题目需要动态选项时，通过 127.0.0.1:18769 的本机服务取得当前 attempt dataset。服务绑定固定 HTTPS 后端与明确的网页 Origin，不接受任意代理 URL、命令或路径。
 
@@ -16,4 +20,4 @@ FSRS 复用 Academy 的已有规则：首次直接通过 Good；少量有效错�
 
 本机启动使用 `Start-HyperskillBridge.ps1 -ConfigPath <private config>`。配置包括固定 backend、origins、port、directory、cookieModule、cookieWorkflowRoot、cookieDataRoot、expectedUserId，不含复制出来的 Cookie。服务只监听本机地址；浏览器可能要求用户允许本地网络访问。此次不设置开机自启。
 
-验证入口：`tests/test_hyperskill.py`、`scripts/test_hyperskill_bridge.mjs`、`scripts/validate_hyperskill_package.py`、`scripts/hyperskill_ui_acceptance.mjs`。真实 Hyperskill 答案由用户在网页提交；合成契约测试不作为真实提交通过的证据。
+验证入口：`tests/test_hyperskill.py`、`scripts/test_hyperskill_bridge.mjs`、`scripts/validate_hyperskill_branch.py`、`scripts/test_hyperskill_render.mjs`、`scripts/hyperskill_ui_acceptance.mjs`。经用户授权的真实提交验收使用测试学员，保留上游提交 ID、独立卡片的复习日期和去重结果；合成契约测试不作为真实提交通过的证据。

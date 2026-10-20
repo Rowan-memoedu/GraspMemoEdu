@@ -13,3 +13,91 @@
 .topicBacklinks a { color: inherit; }
 .introProgressFill { display: block; height: 100%; background: var(--accent, #806449); }
 .introductionUpdateNotice { padding: .75rem 1rem; border-left: 3px solid #806449; background: #faf7f1; }
+
+/* Hallmark · pre-emit critique: P4 H4 E4 S4 R5 V3 */
+.sourceReading {
+  --source-code-font: Consolas, "Cascadia Mono", "Courier New", monospace;
+  --source-code-background: var(--answer-background);
+  --source-code-border: var(--ma-border);
+  --source-code-ink: var(--ma-ink);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.sourceReading .sourceOutlineSection { margin-block: 1.6rem; min-width: 0; }
+.sourceReading .sourceOutlineSection > summary {
+  cursor: pointer; color: var(--ma-navy); list-style-position: outside;
+  margin-left: 1.1rem; padding-block: .25rem; line-height: 1.5;
+}
+.sourceReading .sourceOutlineSection > summary::marker { color: var(--muted); font-size: .7em; }
+.sourceReading .sourceOutlineSection > summary:hover { color: var(--ma-blue); }
+.sourceReading .sourceSectionTitle {
+  display: inline; margin: 0; font: inherit; font-size: 1.18rem;
+  font-weight: 700; color: inherit; font-style: normal; overflow-wrap: anywhere;
+}
+.sourceReading .sourceSectionBody {
+  margin: .6rem 0 0 .35rem; padding-left: 1rem;
+  border-left: 1px solid var(--subtle-accent-border); min-width: 0;
+}
+.sourceReading .sourceOutlineSection .sourceOutlineSection { margin-block: 1.25rem; }
+.sourceReading .sourceOutlineSection .sourceOutlineSection .sourceSectionTitle { font-size: 1rem; }
+.sourceReading .sourceSectionBody > :first-child { margin-top: .5rem; }
+.sourceReading .sourceSectionBody > :last-child { margin-bottom: 0; }
+.sourceReading p { line-height: 1.8; }
+.sourceReading p:empty { display: none; }
+.sourceReading li { margin-block: .35rem; }
+.sourceReading li > p { margin-block: .35rem; }
+.sourceReading :not(pre) > code, .sourceReading samp {
+  font-family: var(--source-code-font); font-size: .92em;
+  color: var(--source-code-ink); background: var(--source-code-background);
+  border-radius: 3px; padding: .08em .25em; overflow-wrap: anywhere;
+}
+.sourceReading .sourceCodeBlock {
+  margin-block: 1rem; max-width: 100%; min-width: 0;
+  border: 1px solid var(--source-code-border); border-radius: 5px;
+  background: var(--source-code-background); color: var(--source-code-ink);
+}
+.sourceReading .sourceCodeLanguage {
+  padding: .35rem .85rem 0; color: var(--muted);
+  font-size: .75rem; font-family: var(--source-code-font);
+}
+.sourceReading .sourceCodeBlock pre {
+  margin: 0; padding: .75rem .85rem; max-width: 100%; overflow-x: auto;
+  white-space: pre; overflow-wrap: normal; tab-size: 4;
+  font-family: var(--source-code-font); font-size: .9rem; line-height: 1.65;
+}
+.sourceReading .sourceCodeBlock pre code {
+  font: inherit; background: transparent; padding: 0;
+  white-space: inherit; overflow-wrap: normal;
+}
+.sourceReading .sourceTable { overflow-x: auto; margin-block: 1rem; }
+.sourceReading img { max-width: 100%; height: auto; object-fit: contain; vertical-align: middle; }
+.sourceReading figure { max-width: 100%; margin: 1rem 0; }
+.sourceReading figcaption { margin-top: .5rem; color: var(--muted); font-size: .9em; }
+.sourceReading .alert {
+  border-left: 3px solid var(--muted-accent-border);
+  background: var(--answer-help-background); padding: .25rem 1rem; margin-block: 1rem;
+}
+.sourceReading .sourceImageError { display: block; color: var(--amber); padding-block: .5rem; }
+.sourceReading :is(summary,pre,.sourceTable):focus-visible {
+  outline: 2px solid var(--ma-blue); outline-offset: 3px;
+}
+@media (max-width: 480px) {
+  .sourceReading .sourceSectionBody { padding-left: .65rem; margin-left: .15rem; }
+  .sourceReading .sourceSectionTitle { font-size: 1.05rem; }
+  .sourceReading .sourceCodeBlock pre { padding-inline: .65rem; font-size: .82rem; }
+}
+.hyperskillInteraction { min-width: 0; }
+.hyperskillOrdering { padding-left: 1.5rem; }
+.hyperskillOrderRow { padding: .5rem; margin-block: .5rem; border: 1px solid var(--ma-border); border-radius: 4px; }
+.hyperskillOrderRow .courseContent { margin: 0; min-width: 0; }
+.hyperskillOrderRow .courseContent p { margin-block: 0; }
+.hyperskillOrderControls { display: flex; gap: .4rem; justify-content: flex-end; margin-top: .4rem; }
+.hyperskillCodeLine { font-family: Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.hyperskillTable { border-collapse: collapse; width: 100%; }
+.hyperskillTable :is(th,td) { border: 1px solid var(--ma-border); padding: .65rem; }
+.hyperskillTable td { text-align: center; }
+.hyperskillTable input { width: 1.1rem; height: 1.1rem; accent-color: var(--ma-blue); }
+.hyperskillTable .courseContent { font-size: .9rem; font-weight: normal; }
+.hyperskillInteraction > .sourceTable { overflow-x: auto; }
+.hyperskillCodeEditor { font-family: Consolas, monospace; white-space: pre; tab-size: 4; font-size: .9rem; }
+.hyperskillEditorActions { display: flex; flex-wrap: wrap; gap: .75rem; margin-block: .75rem; }
