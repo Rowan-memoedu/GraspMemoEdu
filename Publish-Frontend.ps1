@@ -84,11 +84,23 @@ $allowedPrior = if ($created) { @('README.md') } else { $expected }
 if ($priorTree.truncated -or @($priorTree.tree | Where-Object { ($_.type -eq 'blob' -and $_.path -notin $allowedPrior) -or ($_.type -eq 'tree' -and $_.path -notin @('vendor','vendor/mermaid','vendor/chat','vendor/chat/fonts')) -or $_.type -notin @('blob','tree') }).Count) {
     throw 'Existing repository contains files outside the frontend allowlist. Publication stopped.'
 }
+$priorBlobs = @{}
+foreach ($item in $priorTree.tree | Where-Object type -EQ 'blob') { $priorBlobs[$item.path] = $item.sha }
 $treeItems = @($files | ForEach-Object {
     $entry = @{path=[IO.Path]::GetRelativePath($ExportDirectory, $_.FullName).Replace('\','/');mode='100644';type='blob'}
     if ($_.Extension -in @('.woff2','.png')) {
-        $blob = Invoke-Api POST ('repos/' + $Repository + '/git/blobs') @{content=[Convert]::ToBase64String([IO.File]::ReadAllBytes($_.FullName));encoding='base64'}
-        $entry.sha = $blob.sha
+        $bytes = [IO.File]::ReadAllBytes($_.FullName)
+        $digest = [Security.Cryptography.IncrementalHash]::CreateHash([Security.Cryptography.HashAlgorithmName]::SHA1)
+        try {
+            $digest.AppendData([Text.Encoding]::ASCII.GetBytes('blob ' + $bytes.Length + [char]0))
+            $digest.AppendData($bytes)
+            $blobHash = [Convert]::ToHexString($digest.GetHashAndReset()).ToLowerInvariant()
+        } finally { $digest.Dispose() }
+        if ($priorBlobs[$entry.path] -eq $blobHash) { $entry.sha = $blobHash }
+        else {
+            $blob = Invoke-Api POST ('repos/' + $Repository + '/git/blobs') @{content=[Convert]::ToBase64String($bytes);encoding='base64'}
+            $entry.sha = $blob.sha
+        }
     } else { $entry.content = [IO.File]::ReadAllText($_.FullName) }
     $entry
 })
