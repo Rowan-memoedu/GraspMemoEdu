@@ -8,7 +8,7 @@ self.addEventListener('fetch', event => {
   const url = new URL(request.url);
   if (request.method !== 'GET' || request.mode !== 'navigate' ||
       url.origin !== APP_ROOT.origin || !url.pathname.startsWith(APP_ROOT.pathname)) return;
-  event.respondWith(fetch(request).catch(() => new Response(
+  event.respondWith(fetch(request, { cache: 'no-store' }).catch(() => new Response(
     '<!doctype html><html lang="zh-CN"><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width,initial-scale=1"><title>GraspMemoEdu · 等待连接</title>' +
     '<body><main><h1>暂时无法连接</h1><p>请联网后重新打开 GraspMemoEdu。</p>' +

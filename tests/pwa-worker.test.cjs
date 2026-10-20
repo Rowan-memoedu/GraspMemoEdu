@@ -30,7 +30,10 @@ test('API reads, mutations, foreign scopes and subresources pass untouched', () 
 });
 test('online navigation preserves the original response', async () => {
   const response = new Response('current page');
-  const events = worker(async()=>response);
+  const events = worker(async(request, options)=>{
+    assert.equal(options.cache,'no-store','offline navigation must not fall back to HTTP disk cache');
+    return response;
+  });
   let result;
   events.fetch({request:{method:'GET',mode:'navigate',url:'https://example.test/GraspMemoEdu-Pages/download.html'},respondWith:p=>{result=p;}});
   assert.equal(await result,response);
