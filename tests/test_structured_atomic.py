@@ -123,6 +123,8 @@ class StructuredAtomicTests(unittest.TestCase):
                 node='node', reset_reading_progress=True))
             result = install(package, data, extend_course=True)
             self.assertEqual(result['migration'], {'cleared_reading_rows':1})
+            self.assertEqual(Catalog.load(Settings.load(data)).courses['course']['units'][0]['topic_ids'],
+                             ['existing', 'atomic-new'])
             self.assertEqual(verify_transition(before, data / 'learning.sqlite3', {'atomic-new'})['cleared_reading_rows'], 1)
             journals = list((data / 'migration-backups/atomic-reading').glob('*.json'))
             self.assertEqual(len(json.loads(journals[0].read_bytes())['rows']), 1)

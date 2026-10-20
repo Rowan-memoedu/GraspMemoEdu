@@ -111,7 +111,10 @@ def _install(package, data_dir, *, extend_course=False, migration=None):
                     if ({k: v for k, v in previous.items() if k != 'topic_ids'} !=
                             {k: v for k, v in unit.items() if k != 'topic_ids'}):
                         raise ValueError('Existing source hierarchy must be preserved')
-                    previous['topic_ids'] = list(dict.fromkeys(unit.get('topic_ids', []) + previous.get('topic_ids', [])))
+                    ordered = (previous.get('topic_ids', []) + unit.get('topic_ids', [])
+                               if manifest['adapter'] == 'structured-atomic'
+                               else unit.get('topic_ids', []) + previous.get('topic_ids', []))
+                    previous['topic_ids'] = list(dict.fromkeys(ordered))
         (batch / 'catalog.json').write_bytes(encoded({'courses': courses}))
         subjects = json.loads(baseline[old_root / 'subjects.json'])
         subject_id = manifest.get('subject_id', 'cs')
