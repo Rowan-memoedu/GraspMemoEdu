@@ -70,9 +70,11 @@ class Subjects:
             for course_id in catalog.courses:
                 self.course_subjects.setdefault(course_id, 'math')
             for topic_id, topic in getattr(catalog, 'topics', {}).items():
-                if topic.get('training_mode') == 'atomic_retrieval':
+                from .topic_structure import has_atomic
+                from .atomic_content import SUBJECTS
+                if has_atomic(topic):
                     actual = self.topic_subject(topic_id)
-                    if actual not in ('english', 'chinese', 'biology', 'chemistry', 'cs') or topic.get('subject_id') != actual:
+                    if actual not in SUBJECTS or topic.get('subject_id') != actual:
                         raise ValueError('Atomic topic does not match its permitted subject')
         except (ValueError, TypeError) as exc:
             raise DomainError('invalid_subjects', '学科配置中的课程、字段或指南路径不正确。', 422) from exc

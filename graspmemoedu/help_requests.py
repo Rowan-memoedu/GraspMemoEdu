@@ -231,7 +231,7 @@ class HelpRequestStore:
             # Converted questions pin an immutable bank revision rather than
             # the source Topic version, including in history and reviews.
             try:
-                if not question_id or topic.get('training_mode') == 'atomic_retrieval':
+                if not question_id or question_id in {q['id'] for q in topic.get('flashcards', [])}:
                     raise ValueError('A bank revision requires a paradigm question')
                 bank = QuestionBank(topic, self.access_store.data_dir)
                 if question_id not in bank.load(revision)['questions']:
@@ -242,7 +242,7 @@ class HelpRequestStore:
         html = None
         block_title = ''
         if question_id:
-            questions = topic['flashcards'] if topic.get('training_mode') == 'atomic_retrieval' else [q for m in topic['modules'] for q in [m['example'], *m['practices']]]
+            questions = topic.get('flashcards', []) + [q for m in topic.get('modules', []) for q in [m['example'], *m['practices']]]
             question = bank_question or next((q for q in questions if q['id'] == question_id), None)
             field = {f'question:{question_id}': 'html', f'explanation:{question_id}': 'explanation_html'}.get(block)
             if question and field:
@@ -255,7 +255,7 @@ class HelpRequestStore:
             intro = next((i for i in topic['introductions'] if 'introduction:' + i['id'] == block), None)
             if intro:
                 html, block_title = intro['html'], intro.get('title', intro['id'])
-        elif block.startswith('chunk:') and topic.get('training_mode') == 'atomic_retrieval':
+        elif block.startswith('chunk:') and topic.get('memory_chunks'):
             chunk = next((c for c in topic['memory_chunks'] if 'chunk:' + c['id'] == block), None)
             if chunk:
                 html, block_title = chunk['html'], chunk.get('title', chunk['id'])

@@ -1,12 +1,12 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=1ea46391e42d4b14";
-import {answerReady} from './question-input.js?v=1ea46391e42d4b14';
-import {reportableContent} from './content-report.js?v=1ea46391e42d4b14';
-import {createLearningCache} from './learning-cache.js?v=1ea46391e42d4b14';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=80ba278a52ec527d";
+import {answerReady} from './question-input.js?v=80ba278a52ec527d';
+import {reportableContent} from './content-report.js?v=80ba278a52ec527d';
+import {createLearningCache} from './learning-cache.js?v=80ba278a52ec527d';
 
-import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, readerHistorySteps, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState} from './learning-ui.js?v=1ea46391e42d4b14';
-import {selfAssessment} from './self-assessment.js?v=1ea46391e42d4b14';
-import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=1ea46391e42d4b14';
-import {renderSourceReader} from './learning-ui.js?v=1ea46391e42d4b14';
+import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, readerHistorySteps, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState} from './learning-ui.js?v=80ba278a52ec527d';
+import {selfAssessment} from './self-assessment.js?v=80ba278a52ec527d';
+import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=80ba278a52ec527d';
+import {renderSourceReader} from './learning-ui.js?v=80ba278a52ec527d';
 
 applyStaticTranslations();
 
@@ -685,6 +685,12 @@ function syncAnswerClock(forcePause = false) {
 }
 
 function applyState(next, { force = false, announceChange = false } = {}) {
+  if (state && next?.course_version === state.course_version && next.revision < state.revision) return;
+  if (next?.unified_topic && next.training_mode === 'atomic_retrieval') {
+    if (access?.learner_id && next.learner_id !== access.learner_id) throw new ApiError(t("此学习记录不属于当前身份，请刷新。"), 0, "identity_mismatch");
+    void portal.showAtomic(next);
+    return;
+  }
   if (!next || !Array.isArray(next.steps) || !Array.isArray(next.modules)) throw new ApiError(t("课程数据不完整，请重新连接。"), 0, "invalid_state");
   if (access?.learner_id && next.learner_id !== access.learner_id) throw new ApiError(t("此学习记录不属于当前身份，请刷新。"), 0, "identity_mismatch");
   if (state && next.course_version === state.course_version && next.revision < state.revision) return;
@@ -717,6 +723,7 @@ async function refreshState({ quiet = true, force = false } = {}) {
   stateBusy = true;
   try {
     const next = await topicRequest("state", { timeout: CONTENT_TIMEOUT });
+    if (generation !== connectionGeneration) return;
     if (!quiet) pageMessage = null;
     applyState(next, { force });
     renderConnectionNotice();
@@ -772,6 +779,7 @@ async function mutate(path, payload, { pause = false } = {}) {
   renderBusy();
   try {
     const next = await topicRequest(path, { method: "POST", body: payload });
+    if (generation !== connectionGeneration) return;
     applyState(next, { force: true, announceChange: true });
     notifyOtherTabs();
     if (path === "skip") announce(t('reader.skipDone'));
@@ -990,6 +998,11 @@ function renderPageNotice() {
 
 function renderProgress() {
   const refs = {progressCaption: $('progressCaption'), lessonProgress: $('lessonProgress')};
+  let atoms = $('topicAtomicProgress');
+  if (state.atomic_progress?.total) {
+    if (!atoms) { atoms = el('p', 'atomicProgress'); atoms.id = 'topicAtomicProgress'; refs.lessonProgress.before(atoms); }
+    atoms.textContent = t('atomic.progress', {done: state.atomic_progress.completed, total: state.atomic_progress.total});
+  } else atoms?.remove();
   if (state.read_only) { readerProgress(refs, {label: '可阅读', status: '暂不可训练', percent: 0, hidden: true}); return; }
   if (state.topic_kind === 'introduction') {
     const progress = Math.round(state.reading_progress || 0), status = readingStatus();
@@ -999,6 +1012,9 @@ function renderProgress() {
     return;
   }
   const completed = state.modules.filter((module) => module.status === "completed").length;
+  if (!state.modules.length && state.unified_topic) {
+    readerProgress(refs, {hidden: true, label: '', percent: 0}); return;
+  }
   readerProgress(refs, {label: t('reader.modulesCompleted', {completed, total: state.modules.length}),
     status: state.status === 'paused' ? t('已暂停') : state.status === 'completed' ? state.skipped_modules?.length ? t('reader.roundEnded') : t('学习完成') : t('学习中'),
     percent: Math.round(100 * completed / (state.modules.length || 1)),
@@ -1027,6 +1043,7 @@ function renderHistory() {
   if (state.topic_format_version === 2) {
     for (const step of visited) {
       if (step.kind === 'introduction') nodes.push(historyGroup(readerStepTitle(step), step.phase === 'completed' ? t('已读') : t('阅读中'), [step]));
+      else if (step.kind === 'atomic_card') nodes.push(historyGroup(t('atomic.title'), t('atomic.mastered'), [step]));
       else if (step.kind === 'completion') nodes.push(historyGroup(t('Topic 完成'), t('已完成'), [step], 'completed'));
       else if (!visited.slice(0, visited.indexOf(step)).some(item => item.module_id === step.module_id && item.kind !== 'introduction')) {
         const module = state.modules.find(item => item.id === step.module_id);
@@ -1442,9 +1459,9 @@ async function openTopic(id, subjectId) {
   }
 }
 
-const { initPortal } = await import("./portal.js?v=1ea46391e42d4b14");
-const {startPresence} = await import('./presence.js?v=1ea46391e42d4b14');
-const {visibleContentTopics} = await import('./content-report.js?v=1ea46391e42d4b14');
+const { initPortal } = await import("./portal.js?v=80ba278a52ec527d");
+const {startPresence} = await import('./presence.js?v=80ba278a52ec527d');
+const {visibleContentTopics} = await import('./content-report.js?v=80ba278a52ec527d');
 startPresence({getAccess: () => identityProblem ? null : access, request, getTopics: visibleContentTopics});
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {

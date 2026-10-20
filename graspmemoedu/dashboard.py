@@ -19,6 +19,7 @@ from .question_types import public_interaction, display_answer
 from .reference_answers import reference_fields
 from .content_reports import validate_correction
 from .question_bank import QuestionBank
+from .topic_structure import has_atomic, sectioned_training, atomic_state
 from .course_hierarchy import pending_hierarchy
 from .topic_runtime import is_introduction, learning_units, reread_pending
 
@@ -183,7 +184,7 @@ class DashboardStore:
                     'completed_modules': int(done), 'module_count': 1, 'progress': 100 if done else 0,
                     'reread_pending': reread_pending(topic, state),
                     'reading_progress': round(100 * read / len(topic['introductions']), 2)}
-        if topic.get('training_mode') == 'atomic_retrieval':
+        if has_atomic(topic) and not sectioned_training(topic):
             from .atomic_content import memory_points
             count = len(memory_points(topic))
             completed = sum(p['mastered'] for p in state['points'].values()) if state else 0
@@ -211,10 +212,15 @@ class DashboardStore:
         if state and state.get('initial_completed_at') and (status != 'completed' or state.get('skipped_modules')):
             completed_at = state['initial_completed_at']
         module_count = len(topic['modules'])
+        completed_count = len(completed)
+        if has_atomic(topic):
+            from .atomic_content import memory_points
+            module_count += len(memory_points(topic))
+            completed_count += sum(p['mastered'] for p in atomic_state(state).get('points', {}).values())
         return {'state': state, 'status': status, 'started_at': started_at, 'completed_at': completed_at,
                 'mastery': self.dependency_policy.mastery(con, learner_id, topic_id, state),
-                'completed_modules': len(completed), 'module_count': module_count,
-                'progress': round(100 * len(completed) / module_count, 2)}
+                'completed_modules': completed_count, 'module_count': module_count,
+                'progress': round(100 * completed_count / max(1, module_count), 2)}
 
     def _task(self, course, topic_id, snapshot, allowed, dependencies=None):
         if dependencies is None:
@@ -268,15 +274,15 @@ class DashboardStore:
 
     def _reviews(self, con, access, course, snapshots):
         tasks, history, wakeups, paused = [], [], [], set()
-        if not self._has_reviews(con) and not any(self.catalog.topic(t).get('training_mode') == 'atomic_retrieval' for t in snapshots):
+        if not self._has_reviews(con) and not any(has_atomic(self.catalog.topic(t)) for t in snapshots):
             return tasks, history, None, paused
         current_time = now()
         for topic_id, snapshot in snapshots.items():
             topic = self.catalog.topic(topic_id)
-            if topic.get('training_mode') == 'atomic_retrieval':
+            if has_atomic(topic):
                 from .atomic_api import review_summary
                 state = snapshot['state']
-                if state and state['pause']:
+                if atomic_state(state).get('pause'):
                     paused.add(topic_id)
                 summary = review_summary(topic, state, self.atomic_clock() if self.atomic_clock else None)
                 if summary['next_due_at']:
@@ -287,8 +293,11 @@ class DashboardStore:
                                   'course_title': course['title'], 'started': summary['active'], 'started_at': None,
                                   'status': 'in_progress' if summary['active'] else 'not_started', 'progress': 0,
                                   'due_at': summary['next_due_at'], 'prerequisites': [], 'maintenance': False,
-                                  'start_href': '#/review/' + quote(topic_id, safe='') + '/atomic'})
-                continue
+                                  'start_href': (('#/topic/' + quote(topic_id, safe='')) if summary['active']
+                                                 else '#/reviews') if sectioned_training(topic)
+                                                 else '#/review/' + quote(topic_id, safe='') + '/atomic'})
+                if not sectioned_training(topic) or not topic.get('modules'):
+                    continue
             if not self._has_reviews(con):
                 continue
             key = (access['learner_id'], topic_id)
@@ -486,8 +495,8 @@ class DashboardStore:
             snapshot = self._snapshot(con, access['learner_id'], topic_id)
             rows = con.execute('''SELECT * FROM submissions WHERE learner=? AND topic=? AND status='judged'
                                 ORDER BY created_at,id''', (access['learner_id'], topic_id)).fetchall()
-            if topic.get('training_mode') == 'atomic_retrieval':
-                state = snapshot['state']
+            if has_atomic(topic) and not sectioned_training(topic):
+                state = atomic_state(snapshot['state'])
                 if not state or not state['completed_at']:
                     raise DomainError('unknown_task_answers', '此身份尚无该任务的已完成作答记录。', 404)
                 questions = {q['id']: q for q in topic['flashcards']}
@@ -511,7 +520,8 @@ class DashboardStore:
             rows = [row for row in rows if row['attempt'] in current_attempts]
         task = self._task(course, topic_id, snapshot, self._allowed_topics(access))
         initially_done = bool((snapshot['state'] or {}).get('initial_completed_at'))
-        if (snapshot['status'] != 'completed' and not initially_done) or (not rows and not task.get('skipped_modules')):
+        point_history = atomic_state(snapshot['state']).get('history', [])
+        if (snapshot['status'] != 'completed' and not initially_done) or (not rows and not point_history and not task.get('skipped_modules')):
             raise DomainError('unknown_task_answers', '此身份尚无该任务的已完成作答记录。', 404)
         if initially_done:
             task.update(status='completed', result='completed', completed_at=snapshot['completed_at'])
@@ -539,6 +549,29 @@ class DashboardStore:
                                 'difficulty': None})
             if answers:
                 groups.append({'id': module['id'], 'title': module['title'], 'answers': answers})
+        if sectioned_training(topic):
+            from .topic_structure import sections
+            questions = {q['id']: q for q in topic['flashcards']}
+            points = atomic_state(snapshot['state']).get('points', {})
+            combined = []
+            for section in sections(topic):
+                for chunk in section['chunks']:
+                    local = {p['id'] for p in chunk['points']}
+                    records = [record for record in point_history if record['mode'] == 'learn'
+                               and set(record['point_ids']) <= local
+                               and all(points[p]['mastered'] for p in record['point_ids'])]
+                    answers = [{'id': r['id'], 'question_id': r['card_id'], 'html': questions[r['card_id']]['html'],
+                                'interaction': public_interaction(questions[r['card_id']]), 'content_version': topic['version'],
+                                'explanation_html': questions[r['card_id']]['explanation_html'], 'answer': r['answer'],
+                                **reference_fields(questions[r['card_id']], True),
+                                'answer_display': display_answer(questions[r['card_id']], r['answer']),
+                                'correct': r['correct'], 'reason': r['reason'],
+                                'result': 'correct' if r['correct'] else 'incorrect', 'answered_at': r['answered_at'],
+                                'elapsed_seconds': None, 'difficulty': None} for r in records]
+                    if answers:
+                        combined.append({'id': chunk['id'], 'title': chunk['title'], 'answers': answers})
+                combined.extend(group for group in groups if group['id'] in {m['id'] for m in section['modules']})
+            groups = combined
         return {'task': task, 'groups': groups, 'math_css': topic.get('math_css', '') + bank.css(s.get('question_bank_revision') for s in steps.values())}
 
     def _review_answers(self, access, task_id, topic_id):
@@ -603,11 +636,10 @@ class DashboardStore:
             if question_id:
                 snapshot = self._snapshot(con, access['learner_id'], topic_id)
                 saved = snapshot['state']
-                if saved and saved.get('training_mode') == 'atomic_retrieval':
-                    records = saved['history'] + ([saved['active']] if saved['active'] else [])
-                    visited = {record['card_id'] for record in records}
-                else:
-                    visited = {step['question_id'] for step in saved['steps']} if saved else set()
+                visited = {step['question_id'] for step in (saved or {}).get('steps', [])}
+                point_state = atomic_state(saved)
+                records = point_state.get('history', []) + ([point_state['active']] if point_state.get('active') else [])
+                visited.update(record['card_id'] for record in records)
                 if task_id and task_id.startswith('review:'):
                     row = con.execute('SELECT body FROM review_sessions WHERE id=? AND learner=? AND topic=?',
                                       (task_id[7:], access['learner_id'], topic_id)).fetchone()
@@ -618,7 +650,7 @@ class DashboardStore:
                 if correction:
                     topic = self.catalog.topic(topic_id)
                     revision = correction['content_version']
-                    if saved and saved.get('training_mode') == 'atomic_retrieval':
+                    if question_id in {q['id'] for q in topic.get('flashcards', [])}:
                         validate_correction(topic, question_id, correction)
                     else:
                         allowed = ({state.get('question_bank_revision') or topic['version']}

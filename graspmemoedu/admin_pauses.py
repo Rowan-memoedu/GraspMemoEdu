@@ -123,7 +123,7 @@ class AdminPauses:
         learner = self.service_for(values['learner_id'], values['topic_id'])
         skip_record = state.get('skipped_modules', {}).get(values['module_id'])
         skip_event = skip_record and skip_record['event_id'] == values['pause_event_id']
-        if not skip_event and topic.get('training_mode') != 'atomic_retrieval' and (review_pause or review_replay):
+        if not skip_event and learner.review_backend is not None and (review_pause or review_replay):
             learner.review_backend.unlock_topic(pause_event_id=values['pause_event_id'])
         else:
             learner.unlock(values['topic_id'], values['module_id'], values['pause_event_id'])

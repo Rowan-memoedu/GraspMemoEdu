@@ -8,6 +8,7 @@ from .fsrs_engine import utc_time
 from .question_types import present_choice
 from .review_cards import point_id, register_point, eligible_presentations
 from .training_content import permission_id
+from .topic_structure import atomic_state, sectioned_training
 
 
 def fingerprint(value):
@@ -72,8 +73,8 @@ class ReviewSources:
             row = con.execute('SELECT body,version FROM topics WHERE learner=? AND topic=?', (self.learner, topic_id)).fetchone()
             if not row or row['version'] != topic['version']:
                 continue
-            state = json.loads(row['body'])
-            if (not state.get('completed_at') or state['pause'] or state.get('pending_submission_id')
+            state = atomic_state(json.loads(row['body']))
+            if ((not sectioned_training(topic) and not state.get('completed_at')) or state['pause'] or state.get('pending_submission_id')
                     or state.get('active') or not self.dependencies.ready(con, self.access, topic_id)):
                 continue
             eligible, global_ids = set(), {}

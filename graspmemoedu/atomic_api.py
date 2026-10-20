@@ -7,16 +7,18 @@ from fastapi import Request
 
 from .atomic_content import GAP_SECONDS, is_atomic, point_chunks
 from .service import DomainError
+from .topic_structure import atomic_state, has_atomic, sectioned_training
 
 
 def review_summary(topic, state, current=None):
     current = current or datetime.now(timezone.utc)
-    if not state or not state.get('completed_at') or state.get('pause'):
+    state = atomic_state(state)
+    if not state or (not sectioned_training(topic) and not state.get('completed_at')) or state.get('pause'):
         return {'due_count': 0, 'next_due_at': None, 'active': False}
     chunks = point_chunks(topic)
     dates = []
     for point_id, memory in state['points'].items():
-        if not memory['due_at']:
+        if not memory['mastered'] or not memory['due_at']:
             continue
         due = datetime.fromisoformat(memory['due_at'])
         last = state['chunk_last_seen'].get(chunks[point_id])
@@ -49,7 +51,7 @@ def register_atomic_routes(app, catalog, access_store, subjects, dependencies, *
             for topic_id, topic in catalog.topics.items():
                 if topic_id in redirected:
                     continue
-                if not is_atomic(topic) or topic_id not in allowed or (subject_id and topic['subject_id'] != subject_id):
+                if not has_atomic(topic) or topic_id not in allowed or (subject_id and topic['subject_id'] != subject_id):
                     continue
                 row = con.execute('SELECT version,body FROM topics WHERE learner=? AND topic=?', (access['learner_id'], topic_id)).fetchone()
                 if not row or row['version'] != topic['version']:
@@ -58,7 +60,8 @@ def register_atomic_routes(app, catalog, access_store, subjects, dependencies, *
                 summary = review_summary(topic, state, clock() if clock else None)
                 if summary['next_due_at']:
                     next_dates.append(summary['next_due_at'])
-                if summary['due_count'] or summary['active'] or state['pause']:
+                point_state = atomic_state(state)
+                if summary['due_count'] or summary['active'] or point_state['pause']:
                     items.append({'topic_id': topic_id, 'title': topic['title'], 'subject_id': topic['subject_id'],
-                                  'paused': bool(state['pause']), 'dependency_ready': dependencies.ready(con, access, topic_id), **summary})
+                                  'paused': bool(point_state['pause']), 'dependency_ready': dependencies.ready(con, access, topic_id), **summary})
         return {'items': items, 'next_due_at': min(next_dates, default=None)}

@@ -61,7 +61,7 @@ class AtomicTests(unittest.TestCase):
 
     def test_contract_rejects_wrong_subject_anchor_and_missing_single_card(self):
         validate_atomic(self.topic)
-        for mutate in (lambda t: t.update(subject_id='math'),
+        for mutate in (lambda t: t.update(subject_id='unknown-subject'),
                        lambda t: t['memory_chunks'][0]['anchors'][0].update(quote='wrong'),
                        lambda t: t.update(flashcards=[c for c in t['flashcards'] if c['point_ids'] != ['a']])):
             topic = atomic_topic(); mutate(topic)

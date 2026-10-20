@@ -37,6 +37,12 @@ class ContentReferenceIndex:
                 continue
             kind = step.get('kind')
             if kind == 'introduction':
+                if state.get('atomic') and state.get('display') == 'atomic':
+                    introductions = [entry['id'] for entry in topic.get('content_order', [])
+                                     if entry['kind'] == 'introduction']
+                    current = introductions[state['section_index']] if introductions else 'introduction'
+                    if step.get('introduction_id', 'introduction') == current:
+                        continue
                 owner = ('introduction', step.get('introduction_id', 'introduction'), 'html')
                 result[owner] = step['id']
             elif kind in ('example', 'practice'):

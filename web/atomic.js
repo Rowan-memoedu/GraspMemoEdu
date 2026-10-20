@@ -1,10 +1,10 @@
-import {t, translateMessage} from './i18n.js?v=1ea46391e42d4b14';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=1ea46391e42d4b14';
-import {selfAssessment, referenceAnswer, prepareAnswerContent, ratingChoices} from './self-assessment.js?v=1ea46391e42d4b14';
-import {reportableContent, helpableContent} from './content-report.js?v=1ea46391e42d4b14';
-import {createLearningCache} from './learning-cache.js?v=1ea46391e42d4b14';
-import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=1ea46391e42d4b14';
-import {enhanceSourceContent} from './topic-content.js?v=1ea46391e42d4b14';
+import {t, translateMessage} from './i18n.js?v=80ba278a52ec527d';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=80ba278a52ec527d';
+import {selfAssessment, referenceAnswer, prepareAnswerContent, ratingChoices} from './self-assessment.js?v=80ba278a52ec527d';
+import {reportableContent, helpableContent} from './content-report.js?v=80ba278a52ec527d';
+import {createLearningCache} from './learning-cache.js?v=80ba278a52ec527d';
+import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=80ba278a52ec527d';
+import {enhanceSourceContent} from './topic-content.js?v=80ba278a52ec527d';
 
 const node = (tag, cls = '', text) => {
   const el = document.createElement(tag); el.className = cls;
@@ -48,6 +48,11 @@ export function createAtomicView(bridge) {
     if (topic) timer = setTimeout(refresh, state?.pending_submission_id ? 800 : 5000);
   }
   function accept(next, force = false) {
+    if (state && next?.course_version === state.course_version && next.revision < state.revision) return;
+    if (next?.unified_topic && next.training_mode !== 'atomic_retrieval'
+        && next.topic_id === topic && next.learner_id === learner) {
+      stop(); bridge.resumeTopic(next); return;
+    }
     if (next?.training_mode !== 'atomic_retrieval' || next.topic_id !== topic || next.learner_id !== learner) throw new Error(t('review.invalidState'));
     if (state && next.revision < state.revision) return;
     const changed = !state || state.revision !== next.revision || JSON.stringify(state.access) !== JSON.stringify(next.access);
@@ -71,7 +76,7 @@ export function createAtomicView(bridge) {
       if (result.status === 'error') { write(submissionKey(), null); failure = result.reason; }
       accept(pending ? result.state : result);
       notice(failure);
-      if (state.phase === 'waiting' && state.next_available_at && !state.pause && !selected
+      if (state?.phase === 'waiting' && state.next_available_at && !state.pause && !selected
           && state.can_learn && Date.parse(state.server_time) >= Date.parse(state.next_available_at)) await mutate('continue');
     } catch (error) {
       if (active(ticket)) notice(translateMessage(error.message));
@@ -268,6 +273,10 @@ export function createAtomicView(bridge) {
     const intro = button(t('Introduction'), () => { selected = 'introduction'; render(); });
     intro.disabled = !state.introduction; sidebar.append(intro);
     if (!state.introduction) sidebar.append(node('p', 'atomicLockedHint', t('atomic.introLocked')));
+    for (const section of state.unified_history || []) {
+      const row = button(section.title, () => { selected = section.id; render(); });
+      row.dataset.historyId = section.id; sidebar.append(row);
+    }
     state.history.forEach((record, index) => {
       const row = button(t('atomic.cardNumber', {number: index + 1}), () => { selected = record.id; render(); });
       row.disabled = !record.viewable; row.dataset.historyId = record.id;
@@ -280,8 +289,10 @@ export function createAtomicView(bridge) {
     const status = node('p', 'fieldError', failure || ''); status.id = 'atomicNotice'; status.hidden = !failure; status.setAttribute('role', 'status'); main.append(status);
     if (selected) {
       const previous = selected === 'introduction' ? null : state.history.find(r => r.id === selected && r.viewable);
+      const section = state.unified_history?.find(item => item.id === selected);
       if (selected === 'introduction' && state.introduction) main.append(marked(state.introduction.html, 'introduction'));
       else if (previous) main.append(renderQuestion(previous, true));
+      else if (section) main.append(node('h2', '', section.title), content(section.html));
       else selected = null;
       if (selected) {
         const back = button(t('atomic.backCurrent'), () => { selected = null; render(); });
@@ -315,6 +326,7 @@ export function createAtomicView(bridge) {
       : initial || await call('state');
     if (!active(ticket)) return;
     accept(next, true);
+    if (!state) return;
     if (mode === 'review' && state.mode !== 'review' && state.completed_at && !state.pause) await mutate('choose', {choice: 'review'});
     else if (mode === 'review' && state.mode === 'review' && state.phase === 'waiting') await mutate('continue');
     if (state.pending_submission_id || savedSubmission()) await refresh();

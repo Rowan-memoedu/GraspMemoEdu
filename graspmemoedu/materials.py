@@ -11,6 +11,7 @@ from .training_content import permission_id
 from .question_types import public_interaction
 from .question_bank import QuestionBank
 from .reference_answers import reference_fields
+from .topic_structure import has_atomic, sectioned_training, sections
 
 
 def topic_blocks(topic):
@@ -24,6 +25,20 @@ def topic_blocks(topic):
         add('question', item)
         add('explanation', item, field='explanation_html')
         blocks[-1].update(reference_fields(item, True))
+    if sectioned_training(topic):
+        shown = set()
+        for section in sections(topic):
+            add('introduction', section['introduction'])
+            for chunk in section['chunks']:
+                add('chunk', chunk)
+            for card in topic['flashcards']:
+                if card['id'] not in shown and set(card['point_ids']).intersection(section['point_ids']):
+                    question(card)
+                    shown.add(card['id'])
+            for module in section['modules']:
+                for q in [module['example'], *module['practices']]:
+                    question(q)
+        return blocks
     if topic.get('topic_format_version') == 2:
         introductions = {item['id']: item for item in topic['introductions']}
         modules = {item['id']: item for item in topic.get('modules', [])}
@@ -85,7 +100,7 @@ def material_inventory(catalog, subjects, access, subject_id=None, topic_id=None
             topic = catalog.topic(declaration['id'])
             if topic_id and topic['id'] != topic_id:
                 continue
-            provider = MATERIAL_PROVIDERS.get(topic.get('training_mode', 'paradigm'), topic_entries)
+            provider = atomic_entries if has_atomic(topic) else topic_entries
             for entry in provider(topic):
                 result.append({**entry, 'topic_id': topic['id'], 'topic_title': topic['title'],
                                'subject_id': actual_subject, 'course_id': course['id'], 'course_title': course['title']})

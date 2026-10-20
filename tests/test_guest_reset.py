@@ -125,7 +125,11 @@ class GuestResetTests(unittest.TestCase):
         @app.exception_handler(DomainError)
         async def domain_error(request, error):
             return JSONResponse({'code': error.code}, status_code=error.status_code)
-        register_guest_reset_routes(app, identity, lambda state, access: state, Action)
+        def public_state(state, access, learner):
+            self.assertIs(learner, self.service)
+            self.assertEqual(access['role'], 'guest')
+            return state
+        register_guest_reset_routes(app, identity, public_state, Action)
         with TestClient(app) as client:
             role[0] = 'account'
             self.assertEqual(client.post('/api/guest/reset', json=self.payload()).status_code, 403)

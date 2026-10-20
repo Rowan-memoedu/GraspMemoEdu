@@ -5,6 +5,7 @@ import json
 
 from .service import DomainError, now
 from .topic_runtime import is_introduction
+from .topic_structure import atomic_state, has_atomic
 
 
 class DependencyPolicy:
@@ -74,9 +75,10 @@ class DependencyPolicy:
             skip_allowed = bool(skipped and state.get('skip_downstream_allowed'))
             valid = valid and (state.get('status') == 'completed' or skip_allowed and state.get('initial_completed_at'))
             valid = valid and not state.get('pause') and (not skipped or skip_allowed)
-            if valid and state.get('training_mode') == 'atomic_retrieval':
-                valid = not state.get('pause') and not any(p.get('due_at') and datetime.fromisoformat(p['due_at']) <= current
-                                                         for p in state['points'].values())
+            if valid and has_atomic(self.catalog.topic(node)):
+                points = atomic_state(state)
+                valid = not points.get('pause') and not any(p.get('due_at') and datetime.fromisoformat(p['due_at']) <= current
+                                                           for p in points.get('points', {}).values())
             if valid and 'review_topic_pauses' in tables:
                 valid = con.execute('SELECT 1 FROM review_topic_pauses WHERE learner=? AND topic=?', key).fetchone() is None
             if valid and 'review_sessions' in tables:
@@ -106,8 +108,8 @@ class DependencyPolicy:
 
     def mastery(self, con, learner_id, topic_id, state):
         topic = self.catalog.topic(topic_id)
-        if topic.get('training_mode') == 'atomic_retrieval':
-            ratings = [p['last_rating'] for p in (state or {}).get('points', {}).values() if p.get('last_rating') is not None]
+        if has_atomic(topic) and not topic.get('modules'):
+            ratings = [p['last_rating'] for p in atomic_state(state).get('points', {}).values() if p.get('last_rating') is not None]
             return round(sum(ratings) / len(ratings), 2) if ratings else None
         modules = {module['id'] for module in topic['modules']}
         scores = {}

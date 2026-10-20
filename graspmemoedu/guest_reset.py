@@ -12,4 +12,4 @@ def register_guest_reset_routes(app, identity, public_state, Action):
         access, learner = identity(request, 'learn')
         if access['role'] != 'guest':
             raise DomainError('feature_forbidden', '直接重置仅供游客使用。', 403)
-        return public_state(learner.reset_progress(payload.model_dump()), access)
+        return public_state(learner.reset_progress(payload.model_dump()), access, learner)

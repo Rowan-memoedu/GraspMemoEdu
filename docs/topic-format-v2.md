@@ -2,6 +2,8 @@
 
 本文件是 MathTopicPipeline、RemNote 转换流程与 GraspMemoEdu 的共用格式定义。适用于显式声明 `topic_format_version: 2` 的范式 Topic；旧 Markdown、原子训练 JSON、独立题库 JSON 继续沿用原协议。导入只解析、按字段映射、渲染与验证，不生成、改写或逐题审核教学内容。
 
+运行接口现允许在同一 Topic 中同时提供原子记忆点、卡片和 Example 模块。章节归属、可选字段及旧 Topic 的执行兼容见 [统一 Topic](unified-topic.md)。本文件中的 Example 优先流程适用于纯范式内容。
+
 ## 身份、顺序与引论
 
 - `id` 是稳定 Topic ID，显示编号（如 2.1）、标题、文件名变化不重编 ID。根 `source_rem_id` 保存原 RemNote Document 身份，可省略，不能按同名标题匹配。

@@ -21,6 +21,7 @@ from .config import Settings
 from .judge import ExistingJudge
 from .service import DomainError, LearningService, create_learning_service
 from .atomic_content import is_atomic
+from .topic_structure import has_atomic
 from .atomic_api import register_atomic_routes
 from .access import AccessStore
 from .access import credential_digest
@@ -134,8 +135,8 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     if service is None:
         course = catalog.topic(catalog.default_topic_id)
         service = create_learning_service(course, settings.data_dir, ExistingJudge(settings.judge_project),
-                                          **({'clock': atomic_clock} if is_atomic(course) and atomic_clock else {}))
-    if is_atomic(service.course) and atomic_clock:
+                                          **({'clock': atomic_clock} if has_atomic(course) and atomic_clock else {}))
+    if has_atomic(service.course) and atomic_clock:
         service.clock = atomic_clock
     session_token = secrets.token_urlsafe(32)
     # Store only a salted cryptographic hash of the remote pairing credential.
@@ -192,7 +193,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                 learning_services[key] = create_learning_service(
                     catalog.topic(topic_id), settings.data_dir, service.judge, learner_id=learner_id,
                     **({'runtime': runtime} if runtime else {}),
-                    **({'clock': atomic_clock} if is_atomic(catalog.topic(topic_id)) and atomic_clock else {}))
+                    **({'clock': atomic_clock} if has_atomic(catalog.topic(topic_id)) and atomic_clock else {}))
                 if trainable(learning_services[key].course) and not is_atomic(learning_services[key].course) and not is_introduction(learning_services[key].course):
                     ReviewBackend(learning_services[key])
             learner = learning_services[key]
@@ -277,12 +278,17 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         with closing(learner._connect()) as con:
             self_rating = self_rating_enabled(access, con) and state['dependency_ready'] and 'submit_answer' in features
         if state.get('training_mode') == 'atomic_retrieval':
+            # A paradigm pause cannot freeze the independent point engine.
+            if state.get('unified_topic'):
+                state['topic_locked'] = bool(state.get('pause'))
+                state['topic_pause'] = state.get('pause')
             if state.get('current'):
                 protect_assessment(state['current'], self_rating)
             for item in state.get('history', []):
                 protect_assessment(item, self_rating)
             if 'review_history' not in features:
                 state['history'] = []
+                state.pop('unified_history', None)
                 if state['phase'] != 'introduction':
                     state['introduction'] = None
             state['can_learn'] = 'learn' in features and state['dependency_ready']
@@ -702,7 +708,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         if access['role'] != 'guest' and not access.get('is_admin'):
             raise DomainError('feature_forbidden', '体验专用浏览版仅供游客和管理员使用。', 403)
         state = learner.state()
-        if is_atomic(learner.course):
+        if state.get('training_mode') == 'atomic_retrieval':
             current = state['current']
             if not current or state['phase'] != 'answer' or state['pause'] or state['pending_submission_id']:
                 raise DomainError('demo_answer_unavailable', '当前页面没有可作答的题目。', 409)

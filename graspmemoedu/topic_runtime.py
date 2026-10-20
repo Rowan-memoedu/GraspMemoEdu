@@ -24,7 +24,7 @@ def validate_runtime(topic):
         if 'topic_format_version' in topic:
             raise ValueError('Unknown Topic format version')
         return
-    if topic.get('training_mode', 'paradigm') != 'paradigm' or topic.get('topic_kind') not in ('lesson', 'introduction'):
+    if topic.get('training_mode', 'paradigm') not in ('paradigm', 'atomic_retrieval') or topic.get('topic_kind') not in ('lesson', 'introduction'):
         raise ValueError('Invalid Topic v2 kind or training mode')
     if not isinstance(topic.get('content_version'), str) or not topic['content_version']:
         raise ValueError('Missing teaching content version')
@@ -39,7 +39,8 @@ def validate_runtime(topic):
             raise ValueError('Invalid or duplicate Introduction')
         seen.add(intro['id'])
     modules = topic.get('modules')
-    if not isinstance(modules, list) or (is_introduction(topic) != (not modules)):
+    from .topic_structure import has_atomic
+    if not isinstance(modules, list) or (is_introduction(topic) != (not modules and not has_atomic(topic))):
         raise ValueError('Topic kind and Example modules disagree')
     module_ids = [m.get('id') for m in modules]
     if len(set(module_ids)) != len(module_ids) or seen.intersection(module_ids):
@@ -106,9 +107,10 @@ def learning_units(topic):
         return max(1, len(topic.get('modules', [])))
     if is_introduction(topic):
         return 1
-    if topic.get('training_mode') == 'atomic_retrieval':
+    from .topic_structure import has_atomic
+    if has_atomic(topic):
         from .atomic_content import memory_points
-        return len(memory_points(topic))
+        return len(memory_points(topic)) + len(topic.get('modules', []))
     return len(topic['modules'])
 
 

@@ -65,7 +65,7 @@ def skip(service, payload):
     with service._transaction() as con:
         if not student(service, con):
             raise DomainError('student_required', '该功能仅对学员开放', 403)
-        if is_introduction(service.course) or service.course.get('training_mode') == 'atomic_retrieval':
+        if is_introduction(service.course) or not service.course.get('modules'):
             raise DomainError('skip_unavailable', '当前内容没有可跳过的初学模块。', 409)
         state = service._load(con)
         replay, fingerprint = service._request(con, 'skip', payload)
@@ -73,6 +73,8 @@ def skip(service, payload):
             # Cancelling a pending judgement is safe: its old attempt can no longer apply.
             service._guard({**state, 'pending_submission_id': None}, payload)
             attempt = service._attempt(state)
+            if attempt['module_id'] not in {module['id'] for module in service.course['modules']}:
+                raise DomainError('skip_unavailable', '当前内容没有可跳过的初学模块。', 409)
             if attempt['status'] == 'completed':
                 raise DomainError('module_completed', '已完成的模块不能跳过。')
             attempt.update(status='skipped', mastery=None)

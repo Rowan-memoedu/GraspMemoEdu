@@ -127,14 +127,16 @@ class LearningService:
             validate_runtime(self.course)
         except (ValueError, TypeError, KeyError, AttributeError) as exc:
             raise DomainError('invalid_course', 'Topic 章节、正文身份或引用结构无效。', 422) from exc
-        if self.course.get('training_mode') == 'atomic_retrieval':
+        from .topic_structure import has_atomic
+        if has_atomic(self.course) or self.course.get('training_mode') == 'atomic_retrieval':
             from .atomic_content import validate_atomic
             try:
                 self.questions = validate_atomic(self.course)
             except (ValueError, TypeError, KeyError, AttributeError) as exc:
                 raise DomainError('invalid_course', '原子训练结构、记忆点或批注位置无效。', 422) from exc
-            return
-        if self.course.get('training_mode', 'paradigm') != 'paradigm':
+            if not self.course.get('modules'):
+                return
+        if self.course.get('training_mode', 'paradigm') not in ('paradigm', 'atomic_retrieval'):
             raise DomainError('invalid_course', '未知的 Topic 训练模式。', 422)
         if not self.course.get('version') or not (is_v2(self.course) or self.course.get('introduction', {}).get('html')):
             raise DomainError('invalid_course', '课程缺少版本或 Introduction。', 422)
@@ -370,9 +372,10 @@ class LearningService:
                 # Reset is also allowed after completion, pause or while judging.
                 if payload.get('expected_revision') != state['revision']:
                     raise DomainError('stale_revision', '学习状态已更新，请刷新后重置。')
-                if payload.get('attempt_id') != state['attempt_id']:
+                attempt_id, step_id = self._reset_identity(state)
+                if payload.get('attempt_id') != attempt_id:
                     raise DomainError('stale_attempt', '作答轮次已变化，请刷新。')
-                if payload.get('step_id') != state['active_step_id']:
+                if payload.get('step_id') != step_id:
                     raise DomainError('locked_step', '学习步骤已变化，请刷新。', 403)
                 review_tables = {row[0] for row in con.execute(
                     "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'review_%'")}
@@ -401,6 +404,9 @@ class LearningService:
                 self._save(con, state)
         self.flush_logs()
         return self._public(state)
+
+    def _reset_identity(self, state):
+        return state['attempt_id'], state['active_step_id']
 
     def choose(self, payload):
         with self._transaction() as con:
@@ -469,29 +475,33 @@ class LearningService:
             replay, fingerprint = self._request(con, 'continue', payload)
             if not replay:
                 self._guard(state, payload)
-                step, attempt = self._step(state), self._attempt(state)
-                if step['phase'] in ('choice', 'answer'):
-                    raise DomainError('answer_required', '请先完成当前步骤。')
-                if step['kind'] == 'introduction':
-                    state['introduction_read'] = True
-                    step['phase'] = 'completed'
-                    self._learn(state)
-                elif attempt['status'] == 'completed':
-                    self._next_module(state)
-                elif step['kind'] == 'example' and step['phase'] in ('unmastered', 'feedback'):
-                    self._learn(state)
-                elif step['kind'] == 'example' and step['phase'] == 'reading':
-                    question = self._practice_question(con, state, attempt)
-                    self._add_step(state, kind='practice', question=question, phase='answer')
-                elif step['kind'] == 'practice' and step['phase'] == 'feedback':
-                    question = self._practice_question(con, state, attempt)
-                    self._add_step(state, kind='practice', question=question, phase='answer')
-                else:
-                    raise DomainError('invalid_step', '无法推进当前步骤。')
+                self._advance_step(con, state)
                 self._record_action(con, 'continue', payload, fingerprint)
                 self._save(con, state)
         self.flush_logs()
         return self._public(state)
+
+    def _advance_step(self, con, state):
+        """Advance only when the next normal page is actually being shown."""
+        step, attempt = self._step(state), self._attempt(state)
+        if step['phase'] in ('choice', 'answer'):
+            raise DomainError('answer_required', '请先完成当前步骤。')
+        if step['kind'] == 'introduction':
+            state['introduction_read'] = True
+            step['phase'] = 'completed'
+            self._learn(state)
+        elif attempt['status'] == 'completed':
+            self._next_module(state)
+        elif step['kind'] == 'example' and step['phase'] in ('unmastered', 'feedback'):
+            self._learn(state)
+        elif step['kind'] == 'example' and step['phase'] == 'reading':
+            question = self._practice_question(con, state, attempt)
+            self._add_step(state, kind='practice', question=question, phase='answer')
+        elif step['kind'] == 'practice' and step['phase'] == 'feedback':
+            question = self._practice_question(con, state, attempt)
+            self._add_step(state, kind='practice', question=question, phase='answer')
+        else:
+            raise DomainError('invalid_step', '无法推进当前步骤。')
 
     def _practice_question(self, con, state, attempt):
         module = self.course['modules'][attempt['module_index']]
@@ -816,7 +826,11 @@ def create_learning_service(course, data_dir, judge=None, learner_id='local', **
     from .source_content import trainable, SourceReader
     if not trainable(course):
         return SourceReader(course, data_dir, judge, learner_id, **options)
-    if course.get('training_mode') == 'atomic_retrieval':
+    from .topic_structure import sectioned_training, has_atomic
+    if sectioned_training(course):
+        from .unified_learning import UnifiedLearningService
+        return UnifiedLearningService(course, data_dir, judge, learner_id, **options)
+    if has_atomic(course) or course.get('training_mode') == 'atomic_retrieval':
         if course.get('source_adapter') == 'hyperskill':
             from .hyperskill import HyperskillLearningService
             return HyperskillLearningService(course, data_dir, judge, learner_id, **options)

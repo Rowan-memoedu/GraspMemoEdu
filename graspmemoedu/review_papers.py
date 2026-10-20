@@ -4,7 +4,7 @@ from datetime import timedelta
 import json
 import sqlite3
 
-from .atomic_content import is_atomic
+from .topic_structure import has_atomic, atomic_backend
 from .fsrs_engine import utc_time
 from .judging import judge_answer
 from .question_types import parse_answer, public_interaction, display_answer
@@ -56,7 +56,7 @@ class PaperService:
                 con.execute("ALTER TABLE review_papers ADD COLUMN metadata TEXT NOT NULL DEFAULT '{}'")
             tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             existing = {r[0] for r in con.execute('SELECT topic FROM topics WHERE learner=?', (self.learner_id,))} if 'topics' in tables else set()
-        atoms = {tid: service_for(tid) for tid in existing if tid in catalog.topics and is_atomic(catalog.topics[tid])
+        atoms = {tid: atomic_backend(service_for(tid)) for tid in existing if tid in catalog.topics and has_atomic(catalog.topics[tid])
                  and tid not in training.catalog.topic_redirects}
         self.sources = ReviewSources(training, catalog, atoms, dependencies, access)
 

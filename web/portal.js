@@ -1,21 +1,21 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=1ea46391e42d4b14";
-import { createReviewView } from "./review.js?v=1ea46391e42d4b14";
-import { renderCourseGraph } from "./course-graph.js?v=1ea46391e42d4b14";
-import {questionInput, choiceTypeField} from './question-input.js?v=1ea46391e42d4b14';
-import {enhanceTopicContent} from './topic-content.js?v=1ea46391e42d4b14';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=1ea46391e42d4b14';
-import {createCatalogPicker} from './catalog-picker.js?v=1ea46391e42d4b14';
-import {createAtomicView} from './atomic.js?v=1ea46391e42d4b14';
-import {createTrainingView} from './training.js?v=1ea46391e42d4b14';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=1ea46391e42d4b14";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=80ba278a52ec527d";
+import { createReviewView } from "./review.js?v=80ba278a52ec527d";
+import { renderCourseGraph } from "./course-graph.js?v=80ba278a52ec527d";
+import {questionInput, choiceTypeField} from './question-input.js?v=80ba278a52ec527d';
+import {enhanceTopicContent} from './topic-content.js?v=80ba278a52ec527d';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=80ba278a52ec527d';
+import {createCatalogPicker} from './catalog-picker.js?v=80ba278a52ec527d';
+import {createAtomicView} from './atomic.js?v=80ba278a52ec527d';
+import {createTrainingView} from './training.js?v=80ba278a52ec527d';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=80ba278a52ec527d";
 
-import {createPaperView} from './review-papers.js?v=1ea46391e42d4b14';
+import {createPaperView} from './review-papers.js?v=80ba278a52ec527d';
 
-import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=1ea46391e42d4b14';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=1ea46391e42d4b14';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=1ea46391e42d4b14';
-import {attachChatEditor, renderChatMarkdown, configureChatImages} from './vendor/chat/chat.js?v=1ea46391e42d4b14';
-import {createStudentDashboard} from './student-dashboard.js?v=1ea46391e42d4b14';
+import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=80ba278a52ec527d';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=80ba278a52ec527d';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=80ba278a52ec527d';
+import {attachChatEditor, renderChatMarkdown, configureChatImages} from './vendor/chat/chat.js?v=80ba278a52ec527d';
+import {createStudentDashboard} from './student-dashboard.js?v=80ba278a52ec527d';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -112,6 +112,7 @@ export function initPortal(bridge) {
     return bank ? localHref(`/banks/${encode(bank)}`) : learnHref();
   };
   const atomic = createAtomicView({...bridge, request: call, root, homeHref: topicHomeHref,
+    resumeTopic: next => { root.hidden = true; void bridge.openTopic(next.topic_id, currentRoute?.subjectId); },
     homeLabel: () => t(currentRoute?.params?.has('bank') ? 'training.back' : 'nav.backHome'),
     reviewHref: () => subjectHref(currentRoute?.subjectId, '/reviews'), formatDate: value => apiDate(value, true),
     progressChanged: () => { dashboards.clear(); answerCache.clear(); }});
@@ -1593,6 +1594,11 @@ export function initPortal(bridge) {
   history.scrollRestoration = "manual";
   return {
     start: route,
+    async showAtomic(next) {
+      bridge.leaveTopic();
+      root.hidden = false;
+      await atomic.open(next.topic_id, 'learn', next);
+    },
     setIdentity(next) {
       if (identity?.learner_id !== next?.learner_id) { replyDrafts.clear(); helpSummaryAt = 0; showHelpSummary(null); }
       if (JSON.stringify(identity) !== JSON.stringify(next)) catalogPicker.reset();

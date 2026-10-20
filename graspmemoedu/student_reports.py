@@ -17,6 +17,7 @@ from .topic_runtime import introductions, is_introduction
 from .training_content import permission_id
 from .course_hierarchy import project_hierarchy
 from .atomic_content import point_groups
+from .topic_structure import atomic_state
 
 
 def unpack(value, default=None):
@@ -134,7 +135,7 @@ class StudentReport:
         by_step = {(r['topic'], r['step']): r for r in submissions if r['status'] == 'judged'}
         atomic_steps = set()
         for tid, state in self.states.items():
-            for record in state.get('history', []):
+            for record in atomic_state(state).get('history', []):
                 if record.get('correct') is None:
                     continue
                 atomic_steps.add((tid, record['id']))
@@ -204,8 +205,8 @@ class StudentReport:
             topic = self.owner.catalog.topics.get(cid, {}) if k == 'topic' else {}
             memory = self.memory.get((cid, version, qid), {}) if k == 'training' else {}
             title = info.get('title') or (events[-1] if events else {}).get('title') or qid
-            if self.own and topic.get('training_mode') == 'atomic_retrieval':
-                point_state = self.states.get(cid, {}).get('points', {})
+            if self.own and qid in {card['id'] for card in topic.get('flashcards', [])}:
+                point_state = atomic_state(self.states.get(cid, {})).get('points', {})
                 if not all(point_state.get(pid, {}).get('mastered') for pid in info.get('points', [qid])):
                     title = qid
             stopped = (cid, version, qid) in self.stopped if k == 'training' else False
@@ -252,14 +253,18 @@ class StudentReport:
                     'mastery': done.get('mastery') if done else None})
             for chunk in point_groups(topic):
                 for point in chunk['points']:
-                    memory = progress.get('points', {}).get(point['id'], {})
+                    memory = atomic_state(progress).get('points', {}).get(point['id'], {})
                     points.append({'id': point['id'], 'title': point['id'] if self.own and not memory.get('mastered') else point['text'], 'chunk_title': chunk['title'],
                                    'mastered': bool(memory.get('mastered')), 'due_at': memory.get('due_at')})
             guidance = [{'id': i.get('id', 'introduction'), 'title': i.get('title', 'Introduction'),
                          'read': bool(progress.get('introduction_read') or i.get('id') in progress.get('read_introductions', [])
                                       or topic.get('training_mode') == 'atomic_retrieval' and progress.get('started_at'))}
                         for i in introductions(topic)]
-            if points:
+            if points and modules:
+                total = len(points) + len(modules)
+                done = sum(p['mastered'] for p in points) + sum(m['status'] == 'completed' for m in modules)
+                unit = 'items'
+            elif points:
                 total, done, unit = len(points), sum(p['mastered'] for p in points), 'points'
             elif is_introduction(topic):
                 total, done, unit = len(guidance), sum(i['read'] for i in guidance), 'guidance'
@@ -364,7 +369,7 @@ class StudentReport:
             css = topic.get('math_css', '')
         if not question and topic and event['version'] == topic['version']:
             try:
-                if topic.get('training_mode') == 'atomic_retrieval':
+                if event['question'] in {card['id'] for card in topic.get('flashcards', [])}:
                     question = next(q for q in topic['flashcards'] if q['id'] == event['question'])
                 else:
                     bank = QuestionBank(topic, self.owner.access.data_dir)
@@ -387,7 +392,7 @@ class StudentReport:
     def locked(self, event):
         if not self.own or event['kind'] != 'topic': return False
         topic = self.owner.catalog.topics.get(event['container'], {})
-        if topic.get('training_mode') != 'atomic_retrieval': return False
+        if event['question'] not in {card['id'] for card in topic.get('flashcards', [])}: return False
         if event['mode'] == 'review': return not event['correct']
-        points = self.states.get(event['container'], {}).get('points', {})
+        points = atomic_state(self.states.get(event['container'], {})).get('points', {})
         return not all(points.get(point, {}).get('mastered') for point in event['points'])

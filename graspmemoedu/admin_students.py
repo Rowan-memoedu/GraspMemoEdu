@@ -12,6 +12,7 @@ from typing import Literal
 from fastapi import Query, Request
 
 from .atomic_content import GAP_SECONDS
+from .topic_structure import has_atomic, atomic_state, sectioned_training
 from .service import DomainError
 from .training_content import permission_id
 from .student_reports import StudentReport, time_zone
@@ -70,7 +71,7 @@ class AdminStudents:
             for row in rows:
                 item = self.student(row)
                 states = [json.loads(r['body']) for r in con.execute('SELECT topic,body FROM topics WHERE learner=?', (row['learner_id'],))
-                          if self.access.test_materials.topic_visible(r['topic'], access)
+                         if self.access.test_materials.topic_visible(r['topic'], access)
                          and r['topic'] not in self.training.topic_redirects]
                 item.update(started_topics=sum(self.started(s) for s in states),
                             completed_topics=sum(s.get('status') == 'completed' for s in states))
@@ -85,7 +86,7 @@ class AdminStudents:
         return {'topic_id': topic_id, 'topic_title': topic['title'], 'course_title': course['title'],
                 'subject_id': self.subjects.topic_subject(topic_id)}
 
-    def blockers(self, con, student, topic_id, state, version, tables, current):
+    def blockers(self, con, student, topic_id, state, version, tables, current, *, atomic=False):
         result = []
         allowed = {t['id'] for t in student['topics']}
         if not student['enabled']: result.append('account_disabled')
@@ -95,7 +96,7 @@ class AdminStudents:
         if not topic or version != topic['version']:
             result.append('old_version')
         else:
-            if (state or {}).get('pause') or ('review_topic_pauses' in tables and con.execute(
+            if (state or {}).get('pause') or (not atomic and 'review_topic_pauses' in tables and con.execute(
                 'SELECT 1 FROM review_topic_pauses WHERE learner=? AND topic=?', (student['learner_id'], topic_id)).fetchone()):
                 result.append('paused')
             if not self.dashboard.dependency_policy.ready(con, student, topic_id, current_time=current.isoformat()):
@@ -127,7 +128,7 @@ class AdminStudents:
         item['modules'] = list(by_module.values())
         from .atomic_content import memory_points
         known_points = {p['id']: p for p in memory_points(topic)}
-        for point_id, memory in state.get('points', {}).items():
+        for point_id, memory in atomic_state(state).get('points', {}).items():
             if memory.get('mastered') or memory.get('card_json') or memory.get('first_passed_at'):
                 item['points'].append({'id': point_id, 'text': known_points.get(point_id, {}).get('text', point_id),
                     'mastered': bool(memory.get('mastered')), 'first_passed_at': memory.get('first_passed_at')})
@@ -174,12 +175,13 @@ class AdminStudents:
                     continue
                 if not self.access.test_materials.topic_visible(topic_id, access):
                     continue
-                if topic.get('training_mode') != 'atomic_retrieval' or (topic_id not in rows and topic_id not in {t['id'] for t in student['topics']}):
+                if not has_atomic(topic) or (topic_id not in rows and topic_id not in {t['id'] for t in student['topics']}):
                     continue
-                state = states.get(topic_id, {})
+                state = atomic_state(states.get(topic_id, {}))
                 points = state.get('points', {})
-                blocked = self.blockers(con, student, topic_id, state, rows[topic_id]['version'] if topic_id in rows else topic['version'], tables, current)
-                if not state.get('completed_at'): blocked.append('initial_learning')
+                blocked = self.blockers(con, student, topic_id, state, rows[topic_id]['version'] if topic_id in rows else topic['version'], tables, current,
+                                        atomic=sectioned_training(topic))
+                if not sectioned_training(topic) and not state.get('completed_at'): blocked.append('initial_learning')
                 dates = {}
                 from .atomic_content import point_groups
                 for chunk in point_groups(topic):

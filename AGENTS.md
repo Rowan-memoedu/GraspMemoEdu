@@ -16,7 +16,7 @@
 - 活动开发源码仅在本仓库；正式数据在腾讯云 `/var/lib/graspmemoedu`，本机 `D:/AppData/GraspMemoEdu` 仅作回滚快照及原稿存档，证据在 `D:/Artifacts/GraspMemoEdu`。课程正文、答案表、数据库、配对信息和密钥不进入 Git。
 - 修改后运行 `D:/AppData/GraspMemoEdu/venv/Scripts/python.exe -m unittest discover -s tests -v`。实际学习流程须用独立验收目录和真实判题核验，不能消耗正式进度。
 - 课程默认只做机械导入：解析结构、按字段注入、搬运附件及校验来源一致性；不得逐题检查数学、答案、图注或配图细节。API 仅可用于极少量抽样，检查整体性损坏，不作为逐题语义门禁。后续只局部修复，不整篇重跑，不增加全量细节检查。
-- 界面术语以 `docs/ui-language.md` 为准，完整对照表从生产词库生成并检查；Introduction 为“指导”（含 v2），纯引论 Topic 类型标为“引论”，Guide 为“指南”；指导的自定义标题保留。普通 Topic 仍先选择例题是否掌握；Example/Practice 归属前面最近的 Introduction，原稿排列不构成强制阅读顺序。UI 本地化不得翻译课程正文、答案或解析。
+- 界面术语以 `docs/ui-language.md` 为准，完整对照表从生产词库生成并检查；Introduction 为“指导”（含 v2），纯引论 Topic 类型标为“引论”，Guide 为“指南”；指导的自定义标题保留。纯范式 Topic 仍先选择例题是否掌握；Example/Practice 归属前面最近的 Introduction。混合 Topic 按每节指导、原子初学、范式训练推进，只在继续/下一页插入当前节可推送的到期卡；进入下一节后不再插上一节卡，范式暂停不阻断原子复习，详见 `docs/unified-topic.md`。UI 本地化不得翻译课程正文、答案或解析。
 - 作者 Markdown / v2 JSON 导入使用 `Import-Topic.ps1` 或 `author-prepare` / `author-install`，规范见 `docs/author-import.md` 和 `docs/topic-format-v2.md`。复用原转换器，原稿 Explanation 机械映射为判题参考，不经 LLM 改写；来源包留本机。普通 Topic 只新增，纯引论允许同 ID 更新并保留旧版本与学习进度；不自动扩大账号权限，安装后重载后端。纯引论无定时复习、不进入知识图谱，已学过且教学内容变化才推送重读。
 - 字段固定归属：定义、定理、性质、识别特征、范式属于 Introduction；要求、题源属于题目正面；巧法、Idea / idea 属于同题背面的 Explanation。纯 RemNote 内引用节点就是 idea。普通字段不能按原位置保留，转换时按固定归属整理并校验，保留内容与身份；范式以 Mermaid 表达整数顺序步骤、小数分支。既有产物只做显示兼容并同步答案侧引用可见范围，保留原始内容版本和学习进度。
 - 本地插图使用文档目录内相对 PNG，来源包绑定附件哈希，显示时内嵌受控 data URL；安装和备份保留原附件，不审查配图教学细节。新建整门课程可用 `scripts/install_author_course.py`，先验证全部来源包再切换目录，沿用已存在图谱的 Course/Topic ID。局部修复只更新受影响字段、附件及哈希并留痕，不重跑整篇导入。

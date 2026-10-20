@@ -1,11 +1,11 @@
-"""Author contract for atomic retrieval topics, independent of Example modules."""
+"""Author contract for point/card content, optionally alongside Example modules."""
 from html.parser import HTMLParser
 import re
 
 from .question_types import validate_interaction
 
 MODE = 'atomic_retrieval'
-SUBJECTS = {'english', 'chinese', 'biology', 'chemistry', 'cs'}
+SUBJECTS = {'math', 'physics', 'english', 'chinese', 'biology', 'chemistry', 'cs'}
 DEFAULT_POLICY = {'version': 'atomic-v1', 'first_review_seconds': 21600, 'correct_rating': 3}
 GAP_SECONDS = 180
 IDENTIFIER = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z')
@@ -26,7 +26,8 @@ def plain_text(html):
 
 
 def is_atomic(topic):
-    return topic.get('training_mode') == MODE
+    from .topic_structure import has_atomic, has_paradigm
+    return not has_paradigm(topic) and (has_atomic(topic) or topic.get('training_mode') == MODE)
 
 
 def memory_points(topic):
@@ -67,12 +68,12 @@ def validate_atomic(topic):
     def text(value):
         return isinstance(value, str) and bool(value.strip()) and '\x00' not in value
 
-    require(is_atomic(topic) and topic.get('subject_id') in SUBJECTS, 'Unsupported atomic retrieval subject')
+    from .topic_structure import has_atomic, sections
+    require(has_atomic(topic) and topic.get('subject_id') in SUBJECTS, 'Unsupported atomic retrieval subject')
     require(identifier(topic.get('id')) and text(topic.get('title')) and text(topic.get('version')), 'Missing topic identity')
-    require(not topic.get('modules'), 'Atomic topics cannot contain Example modules')
-    intro = topic.get('introduction', {}).get('html')
-    require(text(intro), 'Missing Introduction')
-    intro_text = plain_text(intro)
+    groups = sections(topic)
+    require(all(text(s['introduction'].get('html')) for s in groups), 'Missing Introduction')
+    chunk_sources = {c['id']: plain_text(s['introduction']['html']) for s in groups for c in s['chunks']}
     policy_for(topic)
     chunks = topic.get('memory_chunks')
     external = topic.get('source_adapter') == 'hyperskill'
@@ -84,6 +85,7 @@ def validate_atomic(topic):
         require(text(chunk.get('title')) and text(chunk.get('html')), 'Missing memory chunk content')
         anchors = chunk.get('anchors')
         require(isinstance(anchors, list) and 1 <= len(anchors) <= 30, 'Missing Introduction anchors')
+        intro_text = chunk_sources[chunk['id']]
         for anchor in anchors:
             start, end = anchor.get('start'), anchor.get('end')
             require(type(start) is int and type(end) is int and 0 <= start < end <= len(intro_text)
