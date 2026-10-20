@@ -21,8 +21,8 @@ page.on('request', r => {
 try {
   await page.goto(url, {waitUntil:'networkidle'});
   await page.locator('.subjectCard').first().waitFor();
-  assert.equal(await page.locator('.subjectCard').count(), 6);
-  for (const subject of ['math','physics','english','chinese','biology','chemistry']) {
+  assert.equal(await page.locator('.subjectCard').count(), 7);
+  for (const subject of ['math','physics','english','chinese','biology','chemistry','cs']) {
     for (const section of ['courses','guide']) {
       const responsePromise = page.waitForResponse(r => new URL(r.url()).pathname === (section === 'guide' ? '/api/guide' : '/api/catalog') && new URL(r.url()).searchParams.get('subject_id') === subject);
       await page.evaluate(hash => {location.hash=hash;}, `#/subjects/${subject}/${section}`);

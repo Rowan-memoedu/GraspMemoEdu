@@ -13,6 +13,7 @@ DEFAULTS = (
     ('chinese', '语文', 'Chinese', '在阅读与表达中理解与思考。', 'Read, reflect and express ideas with clarity.', '#915847', '文'),
     ('biology', '生物', 'Biology', '认识生命的结构与变化。', 'Discover the structures and processes of life.', '#647746', '❧'),
     ('chemistry', '化学', 'Chemistry', '探索物质的性质与变化。', 'Explore matter, its properties and transformations.', '#796080', '⚗'),
+    ('cs', '计算机科学', 'Computer Science', '理解计算，构建解决问题的方法。', 'Understand computation and build ways to solve problems.', '#087f83', 'CS'),
 )
 PUBLIC_FIELDS = ('id', 'title', 'title_en', 'description', 'description_en', 'accent', 'emblem')
 

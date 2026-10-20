@@ -19,7 +19,7 @@ try{
  page.on('pageerror',e=>report.errors.push(e.message));
  const go=async route=>{await page.goto(base+'#'+route,{waitUntil:'networkidle'});};
  await go('/');await page.locator('.subjectCard').first().waitFor();
- assert.equal(await page.locator('.subjectSecondaryName').count(),6,'Keep homepage bilingual subtitles');
+ assert.equal(await page.locator('.subjectSecondaryName').count(),7,'Keep homepage bilingual subtitles');
  for(const selector of ['.mainNavigation a.active','.userAvatar'])assert.equal(await page.locator(selector).evaluate(node=>getComputedStyle(node).color),'rgb(0, 0, 0)','Homepage navbar uses neutral black');
  assert.equal(await page.locator('.mainNavigation a.active').evaluate(node=>getComputedStyle(node).borderBottomColor),'rgb(0, 0, 0)');
  const homeLogos=await page.locator('.subjectCard').evaluateAll(cards=>Object.fromEntries(cards.map(card=>[card.dataset.subjectId,card.querySelector('.subjectEmblem').src])));

@@ -1,4 +1,4 @@
-import { getLanguage, t } from './i18n.js?v=2640fd47e967d834';
+import { getLanguage, t } from './i18n.js?v=bd868751e7c14b1e';
 
 const element = (tag, className, text) => {
   const node = document.createElement(tag);
@@ -12,7 +12,7 @@ const link = (text, href, className) => {
 const decode = value => { try { return decodeURIComponent(value); } catch { return value; } };
 // One Math reference palette, with subject hue/chroma and emphasis strength.
 // Math and violet keep matching luminance; other accents have stronger contrast.
-export const subjectHues = {math: null, physics: 26, biology: 145, english: 275, chinese: 9, chemistry: 0};
+export const subjectHues = {math: null, physics: 26, biology: 145, english: 275, chinese: 9, chemistry: 0, cs: 185};
 // Violet needs less chroma to remain a restrained deep purple at the same luminance.
 const subjectChroma = {english: .55};
 const subjectEmphasis = {physics: .75, biology: .75, chinese: .75};
@@ -81,7 +81,7 @@ export function subjectPalette(subjectId = 'math') {
   return palette;
 }
 const accent = subject => subjectPalette(subject?.id)['--link-color'];
-const emblems = { math: '∑', physics: 'φ', english: 'Aa', chinese: '文', biology: '叶', chemistry: '⚗' };
+const emblems = { math: '∑', physics: 'φ', english: 'Aa', chinese: '文', biology: '叶', chemistry: '⚗', cs: 'CS' };
 // Selected together for homepage cards and the subject navbar: P2 / B3 / C2.
 const subjectMarks = {"physics":"<path d=\"M9 8h22M20 8v3l9 17M10 28a19 19 0 0 0 17 4\" /><circle cx=\"29\" cy=\"28\" r=\"4\" fill=\"currentColor\" stroke=\"none\"/>","biology":"<path d=\"M33 20c0 9-5 14-14 13S6 30 6 21 9 7 18 7 33 10 33 20Z\"/><circle cx=\"20\" cy=\"20\" r=\"5\"/><path d=\"m11 16 2-2m13 13 2-2m-15 2 2 1\"/>","chemistry":"<path d=\"m20 5 13 7v16l-13 7-13-7V12ZM20 10l8 5m0 10-8 5M12 15v10\"/>"};
 
@@ -189,7 +189,7 @@ export function applySubjectTheme(subject, { home = false } = {}) {
 }
 
 export function subjectLogo(subject) {
-  if (!subject) return './favicon.svg?v=2640fd47e967d834';
+  if (!subject) return './favicon.svg?v=bd868751e7c14b1e';
   const color = subjectPalette(subject.id)[subjectMarks[subject.id] ? '--link-color' : '--ma-navy'];
   const mark = subjectMarks[subject.id]
     ? '<g stroke="' + color + '" color="' + color + '" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + subjectMarks[subject.id] + '</g>'

@@ -55,7 +55,7 @@ async function readCurrent() {
   return api('training/state?attempt_id=' + group.questions.find(q => q.id === qid).latest_attempt_id);
 }
 try {
-  for (const subject of ['math', 'physics', 'english', 'chinese', 'biology', 'chemistry']) {
+  for (const subject of ['math', 'physics', 'english', 'chinese', 'biology', 'chemistry', 'cs']) {
     await go(`/subjects/${subject}/banks`);
     await page.locator('.portalPageTitle').waitFor();
     assert.equal(await page.locator('[data-navigation=reviews]').isVisible(), true);
@@ -63,7 +63,7 @@ try {
     assert.deepEqual(links, ['learn', 'reviews', 'courses', 'banks', 'guide']);
     assert.equal((await page.locator('.mainNavigation :is(a,button)').evaluateAll(items => new Set(items.map(i => getComputedStyle(i).marginRight)).size)), 1);
   }
-  pass('All six subjects expose Review and Question banks, with equal nav spacing and bank immediately before Guide');
+  pass('All seven subjects expose Review and Question banks, with equal nav spacing and bank immediately before Guide');
   await go('/subjects/math/topic/synthetic-course');
   await page.getByRole('button', {name: '已掌握，试着作答', exact: true}).click();
   await page.locator('#answerInput').waitFor();

@@ -1,0 +1,5 @@
+/* Additive safe-area support; preserve the existing learning layout. */
+@media (display-mode: standalone) {
+  body { padding-top:env(safe-area-inset-top); padding-bottom:env(safe-area-inset-bottom); }
+  .topBarContainer { padding-left:max(14px,env(safe-area-inset-left)); padding-right:max(14px,env(safe-area-inset-right)); }
+}

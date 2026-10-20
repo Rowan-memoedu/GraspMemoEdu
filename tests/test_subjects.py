@@ -72,16 +72,18 @@ class SubjectAcceptanceTests(unittest.TestCase):
     def test_defaults_empty_shell_and_no_private_configuration(self):
         result = self.call('GET', '/api/subjects')
         self.assertEqual(result['brand'], 'GraspMemoEdu')
-        self.assertEqual([s['id'] for s in result['subjects']], ['math', 'physics', 'english', 'chinese', 'biology', 'chemistry'])
-        self.assertEqual([s['course_count'] for s in result['subjects']], [2, 1, 0, 0, 0, 0])
+        self.assertEqual([s['id'] for s in result['subjects']], ['math', 'physics', 'english', 'chinese', 'biology', 'chemistry', 'cs'])
+        self.assertEqual([s['course_count'] for s in result['subjects']], [2, 1, 0, 0, 0, 0, 0])
         self.assertNotIn('guide_path', json.dumps(result))
         self.assertNotIn(str(self.data), json.dumps(result))
         self.assertTrue(all(s['available'] for s in result['subjects']))
         self.assertFalse(any(s['requires_account'] for s in result['subjects']))
-        for subject in ('english', 'chinese', 'biology', 'chemistry'):
+        for subject in ('english', 'chinese', 'biology', 'chemistry', 'cs'):
             self.assertEqual(self.call('GET', '/api/catalog?subject_id=' + subject)['courses'], [])
             self.call('GET', '/api/dashboard?subject_id=' + subject, status=409)
             self.assertEqual(self.call('GET', '/api/guide?subject_id=' + subject)['status'], 'empty')
+            self.assertEqual(self.call('GET', '/api/training/catalog?subject_id=' + subject)['banks'], [])
+            self.assertEqual(self.call('GET', '/api/review-papers/inbox?subject_id=' + subject)['due_count'], 0)
         self.login_account([])
         self.assertTrue(all(s['available'] for s in self.call('GET', '/api/subjects')['subjects']))
         self.assertEqual(self.call('GET', '/api/catalog?subject_id=english'), {'courses': [], 'selected_course_id': None})
