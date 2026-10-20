@@ -73,6 +73,11 @@ def validate(bank):
                     'Missing or oversized rendered question or explanation')
             require(text(q.get('title', q['id']), 200), 'Invalid question title')
             validate_interaction(q.get('interaction'), q['question'])
+            if 'academy' in q:
+                a = q['academy']
+                require(isinstance(a, dict) and set(a) == {'task_key', 'kind', 'version'}
+                        and identifier(a['task_key']) and a['kind'] in ('automated', 'manual')
+                        and text(a['version'], 128), 'Invalid Academy grading binding')
         if 'content_order' in group:
             order = group['content_order']
             expected = {('introduction', i['id']) for i in intros} | {('question', q['id']) for q in rows}
@@ -104,6 +109,17 @@ class TrainingCatalog:
         from .training_format import read_formats, present
         self.formats = read_formats(data_dir, self.banks)
         self.presented = {ident: present(self.banks[ident], value) for ident, value in self.formats.items()}
+        self.topic_redirects = {}
+        for bank in self.banks.values():
+            for group in bank['groups']:
+                for kind, rows in (('question', group.get('questions', [])), ('introduction', group.get('introductions', []))):
+                    for item in rows:
+                        tid = item.get('legacy_topic_id')
+                        if tid:
+                            if not isinstance(tid, str) or not IDENTIFIER.fullmatch(tid) or tid in self.topic_redirects:
+                                raise ValueError('Invalid or duplicate legacy Topic mapping')
+                            self.topic_redirects[tid] = {'bank_id': bank['id'], 'group_id': group['id'],
+                                                         kind + '_id': item['id']}
 
     def permissions(self, existing=()):
         result = [{'id': permission_id(b['id']), 'title': b['title']} for b in self.banks.values()]

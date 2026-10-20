@@ -5,14 +5,18 @@ import hashlib
 import secrets
 
 from fastapi import Request
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from .access import credential_digest
 from .academy import AcademyLearningService
+from .academy_training import AcademyTraining
+from .training_api import AttemptAction
+from .training_content import permission_id
 from .service import DomainError
 
 CAPABILITY_PATHS = {'/api/academy/claim', '/api/academy/event'}
-PUBLIC_PATHS = CAPABILITY_PATHS | {'/api/academy/launch', '/api/academy/finish'}
+PUBLIC_PATHS = CAPABILITY_PATHS | {'/api/academy/launch', '/api/academy/finish',
+                                 '/api/academy/training/launch', '/api/academy/training/finish'}
 
 
 class Finish(BaseModel):
@@ -54,12 +58,49 @@ def register_academy_routes(app, settings, access_store, service_for, identity, 
             raise DomainError('expired_academy_ticket', 'IDEA 连接授权已到期，请从网页重新打开。', 401)
         access = access_store.resolve_digest(row['identity_digest'])
         access_store.authorize(access, row['topic'], 'submit_answer')
+        if row['topic'].startswith('training.'):
+            backend = AcademyTraining(app.state.training_backend_for(access, row['preview_scope']), row['step'])
+            if (access['learner_id'] != row['learner'] or backend.version != row['version']
+                    or permission_id(backend.bank_id) != row['topic']):
+                raise DomainError('stale_academy_ticket', '题库已更新，请从网页重新打开。', 409)
+            return row, backend
+        if row['topic'] in app.state.training_catalog.topic_redirects:
+            raise DomainError('stale_academy_ticket', '本题已移入题库，请从题库重新打开。', 409)
         dependencies.require(access, row['topic'])
         backend = service_for(access['learner_id'], row['topic'], scope_digest=row['preview_scope'])
         require_service(backend)
         if access['learner_id'] != row['learner'] or backend.course['version'] != row['version']:
             raise DomainError('stale_academy_ticket', '课程已更新，请从网页重新打开。', 409)
         return row, backend
+
+    def grant(request, access, container, run):
+        token = secrets.token_urlsafe(32)
+        identity_token = request.headers.get('x-learning-identity')
+        with closing(access_store._connect()) as con:
+            con.execute('DELETE FROM academy_capabilities WHERE expires<?', (now().isoformat(),))
+            con.execute('INSERT INTO academy_capabilities VALUES (?,?,?,?,?,?,?,?,?,0)',
+                        (hashlib.sha256(token.encode()).hexdigest(), credential_digest('identity', identity_token),
+                         credential_digest('preview', identity_token), access['learner_id'], container,
+                         run['version'], run['step_id'], run['round_id'], (now() + timedelta(minutes=10)).isoformat()))
+            con.commit()
+        return token
+
+    @app.post('/api/academy/training/launch')
+    def training_launch(payload: AttemptAction, request: Request):
+        access, training = app.state.training_attempt_context(request, payload.attempt_id, 'submit_answer')
+        backend = AcademyTraining(training, payload.attempt_id)
+        token = grant(request, access, permission_id(backend.bank_id), backend.launch())
+        return {'url': 'graspmemoedu://academy/open?ticket=' + token,
+                'state': app.state.training_public_state(request, access, training, payload.attempt_id)}
+
+    class TrainingFinish(AttemptAction):
+        rating: int | None = Field(default=None, strict=True, ge=1, le=4)
+
+    @app.post('/api/academy/training/finish')
+    def training_finish(payload: TrainingFinish, request: Request):
+        access, training = app.state.training_attempt_context(request, payload.attempt_id, 'submit_answer')
+        AcademyTraining(training, payload.attempt_id).finish(payload.rating)
+        return app.state.training_public_state(request, access, training, payload.attempt_id)
 
     @app.post('/api/academy/launch')
     def launch(payload: Action, request: Request):
@@ -87,17 +128,21 @@ def register_academy_routes(app, settings, access_store, service_for, identity, 
     @app.post('/api/academy/claim')
     def claim(request: Request):
         row, backend = capability(request, claim=True)
-        with closing(backend._connect()) as con:
-            state = backend._load(con)
-            run = backend._run(state, row['round'], row['step'])
-            if state['phase'] != 'answer':
-                raise DomainError('academy_round_closed', '此轮已经完成，请回到网页继续。', 409)
+        if isinstance(backend, AcademyTraining):
+            binding = backend.claim(row['round'])
+        else:
+            with closing(backend._connect()) as con:
+                state = backend._load(con)
+                run = backend._run(state, row['round'], row['step'])
+                if state['phase'] != 'answer':
+                    raise DomainError('academy_round_closed', '此轮已经完成，请回到网页继续。', 409)
+            binding = {**backend.binding(state['active']), 'version': backend.course['version'], 'round_id': row['round'],
+                       'next_sequence': len(run['events']) + 1, 'mode': state['mode'], 'reset_policy': 'archive_then_template'}
         with closing(access_store._connect()) as con:
             con.execute('UPDATE academy_capabilities SET claimed=1,expires=? WHERE digest=? AND claimed=0',
                         ((now() + timedelta(days=7)).isoformat(), row['digest']))
             con.commit()
-        return {**backend.binding(state['active']), 'version': backend.course['version'], 'round_id': row['round'],
-                'next_sequence': len(run['events']) + 1, 'mode': state['mode'], 'reset_policy': 'archive_then_template'}
+        return binding
 
     @app.post('/api/academy/event')
     def event(payload: Event, request: Request):

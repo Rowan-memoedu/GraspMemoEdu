@@ -38,6 +38,9 @@ class ReviewSources:
                 AND s.status IN ('pending','running')''', (self.learner, bank_id))}
             for group in bank['groups']:
                 for question in group.get('questions', []):
+                    if question.get('academy'):
+                        # The shared bank owns its schedule; its answer provider is the IDE.
+                        continue
                     memory = memories.get(question['id'])
                     if not memory:
                         continue

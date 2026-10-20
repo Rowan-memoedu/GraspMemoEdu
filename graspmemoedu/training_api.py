@@ -49,8 +49,13 @@ def register_training_routes(app, training, access_store, subjects, service_for,
                              admission_lock, limits, schedule, outstanding_count, clock=None):
     settings = app.state.settings
     atomic_banks = AtomicBanks(app.state.catalog, subjects, access_store.test_materials)
-    if atomic_banks.banks.keys() & training.banks.keys():
-        raise ValueError('Atomic and standalone question-bank IDs must be distinct')
+    # Compatibility for older installations only. A native bank is authoritative.
+    atomic_banks.banks = {k: v for k, v in atomic_banks.banks.items() if k not in training.banks}
+
+    def backend_for(access, scope_digest=None):
+        runtime = service_for(access['learner_id'], scope_digest=scope_digest).runtime if access.get('is_admin') else None
+        return TrainingService(training, settings.data_dir, access['learner_id'], app.state.service.judge,
+                               runtime=runtime, clock=clock)
 
     def context(request, feature=None):
         access = access_store.resolve(request.headers.get('x-learning-identity'))
@@ -211,3 +216,6 @@ def register_training_routes(app, training, access_store, subjects, service_for,
         return {**backend.preferences(payload.self_rating_enabled), 'eligible': True}
 
     app.state.training_catalog = training
+    app.state.training_attempt_context = attempt_context
+    app.state.training_public_state = state
+    app.state.training_backend_for = backend_for

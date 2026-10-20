@@ -225,6 +225,8 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         subjects.authorize_subject(access, request.query_params.get('subject_id'))
         topic_id = requested_topic(request)
         access_store.authorize(access, topic_id, feature)
+        if topic_id in training.topic_redirects and request.method != 'GET':
+            raise DomainError('topic_moved_to_bank', '本题已移入题库，请从题库继续训练。', 409)
         if not trainable(catalog.topic(topic_id)) and request.url.path != '/api/state':
             raise DomainError('content_not_trainable', '原材料尚不满足训练条件，可阅读已保存内容。', 409)
         recover_cooldowns(access)
@@ -259,6 +261,8 @@ def create_app(settings: Settings | None = None, service: LearningService | None
 
     def public_state(state, access, learner):
         state['access'] = access
+        if learner.topic_id in training.topic_redirects:
+            state['training_target'] = training.topic_redirects[learner.topic_id]
         if state.get('read_only'):
             return state
         features = set(access['features'])
@@ -713,6 +717,14 @@ def create_app(settings: Settings | None = None, service: LearningService | None
 
     @app.get('/api/state')
     def state(request: Request):
+        target = training.topic_redirects.get(request.query_params.get('topic_id'))
+        if target:
+            access = access_store.resolve(request.headers.get('x-learning-identity'))
+            subjects.authorize_subject(access, request.query_params.get('subject_id'))
+            requested_topic(request)
+            access_store.authorize(access, 'training.' + target['bank_id'])
+            # A bookmark redirect must not initialize or advance the retired Topic.
+            return {'training_target': target, 'access': access}
         access, learner = identity(request)
         return public_state(learner.state(), access, learner)
 

@@ -1,15 +1,15 @@
-import {t, translateMessage} from './i18n.js?v=0305ca00f429330d';
-import {answerEditor, readerFrame} from './learning-ui.js?v=0305ca00f429330d';
-import {answerReady, questionInput, choiceTypeField} from './question-input.js?v=0305ca00f429330d';
-import {createLearningCache} from './learning-cache.js?v=0305ca00f429330d';
-import {helpableContent, reportableContent} from './content-report.js?v=0305ca00f429330d';
+import {t, translateMessage} from './i18n.js?v=1ea46391e42d4b14';
+import {answerEditor, readerFrame} from './learning-ui.js?v=1ea46391e42d4b14';
+import {answerReady, questionInput, choiceTypeField} from './question-input.js?v=1ea46391e42d4b14';
+import {createLearningCache} from './learning-cache.js?v=1ea46391e42d4b14';
+import {helpableContent, reportableContent} from './content-report.js?v=1ea46391e42d4b14';
 
 const node = (tag, cls = '', text) => { const x = document.createElement(tag); x.className = cls; if (text !== undefined) x.textContent = text; return x; };
 const button = (label, cls, action) => { const x = node('button', cls, label); x.type = 'button'; x.addEventListener('click', action); return x; };
 const html = content => { const x = node('div', 'courseContent'); x.innerHTML = content || ''; return x; };
-import {createContentTimer} from './content-timer.js?v=0305ca00f429330d';
-import {renderReviewDirectory, paperNumber} from './review-directory.js?v=0305ca00f429330d';
-import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=0305ca00f429330d';
+import {createContentTimer} from './content-timer.js?v=1ea46391e42d4b14';
+import {renderReviewDirectory, paperNumber} from './review-directory.js?v=1ea46391e42d4b14';
+import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=1ea46391e42d4b14';
 
 export function createPaperView({root, request, href, getAccess, formatDate, progressChanged, courseSidebar, taskTree}) {
   const template = document.getElementById('appLayout').cloneNode(true);
@@ -90,6 +90,11 @@ export function createPaperView({root, request, href, getAccess, formatDate, pro
     const e = ++epoch, data = await request('review-papers/inbox' + (allMaterials ? '?materials=1' : '')); if (e !== epoch) return;
     const requests = new Map();
     const body = renderReviewDirectory(root, data, {courseSidebar, taskTree, href, start: async item => {
+      if (item.external) {
+        location.hash = href('/banks/' + encodeURIComponent(item.bank_id) + '/' + encodeURIComponent(item.group_id)
+          + '?question=' + encodeURIComponent(item.question_id) + '&review=1');
+        return;
+      }
       if (item.material) {
         location.hash = href(item.source.kind === 'atomic'
           ? '/review/' + encodeURIComponent(item.topic_id) + '/atomic?card=' + encodeURIComponent(item.card_id)

@@ -139,7 +139,7 @@ def register_paper_routes(app, training, catalog, dependencies, access_store, su
                         'topic_id': row['topic_id'], 'card_id': row['id'],
                         'source': {'kind': 'atomic', 'container': row['topic_id']}}
                        for row in material_inventory(catalog, subjects, backend.access, subject)
-                       if row['kind'] == 'atomic_card']
+                       if row['kind'] == 'atomic_card' and row['topic_id'] not in training.topic_redirects]
             allowed = {topic['id'] for topic in backend.access['topics']}
             banks = [bank for bank in training.banks.values()
                      if bank['subject_id'] == subject and permission_id(bank['id']) in allowed]

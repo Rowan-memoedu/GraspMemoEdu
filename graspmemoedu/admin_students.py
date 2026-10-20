@@ -70,7 +70,8 @@ class AdminStudents:
             for row in rows:
                 item = self.student(row)
                 states = [json.loads(r['body']) for r in con.execute('SELECT topic,body FROM topics WHERE learner=?', (row['learner_id'],))
-                          if self.access.test_materials.topic_visible(r['topic'], access)]
+                          if self.access.test_materials.topic_visible(r['topic'], access)
+                         and r['topic'] not in self.training.topic_redirects]
                 item.update(started_topics=sum(self.started(s) for s in states),
                             completed_topics=sum(s.get('status') == 'completed' for s in states))
                 items.append(item)
@@ -147,7 +148,8 @@ class AdminStudents:
             student = self.access._public(row)
             tables = self.dashboard.dependency_policy.tables(con)
             rows = {r['topic']: r for r in con.execute('SELECT topic,version,body FROM topics WHERE learner=?', (learner_id,))
-                    if self.access.test_materials.topic_visible(r['topic'], access)}
+                    if self.access.test_materials.topic_visible(r['topic'], access)
+                    and r['topic'] not in self.training.topic_redirects}
             states = {key: json.loads(r['body']) for key, r in rows.items()}
             learned = [self.learned_topic(key, r) for key, r in rows.items()
                        if self.started(states[key])]
@@ -168,6 +170,8 @@ class AdminStudents:
                         'due_at': card['due_at'], 'stored_due_at': card['due_at'], 'active': bool(card['active_session']),
                         'blockers': blocked, 'overdue': datetime.fromisoformat(card['due_at']) <= current})
             for topic_id, topic in self.catalog.topics.items():
+                if topic_id in self.training.topic_redirects:
+                    continue
                 if not self.access.test_materials.topic_visible(topic_id, access):
                     continue
                 if topic.get('training_mode') != 'atomic_retrieval' or (topic_id not in rows and topic_id not in {t['id'] for t in student['topics']}):
@@ -226,7 +230,8 @@ class AdminStudents:
             if not row:
                 raise DomainError('student_not_found', '未找到该学员。', 404)
             rows = {r['topic']: r for r in con.execute('SELECT topic,version,body FROM topics WHERE learner=?', (learner_id,))
-                    if self.access.test_materials.topic_visible(r['topic'], access)}
+                    if self.access.test_materials.topic_visible(r['topic'], access)
+                    and r['topic'] not in self.training.topic_redirects}
             report = StudentReport(self, con, access, self.access._public(row), rows,
                                    self.dashboard.dependency_policy.tables(con), self.clock(), own)
             kind, container = options['kind'], options.get('container')

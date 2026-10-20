@@ -53,6 +53,8 @@ class TrainingService:
                 CREATE TABLE IF NOT EXISTS training_suspensions (
                     learner TEXT NOT NULL, bank TEXT NOT NULL, question TEXT NOT NULL, version TEXT NOT NULL,
                     stopped_at TEXT NOT NULL, PRIMARY KEY(learner,bank,question,version));
+                CREATE TABLE IF NOT EXISTS training_external_rounds (
+                    attempt TEXT PRIMARY KEY, body TEXT NOT NULL);
             ''')
 
     def _connect(self):
@@ -168,6 +170,8 @@ class TrainingService:
             result = json.loads(row['result']) if row['result'] else None
             memory = self._memory(con, row['bank'], row['question'], row['version'])
             stopped = self._stopped(con, row['bank'], row['question'], row['version'])
+            external = con.execute('SELECT body FROM training_external_rounds WHERE attempt=?', (attempt_id,)).fetchone()
+            run = json.loads(external['body']) if external else None
         revealed = row['phase'] in ('shown', 'done')
         return {'attempt_id': row['id'], 'bank_id': row['bank'], 'group_id': row['group_id'],
                 'question_id': row['question'], 'version': row['version'], 'phase': row['phase'],
@@ -176,7 +180,10 @@ class TrainingService:
                              'html': question['html'], 'interaction': public_interaction(question)},
                 'explanation_html': question['explanation_html'] if revealed else None,
                 **reference_fields(question, revealed),
-                'can_self_rate': self_rating and is_reproduction(question),
+                'can_self_rate': self_rating and is_reproduction(question) and not question.get('academy'),
+                **({'academy': {**question['academy'], 'round_id': run['id'] if run else None,
+                               'checks': len(run['events']) if run else 0,
+                               'opened': bool(run and run.get('opened_at'))}} if question.get('academy') else {}),
                 'submission_id': row['submission_id'], 'submission_status': submission['status'] if submission else None,
                 'answer': submission['answer'] if submission else '',
                 'answer_display': display_answer(question, submission['answer']) if submission else '',
@@ -196,6 +203,8 @@ class TrainingService:
             if row['phase'] != 'done':
                 require_unreserved(con, self.learner_id, 'training', row['bank'], row['version'], row['question'], now=utc_time(self.clock()).isoformat())
             question = json.loads(row['snapshot'])
+            if question.get('academy'):
+                raise DomainError('academy_check_required', '请在 IDEA 中检查此题。', 409)
             answer = data['answer']
             try:
                 if not answer.strip():
@@ -226,10 +235,11 @@ class TrainingService:
             raise DomainError('unknown_submission', '未找到此提交记录。', 404)
         return row[0]
 
-    def _complete(self, con, row, *, correct=None, reason='', rating=None, elapsed_ms=None, stop=False):
+    def _complete(self, con, row, *, correct=None, reason='', rating=None, elapsed_ms=None, stop=False,
+                  self_rating=True, completed_at=None, enroll=False):
         memory = self._memory(con, row['bank'], row['question'], row['version'])
         revision = memory['revision'] if memory else 0
-        now = utc_time(self.clock())
+        now = utc_time(completed_at or self.clock())
         if stop:
             con.execute('''INSERT INTO training_suspensions VALUES (?,?,?,?,?)
                 ON CONFLICT(learner,bank,question,version) DO NOTHING''',
@@ -244,7 +254,7 @@ class TrainingService:
             mastery = rating if rating is not None else 1 if not correct else 5 if memory is None else 3
             # A manually enrolled due card follows review semantics even on its
             # first wrong answer; later attempts must respect its new due date.
-            mastered = bool(row['mode'] == 'review' or memory and memory['mastered']
+            mastered = bool(enroll or row['mode'] == 'review' or memory and memory['mastered']
                             or (memory and memory['revision'] == 0 and memory['card_json'] is None)
                             or (rating > 1 if rating is not None else correct))
             if mastery == 5:
@@ -263,7 +273,7 @@ class TrainingService:
                 (self.learner_id, row['bank'], row['question'], row['version'], int(mastered), revision + 1, card_json, due))
             scheduled = not stopped
         result = {'correct': correct, 'reason': reason, 'rating': mastery,
-                  'self_rating': rating, 'scheduled': scheduled, 'due_at': None if stopped else due,
+                  'self_rating': rating if self_rating else None, 'scheduled': scheduled, 'due_at': None if stopped else due,
                   'stopped': stopped, 'stop_requested': stop,
                   'practice_only': not eligible}
         con.execute('''INSERT INTO training_ratings VALUES (?,?,?,?,?,?,?,?)''',
@@ -308,6 +318,8 @@ class TrainingService:
     def reveal(self, attempt_id):
         with self.transaction() as con:
             row = self._attempt(con, attempt_id)
+            if json.loads(row['snapshot']).get('academy'):
+                raise DomainError('academy_check_required', '请在 IDEA 中完成本题后记录结果。', 409)
             if not is_reproduction(json.loads(row['snapshot'])):
                 raise DomainError('self_rating_forbidden', '只有复现题支持高阶学习者自主评分。', 403)
             if row['submission_id']:
@@ -401,6 +413,8 @@ class TrainingService:
         for row in rows:
             bank = allowed.get(row['bank'])
             if not bank or bank['version'] != row['version']:
+                continue
+            if not any(q['id'] == row['question'] for g in bank['groups'] for q in g.get('questions', [])):
                 continue
             due = utc_time(row['due_at'])
             if due > now:

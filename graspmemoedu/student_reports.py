@@ -81,6 +81,8 @@ class StudentReport:
         return self.con.execute(f'SELECT * FROM {table} WHERE learner=?', (self.learner,))
 
     def visible(self, kind, container):
+        if kind == 'topic' and container in self.owner.training.topic_redirects:
+            return False
         return self.owner.access.test_materials.topic_visible(
             permission_id(container) if kind == 'training' else container, self.access)
 

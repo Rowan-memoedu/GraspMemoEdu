@@ -33,7 +33,7 @@ def contains_extension(old, incoming, package):
     return True
 
 
-def install(package, data_dir, *, extend_course=False):
+def _install(package, data_dir, *, extend_course=False):
     package, data_dir = Path(package).resolve(), Path(data_dir).resolve()
     if (data_dir / 'cloud-authoritative.json').exists():
         raise ValueError('Do not install into the local production rollback snapshot')
@@ -139,6 +139,17 @@ def install(package, data_dir, *, extend_course=False):
         assert all(final.topics[t['id']] == loaded.topics[t['id']] for c in candidate['courses'] for t in c['topics'])
         return {'status': 'installed', 'courses': [c['id'] for c in candidate['courses']],
                 'topics': sum(len(c['topics']) for c in candidate['courses']), 'generation': generation, 'learning_records_changed': False}
+
+
+def install(package, data_dir, *, extend_course=False):
+    result = _install(package, data_dir, extend_course=extend_course)
+    manifest = json.loads((Path(package) / 'manifest.json').read_bytes())
+    if manifest['adapter'] == 'jetbrains-academy':
+        from .academy_training_import import install as install_bank
+        courses = json.loads((Path(package) / 'catalog.json').read_bytes())['courses']
+        result['banks'] = [install_bank(data_dir, c['id']) for c in courses if c.get('placement') == 'question_bank']
+        result['learning_records_changed'] = any(b['status'] == 'migrated' for b in result['banks'])
+    return result
 
 
 if __name__ == '__main__':

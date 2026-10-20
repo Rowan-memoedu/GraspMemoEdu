@@ -1,6 +1,8 @@
-# JetBrains Academy 练习与原子卡
+# JetBrains Academy 题库与 IDEA 作答
 
-每道练习对应一个 CS 原子 Topic、一个原子卡和一个记忆点。整批内容归入 CS 题库中的一个分组，保留原 Course、Section、Lesson 的目录顺序，不作为“学习”中的课程。纯说明材料转换为引论，不创建 FSRS 状态。练习使用现有 `AtomicLearningService` 的数据表和 `FSRSEngine`，不会另外维护熟练度。
+整批练习对应 CS 题库中的一个题库，Section、Lesson 对应其中的分组，每道题目对应一个 FSRS 状态。数据、目录、读题页面、自由选题、作答历史和复习排程全部使用数学等学科共用的 `TrainingCatalog`、`TrainingService` 和 `web/training.js`。纯说明材料保留为题组内的阅读页，不创建 FSRS 状态，也不构成答题前置门槛。
+
+IDEA 是作答与判题适配器，只负责打开 Task、检查代码和回传结果。它不另建课程学习流程。题目直接进入作答阶段，无“已理解，开始训练”按钮。复习入口仍打开同一题库页面；IDE 题不混入网页判题试卷。
 
 ## 使用
 
@@ -20,7 +22,7 @@ Windows 安装器只登记当前用户的 `graspmemoedu` 协议，直接交给�
 
 只排除明确的运行环境或网络故障。无法进一步归类的有效失败按答案错误计入。时间、提示次数不改变评分权重。网页显式创建一轮，首次通过或主动结束时关闭；它替代基于提交间隔推测轮次的办法，继续同一轮不会因跨午夜分拆。
 
-每轮结果直接更新同一个原子记忆点的 FSRS Card。初次有效训练也使用 FSRS 的学习间隔，不套用其他学科原子卡的固定首次六小时。导入时不把 Academy 的 Solved、Unchecked 或文件修改时间当成历史评分。
+每轮评分交给共享训练服务，更新同一道题的 FSRS Card。初次有效训练也使用 FSRS 学习间隔；提前练习保存作答历史但不推进未到期的排程，与其他题库一致。导入时不把 Academy 的 Solved、Unchecked 或文件修改时间当成历史评分。
 
 ## 本机与网站边界
 
@@ -38,7 +40,7 @@ Windows 安装器只登记当前用户的 `graspmemoedu` 协议，直接交给�
 
 转换使用网站现有的安全 Markdown、MathJax 和图片渲染器。包的 manifest 只列目录和 Topic；带本机路径的中间文件、模板清单和旧答案不属于上传包。安装由 `python -m graspmemoedu.academy_import --package <package> --data-dir <data>` 完成，通过现有 `active-content.json` 原子切换。已有课程和 Topic 不覆盖，重复安装返回 unchanged。
 
-容器元数据的 `placement: question_bank` 控制题库归属。目录和权限仍以同一组 Topic ID 关联，题库视图直接读取这些原子卡的状态，不复制到 `training_memory`。已导入内容使用 `python -m graspmemoedu.bank_placement --data-dir <data> --container-id <id>` 迁移：验证所有正文哈希和层级后切换内容指针，不更新正文版本或数据库行；旧课程选择自动失效。迁移前后的内容指针可用于回退。
+安装器会将标记为 `placement: question_bank` 的 Academy 内容机械转换为 `training-banks/<id>.json`。已有的投影式题库用 `python -m graspmemoedu.academy_training_import --data-dir <data> --course-id <id>` 迁移。该操作先备份数据库，保留原 Topic、版本与历史证据，原样复制已有 FSRS Card 和到期时间，并接续未结束的 IDEA 轮次及其授权。旧 Topic 地址跳转到题库，旧写入入口关闭，复习目录只使用题库排程，避免双份卡片。重复迁移不重评分。权限只有在原题目全部已授权时才映射到整个题库；遇到部分授权即停止，不扩大访问范围。测试材料在题库公开前继承测试标记。
 
 插件源代码位于 `idea-plugin`。`Build.ps1` 使用当前安装的 IDEA 262 和 Academy 2026.9 SDK 编译，依赖目标机已有的 Academy 插件；不复制其源码或重新打包其依赖。将生成的 `GraspMemoEduAcademy` 安装到 IDEA 插件目录，并在 IDEA config 目录放置 `graspmemoedu-academy.json`，指定 `api_origin`、`manifest`、`data_dir`。
 
@@ -46,6 +48,6 @@ Windows 安装器只登记当前用户的 `graspmemoedu` 协议，直接交给�
 
 ## 验证
 
-`tests/test_academy.py` 验证评分、乱序拒绝、跨轮去重、账户授权和 FSRS Card 身份延续。`tests/test_academy_import.py` 验证层级、幂等安装和 UTF-16 占位区。`tests/test_atomic_banks.py` 验证迁移保留卡片状态、题库层级、学习入口排除、权限和测试材料隔离。`idea-plugin/test/BridgeCoreTest.java` 检查存档、指纹、路径边界与结果分类。`scripts/academy_ui_acceptance.mjs` 在独立后台浏览器只读渲染五种布局。
+`tests/test_academy_training.py` 验证共用题库契约、首次直接作答、评分映射、重复回传、同一 FSRS 身份、提前练习、迁移与在途轮次接续、复习去重和权限隔离。既有数学题库测试继续验证原行为。`tests/test_academy.py` 保留旧适配器兼容验证，`tests/test_academy_import.py` 验证幂等安装和 UTF-16 占位区。`idea-plugin/test/BridgeCoreTest.java` 检查存档、指纹、路径边界与结果分类。
 
 编译通过不能代替已安装插件的实机验收。实机还需核对网页授权、IDEA Task/代码导航、存档与模板恢复，以及真实 Check 回传；这些操作使用独立验收课程和身份，不消耗正式练习进度。

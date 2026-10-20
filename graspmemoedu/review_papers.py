@@ -56,7 +56,8 @@ class PaperService:
                 con.execute("ALTER TABLE review_papers ADD COLUMN metadata TEXT NOT NULL DEFAULT '{}'")
             tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             existing = {r[0] for r in con.execute('SELECT topic FROM topics WHERE learner=?', (self.learner_id,))} if 'topics' in tables else set()
-        atoms = {tid: service_for(tid) for tid in existing if tid in catalog.topics and is_atomic(catalog.topics[tid])}
+        atoms = {tid: service_for(tid) for tid in existing if tid in catalog.topics and is_atomic(catalog.topics[tid])
+                 and tid not in training.catalog.topic_redirects}
         self.sources = ReviewSources(training, catalog, atoms, dependencies, access)
 
     def _now(self):
@@ -180,7 +181,8 @@ class PaperService:
             legacy = []
             allowed = {x['id'] for x in self.access['topics']}
             for tid, backend in self.sources.atoms.items():
-                if tid not in allowed or backend.course['subject_id'] != subject:
+                if (tid not in allowed or backend.course['subject_id'] != subject
+                        or tid in self.training.catalog.topic_redirects):
                     continue
                 old = backend._load(con)
                 if backend.course.get('academy') or backend.course.get('source_adapter') == 'hyperskill':
@@ -201,6 +203,20 @@ class PaperService:
                     legacy.append({'id': 'legacy:' + tid, 'kind': 'single', 'source': {'kind': 'atomic', 'container': tid},
                                    'topic_id': tid, 'title': backend.course['title'], 'paused': bool(old.get('pause')),
                                    'can_resume': not old.get('pause') and self.sources.dependencies.ready(con, self.access, tid)})
+        banks = []
+        for b in self.training.catalog.banks.values():
+            if b['subject_id'] == subject and 'training.' + b['id'] in allowed:
+                banks.append({**b, 'groups': [{**g, 'questions': [q for q in g.get('questions', []) if q.get('academy')]}
+                                              for g in b['groups']]})
+        external = self.training.reviews(banks)
+        # Do not put IDE questions into a web-graded paper. They still use the
+        # shared training directory, history and memory schedule.
+        for item in external['items']:
+            legacy.append({**item, 'id': 'training:' + item['bank_id'] + ':' + item['question_id'],
+                           'kind': 'single', 'count': 1, 'external': True,
+                           'source': {'kind': 'training', 'container': item['bank_id'], 'group_id': item['group_id']}})
+        count += len(external['items'])
+        next_due = min(filter(None, [next_due, external['next_due_at']]), default=None)
         trees = source_trees(self.catalog, self.training.catalog,
                              [e for e in candidates + active if e['kind'] == 'single'] + legacy)
         return {'items': candidates, 'active': active, 'trees': trees, 'due_count': count, 'next_due_at': next_due,

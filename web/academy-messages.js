@@ -10,4 +10,5 @@ export const academyMessages = {
   'academy.finish': ['本轮未完成，结束并安排重练', 'End this unsuccessful round and schedule another attempt'],
   'academy.connection': ['若 IDEA 尚未打开，请确认浏览器已允许打开 JetBrains 链接，再点击下方链接。', 'If IDEA has not opened, allow the JetBrains link in your browser and use the link below.'],
   'academy.recorded': ['已记录本轮结果', 'Round recorded'],
+  'academy.scoring': ['一次通过记 Good；通过前的错误按既定权重记 Hard 或 Again。环境错误不计分。', 'A first-check pass earns Good; earlier errors determine Hard or Again. Environment failures are not scored.'],
 };

@@ -1,21 +1,21 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=0305ca00f429330d";
-import { createReviewView } from "./review.js?v=0305ca00f429330d";
-import { renderCourseGraph } from "./course-graph.js?v=0305ca00f429330d";
-import {questionInput, choiceTypeField} from './question-input.js?v=0305ca00f429330d';
-import {enhanceTopicContent} from './topic-content.js?v=0305ca00f429330d';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=0305ca00f429330d';
-import {createCatalogPicker} from './catalog-picker.js?v=0305ca00f429330d';
-import {createAtomicView} from './atomic.js?v=0305ca00f429330d';
-import {createTrainingView} from './training.js?v=0305ca00f429330d';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=0305ca00f429330d";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=1ea46391e42d4b14";
+import { createReviewView } from "./review.js?v=1ea46391e42d4b14";
+import { renderCourseGraph } from "./course-graph.js?v=1ea46391e42d4b14";
+import {questionInput, choiceTypeField} from './question-input.js?v=1ea46391e42d4b14';
+import {enhanceTopicContent} from './topic-content.js?v=1ea46391e42d4b14';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=1ea46391e42d4b14';
+import {createCatalogPicker} from './catalog-picker.js?v=1ea46391e42d4b14';
+import {createAtomicView} from './atomic.js?v=1ea46391e42d4b14';
+import {createTrainingView} from './training.js?v=1ea46391e42d4b14';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=1ea46391e42d4b14";
 
-import {createPaperView} from './review-papers.js?v=0305ca00f429330d';
+import {createPaperView} from './review-papers.js?v=1ea46391e42d4b14';
 
-import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=0305ca00f429330d';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=0305ca00f429330d';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=0305ca00f429330d';
-import {attachChatEditor, renderChatMarkdown, configureChatImages} from './vendor/chat/chat.js?v=0305ca00f429330d';
-import {createStudentDashboard} from './student-dashboard.js?v=0305ca00f429330d';
+import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=1ea46391e42d4b14';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=1ea46391e42d4b14';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=1ea46391e42d4b14';
+import {attachChatEditor, renderChatMarkdown, configureChatImages} from './vendor/chat/chat.js?v=1ea46391e42d4b14';
+import {createStudentDashboard} from './student-dashboard.js?v=1ea46391e42d4b14';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -378,6 +378,11 @@ export function initPortal(bridge) {
         if (bridge.getAccess()?.is_admin) $('adminLearningNotice').append(link(t('admin.allBlocks'), `/topic/${encode(topicId)}/content`, 'textButton adminAllBlocksLink'));
         const state = await call(`state?topic_id=${encode(topicId)}`);
         if (ticket !== sequence) return;
+        if (state.training_target) {
+          const target = state.training_target;
+          navigate(`/banks/${encode(target.bank_id)}/${encode(target.group_id)}?${target.question_id ? 'question=' + encode(target.question_id) : 'introduction=' + encode(target.introduction_id)}`);
+          return;
+        }
         if (state.training_mode === 'atomic_retrieval') await atomic.open(topicId, 'learn', state);
         else { root.hidden = true; await bridge.openTopic(topicId, subjectId); }
       } else if (/^\/review\/[^/]+\/[^/]+$/.test(path)) {

@@ -1,15 +1,15 @@
-import {t, translateMessage} from './i18n.js?v=0305ca00f429330d';
-import {answerReady, answerEmpty} from './question-input.js?v=0305ca00f429330d';
-import {createLearningCache} from './learning-cache.js?v=0305ca00f429330d';
-import {helpableContent} from './content-report.js?v=0305ca00f429330d';
-import {ratingChoices} from './self-assessment.js?v=0305ca00f429330d';
+import {t, translateMessage} from './i18n.js?v=1ea46391e42d4b14';
+import {answerReady, answerEmpty} from './question-input.js?v=1ea46391e42d4b14';
+import {createLearningCache} from './learning-cache.js?v=1ea46391e42d4b14';
+import {helpableContent} from './content-report.js?v=1ea46391e42d4b14';
+import {ratingChoices} from './self-assessment.js?v=1ea46391e42d4b14';
 
 const node = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const button = (text, cls, action) => { const n = node('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
 const encode = encodeURIComponent;
 const query = fields => new URLSearchParams(fields).toString();
 const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy', 'training.retire'];
-import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation} from './learning-ui.js?v=0305ca00f429330d';
+import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation} from './learning-ui.js?v=1ea46391e42d4b14';
 
 export function createTrainingView(bridge) {
   const {root, request, href, formatDate, getAccess} = bridge;
@@ -193,6 +193,7 @@ export function createTrainingView(bridge) {
     } catch (failure) { if (alive(e, s)) error(main, failure, () => select(questionId, fresh, attemptId)); }
   }
   function renderQuestion() {
+    clearTimeout(timer);
     const state = current, e = epoch, s = selection;
     const index = group.questions.findIndex(q => q.id === state.question_id);
     const reportContext = {topic_id: 'training.' + state.bank_id, bank_id: state.bank_id,
@@ -240,7 +241,9 @@ export function createTrainingView(bridge) {
     reader.refs.footerPosition.textContent = t('reader.modulePosition', {current: index + 1, total: group.questions.length});
     reader.refs.saveStatus.textContent = t(state.submission_status === 'pending' || state.submission_status === 'running' ? '答案已提交，正在判题' : '学习进度已保存');
     let primary; const extra = [];
-    if (state.phase === 'answer') {
+    if (state.phase === 'answer' && state.academy) {
+      primary = academyAnswer(state, e, s);
+    } else if (state.phase === 'answer') {
       let savedPayload = null;
       try { savedPayload = JSON.parse(read('submission', state.attempt_id)); } catch {}
       const draft = savedPayload?.answer ?? (state.answer || read('draft', state.attempt_id) || '');
@@ -292,7 +295,7 @@ export function createTrainingView(bridge) {
     if (state.phase === 'done') {
       save('draft', state.attempt_id, null); save('submission', state.attempt_id, null); save('elapsed', state.attempt_id, null); clockKey = null;
     }
-    if (state.phase === 'shown' || state.phase === 'done' && (state.result.self_rating || state.result.stop_requested)) {
+    if (!state.academy && (state.phase === 'shown' || state.phase === 'done' && (state.result.self_rating || state.result.stop_requested))) {
       const ratings = ratingChoices({labels: ratingKeys.slice(1),
         selected: state.result?.stop_requested ? 5 : state.result?.self_rating,
         disabled: state.phase === 'done' || !state.can_self_rate || !state.can_submit,
@@ -311,6 +314,53 @@ export function createTrainingView(bridge) {
       redo.disabled = ['pending', 'running'].includes(state.submission_status); extra.push(redo);
     }
     navigationFor(state.question_id, primary, extra);
+  }
+  function academyAnswer(state, e, s) {
+    const adapter = (name, body) => request('academy/training/' + name, {method: 'POST', body});
+    const open = button(t(state.academy.opened ? 'academy.resume' : 'academy.open'), 'primaryButton academyTrainingOpen', async () => {
+      open.disabled = true;
+      try {
+        const result = await adapter('launch', {attempt_id: state.attempt_id});
+        if (!alive(e, s)) return;
+        current = result.state; renderQuestion();
+        // Only a deliberate click opens the native app; polling never launches it.
+        location.href = result.url;
+      } catch (failure) { if (alive(e, s)) { error(main, failure); open.disabled = !state.can_submit; } }
+    });
+    open.disabled = !state.can_submit;
+    main.append(node('p', 'inputHint', t('academy.reset')));
+    const status = node('p', 'inputHint academyTrainingStatus', state.academy.opened
+      ? t('academy.checks', {count: state.academy.checks}) : t('academy.waiting'));
+    status.setAttribute('role', 'status'); main.append(status);
+    const finish = async rating => {
+      try {
+        const next = await adapter('finish', {attempt_id: state.attempt_id, ...(rating ? {rating} : {})});
+        if (!alive(e, s)) return;
+        flushClock(); current = next; await refreshGroup(e, s); if (alive(e, s)) renderQuestion();
+      } catch (failure) { if (alive(e, s)) error(main, failure); }
+    };
+    if (state.academy.kind === 'manual') main.append(ratingChoices({
+      labels: ratingKeys.slice(1, 5), disabled: !state.can_submit || !state.academy.opened, onRate: finish}));
+    else {
+      main.append(node('p', 'inputHint', t('academy.scoring')));
+      const end = button(t('academy.finish'), 'secondaryButton academyTrainingFinish', () => finish());
+      end.disabled = !state.can_submit || !state.academy.opened || !state.academy.checks; main.append(end);
+    }
+    if (state.academy.round_id) timer = setTimeout(() => pollAcademy(e, s, state), 1500);
+    return open;
+  }
+  async function pollAcademy(e, s, state) {
+    try {
+      const next = await request('training/state?' + query({attempt_id: state.attempt_id}));
+      if (!alive(e, s)) return;
+      if (next.phase === state.phase && JSON.stringify(next.academy) === JSON.stringify(state.academy)) {
+        timer = setTimeout(() => pollAcademy(e, s, next), 1500);
+        return;
+      }
+      current = next;
+      if (next.phase === 'done') { flushClock(); await refreshGroup(e, s); }
+      if (alive(e, s)) renderQuestion();
+    } catch (failure) { if (alive(e, s)) error(main, failure, () => pollAcademy(e, s, state)); }
   }
   async function refreshGroup(e, s) {
     const updated = await request('training/group?' + query({bank_id: group.bank_id, group_id: group.id}));
