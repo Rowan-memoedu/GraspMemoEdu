@@ -1,21 +1,21 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=21acb46c078f2e41";
-import { createReviewView } from "./review.js?v=21acb46c078f2e41";
-import { renderCourseGraph } from "./course-graph.js?v=21acb46c078f2e41";
-import {questionInput, choiceTypeField} from './question-input.js?v=21acb46c078f2e41';
-import {enhanceTopicContent} from './topic-content.js?v=21acb46c078f2e41';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=21acb46c078f2e41';
-import {createCatalogPicker} from './catalog-picker.js?v=21acb46c078f2e41';
-import {createAtomicView} from './atomic.js?v=21acb46c078f2e41';
-import {createTrainingView} from './training.js?v=21acb46c078f2e41';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=21acb46c078f2e41";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=208937ea490726d3";
+import { createReviewView } from "./review.js?v=208937ea490726d3";
+import { renderCourseGraph } from "./course-graph.js?v=208937ea490726d3";
+import {questionInput, choiceTypeField} from './question-input.js?v=208937ea490726d3';
+import {enhanceTopicContent} from './topic-content.js?v=208937ea490726d3';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=208937ea490726d3';
+import {createCatalogPicker} from './catalog-picker.js?v=208937ea490726d3';
+import {createAtomicView} from './atomic.js?v=208937ea490726d3';
+import {createTrainingView} from './training.js?v=208937ea490726d3';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=208937ea490726d3";
 
-import {createPaperView} from './review-papers.js?v=21acb46c078f2e41';
+import {createPaperView} from './review-papers.js?v=208937ea490726d3';
 
-import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=21acb46c078f2e41';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=21acb46c078f2e41';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=21acb46c078f2e41';
-import {attachChatEditor, renderChatMarkdown, configureChatImages} from './vendor/chat/chat.js?v=21acb46c078f2e41';
-import {createStudentDashboard} from './student-dashboard.js?v=21acb46c078f2e41';
+import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=208937ea490726d3';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=208937ea490726d3';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=208937ea490726d3';
+import {attachChatEditor, renderChatMarkdown, configureChatImages} from './vendor/chat/chat.js?v=208937ea490726d3';
+import {createStudentDashboard} from './student-dashboard.js?v=208937ea490726d3';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -52,6 +52,16 @@ export function initPortal(bridge) {
   }
   const replyDrafts = new Map();
   const dashboards = new Map(), scrolls = new Map(), answerCache = new Map();
+  const bankLocations = new Map(), bankSidebarScrolls = new Map();
+  const bankRoute = route => route?.subjectId && /^\/banks(?:\/|$)/.test(route.path);
+  const bankReview = route => bankRoute(route) && (route.params.get('review') === '1' || route.params.get('card') === '1');
+  function rememberBankLocation(hash, leaving = false) {
+    const previous = parsePlatformRoute(hash);
+    if (!bankRoute(previous) || bankReview(previous)) return;
+    bankLocations.set(previous.subjectId, hash);
+    if (leaving) bankSidebarScrolls.set(hash, $('traininghistoryPanel')?.scrollTop || 0);
+  }
+  function clearBankLocations() { bankLocations.clear(); bankSidebarScrolls.clear(); currentHash = ''; }
   const routeKey = () => location.hash || "#/";
   const selectedDashboard = () => dashboards.get(selectedCourse);
   const timezone = () => profile?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -174,7 +184,9 @@ export function initPortal(bridge) {
     for (const item of document.querySelectorAll(".mainNavigation [data-navigation]")) {
       const section = item.dataset.navigation;
       item.hidden = section === 'qa' ? !canUseHelp() : !subject && !currentRoute?.path.startsWith('/qa');
-      item.href = section === 'qa' ? '#/qa' : subjectHref(subject?.id || navigationSubjectId, `/${section}`);
+      const subjectId = subject?.id || navigationSubjectId;
+      item.href = section === 'qa' ? '#/qa' : section === 'banks' && bankLocations.has(subjectId)
+        ? bankLocations.get(subjectId) : subjectHref(subjectId, `/${section}`);
     }
     $("topicHomeLink").href = topicHomeHref();
     if (changed && subject) void refreshHelpSummary(true);
@@ -293,8 +305,14 @@ export function initPortal(bridge) {
   }
   function releaseGuideAssets() { for (const url of guideObjectUrls) URL.revokeObjectURL(url); guideObjectUrls = []; }
   function stopPageWork() { pruneChatEditors(true); clearTimeout(refreshTimer); clearTimeout(pageTimer); releaseGuideAssets(); review.stop(); atomic.stop(); training.stop(); papers.stop(); hidePopovers(); helpFeedRefresh = null; helpReadObserver?.disconnect(); helpReadObserver = null; }
-  async function route() {
-    if (currentHash) scrolls.set(currentHash, window.scrollY);
+  async function route(event) {
+    // A reader can replace the hash while selecting a question without firing
+    // hashchange. Its actual departure URL is the authoritative location.
+    const previousHash = currentHash && (event?.oldURL ? new URL(event.oldURL).hash : currentHash);
+    if (previousHash) {
+      scrolls.set(previousHash, window.scrollY);
+      rememberBankLocation(previousHash, true);
+    }
     currentRoute = parseRoute();
     if (/^\/help-requests(?:\/|$)/.test(currentRoute.path)) {
       currentRoute.path = currentRoute.path.replace('/help-requests', '/qa');
@@ -311,7 +329,7 @@ export function initPortal(bridge) {
     root.classList.toggle("reviewShell", currentRoute.path.startsWith("/review/"));
     if (bridge.getIdentityProblem()) { root.hidden = true; root.replaceChildren(); return; }
     updateSubjectContext(subjects?.find(subject => subject.id === currentRoute.subjectId) || null);
-    setNavigation(currentRoute.path.startsWith('/qa') ? 'qa' : !currentRoute.subjectId ? "subjects" : currentRoute.path.startsWith('/banks') || currentRoute.params.has('bank') ? 'banks' : currentRoute.path.startsWith("/courses") ? "courses" : currentRoute.path === "/guide" ? "guide" : currentRoute.path.startsWith('/reviews') ? 'reviews' : "learn");
+    setNavigation(currentRoute.path.startsWith('/qa') ? 'qa' : !currentRoute.subjectId ? "subjects" : bankReview(currentRoute) ? 'reviews' : currentRoute.path.startsWith('/banks') || currentRoute.params.has('bank') ? 'banks' : currentRoute.path.startsWith("/courses") ? "courses" : currentRoute.path === "/guide" ? "guide" : currentRoute.path.startsWith('/reviews') ? 'reviews' : "learn");
     root.replaceChildren(loading()); window.scrollTo(0, 0);
     try {
       if (profile) await bridge.refreshAccess();
@@ -391,6 +409,9 @@ export function initPortal(bridge) {
         else await review.open(decodeURIComponent(path.split("/")[2]), decodeURIComponent(path.split("/")[3]), params.get("session"));
       } else root.replaceChildren(errorBox(t("portal.this.page.does.not.exist.24"), () => navigate("/"), t("portal.page.not.found.25")));
       if (ticket !== sequence) return;
+      currentHash = routeKey(); currentRoute = parseRoute();
+      rememberBankLocation(currentHash);
+      updateSubjectContext(subject || null);
       const target = params.get("unitId") || params.get("topicId");
       requestAnimationFrame(() => {
         if (ticket !== sequence) return;
@@ -398,6 +419,8 @@ export function initPortal(bridge) {
         if (reportBlock) { reportBlock.focus({preventScroll: true}); reportBlock.scrollIntoView({block: 'start'}); }
         else if (target) root.querySelector(`[data-progress-id="${CSS.escape(target)}"]`)?.scrollIntoView({ block: "start" });
         else window.scrollTo(0, scrolls.get(currentHash) || 0);
+        const sidebar = $('traininghistoryPanel');
+        if (sidebar && !bankReview(currentRoute)) sidebar.scrollTop = bankSidebarScrolls.get(currentHash) || 0;
       });
     } catch (error) {
       if (ticket !== sequence) return;
@@ -1589,6 +1612,10 @@ export function initPortal(bridge) {
   helpReporting = installHelpRequests(bridge.getAccess, context => showFeedback({...context, help_request: true, request_id: crypto.randomUUID()}));
 
   window.addEventListener("hashchange", route);
+  document.querySelector('.mainNavigation [data-navigation="banks"]').addEventListener('click', event => {
+    if (!event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey
+        && bankRoute(parseRoute()) && !bankReview(parseRoute())) event.preventDefault();
+  });
   setInterval(() => { void refreshHelpSummary(true); }, 30000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) void refreshHelpSummary(true); });
   history.scrollRestoration = "manual";
@@ -1600,7 +1627,7 @@ export function initPortal(bridge) {
       await atomic.open(next.topic_id, 'learn', next);
     },
     setIdentity(next) {
-      if (identity?.learner_id !== next?.learner_id) { replyDrafts.clear(); helpSummaryAt = 0; showHelpSummary(null); }
+      if (identity?.learner_id !== next?.learner_id) { replyDrafts.clear(); helpSummaryAt = 0; showHelpSummary(null); clearBankLocations(); scrolls.clear(); }
       if (JSON.stringify(identity) !== JSON.stringify(next)) catalogPicker.reset();
       if (identity?.learner_id !== next?.learner_id || identity?.role !== next?.role) subjects = null;
       if (identity?.learner_id && next?.learner_id !== identity.learner_id) profile = null;
@@ -1610,6 +1637,7 @@ export function initPortal(bridge) {
       identity = next; updateUser();
     },
     suspendIdentity() {
+      clearBankLocations();
       replyDrafts.clear(); showHelpSummary(null); helpSummaryAt = 0;
       catalogPicker.reset();
       contentReporting.clear();
@@ -1620,8 +1648,8 @@ export function initPortal(bridge) {
       if (feedbackDialog.open) feedbackDialog.close();
       feedbackInput.value = "";
     },
-    permissionsChanged() { catalogPicker.reset(); catalog = null; dashboards.clear(); answerCache.clear(); },
-    async identityChanged() { review.reset(); atomic.reset(); subjects = null; catalog = null; profile = null; dashboards.clear(); answerCache.clear(); scrolls.clear(); await route(); },
+    permissionsChanged() { catalogPicker.reset(); catalog = null; dashboards.clear(); answerCache.clear(); clearBankLocations(); },
+    async identityChanged() { review.reset(); atomic.reset(); subjects = null; catalog = null; profile = null; dashboards.clear(); answerCache.clear(); scrolls.clear(); clearBankLocations(); await route(); },
     progressChanged() { dashboards.clear(); answerCache.clear(); },
     showFeedback,
   };

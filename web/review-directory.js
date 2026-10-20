@@ -1,4 +1,4 @@
-import {t, getLanguage} from './i18n.js?v=21acb46c078f2e41';
+import {t, getLanguage} from './i18n.js?v=208937ea490726d3';
 
 export function paperNumber(number) {
   if (getLanguage() !== 'zh-CN') return t('paper.number', {number});
@@ -30,16 +30,13 @@ export function renderReviewDirectory(root, data, {courseSidebar, taskTree, star
     taskTree(container, {...data, tasks}, {review: true, label: t('portal.reviewTask'), sourceOrder: data.source_order,
       start: task => start(task.entry), startLabel: t(data.all_materials ? 'admin.enterCard' : 'paper.start')});
   }
-  for (const [kind, label] of [['atomic', 'paper.atomicCards'], ['training', 'training.reviewCards']]) {
-    const trees = (data.trees || []).filter(tree => tree.kind === kind);
-    if (kind === 'atomic' && !trees.length) continue;
-    const section = element('section', 'incompleteTasks'); section.dataset.reviewKind = kind;
-    section.append(element('h2', 'trainingSectionTitle', t(label))); body.append(section);
-    for (const tree of trees) {
-      const container = element('div', 'courseTree'); section.append(container); render(tree, container, t(label));
-    }
-    if (!trees.length) section.append(element('p', 'portalEmpty', t('paper.none')));
+  // Source kind locates content and its grader; every single review is a card.
+  const cards = element('section', 'incompleteTasks'); cards.dataset.reviewKind = 'atomic';
+  cards.append(element('h2', 'trainingSectionTitle', t('paper.atomicCards'))); body.append(cards);
+  for (const tree of data.trees || []) {
+    const container = element('div', 'courseTree'); cards.append(container); render(tree, container, t('paper.atomicCards'));
   }
+  if (!data.trees?.length) cards.append(element('p', 'portalEmpty', t('paper.none')));
   if (data.all_materials) return body;
   const papers = element('section', 'incompleteTasks'); papers.dataset.reviewKind = 'paper';
   papers.append(element('h2', 'trainingSectionTitle', t('paper.papers')), element('p', 'inputHint', t('paper.overlap')));

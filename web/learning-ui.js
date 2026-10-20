@@ -1,7 +1,7 @@
-import {t, learningTitle} from './i18n.js?v=21acb46c078f2e41';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=21acb46c078f2e41';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=21acb46c078f2e41';
-import {enhanceTopicContent} from './topic-content.js?v=21acb46c078f2e41';
+import {t, learningTitle} from './i18n.js?v=208937ea490726d3';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=208937ea490726d3';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=208937ea490726d3';
+import {enhanceTopicContent} from './topic-content.js?v=208937ea490726d3';
 
 const node = (tag, cls = '', text) => {
   const item = document.createElement(tag); item.className = cls;
@@ -192,6 +192,27 @@ export function answerEditor(step, stem, value, {formId = 'answerForm', inputId 
   submit.id = submitId; submit.type = 'submit'; submit.setAttribute('form', formId); submit.disabled = !answerReady(input);
   bottom.append(hint, submit); form.append(label, control?.element || input, error);
   return {form, input, submit, bottom};
+}
+
+// Review navigation describes cards, regardless of where their answers are graded.
+export function renderReviewReader(refs, {items, selected = 0, phase, onSelect}) {
+  const questions = node('div', 'historyItems'); refs.historyPanel.replaceChildren(questions);
+  items.forEach((item, index) => {
+    const row = action(`${index + 1}. ${item.title || t('training.exercise', {number: index + 1})}`,
+      'historyItem', () => onSelect(index));
+    row.dataset.questionIndex = index;
+    if (index === selected) row.setAttribute('aria-current', 'step');
+    const status = item.completed ? (item.result?.correct ? 'training.correct' : 'training.incorrect')
+      : item.answer ? 'paper.answered' : 'paper.unanswered';
+    row.append(node('span', 'historyMark', t(status))); questions.append(row);
+  });
+  const completed = items.filter(item => item.completed).length;
+  refs.progressCaption.hidden = false; refs.progressCaption.textContent = `${completed} / ${items.length}`;
+  refs.lessonProgress.hidden = false; refs.lessonProgress.setAttribute('aria-valuenow', String(100 * completed / (items.length || 1)));
+  refs.lessonProgress.replaceChildren(...items.map(item => node('span', 'progressSegment ' +
+    (item.completed ? 'completed' : item.answer ? 'in_progress' : 'not_started'))));
+  refs.footerPosition.textContent = t('reader.modulePosition', {current: selected + 1, total: items.length});
+  refs.saveStatus.textContent = t(phase === 'grading' ? 'paper.checking' : 'paper.saved');
 }
 
 // Clone the original reader markup, with isolated IDs and event handlers.

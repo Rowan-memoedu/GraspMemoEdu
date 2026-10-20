@@ -1,16 +1,16 @@
-import {t, translateMessage} from './i18n.js?v=21acb46c078f2e41';
-import {answerReady, answerEmpty} from './question-input.js?v=21acb46c078f2e41';
-import {createLearningCache} from './learning-cache.js?v=21acb46c078f2e41';
-import {helpableContent} from './content-report.js?v=21acb46c078f2e41';
-import {ratingChoices} from './self-assessment.js?v=21acb46c078f2e41';
-import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=21acb46c078f2e41';
+import {t, translateMessage} from './i18n.js?v=208937ea490726d3';
+import {answerReady, answerEmpty} from './question-input.js?v=208937ea490726d3';
+import {createLearningCache} from './learning-cache.js?v=208937ea490726d3';
+import {helpableContent} from './content-report.js?v=208937ea490726d3';
+import {ratingChoices} from './self-assessment.js?v=208937ea490726d3';
+import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=208937ea490726d3';
 
 const node = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const button = (text, cls, action) => { const n = node('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
 const encode = encodeURIComponent;
 const query = fields => new URLSearchParams(fields).toString();
 const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy', 'training.retire'];
-import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation} from './learning-ui.js?v=21acb46c078f2e41';
+import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, renderReviewReader} from './learning-ui.js?v=208937ea490726d3';
 
 export function createTrainingView(bridge) {
   const {root, request, href, formatDate, getAccess} = bridge;
@@ -20,6 +20,7 @@ export function createTrainingView(bridge) {
   let epoch = 0, selection = 0, timer = null, group = null, current = null, sidebar, main;
   let elapsed = 0, activeSince = null, clockKey = null, visibilityHandler = null;
   let reader = null;
+  let reviewCard = false, reviewQuestion = null;
   let selectedIntroduction = null;
   let hyperskillBusy = false;
   const key = (kind, id) => `graspmemoedu:training:${cacheAccess?.learner_id}:${kind}:${id}`;
@@ -44,6 +45,7 @@ export function createTrainingView(bridge) {
     if (visibilityHandler) document.removeEventListener('visibilitychange', visibilityHandler);
     visibilityHandler = null; group = current = selectedIntroduction = null; cache.clear();
     reader?.destroy(); reader = null;
+    reviewCard = false; reviewQuestion = null;
     document.getElementById('trainingMathStyle')?.remove();
   }
   function error(container, failure, retry) {
@@ -55,6 +57,8 @@ export function createTrainingView(bridge) {
   }
   async function open(path, params) {
     cacheAccess = getAccess();
+    reviewCard = params.get('review') === '1' || params.get('card') === '1';
+    reviewQuestion = reviewCard ? params.get('question') : null;
     const e = ++epoch; ++selection;
     root.replaceChildren(node('p', '', t('training.loading')));
     const parts = path.split('/').filter(Boolean).map(decodeURIComponent);
@@ -92,17 +96,18 @@ export function createTrainingView(bridge) {
     } else if (parts.length === 3) {
       const nextGroup = await request('training/group?' + query({bank_id: parts[1], group_id: parts[2]}));
       if (e !== epoch) return;
-      group = nextGroup;
+      group = cardGroup(nextGroup);
       const style = node('style'); style.id = 'trainingMathStyle'; style.textContent = group.math_css; document.head.append(style);
       reader = readerFrame(readerTemplate, 'training');
       const refs = reader.refs;
       sidebar = refs.historyPanel; main = refs.stepCard;
       root.hidden = true; root.after(reader.frame); document.body.classList.add('topicPage');
       refs.loadingState.hidden = true; refs.courseShell.hidden = false;
-      refs.topicHomeLink.href = href(`/banks/${encode(group.bank_id)}`); refs.topicHomeLink.textContent = '← ' + t('training.back');
+      refs.topicHomeLink.href = href(reviewCard ? '/reviews' : `/banks/${encode(group.bank_id)}`);
+      refs.topicHomeLink.textContent = '← ' + t(reviewCard ? 'paper.back' : 'training.back');
       refs.topicFeedbackButton.hidden = true;
-      refs.lessonTitle.textContent = group.title;
-      reader.frame.querySelector('.eyebrow').textContent = t(group.questions.length ? 'lesson.topic' : 'reader.introductionTask');
+      refs.lessonTitle.textContent = reviewCard ? group.questions[0].title : group.title;
+      reader.frame.querySelector('.eyebrow').textContent = t(reviewCard ? 'paper.title' : group.questions.length ? 'lesson.topic' : 'reader.introductionTask');
       reader.frame.querySelector('.lessonToolbar').hidden = true;
       renderSidebar();
       visibilityHandler = () => { flushClock(); if (!document.hidden && current?.phase === 'answer' && !current.submission_id) activeSince = performance.now(); };
@@ -113,10 +118,25 @@ export function createTrainingView(bridge) {
           ? group.introductions.find(i => i.id === group.content_order[0].id) : null);
       if (intro) selectIntroduction(intro.id);
       else if (selected) await select(selected.id, params.get('review') === '1'
-        && !(selected.latest_attempt_mode === 'review' && selected.latest_attempt_phase !== 'done'));
+        && !(selected.latest_attempt_mode === 'review' && selected.latest_attempt_phase !== 'done'),
+        reviewCard ? params.get('attempt') : null);
     } else throw new Error(t('portal.this.page.does.not.exist.24'));
   }
+  function cardGroup(source) {
+    if (!reviewCard) return source;
+    const selected = source.questions.find(question => question.id === reviewQuestion);
+    if (!selected) throw new Error(t('portal.this.page.does.not.exist.24'));
+    return {...source, questions: [selected], introductions: [],
+      content_order: [{type: 'question', id: selected.id}]};
+  }
   function renderSidebar() {
+    if (reviewCard) {
+      const question = group.questions[0];
+      renderReviewReader(reader.refs, {items: [{...question, completed: current?.phase === 'done',
+        answer: current?.answer, result: current?.result}], phase: current?.phase,
+        onSelect: () => { if (current) renderQuestion(); }});
+      return;
+    }
     sidebar.replaceChildren();
     group.questions.forEach((q, index) => {
       const {group: section, items} = readerHistoryGroup({contentId: q.id,
@@ -187,13 +207,15 @@ export function createTrainingView(bridge) {
       }
       if (!alive(e, s)) return;
       if (state.bank_id !== group.bank_id || state.group_id !== group.id || state.question_id !== questionId) throw new Error(t('portal.this.page.does.not.exist.24'));
-      history.replaceState(null, '', href(groupPath(group.bank_id, group.id, questionId)));
+      history.replaceState(null, '', href(groupPath(group.bank_id, group.id, questionId)
+        + (reviewCard ? '&card=1&attempt=' + encode(state.attempt_id) : '')));
       current = state; startClock(state); renderSidebar(); renderQuestion();
     } catch (failure) { if (alive(e, s)) error(main, failure, () => select(questionId, fresh, attemptId)); }
   }
   function renderQuestion() {
     clearTimeout(timer);
     const state = current, e = epoch, s = selection;
+    if (reviewCard) renderSidebar();
     const index = group.questions.findIndex(q => q.id === state.question_id);
     const reportContext = {topic_id: 'training.' + state.bank_id, bank_id: state.bank_id,
       group_id: state.group_id, question_id: state.question_id};
@@ -418,7 +440,7 @@ export function createTrainingView(bridge) {
   async function refreshGroup(e, s) {
     const updated = await request('training/group?' + query({bank_id: group.bank_id, group_id: group.id}));
     if (!alive(e, s)) return;
-    group = updated; renderSidebar();
+    group = cardGroup(updated); renderSidebar();
   }
   async function poll(e, s, state) {
     try {

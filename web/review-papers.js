@@ -1,15 +1,15 @@
-import {t, translateMessage} from './i18n.js?v=21acb46c078f2e41';
-import {answerEditor, readerFrame} from './learning-ui.js?v=21acb46c078f2e41';
-import {answerReady, questionInput, choiceTypeField} from './question-input.js?v=21acb46c078f2e41';
-import {createLearningCache} from './learning-cache.js?v=21acb46c078f2e41';
-import {helpableContent, reportableContent} from './content-report.js?v=21acb46c078f2e41';
+import {t, translateMessage} from './i18n.js?v=208937ea490726d3';
+import {answerEditor, readerFrame, renderReviewReader} from './learning-ui.js?v=208937ea490726d3';
+import {answerReady, questionInput, choiceTypeField} from './question-input.js?v=208937ea490726d3';
+import {createLearningCache} from './learning-cache.js?v=208937ea490726d3';
+import {helpableContent, reportableContent} from './content-report.js?v=208937ea490726d3';
 
 const node = (tag, cls = '', text) => { const x = document.createElement(tag); x.className = cls; if (text !== undefined) x.textContent = text; return x; };
 const button = (label, cls, action) => { const x = node('button', cls, label); x.type = 'button'; x.addEventListener('click', action); return x; };
 const html = content => { const x = node('div', 'courseContent'); x.innerHTML = content || ''; return x; };
-import {createContentTimer} from './content-timer.js?v=21acb46c078f2e41';
-import {renderReviewDirectory, paperNumber} from './review-directory.js?v=21acb46c078f2e41';
-import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=21acb46c078f2e41';
+import {createContentTimer} from './content-timer.js?v=208937ea490726d3';
+import {renderReviewDirectory, paperNumber} from './review-directory.js?v=208937ea490726d3';
+import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=208937ea490726d3';
 
 export function createPaperView({root, request, href, getAccess, formatDate, progressChanged, courseSidebar, taskTree}) {
   const template = document.getElementById('appLayout').cloneNode(true);
@@ -98,7 +98,7 @@ export function createPaperView({root, request, href, getAccess, formatDate, pro
       if (item.material) {
         location.hash = href(item.source.kind === 'atomic'
           ? '/review/' + encodeURIComponent(item.topic_id) + '/atomic?card=' + encodeURIComponent(item.card_id)
-          : '/banks/' + encodeURIComponent(item.bank_id) + '/' + encodeURIComponent(item.group_id) + '?question=' + encodeURIComponent(item.question_id));
+          : '/banks/' + encodeURIComponent(item.bank_id) + '/' + encodeURIComponent(item.group_id) + '?question=' + encodeURIComponent(item.question_id) + '&card=1');
         return;
       }
       if (item.can_resume) { location.hash = href('/review/' + encodeURIComponent(item.topic_id) + '/atomic'); return; }
@@ -255,20 +255,8 @@ export function createPaperView({root, request, href, getAccess, formatDate, pro
     if (!reader || !state) return;
     clock(); input = null;
     contentTimer?.update(state.timing);
-    const item = state.items[selected], refs = reader.refs, main = refs.stepCard, sidebar = refs.historyPanel;
-    const questions = node('div', 'historyItems'); sidebar.replaceChildren(questions);
-    state.items.forEach((q, i) => {
-      const row = button(`${i + 1}. ${q.title || t('training.exercise', {number: i + 1})}`, 'historyItem', () => select(i)); row.dataset.questionIndex = i;
-      if (i === selected) row.setAttribute('aria-current', 'step');
-      const status = q.completed ? (q.result?.correct ? 'training.correct' : 'training.incorrect') : q.answer ? 'paper.answered' : 'paper.unanswered';
-      row.append(node('span', 'historyMark', t(status))); questions.append(row);
-    });
-    const completed = state.items.filter(q => q.completed).length;
-    refs.progressCaption.hidden = false; refs.progressCaption.textContent = `${completed} / ${state.items.length}`;
-    refs.lessonProgress.hidden = false; refs.lessonProgress.setAttribute('aria-valuenow', String(100 * completed / state.items.length));
-    refs.lessonProgress.replaceChildren(...state.items.map(q => node('span', 'progressSegment ' + (q.completed ? 'completed' : q.answer ? 'in_progress' : 'not_started'))));
-    refs.footerPosition.textContent = t('reader.modulePosition', {current: selected + 1, total: state.items.length});
-    refs.saveStatus.textContent = t(state.phase === 'grading' ? 'paper.checking' : 'paper.saved');
+    const item = state.items[selected], refs = reader.refs, main = refs.stepCard;
+    renderReviewReader(refs, {...state, selected, onSelect: select});
     const heading = node('div', 'stepHeader'); heading.append(node('h2', 'stepTitle', t('training.exercise', {number: selected + 1})), node('span', 'stepCounter', t(state.mode === 'paper' ? 'paper.paperMode' : 'paper.questionMode')));
     const stem = content(item, 'question', item.html); main.replaceChildren(heading);
     if (state.phase === 'done') main.append(node('p', 'completionBanner', t('paper.finished')), node('p', '', t('paper.summary', {correct: state.items.filter(q => q.result?.correct).length, count: state.items.length})));

@@ -61,9 +61,9 @@ try {
   const inbox = await api('review-papers/inbox?subject_id=math');
   assert.equal(inbox.items.filter(i => i.kind === 'paper').length, 2);
   assert.equal(inbox.trees.length, 2);
-  await page.getByRole('heading', {name: '我的错题本', exact: true}).waitFor();
+  await page.getByRole('heading', {name: '原子卡片', exact: true}).waitFor();
   await expandTrees();
-  assert.equal(await page.getByRole('heading', {name: '我的错题本', exact: true}).count(), 1);
+  assert.equal(await page.getByRole('heading', {name: '原子卡片', exact: true}).count(), 1);
   assert.equal(await page.locator('.taskTitle').filter({hasText: /^卷一$/}).count(), 1);
   assert.equal(await page.locator('.taskTitle').filter({hasText: /^卷二$/}).count(), 1);
   await shot('shared-review-tree-desktop'); pass('Multiple bank roots retain chapters and groups; one paper-type root contains 卷一 and 卷二');
