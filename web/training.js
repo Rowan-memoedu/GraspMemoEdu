@@ -1,16 +1,16 @@
-import {t, translateMessage} from './i18n.js?v=208937ea490726d3';
-import {answerReady, answerEmpty} from './question-input.js?v=208937ea490726d3';
-import {createLearningCache} from './learning-cache.js?v=208937ea490726d3';
-import {helpableContent} from './content-report.js?v=208937ea490726d3';
-import {ratingChoices} from './self-assessment.js?v=208937ea490726d3';
-import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=208937ea490726d3';
+import {t, translateMessage} from './i18n.js?v=e972693e74f485ba';
+import {answerReady, answerEmpty} from './question-input.js?v=e972693e74f485ba';
+import {createLearningCache} from './learning-cache.js?v=e972693e74f485ba';
+import {helpableContent} from './content-report.js?v=e972693e74f485ba';
+import {ratingChoices} from './self-assessment.js?v=e972693e74f485ba';
+import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=e972693e74f485ba';
 
 const node = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const button = (text, cls, action) => { const n = node('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
 const encode = encodeURIComponent;
 const query = fields => new URLSearchParams(fields).toString();
 const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy', 'training.retire'];
-import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, renderReviewReader} from './learning-ui.js?v=208937ea490726d3';
+import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, renderReviewReader} from './learning-ui.js?v=e972693e74f485ba';
 
 export function createTrainingView(bridge) {
   const {root, request, href, formatDate, getAccess} = bridge;
@@ -23,6 +23,8 @@ export function createTrainingView(bridge) {
   let reviewCard = false, reviewQuestion = null;
   let selectedIntroduction = null;
   let hyperskillBusy = false;
+  let hyperskillAvailability = null, hyperskillProbe = null;
+  const hyperskillWarm = new Map();
   const key = (kind, id) => `graspmemoedu:training:${cacheAccess?.learner_id}:${kind}:${id}`;
   const read = (kind, id) => cache.read(localStorage, key(kind, id));
   const save = (kind, id, value) => cache.write(localStorage, key(kind, id), value);
@@ -44,6 +46,7 @@ export function createTrainingView(bridge) {
     flushClock(); clockKey = null; ++epoch; ++selection; clearTimeout(timer);
     if (visibilityHandler) document.removeEventListener('visibilitychange', visibilityHandler);
     visibilityHandler = null; group = current = selectedIntroduction = null; cache.clear();
+    hyperskillAvailability = hyperskillProbe = null; hyperskillWarm.clear();
     reader?.destroy(); reader = null;
     reviewCard = false; reviewQuestion = null;
     document.getElementById('trainingMathStyle')?.remove();
@@ -97,6 +100,7 @@ export function createTrainingView(bridge) {
       const nextGroup = await request('training/group?' + query({bank_id: parts[1], group_id: parts[2]}));
       if (e !== epoch) return;
       group = cardGroup(nextGroup);
+      if(group.external_providers?.includes('hyperskill')) void probeHyperskill(e);
       const style = node('style'); style.id = 'trainingMathStyle'; style.textContent = group.math_css; document.head.append(style);
       reader = readerFrame(readerTemplate, 'training');
       const refs = reader.refs;
@@ -210,6 +214,7 @@ export function createTrainingView(bridge) {
       history.replaceState(null, '', href(groupPath(group.bank_id, group.id, questionId)
         + (reviewCard ? '&card=1&attempt=' + encode(state.attempt_id) : '')));
       current = state; startClock(state); renderSidebar(); renderQuestion();
+      if(state.hyperskill && state.phase==='answer' && state.can_submit) void warmHyperskill(state,e);
     } catch (failure) { if (alive(e, s)) error(main, failure, () => select(questionId, fresh, attemptId)); }
   }
   function renderQuestion() {
@@ -343,31 +348,100 @@ export function createTrainingView(bridge) {
     }
     navigationFor(state.question_id, primary, extra);
   }
+  function probeHyperskill(e) {
+    if(!hyperskillProbe) hyperskillProbe=localHyperskill('health',{}, {timeout:1800})
+      .then(value=>value.ready===true).catch(()=>false).then(ready=>{
+        if(e===epoch) {hyperskillAvailability=ready;paintHyperskillConnection();}
+        if(ready&&e===epoch)void localHyperskill('warmup',{}).catch(()=>{});
+        return ready;
+      });
+    return hyperskillProbe;
+  }
+  function connectionText(state) {
+    if(hyperskillAvailability===null)return '正在后台检查连接，可以先作答。';
+    if(hyperskillAvailability)return hyperskillWarm.get(state.attempt_id)?.ready?
+      'Hyperskill 已就绪。':'正在后台准备 Hyperskill 判题，可以先作答。';
+    return state.hyperskill.local_ready?'已具备验证过的参考答案，可直接提交。':
+      state.hyperskill.type==='code'?'代码题需要本机 Hyperskill 服务进行判题。':'此题尚无已验证答案，首次判题需要连接 Hyperskill。';
+  }
+  function paintHyperskillConnection() {
+    if(!current?.hyperskill||!main)return;
+    const status=main.querySelector('.hyperskillConnection');
+    if(status)status.textContent=connectionText(current);
+    const send=main.querySelector('[data-hyperskill-submit]');
+    if(send)send.textContent=hyperskillAvailability===false&&current.hyperskill.local_ready?'提交答案':'提交至 Hyperskill';
+  }
+  async function warmHyperskill(state,e,force=false) {
+    if(!force && !await probeHyperskill(e))return null;
+    if(e!==epoch)return null;
+    let entry=hyperskillWarm.get(state.attempt_id);
+    if(entry&&!force)return entry.promise;
+    entry={ready:false};hyperskillWarm.set(state.attempt_id,entry);
+    entry.promise=(async()=>{
+      try {
+        const grant=await request('academy/training/launch',{method:'POST',body:{attempt_id:state.attempt_id}});
+        if(e!==epoch)return null;
+        const result=await localHyperskill('open',{ticket:grant.ticket});
+        if(e!==epoch)return null;
+        save('hyperskill',state.attempt_id,JSON.stringify(result));entry.ready=true;
+        if(current?.attempt_id===state.attempt_id) {
+          if((!state.hyperskill.prepared||result.ide?.watching)&&!hyperskillBusy)renderQuestion();
+          else paintHyperskillConnection();
+        }
+        return result;
+      } catch(failure) {entry.error=failure;return null;}
+    })();
+    return entry.promise;
+  }
   function hyperskillAnswer(state, e, s) {
     let data;
     try { data = JSON.parse(read('hyperskill', state.attempt_id)); } catch {}
+    if(!data && state.hyperskill.prepared)data={interaction:state.hyperskill.interaction,
+      local:!hyperskillAvailability,last:state.hyperskill.local_last};
+    if(data)data={...data,connection:connectionText(state)};
     const action = async (name, answer) => {
       if (hyperskillBusy || !state.can_submit) return;
-      hyperskillBusy = true; renderQuestion();
+      hyperskillBusy = true; if(name!=='status')renderQuestion();
       try {
+        let saved;try{saved=JSON.parse(read('hyperskill',state.attempt_id));}catch{}
+        data=saved||data;
         let result;
         if (name === 'open') {
-          const grant = await request('academy/training/launch', {method:'POST',body:{attempt_id:state.attempt_id}});
-          if (!alive(e,s)) return;
-          result = await localHyperskill('open', {ticket:grant.ticket});
+          hyperskillProbe=null;hyperskillAvailability=null;
+          if(!await probeHyperskill(e))throw Error('本机 Hyperskill 服务尚未连接。');
+          result=await warmHyperskill(state,e,true);
+          if(!result)throw hyperskillWarm.get(state.attempt_id)?.error||Error('Hyperskill 连接失败。');
         } else if (name === 'finish') {
           await request('academy/training/finish', {method:'POST',body:{attempt_id:state.attempt_id}});
         } else {
+          const ready=await probeHyperskill(e);
+          if((name==='status'||name==='submit')&&data?.local_pending) {
+            const next=await post('hyperskill-submit',data.local_pending);
+            result={interaction:state.hyperskill.interaction,local:true,last:next.hyperskill.local_last};
+          } else if(name==='submit' && !ready && !data?.pending) {
+            if(!state.hyperskill.local_ready)throw Error('此题需要本机 Hyperskill 服务完成判题。');
+            const payload={attempt_id:state.attempt_id,request_id:crypto.randomUUID(),answer,elapsed_ms:flushClock()};
+            data={...data,local:true,local_pending:payload};
+            save('hyperskill',state.attempt_id,JSON.stringify(data));
+            const next=await post('hyperskill-submit',payload);
+            result={interaction:state.hyperskill.interaction,local:true,last:next.hyperskill.local_last};
+          } else if(name==='retry' && data?.local) {
+            result={interaction:state.hyperskill.interaction,local:true};
+          } else {
+          if(!data?.session && ['submit','ide'].includes(name)) {
+            data=await warmHyperskill(state,e);
+            if(!data)throw hyperskillWarm.get(state.attempt_id)?.error||Error('本机 Hyperskill 服务尚未连接。');
+          }
           const requestId = data.request_id || crypto.randomUUID();
           if (name === 'submit') {
             data.request_id = requestId; save('hyperskill',state.attempt_id,JSON.stringify(data));
           }
           result = await localHyperskill(name,{session:data.session,attempt_id:data.attempt_id,
-            ...(['submit','ide'].includes(name)?{answer}:{}),...(name==='submit'?{request_id:requestId}:{})});
+            ...(name==='submit'?{answer,request_id:requestId}:{})});
+          }
         }
         if (!alive(e,s)) return;
         if (result) save('hyperskill',state.attempt_id,JSON.stringify(result));
-        if (name==='read-code' && typeof result.draft==='string') save('draft',state.attempt_id,result.draft);
         if (name==='retry') save('draft',state.attempt_id,null);
         const next = await request('training/state?' + query({attempt_id:state.attempt_id}));
         if (!alive(e,s)) return;
@@ -375,9 +449,17 @@ export function createTrainingView(bridge) {
         if (next.phase==='done') { flushClock(); await refreshGroup(e,s); }
       } catch (failure) {
         if (alive(e,s)) {
-          if (name==='submit' && data) save('hyperskill',state.attempt_id,JSON.stringify({
+          if (name==='submit' && data && !data.local && data.request_id) save('hyperskill',state.attempt_id,JSON.stringify({
             ...data,pending:true,message:'提交状态尚未确认，请先刷新结果。'}));
-          hyperskillBusy=false; renderQuestion(); error(main,failure); return;
+          if(data?.local_pending) {
+            const rejected=failure.status>=400&&failure.status<500&&![408,429].includes(failure.status);
+            save('hyperskill',state.attempt_id,JSON.stringify(rejected?
+              {interaction:state.hyperskill.interaction,local:true}:
+              {...data,pending:true,message:'正在确认原答案的判题结果，请稍候。'}));
+          }
+          hyperskillBusy=false; renderQuestion(); error(main,failure);
+          if(name==='status')timer=setTimeout(()=>{if(alive(e,s))void action('status');},5000);
+          return;
         }
       } finally { hyperskillBusy=false; }
       if (alive(e,s)) renderQuestion();
@@ -387,7 +469,7 @@ export function createTrainingView(bridge) {
       disabled:hyperskillBusy||!state.can_submit,data,draft:read('draft',state.attempt_id)||'',
       onDraft:value=>save('draft',state.attempt_id,value),action,finish:()=>action('finish')});
     main.append(box);
-    if (data?.pending && !hyperskillBusy) timer=setTimeout(()=>{if(alive(e,s))void action('status');},1500);
+    if ((data?.pending||data?.ide?.watching) && !hyperskillBusy) timer=setTimeout(()=>{if(alive(e,s))void action('status');},2500);
     else if (data?.last?.status==='correct' && !hyperskillBusy) timer=setTimeout(()=>pollAcademy(e,s,state),1500);
   }
   function academyAnswer(state, e, s) {

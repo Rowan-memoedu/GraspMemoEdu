@@ -2,6 +2,30 @@
 
 SUPPORTED = {'choice', 'matching', 'number', 'string', 'fill-blanks', 'sorting', 'parsons', 'table', 'code'}
 
+def validate_presentation(value, kind):
+    import json
+    if (not isinstance(value, dict) or set(value) != {'schema', 'dataset', 'code_options', 'interaction'}
+            or value['schema'] != 1 or not isinstance(value['dataset'], dict)
+            or not isinstance(value['code_options'], dict) or len(json.dumps(value)) > 1000000):
+        raise ValueError('Invalid prepared Hyperskill presentation')
+    fields = {'choice': {'options', 'is_multiple_choice'}, 'matching': {'pairs'},
+              'fill-blanks': {'components'}, 'sorting': {'options'}, 'parsons': {'lines'},
+              'table': {'rows', 'columns', 'is_checkbox', 'description'}}
+    if set(value['dataset']) != fields.get(kind, set()):
+        raise ValueError('Unexpected prepared problem fields')
+    interaction = value['interaction']
+    types = {'fill-blanks': 'hyperskill_fill', **{k: 'hyperskill_' + k for k in ('sorting', 'parsons', 'table', 'code')}}
+    if kind in ('number', 'string'):
+        if interaction is not None:
+            raise ValueError('Unexpected text interaction')
+    elif not isinstance(interaction, dict) or interaction.get('type') != types.get(kind, kind):
+        raise ValueError('Prepared problem type differs')
+    if kind == 'code':
+        if set(value['code_options']) != {'code_templates', 'samples', 'limits'}:
+            raise ValueError('Unexpected prepared code options')
+    elif value['code_options']:
+        raise ValueError('Unexpected code data')
+
 
 def validate_binding(topic):
     binding = topic.get('hyperskill')

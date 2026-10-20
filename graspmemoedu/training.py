@@ -161,6 +161,9 @@ class TrainingService:
                 if latest['id'] != attempt_id:
                     raise DomainError('feature_forbidden', '当前账号没有查看历史记录的权限。', 403)
             question = json.loads(row['snapshot'])
+            if question.get('hyperskill'):
+                from .hyperskill_answers import enrich
+                question = enrich(self, row['bank'], question)
             media = getattr(self.catalog, 'formats', {}).get(row['bank'], {}).get('media')
             if media:
                 from .training_presentation import present_book_question
@@ -194,12 +197,11 @@ class TrainingService:
                 'awaiting_first_learning': bool(memory and memory['card_json'] is None and not stopped),
                 'due_at': memory['due_at'] if memory and not stopped else None}
 
-    @staticmethod
-    def _hyperskill_state(question, run):
+    def _hyperskill_state(self, question, run):
         if not question.get('hyperskill'):
             return {}
         from .hyperskill_training import public_binding
-        return {'hyperskill': public_binding(question, run)}
+        return {'hyperskill': public_binding(question, run, self)}
 
     @staticmethod
     def submission_fingerprint(data):
@@ -399,6 +401,8 @@ class TrainingService:
         counts = {r['question']: r['count'] for r in rows}
         return {'id': group_id, 'title': group['title'], 'bank_id': bank_id, 'bank_title': bank['title'],
                 'version': bank['version'], 'math_css': bank.get('math_css', ''),
+                'external_providers': sorted({p for q in group.get('questions', [])
+                                              for p in ('hyperskill', 'academy') if q.get(p)}),
                 **({ 'introductions': group['introductions'], 'content_order': group['content_order']}
                    if 'introductions' in group else {}),
                 'questions': [{'id': q['id'], 'title': q.get('title', q['id']),

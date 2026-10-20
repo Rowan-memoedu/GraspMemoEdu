@@ -73,6 +73,9 @@ try {
         sourceImages:[...document.querySelectorAll('.courseContent img')].filter(visible).map(i=>i.complete&&i.naturalWidth>0),
         images:[...document.querySelectorAll('img')].filter(visible).map(i=>({loaded:i.complete&&i.naturalWidth>0})),
         connection:[...document.querySelectorAll('button')].filter(visible).some(e=>e.textContent.includes('连接 Hyperskill')),
+        officialIDE:[...document.querySelectorAll('button')].filter(visible).some(e=>e.textContent.includes('在 IDEA 中解题')),
+        blanks:[...document.querySelectorAll('input.inlineBlank,select.inlineBlank')].filter(visible).length,
+        webCodeEditor:[...document.querySelectorAll('.hyperskillCodeEditor')].filter(visible).length,
         text:document.body.innerText.slice(0,2000)};
     });
     await page.screenshot({path:path.join(output,`${name}-${width}.png`),fullPage:true});
@@ -80,8 +83,12 @@ try {
     assert.deepEqual(state.errors,[],name);
     assert(!state.overflow,`${name} ${width} overflow`);
     assert(state.images.every(i=>i.loaded),`${name} images`);
-    if(['fill','code'].includes(name))assert(state.connection,`${name} missing provider`);
-    if(name==='numeric-theory')assert(state.text.includes('引言')&&state.text.includes('Integer literals'),state.text);
+    if(['fill','code'].includes(name))assert(!state.connection,`${name} still waits for source loading`);
+    if(name==='fill')assert(state.blanks>0,'Prepared blank fields not visible');
+    if(name==='code')assert(state.officialIDE&&!state.webCodeEditor,'Missing official IDEA-only flow');
+    // The chapter drawer is intentionally closed on mobile; assert the current
+    // source section, while the package validator checks every Introduction.
+    if(name==='numeric-theory')assert(state.text.includes('Integer literals'),state.text);
     if(name==='numeric-theory')assert(state.codes>0,'Missing source code block');
     if(name==='image-theory')assert(state.sourceImages.length>0&&state.sourceImages.every(Boolean),'Missing source image');
     report.pages.push({name,width,...state});

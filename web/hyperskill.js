@@ -1,12 +1,12 @@
-import {questionInput,answerReady,choiceTypeField} from './question-input.js?v=208937ea490726d3';
-import {enhanceSourceContent} from './topic-content.js?v=208937ea490726d3';
+import {questionInput,answerReady,choiceTypeField} from './question-input.js?v=e972693e74f485ba';
+import {enhanceSourceContent} from './topic-content.js?v=e972693e74f485ba';
 
-export async function localHyperskill(action,body) {
+export async function localHyperskill(action,body,{timeout=120000}={}) {
   let response;
   try {
     response=await fetch(`http://127.0.0.1:18769/${action}`,{method:'POST',
       headers:{'Content-Type':'application/json','X-Grasp-Local':'1'},
-      body:JSON.stringify(body),signal:AbortSignal.timeout(120000)});
+      body:JSON.stringify(body),signal:AbortSignal.timeout(timeout)});
   } catch {
     throw Error('尚未连接本机 Hyperskill 服务。请确认服务已启动，并允许网站访问本地网络。');
   }
@@ -146,10 +146,31 @@ export function hyperskillQuestion(box,{question,history,disabled,data,draft,onD
     box.append(node('p','inputHint','在此作答，由 Hyperskill 判题；结果同时记入本网站复习记录。'));
     return box;
   }
+  if(data.connection) {
+    const status=node('p','inputHint hyperskillConnection',data.connection);
+    status.setAttribute('role','status');box.append(status);
+  }
   if(data.pending) {
     const status=node('p','inputHint',data.message);status.setAttribute('role','status');box.append(status);
     box.append(button('刷新判题结果',()=>action('status')));
     box.append(button('重新连接',()=>action('open')));
+    return box;
+  }
+  if(question.hyperskill.type==='code') {
+    if(data.last?.status==='correct') {
+      box.append(node('p','inputHint','已通过，正在同步学习记录。'));
+      return box;
+    }
+    box.append(button(data.ide?.opened?'在 IDEA 中继续':'在 IDEA 中解题',()=>action('ide'),true));
+    const status=node('p','inputHint',data.ide?.watching?
+      data.ide.submitting?'Hyperskill 正在判题，结果将自动显示在这里。':
+        '请在 IDEA 的 Hyperskill 插件中点击 Check；结果会自动同步到这里。':
+      '通过 Hyperskill 官方插件打开本题，在 IDEA 中编写代码并 Check。');
+    status.setAttribute('role','status');box.append(status);
+    if(data.last?.status==='wrong') {
+      box.append(node('p','inputHint','尚未通过，可在 IDEA 中修改后再次 Check。'),
+        button('结束本轮并记为未掌握',finish));
+    }
     return box;
   }
   if(data.last?.status==='wrong') {
@@ -173,14 +194,8 @@ export function hyperskillQuestion(box,{question,history,disabled,data,draft,onD
     input=node('textarea','answerInput');input.id='hyperskillAnswer';input.rows=3;input.maxLength=8000;
     input.value=draft;input.disabled=disabled;form.append(label,input);
   }
-  const send=node('button','primaryButton','提交至 Hyperskill');send.type='submit';send.disabled=disabled||!answerReady(input);
-  if(data.interaction?.type==='hyperskill_code') {
-    const controls=node('div','hyperskillEditorActions');
-    controls.append(button('在 IDEA 中编辑',()=>action('ide',input.value)),
-      button('读取 IDEA 已保存代码',()=>action('read-code')));
-    form.append(controls,node('p','inputHint',data.code_opened?
-      'IDEA 中保存后，读取代码并提交。判题结果由 Hyperskill 返回。':'可直接在此编辑，也可在 IDEA 中保存后读取代码。'));
-  }
+  const send=node('button','primaryButton',data.local?'提交答案':'提交至 Hyperskill');
+  send.dataset.hyperskillSubmit='';send.type='submit';send.disabled=disabled||!answerReady(input);
   input.addEventListener('input',()=>{onDraft(input.value);send.disabled=disabled||!answerReady(input);});
   form.addEventListener('submit',event=>{event.preventDefault();if(!disabled&&answerReady(input))action('submit',input.value);});
   form.append(send);box.append(form);return box;

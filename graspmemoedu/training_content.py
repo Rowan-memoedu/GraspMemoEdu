@@ -81,7 +81,7 @@ def validate(bank):
                         and identifier(a['task_key']) and a['kind'] in ('automated', 'manual')
                         and text(a['version'], 128), 'Invalid Academy grading binding')
             if external:
-                from .hyperskill_content import SUPPORTED
+                from .hyperskill_content import SUPPORTED, validate_presentation
                 h = q['hyperskill']
                 require(isinstance(h, dict) and set(h) == {'topic_id', 'theory_id', 'step_id', 'type'}
                         and all(type(h[k]) is int and h[k] > 0 for k in ('topic_id', 'theory_id', 'step_id'))
@@ -89,6 +89,8 @@ def validate(bank):
                         and q.get('reference_answer') == '' and q.get('explanation_html') == ''
                         and q.get('interaction') is None and 'academy' not in q,
                         'Invalid Hyperskill grading binding')
+                if 'hyperskill_presentation' in q:
+                    validate_presentation(q['hyperskill_presentation'], h['type'])
         if 'content_order' in group:
             order = group['content_order']
             expected = {('introduction', i['id']) for i in intros} | {('question', q['id']) for q in rows}

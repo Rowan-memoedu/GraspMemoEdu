@@ -7,14 +7,15 @@ import path from 'node:path';
 import http from 'node:http';
 import {pathToFileURL} from 'node:url';
 import {randomBytes,randomUUID} from 'node:crypto';
-import {spawn} from 'node:child_process';
 import {answer,presentation,hash,supportedTypes} from './hyperskill_protocol.mjs';
 import {embedSourceImages} from './hyperskill_media.mjs';
 import {renderSourceHtml} from './render_mathacademy.mjs';
+import {publicDataset,remapAnswer} from './hyperskill_presentation.mjs';
+import {officialIDE} from './hyperskill_ide.mjs';
 
 export class Bridge {
-  constructor({directory,hyperskill,cloud,openEditor}) {
-    Object.assign(this,{directory,hyperskill,cloud,openEditor});
+  constructor({directory,hyperskill,cloud,openIDE,expectedUserId}) {
+    Object.assign(this,{directory,hyperskill,cloud,openIDE,expectedUserId});
     this.queue=Promise.resolve();
   }
   serial(fn) { const next=this.queue.then(fn); this.queue=next.catch(()=>{}); return next; }
@@ -40,10 +41,14 @@ export class Bridge {
       if (!/^[A-Za-z0-9_-]{32,80}\.json$/.test(name)) continue;
       const old=JSON.parse(await fs.readFile(path.join(this.directory,name),'utf8'));
       if (old.binding.round_id===binding.round_id) {
-        old.ticket=ticket; await this.save(old); return this.status(old);
+        old.ticket=ticket;
+        old.prepared ||= binding.presentation||null;
+        old.codeOptions ||= binding.presentation?.code_options;
+        await this.save(old); return this.status(old);
       }
     }
     const run={id:randomBytes(32).toString('base64url'),ticket,binding,attempt:null,
+      prepared:binding.presentation||null,codeOptions:binding.presentation?.code_options,
       sequence:binding.next_sequence,pending:null,last:null};
     // Persist the round before creating an upstream attempt.
     await this.save(run);
@@ -51,7 +56,8 @@ export class Bridge {
   }
   async status(run) {
     if (run.pending) await this.reconcile(run);
-    if (!run.attempt && !run.pending && run.last?.status!=='correct') {
+    if(run.ide?.active)await this.syncIDE(run);
+    if (run.binding.type!=='code' && !run.attempt && !run.pending && run.last?.status!=='correct') {
       await this.cloud('claim',run.ticket,{}); // Fresh authorization before any upstream write.
       const result=await this.hyperskill('POST','/attempts',{step:run.binding.step_id});
       const attempt=result.attempts?.[0];
@@ -64,21 +70,25 @@ export class Bridge {
       if(source?.id!==run.binding.step_id||source.block?.name!=='code')throw Error('代码题身份不一致。');
       run.codeOptions=source.block.options;await this.save(run);
     }
-    const interaction=run.attempt?presentation(run.binding.type,run.attempt.dataset,source=>({html:source}),run.codeOptions):null;
+    const interaction=run.prepared?structuredClone(run.prepared.interaction):
+      run.attempt||run.binding.type==='code'?presentation(run.binding.type,run.attempt?.dataset||{},source=>({html:source}),run.codeOptions):null;
     const items=interaction?[...(interaction.options||[]),...(interaction.left||[]),...(interaction.right||[]),
       ...(interaction.items||[]),...(interaction.rows||[]),...(interaction.columns||[])]:[];
     for(const key of ['template','description'])
       if(interaction?.[key]!==undefined)items.push({html:interaction[key],key});
-    const media=await embedSourceImages(items.map(item=>item.html),{directory:path.join(this.directory,'media')});
-    items.forEach((item,index)=>item.html=renderSourceHtml(media.html[index]).html);
+    if(!run.prepared) {
+      const media=await embedSourceImages(items.map(item=>item.html),{directory:path.join(this.directory,'media')});
+      items.forEach((item,index)=>item.html=renderSourceHtml(media.html[index]).html);
+    }
     for(const item of items)if(item.key)interaction[item.key]=item.html;
     return {session:run.id,step_id:run.binding.step_id,attempt_id:run.attempt?.id,
-      interaction,code_opened:!!run.codeFile,
+      interaction,ide:run.ide?{watching:!!run.ide.active,opened:!!run.ide.opened,submitting:!!run.ide.submitting}:null,
       last:run.last,pending:Boolean(pending),
       message:pending?'提交正在确认中。请点击刷新结果，不要重复提交。':null};
   }
   async submit(id,attemptId,raw,requestId) {
     const run=await this.load(id);
+    if(run.binding.type==='code')throw Error('代码题请在 Hyperskill 官方 IDEA 插件中点击 Check，网站会自动同步结果。');
     if (!/^[a-zA-Z0-9-]{16,64}$/.test(requestId)) throw Error('请求标识无效。');
     if (run.last?.request_id===requestId || run.pending) {
       if (run.pending && run.pending.request_id!==requestId) throw Error('上一笔提交仍在确认，请先刷新结果。');
@@ -87,7 +97,8 @@ export class Bridge {
       return this.status(run);
     }
     if (!run.attempt || run.attempt.id!==attemptId || run.last?.status==='correct') throw Error('练习实例已变化，请重新加载。');
-    const value=answer(run.binding.type,run.attempt.dataset,raw,run.codeOptions);
+    const value=run.prepared?remapAnswer(run.binding.type,run.prepared.dataset,run.attempt.dataset,raw,run.codeOptions):
+      answer(run.binding.type,run.attempt.dataset,raw,run.codeOptions);
     await this.cloud('claim',run.ticket,{});
     const before=await this.hyperskill('GET',`/submissions?step=${run.binding.step_id}&page_size=100&order=desc`);
     run.pending={request_id:requestId,attempt_id:attemptId,value,raw_hash:hash(raw),started_at:new Date().toISOString(),
@@ -127,6 +138,7 @@ export class Bridge {
       if (!['correct','wrong'].includes(row.status)) return;
       const receipt={submission_id:row.id,attempt_id:row.attempt,step_id:run.binding.step_id,
         status:row.status,time:row.time,reply:pending.value.reply,answer_display:pending.value.display,
+        ...(run.binding.type!=='code'?{dataset:publicDataset(run.binding.type,run.attempt.dataset)}:{}),
         feedback:typeof row.feedback==='string'?row.feedback:JSON.stringify(row.feedback||'')};
       pending.event={id:randomUUID(),sequence:run.sequence,category:row.status==='correct'?'passed':'wrong',
         code_hash:hash(pending.value.semantic),occurred_at:row.time,receipt};
@@ -139,6 +151,7 @@ export class Bridge {
   async retry(id) {
     const run=await this.load(id);
     if (run.pending || run.last?.status!=='wrong') throw Error('当前无法开始下一次尝试。');
+    if(run.binding.type==='code')return this.status(run);
     run.attempt=null; run.last=null; await this.save(run); return this.status(run);
   }
   async flush() {
@@ -147,32 +160,79 @@ export class Bridge {
       if(!/^[A-Za-z0-9_-]{32,80}\.json$/.test(name))continue;
       const run=await this.load(name.slice(0,-5));
       if(run.pending) {try{await this.reconcile(run);}catch{/* Keep the original receipt for a later retry. */}}
+      if(run.ide?.active||run.ide?.event) {try{await this.syncIDE(run);}catch{/* Retry the same source receipt, never resubmit code. */}}
     }
   }
-  async editor(id,raw,read=false) {
+  async editor(id) {
     const run=await this.load(id);
     await this.cloud('claim',run.ticket,{});
     if(run.binding.type!=='code'||run.pending||run.last?.status==='correct')
-      throw Error('当前题目不能编辑代码。');
-    const status=await this.status(run);
-    if(read) {
-      if(!run.codeFile)throw Error('请先在 IDEA 中打开本题。');
-      const code=await fs.readFile(path.join(this.directory,'code',run.id,run.codeFile),'utf8');
-      if(code.length>7800)throw Error('代码过长，请检查当前文件。');
-      return {...status,draft:JSON.stringify({language:run.codeLanguage,code})};
+      throw Error('当前题目不能在 IDEA 中开始新的检查。');
+    if(!this.openIDE||!this.expectedUserId)throw Error('本机尚未配置 Hyperskill 官方 IDEA 入口。');
+    await this.status(run);
+    if(!Object.keys(run.codeOptions?.code_templates||{}).some(k=>/^java\d*$/.test(k)))
+      throw Error('当前 IDEA 入口仅支持 Java。');
+    if(!run.ide?.active) {
+      // One active round owns a source step on this device. Reopening another round
+      // cannot make one official Check score two website attempts.
+      for(const name of await fs.readdir(this.directory)) {
+        if(!/^[A-Za-z0-9_-]{32,80}\.json$/.test(name)||name===run.id+'.json')continue;
+        const old=await this.load(name.slice(0,-5));
+        if(old.ide?.active&&old.binding.step_id===run.binding.step_id) {
+          old.ide.active=false;await this.save(old);
+        }
+      }
+      const before=await this.hyperskill('GET',`/submissions?step=${run.binding.step_id}&page_size=100&order=desc`);
+      run.ide={active:true,opened:false,user:this.expectedUserId,started_at:new Date().toISOString(),
+        before:(before.submissions||[]).map(s=>s.id),seen:[],event:null,polled:0};
+      await this.save(run); // Watch before handing control to the official plugin.
     }
-    if(!this.openEditor)throw Error('本机尚未配置 IDEA。');
-    const value=answer('code',{},raw,run.codeOptions);
-    if(!/^java\d*$/.test(value.reply.language))throw Error('当前 IDEA 入口仅支持 Java。');
-    if(!run.codeFile) {
-      const className=/\bpublic\s+class\s+([A-Za-z_$][\w$]*)/.exec(value.reply.code)?.[1]||'Main';
-      run.codeFile=className+'.java';run.codeLanguage=value.reply.language;
-      const folder=path.join(this.directory,'code',run.id);await fs.mkdir(folder,{recursive:true});
-      await fs.writeFile(path.join(folder,run.codeFile),value.reply.code,{flag:'wx'});
-      await this.save(run);
+    await this.openIDE({step:run.binding.step_id,user:this.expectedUserId,language:'java'});
+    run.ide.opened=true;await this.save(run);
+    return this.status(run);
+  }
+  async syncIDE(run) {
+    const watch=run.ide;
+    if(!watch||!watch.active&&!watch.event||Date.now()-(watch.polled||0)<2000)return;
+    // Persist each event before sending. Lost acknowledgements replay that same ID.
+    const deliver=async()=>{
+      const ack=await this.cloud('event',run.ticket,{kind:'check',event:watch.event});
+      run.last={request_id:'ide-'+watch.event.receipt.submission_id,...watch.event.receipt};
+      watch.seen.push(watch.event.receipt.submission_id);run.sequence++;
+      if(run.last.status==='correct'||ack.closed)watch.active=false;
+      watch.event=null;await this.save(run);
+    };
+    if(watch.event) {await deliver();if(!watch.active)return;}
+    if(Date.now()-Date.parse(watch.started_at)>24*60*60*1000) {
+      watch.active=false;await this.save(run);return;
     }
-    await this.openEditor(path.join(this.directory,'code',run.id,run.codeFile));
-    return {...status,code_opened:true};
+    let rows=[];
+    for(let page=1;page<=100;page++) {
+      const data=await this.hyperskill('GET',`/submissions?step=${run.binding.step_id}&page_size=100&order=desc&page=${page}`);
+      const batch=data.submissions||[];
+      rows.push(...batch.filter(s=>s.step===run.binding.step_id&&s.user_id===watch.user&&
+        !watch.before.includes(s.id)&&!watch.seen.includes(s.id)&&
+        Date.parse(s.time)>=Date.parse(watch.started_at)));
+      if(!data.meta?.has_next||batch.some(s=>watch.before.includes(s.id)||Date.parse(s.time)<Date.parse(watch.started_at)))break;
+      if(page===100)throw Error('待同步记录过多，本轮尚未继续计分。');
+    }
+    rows.sort((a,b)=>Date.parse(a.time)-Date.parse(b.time)||a.id-b.id);
+    watch.polled=Date.now();watch.submitting=false;
+    for(const row of rows) {
+      if(!['correct','wrong'].includes(row.status)) {watch.submitting=true;break;}
+      let reply=row.reply;
+      if(typeof reply==='string') {try{reply=JSON.parse(reply);}catch{continue;}}
+      if(!reply||typeof reply.code!=='string'||!reply.code.trim()||typeof reply.language!=='string')continue;
+      await this.cloud('claim',run.ticket,{});
+      const receipt={submission_id:row.id,attempt_id:row.attempt,step_id:run.binding.step_id,
+        status:row.status,time:row.time,reply,answer_display:reply.code,
+        feedback:typeof row.feedback==='string'?row.feedback:JSON.stringify(row.feedback||'')};
+      watch.event={id:randomUUID(),sequence:run.sequence,category:row.status==='correct'?'passed':'wrong',
+        code_hash:hash({language:reply.language,code:reply.code}),occurred_at:row.time,receipt};
+      await this.save(run);await deliver();
+      if(!watch.active)break;
+    }
+    await this.save(run);
   }
 }
 
@@ -204,15 +264,20 @@ async function main() {
   };
   const profile=await hyperskill('GET','/profiles/current');
   if (profile.profiles?.[0]?.id!==config.expectedUserId) throw Error('Hyperskill 登录账号不一致。');
-  const bridge=new Bridge({directory:config.directory,hyperskill,
-    openEditor:async(file)=>{
-      const executable=config.ideaExecutable||'D:/Applications/IntelliJIDEA/bin/idea64.exe';
-      await fs.access(executable);
-      await new Promise((resolve,reject)=>{
-        const child=spawn(executable,[file],{windowsHide:true,stdio:'ignore'});
-        child.once('error',reject);child.once('spawn',()=>{child.unref();resolve();});
-      });
-    },
+  let warmup=null,warmedAt=0;
+  const warmConnection=()=>{
+    if(!warmup||Date.now()-warmedAt>30000) {
+      warmedAt=Date.now();
+      warmup=hyperskill('GET','/profiles/current').then(value=>{
+        if(value.profiles?.[0]?.id!==config.expectedUserId)throw Error('Hyperskill 登录账号已变化，请重新连接。');
+        return {ready:true};
+      }).catch(error=>{warmup=null;throw error;});
+    }
+    return warmup;
+  };
+  const bridge=new Bridge({directory:config.directory,hyperskill,expectedUserId:config.expectedUserId,
+    openIDE:officialIDE({executable:config.ideaExecutable||'D:/Applications/IntelliJIDEA/bin/idea64.exe',
+      properties:config.ideaProperties}),
     cloud:(route,ticket,body)=>json(new URL('/api/academy/'+route,backend),{
       method:'POST',headers:{Authorization:'Bearer '+ticket,'Content-Type':'application/json',Origin:backend.origin},
       body:JSON.stringify(body)})});
@@ -235,14 +300,14 @@ async function main() {
         !req.headers['content-type']?.startsWith('application/json')) throw Error('请求格式不受支持。');
       let raw='';for await(const part of req){raw+=part;if(raw.length>40000)throw Error('请求过长。');}
       const body=JSON.parse(raw),url=req.url;
+      if(url==='/health') {res.end(JSON.stringify({ready:true,provider:'hyperskill'}));return;}
+      if(url==='/warmup') {res.end(JSON.stringify(await warmConnection()));return;}
       const result=await bridge.serial(async()=>{
-        if(url==='/health')return {ready:true,provider:'hyperskill'};
         if(url==='/open')return bridge.open(body.ticket);
         if(url==='/status')return bridge.status(await bridge.load(body.session));
         if(url==='/submit')return bridge.submit(body.session,body.attempt_id,body.answer,body.request_id);
         if(url==='/retry')return bridge.retry(body.session);
-        if(url==='/ide')return bridge.editor(body.session,body.answer);
-        if(url==='/read-code')return bridge.editor(body.session,null,true);
+        if(url==='/ide')return bridge.editor(body.session);
         throw Error('未知操作。');
       });
       res.end(JSON.stringify(result));

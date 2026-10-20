@@ -39,7 +39,11 @@ def merge_bank(previous, incoming):
         known = {q['id']: q for q in old['questions']}
         for q in group['questions']:
             if q['id'] in known and known[q['id']] != q:
-                raise ValueError('An existing problem cannot be overwritten by an import')
+                old_q = known[q['id']]
+                if ('hyperskill_presentation' in old_q or 'hyperskill_presentation' not in q
+                        or old_q != {k: v for k, v in q.items() if k != 'hyperskill_presentation'}):
+                    raise ValueError('An existing problem cannot be overwritten by an import')
+                old_q['hyperskill_presentation'] = deepcopy(q['hyperskill_presentation'])
             if q['id'] not in known:
                 old['questions'].append(deepcopy(q))
     result['math_css'] = '\n'.join(dict.fromkeys([previous.get('math_css', ''), incoming.get('math_css', '')]))

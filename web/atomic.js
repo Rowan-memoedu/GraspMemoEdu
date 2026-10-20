@@ -1,10 +1,10 @@
-import {t, translateMessage} from './i18n.js?v=208937ea490726d3';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=208937ea490726d3';
-import {selfAssessment, referenceAnswer, prepareAnswerContent, ratingChoices} from './self-assessment.js?v=208937ea490726d3';
-import {reportableContent, helpableContent} from './content-report.js?v=208937ea490726d3';
-import {createLearningCache} from './learning-cache.js?v=208937ea490726d3';
-import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=208937ea490726d3';
-import {enhanceSourceContent} from './topic-content.js?v=208937ea490726d3';
+import {t, translateMessage} from './i18n.js?v=e972693e74f485ba';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=e972693e74f485ba';
+import {selfAssessment, referenceAnswer, prepareAnswerContent, ratingChoices} from './self-assessment.js?v=e972693e74f485ba';
+import {reportableContent, helpableContent} from './content-report.js?v=e972693e74f485ba';
+import {createLearningCache} from './learning-cache.js?v=e972693e74f485ba';
+import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=e972693e74f485ba';
+import {enhanceSourceContent} from './topic-content.js?v=e972693e74f485ba';
 
 const node = (tag, cls = '', text) => {
   const el = document.createElement(tag); el.className = cls;
@@ -67,7 +67,7 @@ export function createAtomicView(bridge) {
     if (!topic || busy || document.hidden) { schedule(); return; }
     const ticket = epoch;
     try {
-      if(state.current?.hyperskill && hyperskillData()?.pending) {
+      if(state.current?.hyperskill && (hyperskillData()?.pending||hyperskillData()?.ide?.watching)) {
         await hyperskillAction('status'); return;
       }
       const pending = state?.pending_submission_id || savedSubmission()?.request_id;
@@ -141,11 +141,10 @@ export function createAtomicView(bridge) {
         const requestId=data.request_id||crypto.randomUUID();
         if(action==='submit') {data.request_id=requestId;write(hyperskillKey(),JSON.stringify(data));}
         result=await localHyperskill(action,{session:data.session,attempt_id:data.attempt_id,
-          ...(['submit','ide'].includes(action)?{answer}:{}),...(action==='submit'?{request_id:requestId}:{})});
+          ...(action==='submit'?{answer,request_id:requestId}:{})});
       }
       if(!active(ticket))return;
       write(hyperskillKey(),JSON.stringify(result));
-      if(action==='read-code'&&typeof result.draft==='string')write(draftKey(),result.draft);
       if(action==='retry')write(draftKey(),null);
       busy=false;
       const next=await call('state');

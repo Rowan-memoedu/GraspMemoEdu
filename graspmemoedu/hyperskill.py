@@ -9,7 +9,8 @@ def validate_receipt(event):
     receipt = event.get('receipt') if isinstance(event, dict) else None
     fields = {'submission_id', 'attempt_id', 'step_id', 'status', 'time',
               'reply', 'answer_display', 'feedback'}
-    if (not isinstance(receipt, dict) or set(receipt) != fields
+    if (not isinstance(receipt, dict) or set(receipt) not in (fields, fields | {'dataset'})
+            or 'dataset' in receipt and not isinstance(receipt['dataset'], dict)
             or any(type(receipt[k]) is not int or receipt[k] <= 0
                    for k in ('submission_id', 'attempt_id', 'step_id'))
             or receipt['status'] not in ('correct', 'wrong')

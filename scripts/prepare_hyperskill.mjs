@@ -7,6 +7,7 @@ import {embedSourceImages} from './hyperskill_media.mjs';
 import {supportedTypes} from './hyperskill_protocol.mjs';
 import {fileURLToPath} from 'node:url';
 import {splitTheory,bankFingerprint} from './hyperskill_sections.mjs';
+import {preparePresentation} from './hyperskill_presentation.mjs';
 
 export async function prepareTopic(translatedPath, livePath, output) {
 if (!output) throw Error('Usage: prepare_hyperskill.mjs translated.json live-source.json output');
@@ -17,6 +18,8 @@ if (translated.topic.id !== live.topic.id || translated.topic.theory !== live.th
   throw Error('Theory and practice identities differ');
 if (live.practices.some(p => !supportedTypes.includes(p.type)))
   throw Error('Unsupported problem type; no partial import');
+if(live.practices.some(p=>!p.presentation_source))
+  throw Error('Capture complete problem presentations before importing');
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const encode = value => JSON.stringify(value, null, 2) + '\n';
 await fs.mkdir(output, {recursive:true});
@@ -42,14 +45,16 @@ const topic = {
   modules:[], memory_chunks:[], memory_points:[], flashcards:[],
 };
 topic.content_version=hash(encode(introductions));
-const questions=live.practices.map((p,i)=>({
+const questions=await Promise.all(live.practices.map(async(p,i)=>({
     id:`hyperskill-step-${p.id}`, title:p.title, question:p.block.text,
     html:renderSourceHtml(media.html[i+1]+samples(p)).html,
     reference_answer:'', explanation_html:'', answer_type:'external',
     constraints:'由 Hyperskill 判题；选项与答案绑定当前练习实例。',
     source_url:`https://hyperskill.org/learn/step/${p.id}`,
     hyperskill:{...topic.hyperskill,step_id:p.id,type:p.type},
-  }));
+    hyperskill_presentation:await preparePresentation(p.type,p.presentation_source.dataset,
+      p.presentation_source.code_options,{directory:path.join(output,'assets')}),
+  })));
 topic.version = hash(encode(topic));
 const units = translated.knowledge_graph.path.map((p,i,rows)=>({
   id:`hyperskill-group-${p.id}`, title:p.title,
@@ -81,10 +86,8 @@ for (const [name,body] of Object.entries(files)) {
   await fs.writeFile(path.join(output,name),body,{flag:'wx'});
 }
 const hashes=Object.fromEntries(Object.entries(files).map(([name,body])=>[name,hash(body)]));
-if(Object.keys(media.assets).length) {
-  for(const name of await fs.readdir(path.join(output,'assets')))
-    hashes['assets/'+name]=hash(await fs.readFile(path.join(output,'assets',name)));
-}
+for(const name of await fs.readdir(path.join(output,'assets')).catch(()=>[]))
+  hashes['assets/'+name]=hash(await fs.readFile(path.join(output,'assets',name)));
 await fs.writeFile(path.join(output,'manifest.json'),encode({
   schema:1,adapter:'hyperskill',topic_format_version:2,
   test_materials:{topics:[topicId],banks:[bank.id]},

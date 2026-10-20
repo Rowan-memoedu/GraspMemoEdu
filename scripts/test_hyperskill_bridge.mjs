@@ -64,20 +64,5 @@ try {
   await assert.rejects(bridge.submit(initial.session,1,'{"selected":"1"}','request-000000002'),/实例已变化/);
   const done=await bridge.submit(initial.session,2,'{"selected":"1"}','request-000000002');
   assert.equal(done.last.status,'correct');assert.equal(posts,2);
-  const codeDir=path.join(directory,'code-test');
-  let opened;
-  const codeBridge=new Bridge({directory:codeDir,openEditor:async file=>{opened=file;},
-    cloud:async(route)=>route==='claim'?{provider:'hyperskill',step_id:20,topic_id:1,mode:'learn',type:'code',round_id:'code-round',next_sequence:1}:{},
-    hyperskill:async(_,route)=>route==='/steps/20'?{steps:[{id:20,block:{name:'code',options:codeOptions}}]}:
-      {attempts:[{id:20,step:20,dataset:{}}]}});
-  const codeRun=await codeBridge.open('y'.repeat(43));
-  assert.equal(codeRun.interaction.type,'hyperskill_code');
-  const raw='{"language":"java25","code":"public class Example {}"}';
-  await codeBridge.editor(codeRun.session,raw);
-  assert.equal(path.basename(opened),'Example.java');
-  await fs.writeFile(opened,'public class Example { /* saved in editor */ }');
-  await codeBridge.editor(codeRun.session,raw); // Opening again must not overwrite learner work.
-  const saved=await codeBridge.editor(codeRun.session,null,true);
-  assert.match(JSON.parse(saved.draft).code,/saved in editor/);
-  console.log('PASS nine reply types, malformed answers, stale dataset, lost responses, durable replay, preserved IDEA draft');
+  console.log('PASS nine reply types, malformed answers, stale dataset, lost responses, durable replay');
 } finally {await fs.rm(directory,{recursive:true,force:true});}

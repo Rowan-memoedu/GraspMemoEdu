@@ -12,7 +12,7 @@ from .access import feature_eligible
 
 PUBLIC_PATHS = {'/api/training/' + name for name in (
     'catalog', 'bank', 'group', 'open', 'state', 'submit', 'submission', 'reveal', 'rate',
-    'history', 'reviews', 'preferences', 'stop', 'notebook')}
+    'history', 'reviews', 'preferences', 'stop', 'notebook', 'hyperskill-submit')}
 
 
 class OpenQuestion(BaseModel):
@@ -154,6 +154,19 @@ def register_training_routes(app, training, access_store, subjects, service_for,
     def add_to_notebook(payload: AttemptAction, request: Request):
         access, backend = attempt_context(request, payload.attempt_id, 'learn')
         backend.add_to_notebook(payload.attempt_id)
+        return state(request, access, backend, payload.attempt_id)
+
+    @app.post('/api/training/hyperskill-submit')
+    def hyperskill_submit(payload: Answer, request: Request):
+        access, backend = attempt_context(request, payload.attempt_id, 'submit_answer')
+        key = 'submit:' + backend.learner_id
+        if request.state.public_transport:
+            limits.check(key, limits.submissions_per_minute)
+        from .hyperskill_training import HyperskillLocalTraining
+        with limits.daily.reserve(backend.learner_id, access['role']):
+            HyperskillLocalTraining(backend, payload.attempt_id).submit_local(payload.request_id, payload.answer)
+        if request.state.public_transport:
+            limits.record(key)
         return state(request, access, backend, payload.attempt_id)
 
     @app.get('/api/training/submission')

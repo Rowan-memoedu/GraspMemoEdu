@@ -47,6 +47,9 @@ manifest = json.loads((package / 'manifest.json').read_bytes())
 ids = manifest['test_materials']['topics']
 policy = TestMaterials(target, catalog)
 bank = TrainingCatalog(target).bank('hyperskill-practice')
+if (previous / 'learning.sqlite3').exists():
+    from graspmemoedu.hyperskill_import import verify_database_transition
+    verify_database_transition(previous / 'learning.sqlite3', target / 'learning.sqlite3', set(ids), bank)
 cards = sum(len(g['questions']) for g in bank['groups'])
 images = code_blocks = introductions = 0
 for ident in ids:
