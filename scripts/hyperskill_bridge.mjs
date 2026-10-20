@@ -125,6 +125,14 @@ export class Bridge {
     if (run.pending || run.last?.status!=='wrong') throw Error('当前无法开始下一次尝试。');
     run.attempt=null; run.last=null; await this.save(run); return this.status(run);
   }
+  async flush() {
+    await fs.mkdir(this.directory,{recursive:true});
+    for(const name of await fs.readdir(this.directory)) {
+      if(!/^[A-Za-z0-9_-]{32,80}\.json$/.test(name))continue;
+      const run=await this.load(name.slice(0,-5));
+      if(run.pending) {try{await this.reconcile(run);}catch{/* Keep the original receipt for a later retry. */}}
+    }
+  }
 }
 
 async function main() {
@@ -192,6 +200,8 @@ async function main() {
       res.statusCode=400;res.end(JSON.stringify({error:error.message?.includes('。')?error.message:'本机连接暂不可用，请重试。'}));
     }
   });
+  const retryTimer=setInterval(()=>{void bridge.serial(()=>bridge.flush()).catch(()=>{});},30000);
+  retryTimer.unref();
   server.listen(config.port,'127.0.0.1',()=>console.log('Hyperskill bridge ready'));
 }
 if(process.argv[1] && import.meta.url===pathToFileURL(path.resolve(process.argv[1])).href) {

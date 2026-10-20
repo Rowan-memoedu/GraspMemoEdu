@@ -1,9 +1,9 @@
-import {t, translateMessage} from './i18n.js?v=7468a8d70bedba23';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=7468a8d70bedba23';
-import {selfAssessment, referenceAnswer, prepareAnswerContent, ratingChoices} from './self-assessment.js?v=7468a8d70bedba23';
-import {reportableContent, helpableContent} from './content-report.js?v=7468a8d70bedba23';
-import {createLearningCache} from './learning-cache.js?v=7468a8d70bedba23';
-import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=7468a8d70bedba23';
+import {t, translateMessage} from './i18n.js?v=262b13fc445222cb';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=262b13fc445222cb';
+import {selfAssessment, referenceAnswer, prepareAnswerContent, ratingChoices} from './self-assessment.js?v=262b13fc445222cb';
+import {reportableContent, helpableContent} from './content-report.js?v=262b13fc445222cb';
+import {createLearningCache} from './learning-cache.js?v=262b13fc445222cb';
+import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=262b13fc445222cb';
 
 const node = (tag, cls = '', text) => {
   const el = document.createElement(tag); el.className = cls;
@@ -58,6 +58,9 @@ export function createAtomicView(bridge) {
     if (!topic || busy || document.hidden) { schedule(); return; }
     const ticket = epoch;
     try {
+      if(state.current?.hyperskill && hyperskillData()?.pending) {
+        await hyperskillAction('status'); return;
+      }
       const pending = state?.pending_submission_id || savedSubmission()?.request_id;
       const result = await call(pending ? `submissions/${encodeURIComponent(pending)}` : 'state');
       if (!active(ticket)) return;

@@ -38,6 +38,7 @@ try {
     }});
   const initial=await bridge.open('x'.repeat(43));
   await assert.rejects(bridge.submit(initial.session,1,'{"selected":"0"}','request-000000001'),/lost ACK/);
+  await bridge.flush(); // A closed browser must not strand an acknowledged upstream result.
   const recovered=await bridge.status(await bridge.load(initial.session));
   assert.equal(posts,1);assert.equal(recovered.last.status,'wrong');assert.equal(delivered,2);
   const replay=await bridge.submit(initial.session,1,'{"selected":"0"}','request-000000001');

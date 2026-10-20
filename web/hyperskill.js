@@ -1,4 +1,4 @@
-import {questionInput,answerReady,choiceTypeField} from './question-input.js?v=7468a8d70bedba23';
+import {questionInput,answerReady,choiceTypeField} from './question-input.js?v=262b13fc445222cb';
 
 export async function localHyperskill(action,body) {
   let response;
