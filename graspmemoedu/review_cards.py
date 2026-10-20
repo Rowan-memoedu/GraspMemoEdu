@@ -78,12 +78,54 @@ def eligible_presentations(cards, points, uses, *, singles=False):
 
 
 def assemble(cards, requirements):
-    """Match typed slots to distinct points, including points with several types.
+    """Fill typed card slots with disjoint point sets, regardless of card origin.
 
-    A paper combines single-point presentations. Existing multi-point cards remain
-    standalone bundled presentations and retain their original whole-card verdict.
-    Augmenting paths avoid a greedy choice using up the only point for a later type.
+    Each card occupies one question slot and all of its linked points. The
+    single-point case uses bipartite matching; overlapping sets require search.
     """
+    options = {}
+    for card in cards:
+        points = frozenset(card['point_ids'])
+        if points and question_kind(card['question']) in requirements:
+            options.setdefault((question_kind(card['question']), points), card)
+    pool = list(options.values())
+
+    def select(available, needed):
+        if not any(needed.values()):
+            return []
+        available = [c for c in available if needed.get(question_kind(c['question']), 0)]
+        if all(len(c['point_ids']) == 1 for c in available):
+            return _match_single_points(available, needed)
+        by_kind = {kind: [c for c in available if question_kind(c['question']) == kind]
+                   for kind, count in needed.items() if count}
+        if any(len(by_kind[kind]) < needed[kind] for kind in by_kind):
+            return None
+        minimum = sum(needed[kind] * min(len(c['point_ids']) for c in rows)
+                      for kind, rows in by_kind.items())
+        if len({p for c in available for p in c['point_ids']}) < minimum:
+            return None
+        kind = min(by_kind, key=lambda k: len(by_kind[k]) / needed[k])
+        rest = {**needed, kind: needed[kind] - 1}
+        for index, card in enumerate(by_kind[kind]):
+            points = set(card['point_ids'])
+            # Equal-kind slots are interchangeable: consider each combination
+            # once, while allowing other kinds to use any disjoint card.
+            later = {c['id'] for c in by_kind[kind][index + 1:]}
+            remaining = [c for c in available if not points.intersection(c['point_ids'])
+                         and (question_kind(c['question']) != kind or c['id'] in later)]
+            chosen = select(remaining, rest)
+            if chosen is not None:
+                return [card, *chosen]
+        return None
+
+    chosen = select(pool, requirements)
+    if chosen is None:
+        return None
+    return [card for kind in requirements for card in chosen if question_kind(card['question']) == kind]
+
+
+def _match_single_points(cards, requirements):
+    """Polynomial matching fast path for sets of size one, preserving order."""
     options = {}
     for card in cards:
         if len(card['point_ids']) == 1:

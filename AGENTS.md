@@ -9,6 +9,7 @@
 - 产品品牌为 GraspMemoEdu，整体多学科框架以 RemNote「搭建掌握式学习平台」（MQrYfdVzLFh4tV96K）及用户后续修订为准。古典衬线风格只用于总首页；数学与全局设置恢复原模板视觉，其他学科沿用同一模板并替换配色、名称与徽标。数学正式课程和物理「运动学进阶」保持原内容。2026-10-05 用户授权恢复英语、语文、生物、化学的原子训练样例、一份英语范式样例，并新增数学测试题库，全部纳入测试材料策略；其余已下线测试内容不自行恢复。共用结构在当前仓库维护，不复制六份网站。
 - 学科路由为 `#/subjects/<id>/...`；旧数学路径继续兼容。账号、身份存储与 Topic ID 不因学科拆分改变。正式课程归属、名称及指南由服务器 `/var/lib/graspmemoedu/subjects.json` 配置；配色和首页/导航栏共用徽标统一在 `web/subjects.js` 维护，见 `docs/subjects.md`。不得将服务器或本机路径暴露给公开前端。
 - 学科只配置内容与外观，通用业务不得按学科名称分派。学科名单唯一来源为 `subject_registry.py`；学习模式和作答适配按内容能力选择，评分、FSRS、权限、测试材料、记录及页面机制全学科共用。题库只能走 `TrainingCatalog`，不得以目录投影或回退到 Topic 的方式模拟题库。共用层修改须通过 `tests/test_shared_architecture.py` 的全注册学科对照；历史 URL、旧选课及备份兼容必须留在明确的兼容边界。见 `docs/shared-platform.md`。
+- 原子卡、变式卡与打包复习卡共用同一 Flashcard 模型，单点与多点的区别只由 `point_ids` 关联集合决定：关联一个原子记忆点即单点卡，关联多个点即打包复习卡；增减关联即可改变这一属性，不另设卡片类型、专属存储或按名称硬编码的业务流程。题型、生成来源与关联点数相互独立；初学、到期、间隔及评分按关联集合和既有策略处理。完整规则见 `docs/topic-training-modes.md` 的“统一 Flashcard 模型”。
 - 腾讯云托管的多学科学习应用；Lesson 产品行为以 `D:/Artifacts/GraspMemoEduPlan/01-需求与方案.md`、`04-推送系统补充需求.md` 为准，复习后端以 `docs/review-backend.md` 为准，当前实现/运维以 README 为准。
 - 主页布局以 `D:/Artifacts/MathTopicPipeline/MathAcademy-learn-主页复刻需求.md` 为准；Course「再探小学算术」组织 Topic「数字化为字母」，不改变其 ID、版本和既有进度。网站主页产生真实 Lesson 和到期 Review 任务，尚未接入 XP 或测验。
 - 正式 GUIDE 由服务器 `subjects.json` 指定并单向发布；数学和物理共用 `/var/lib/graspmemoedu/subject-guides/shared/guide.md` 与相对 assets，本地编辑源在 `D:/AppData/GraspMemoEduGuide/guide.md`。保留分层大纲，标题与列表可展开收起；学员和高阶说明按 `docs/guide-visibility.md` 独立投影，游客与管理员可阅读全部。配图用本网站真实界面。更新指南不能夹带技术配置说明或暴露其他文件。

@@ -179,6 +179,42 @@ class PaperTests(unittest.TestCase):
         self.assertEqual(len(updated['history']), len(state['history']) + 3)
         self.assertEqual(updated['learned_count'], 3)
 
+    def test_multi_point_card_uses_the_same_paper_grading_history_and_reservations(self):
+        from graspmemoedu.question_types import demo_answer
+        self.learner_id = self.service().learner_id
+        self.scope = '?topic_id=atomic-english&subject_id=english'
+        initial, backend = self.finish()
+        self.when += timedelta(hours=7)
+        self.app.state.review_paper_types = [{'id': 'linked-cards', 'title': '关联卡片卷',
+            'subject': 'english', 'enabled': True, 'requirements': {'fill_blank': 1, 'text': 1}}]
+        inbox = self.call('GET', '/api/review-papers/inbox?subject_id=english')
+        candidate = next(x for x in inbox['items'] if x['kind'] == 'paper')
+        self.assertEqual((candidate['count'], candidate['point_count']), (2, 3))
+        paper = self.call('POST', '/api/review-papers/open?subject_id=english',
+                          {'candidate_id': candidate['id'], 'request_id': str(uuid.uuid4())})
+        linked = [p for item in paper['items'] for p in item['point_ids']]
+        self.assertEqual(len(linked), len(set(linked)))
+        self.assertEqual(self.call('GET', '/api/review-papers/inbox?subject_id=english')['due_count'], 0)
+        for item in paper['items']:
+            qid = item['content_context']['question_id']
+            self.assertIsNone(item['explanation_html'])
+            paper = self.call('POST', '/api/review-papers/draft', {'paper_id': paper['id'],
+                'expected_revision': paper['revision'], 'answers': [
+                    {'index': item['index'], 'answer': demo_answer(backend.questions[qid]), 'elapsed_ms': 1000}]})
+        result, payload = self.submit_paper(paper)
+        self.assertEqual([len(i['result']['ratings']) for i in result['items']], [2, 1])
+        self.assertTrue(all(set(i['result']['ratings']) == set(i['point_ids']) for i in result['items']))
+        self.assertTrue(all(set(i['result']['ratings'].values()) == {3} for i in result['items']))
+        state = self.call('GET', '/api/state' + self.scope)
+        self.assertEqual(len(state['history']), len(initial['history']) + 2)
+        self.assertEqual(state['history'][-2]['card_id'], 'ab-bundle')
+        self.assertEqual(len(state['history'][-2]['point_ids']), 2)
+        replay = self.call('POST', '/api/review-papers/submit', payload)
+        self.assertEqual(replay['items'], result['items'])
+        self.assertEqual(self.call('GET', '/api/state' + self.scope)['history'], state['history'])
+        with closing(backend._connect()) as con:
+            self.assertEqual(con.execute('SELECT count(*) FROM review_reservations').fetchone()[0], 0)
+
     def test_backup_retains_papers_drafts_registry_and_retry_state(self):
         self.prime(); paper = self.draft(self.open_paper(), 0)
         archive = self.root / 'paper-backup.zip'; backup_site(self.settings, archive)
@@ -263,6 +299,53 @@ class PaperTests(unittest.TestCase):
 
 
 class SelectionTests(unittest.TestCase):
+    def test_linked_set_matching_agrees_with_exhaustive_small_catalogs(self):
+        from collections import Counter
+        from itertools import combinations
+        import random
+        rng = random.Random(413)
+        for _ in range(150):
+            cards = [{'id': str(i), 'point_ids': rng.sample(list('abcdef'), rng.randint(1, 3)),
+                      'question': {'interaction': {'type': rng.choice(['text', 'fill_blank'])}}}
+                     for i in range(9)]
+            needed = {'text': rng.randint(1, 2), 'fill_blank': rng.randint(1, 2)}
+            def fits(group):
+                points = [p for c in group for p in c['point_ids']]
+                return (Counter(c['question']['interaction']['type'] for c in group) == needed
+                        and len(points) == len(set(points)))
+            possible = any(fits(group) for group in combinations(cards, sum(needed.values())))
+            chosen = assemble(cards, needed)
+            self.assertEqual(chosen is not None, possible, (cards, needed))
+            if chosen is not None:
+                self.assertTrue(fits(chosen))
+        dense = [{'id': f'{a}-{b}', 'point_ids': [str(a), str(b)],
+                  'question': {'interaction': {'type': 'text'}}}
+                 for a in range(20) for b in range(a + 1, 20)]
+        self.assertIsNone(assemble(dense, {'text': 60}))
+
+    def test_card_identity_and_origin_do_not_decide_single_or_multiple_points(self):
+        from graspmemoedu.review_cards import eligible_presentations
+        card = {'id': 'unchanged-card', 'title': '打包变式', 'origin': 'generated',
+                'point_ids': ['a', 'b'], 'question': {'interaction': {'type': 'text'}}}
+        self.assertIsNone(assemble([card], {'text': 2}))
+        self.assertEqual(assemble([card], {'text': 1}), [card])
+        self.assertEqual(eligible_presentations([card], {'a'}, {}), [])
+        card['point_ids'] = ['a']
+        self.assertEqual(assemble([card], {'text': 1}), [card])
+        self.assertEqual(eligible_presentations([card], {'a'}, {}, singles=True), [card])
+        card['point_ids'].append('b')
+        self.assertEqual(eligible_presentations([card], {'a', 'b'}, {}), [card])
+        self.assertEqual(eligible_presentations([card], {'a', 'b'}, {}, singles=True), [])
+
+    def test_multi_point_matching_backtracks_and_never_reuses_any_linked_point(self):
+        def card(ident, points, kind):
+            return {'id': ident, 'point_ids': points, 'question': {'interaction': {'type': kind}}}
+        cards = [card('ab', ['a', 'b'], 'text'), card('bc', ['b', 'c'], 'text'),
+                 card('ad', ['a', 'd'], 'choice')]
+        selected = assemble(cards, {'text': 1, 'choice': 1})
+        self.assertEqual([c['id'] for c in selected], ['bc', 'ad'])
+        self.assertIsNone(assemble(cards[:1] + cards[2:], {'text': 1, 'choice': 1}))
+
     def test_templates_and_matching_do_not_count_variants_as_extra_points(self):
         self.assertEqual([sum(t['requirements'].values()) for t in load_paper_types()], [8, 3, 3, 11, 14])
         def card(pid, kind):

@@ -70,6 +70,48 @@ class SharedArchitectureTests(unittest.TestCase):
                 self.assertEqual(self.client.get('/subject-guide-assets/' + subject + '/pixel.png',
                                                headers={'Origin': self.headers['Origin']}).status_code, 401)
 
+    def test_linked_cards_share_paper_selection_and_point_scoring_in_every_subject(self):
+        import time
+        from graspmemoedu.question_types import demo_answer
+        for subject in SUBJECT_IDS:
+            with self.subTest(subject=subject):
+                tid = 'atomic-' + subject
+                self.call('GET', '/api/state?subject_id=' + subject + '&topic_id=' + tid)
+                backend = self.app.state.learning_services[self.learner, tid]
+                # Prime only the isolated fixture's learned/due state.
+                with backend._transaction() as con:
+                    state = backend._load(con)
+                    state.update(completed_at=self.when.isoformat(), status='completed', phase='completed')
+                    for memory in state['points'].values():
+                        memory.update(mastered=True, first_passed_at=self.when.isoformat(), due_at=self.when.isoformat())
+                    backend._save(con, state)
+                self.app.state.review_paper_types = [{'id': 'linked-' + subject, 'title': 'Linked cards',
+                    'subject': subject, 'enabled': True, 'requirements': {'fill_blank': 1, 'text': 1}}]
+                inbox = self.call('GET', '/api/review-papers/inbox?subject_id=' + subject)
+                candidate = next(c for c in inbox['items'] if c['kind'] == 'paper')
+                self.assertEqual((candidate['count'], candidate['point_count']), (2, 3))
+                paper = self.call('POST', '/api/review-papers/open?subject_id=' + subject,
+                    {'candidate_id': candidate['id'], 'request_id': str(uuid.uuid4())})
+                answers = []
+                for item in paper['items']:
+                    question = backend.questions[item['content_context']['question_id']]
+                    answer = ('{"a":"wrong","b":"wrong"}' if len(item['point_ids']) > 1 else demo_answer(question))
+                    answers.append({'index': item['index'], 'answer': answer})
+                paper = self.call('POST', '/api/review-papers/draft',
+                    {'paper_id': paper['id'], 'expected_revision': paper['revision'], 'answers': answers})
+                self.call('POST', '/api/review-papers/submit', {'paper_id': paper['id'],
+                    'expected_revision': paper['revision'], 'request_id': str(uuid.uuid4())})
+                for _ in range(100):
+                    paper = self.call('GET', '/api/review-papers/state?paper_id=' + paper['id'])
+                    if paper['job_status'] not in ('pending', 'running'):
+                        break
+                    time.sleep(.01)
+                self.assertEqual(paper['phase'], 'done', paper)
+                for item in paper['items']:
+                    expected = 1 if len(item['point_ids']) > 1 else 3
+                    self.assertEqual(set(item['result']['ratings']), set(item['point_ids']))
+                    self.assertEqual(set(item['result']['ratings'].values()), {expected})
+
     def test_bank_scoring_review_selection_and_fsrs_are_subject_independent(self):
         states, schedules = [], []
         for subject, *_ in DEFAULTS:
