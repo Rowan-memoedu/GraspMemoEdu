@@ -1,21 +1,20 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=dff64e5bebb46993";
-import { createReviewView } from "./review.js?v=dff64e5bebb46993";
-import { renderCourseGraph } from "./course-graph.js?v=dff64e5bebb46993";
-import {questionInput, choiceTypeField} from './question-input.js?v=dff64e5bebb46993';
-import {enhanceTopicContent} from './topic-content.js?v=dff64e5bebb46993';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=dff64e5bebb46993';
-import {createCatalogPicker} from './catalog-picker.js?v=dff64e5bebb46993';
-import {createAtomicView} from './atomic.js?v=dff64e5bebb46993';
-import {createTrainingView} from './training.js?v=dff64e5bebb46993';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=dff64e5bebb46993";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=bb697b0eb1be42ed";
+import { createReviewView } from "./review.js?v=bb697b0eb1be42ed";
+import { renderCourseGraph } from "./course-graph.js?v=bb697b0eb1be42ed";
+import {questionInput, choiceTypeField} from './question-input.js?v=bb697b0eb1be42ed';
+import {enhanceTopicContent} from './topic-content.js?v=bb697b0eb1be42ed';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=bb697b0eb1be42ed';
+import {createCatalogPicker} from './catalog-picker.js?v=bb697b0eb1be42ed';
+import {createAtomicView} from './atomic.js?v=bb697b0eb1be42ed';
+import {createTrainingView} from './training.js?v=bb697b0eb1be42ed';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=bb697b0eb1be42ed";
 
-import {createPaperView} from './review-papers.js?v=dff64e5bebb46993';
+import {createPaperView} from './review-papers.js?v=bb697b0eb1be42ed';
 
-import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=dff64e5bebb46993';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=dff64e5bebb46993';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=dff64e5bebb46993';
-import {attachChatEditor, renderChatMarkdown, configureChatImages} from './vendor/chat/chat.js?v=dff64e5bebb46993';
-import {createStudentDashboard} from './student-dashboard.js?v=dff64e5bebb46993';
+import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=bb697b0eb1be42ed';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=bb697b0eb1be42ed';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=bb697b0eb1be42ed';
+import {createStudentDashboard} from './student-dashboard.js?v=bb697b0eb1be42ed';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -33,7 +32,12 @@ const statusNames = { not_started: t("portal.not.started.3"), in_progress: t("po
 const roundButton = (text, action) => control(text, "portalStart", action);
 
 export function initPortal(bridge) {
-  configureChatImages(ident => bridge.request('help-images?image_id=' + encode(ident)));
+  let chatModule, attachChatEditor, renderChatMarkdown;
+  async function loadChat() {
+    const module = await (chatModule ||= import('./vendor/chat/chat.js?v=bb697b0eb1be42ed').catch(error => { chatModule = null; throw error; }));
+    ({attachChatEditor, renderChatMarkdown} = module);
+    module.configureChatImages(ident => bridge.request('help-images?image_id=' + encode(ident)));
+  }
   const root = $("portalContent");
   let catalog = null, profile = null, identity = null, selectedCourse = null;
   let subjects = null, catalogSubject = null, activeSubject = null, navigationSubjectId = 'math';
@@ -1066,6 +1070,8 @@ export function initPortal(bridge) {
   }
 
   async function renderHelpInbox(ticket) {
+    await loadChat();
+    if (ticket !== sequence) return;
     const page = node('section', 'helpInbox'); page.append(node('h1', 'portalPageTitle', t('help.pageTitle')));
     const toolbar = node('div', 'helpToolbar');
     const refresh = control(t('help.refresh'), 'textButton', () => load(true)); toolbar.append(refresh); page.append(toolbar);
@@ -1300,6 +1306,8 @@ export function initPortal(bridge) {
     }
   }
   async function renderHelpContent(ticket, reportId) {
+    await loadChat();
+    if (ticket !== sequence) return;
     const result = await call(`help-center?report_id=${encode(reportId)}`);
     if (ticket !== sequence) return;
     const item = result.items[0]; showHelpSummary(result);

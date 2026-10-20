@@ -1,7 +1,8 @@
 param(
     [string]$Repository = 'Rowan-memoedu/GraspMemoEdu-Pages',
     [string]$ExportDirectory = 'D:\Artifacts\GraspMemoEdu\pages-ready',
-    [string]$EvidenceDirectory = 'D:\Artifacts\GraspMemoEdu\publication'
+    [string]$EvidenceDirectory = 'D:\Artifacts\GraspMemoEdu\publication',
+    [string]$ExpectedParent = ''
 )
 $ErrorActionPreference = 'Stop'
 & python (Join-Path $PSScriptRoot 'scripts/version_web_assets.py')
@@ -80,6 +81,7 @@ if ($created) {
 $branch = $info.default_branch
 $reference = Invoke-Api GET ('repos/' + $Repository + '/git/ref/heads/' + $branch)
 $parent = $reference.object.sha
+if ($ExpectedParent -and $parent -ne $ExpectedParent) { throw 'The public frontend changed during acceptance. Reconcile the new deployment before publishing.' }
 $commit = Invoke-Api GET ('repos/' + $Repository + '/git/commits/' + $parent)
 $priorTree = Invoke-Api GET ('repos/' + $Repository + '/git/trees/' + $commit.tree.sha + '?recursive=1')
 $allowedPrior = if ($created) { @('README.md') } else { $expected }

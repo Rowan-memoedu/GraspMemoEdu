@@ -108,10 +108,17 @@ def register_training_routes(app, training, access_store, subjects, service_for,
         return backend.bank(bank_id, history='review_history' in access['features'])
 
     @app.get('/api/training/group')
-    def group(request: Request, bank_id: str, group_id: str):
+    def group(request: Request, bank_id: str, group_id: str, reader: bool = False):
         access, backend = context(request, 'learn')
         authorize_bank(request, access, bank_id)
-        return backend.group(bank_id, group_id, history='review_history' in access['features'])
+        if not reader:
+            return backend.group(bank_id, group_id, history='review_history' in access['features'])
+        result = backend.reader(bank_id, group_id, history='review_history' in access['features'],
+                                self_rating=self_enabled(access, backend))
+        for value in result['reader_states'].values():
+            value['can_submit'] = 'submit_answer' in access['features']
+            value['can_learn'] = 'learn' in access['features']
+        return result
 
     @app.post('/api/training/open')
     def open_question(payload: OpenQuestion, request: Request):

@@ -55,6 +55,11 @@ class SharedArchitectureTests(unittest.TestCase):
                 for endpoint in ('dashboard', 'training/catalog', 'review-papers/inbox', 'guide'):
                     data = self.call('GET', '/api/' + endpoint + '?subject_id=' + subject)
                     self.assertEqual(set(data), shapes.setdefault(endpoint, set(data)))
+                reader = self.call('GET', '/api/training/group?reader=1&subject_id=' + subject +
+                                   '&bank_id=bank-' + subject + '&group_id=group-a')
+                self.assertEqual(set(reader['reader_states']), {'essay', 'exact', 'boolean', 'choice', 'blank'})
+                self.assertTrue(all(value['preview'] and value['explanation_html'] is None
+                                    for value in reader['reader_states'].values()))
                 for kind in ('lesson', 'atomic', 'composed', 'academy', 'hyperskill'):
                     tid = kind + '-' + subject
                     state = self.call('GET', '/api/state?subject_id=' + subject + '&topic_id=' + tid)

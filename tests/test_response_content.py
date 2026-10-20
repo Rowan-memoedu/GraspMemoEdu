@@ -5,7 +5,7 @@ import unittest
 from fastapi.testclient import TestClient
 from graspmemoedu.api import create_app
 from graspmemoedu.config import Settings
-from graspmemoedu.response_content import pack_content
+from graspmemoedu.response_content import pack_content, compact_access, read_fingerprint
 from graspmemoedu.service import LearningService
 from tests.fixtures import synthetic_course, DeterministicJudge, temporary_test_directory
 
@@ -21,6 +21,45 @@ def restore(value, texts):
 
 
 class ResponseContentTests(unittest.TestCase):
+    def test_access_and_state_validation_include_permissions_content_and_time_gates(self):
+        access = {'learner_id': 'one', 'role': 'account', 'features': ['learn'], 'topics': [{'id': 'one'}]}
+        first = compact_access({'access': access, 'server_time': 'now', 'revision': 1,
+                                'next_available_at': 'tomorrow', 'html': 'authorized'}, '1')
+        digest, clocks = read_fingerprint(first)
+        second = compact_access({'access': access, 'server_time': 'later', 'revision': 1,
+                                 'next_available_at': 'tomorrow', 'html': 'authorized'}, first['access']['access_revision'])
+        self.assertEqual(read_fingerprint(second)[0], digest)
+        self.assertEqual(read_fingerprint(second)[1], [[['server_time'], 'later']])
+        for key, value in [('next_available_at', 'today'), ('html', 'new content'),
+                           ('dependency_ready', False), ('pause', True), ('revision', 2)]:
+            self.assertNotEqual(read_fingerprint({**second, key: value})[0], digest)
+        revoked = compact_access({'access': {**access, 'topics': []}}, first['access']['access_revision'])
+        self.assertIn('topics', revoked['access'])
+        self.assertNotEqual(revoked['access']['access_revision'], first['access']['access_revision'])
+
+    def test_small_unchanged_read_still_authorizes_and_updates_clocks(self):
+        with temporary_test_directory() as folder:
+            settings = Settings(data_dir=Path(folder), public_api_origin="https://cache.test")
+            app = create_app(settings, LearningService(synthetic_course(), Path(folder), DeterministicJudge()))
+            with TestClient(app, base_url="https://cache.test") as client:
+                headers = {'Origin': 'https://cache.test'}
+                account = app.state.access_store.create_account('Validation test')
+                login = client.post('/api/access/login?access_revision=1', headers=headers,
+                                    json={'invitation_code': account['invitation_code']}).json()
+                headers['X-Learning-Identity'] = login['identity_token']
+                access = login['access']
+                path = '/api/state?access_revision=' + access['access_revision'] + '&state_revision='
+                first = client.get(path + '1', headers=headers).json()
+                self.assertEqual(first['value']['access'], {'$gme_access': access['access_revision']})
+                second = client.get(path + first['revision'], headers=headers)
+                self.assertNotIn('value', second.json())
+                self.assertLess(len(second.content), 1000)
+                self.assertEqual(second.headers['cache-control'], 'no-store')
+                app.state.access_store.set_permissions(access['learner_id'], topic_ids=[])
+                denied = client.get(path + first['revision'], headers=headers)
+                self.assertEqual(denied.status_code, 403)
+                self.assertNotIn('$gme_state', denied.text)
+
     def test_roundtrip_content_changes_and_no_early_answer(self):
         raw = {"steps": [{"html": "<p>question</p>" * 50, "explanation_html": None}],
                "answer": "learner answer", "server_time": "now", "revision": 1}

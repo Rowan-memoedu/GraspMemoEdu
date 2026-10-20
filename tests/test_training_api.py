@@ -23,6 +23,36 @@ from tests.fixtures import temporary_test_directory
 
 
 class TrainingAPITests(unittest.TestCase):
+    def test_reader_preloads_question_faces_without_creating_attempts_or_revealing_answers(self):
+        path = '/api/training/group?subject_id=math&bank_id=isolated-bank&group_id=group-a&reader=1'
+        group = self.call('GET', path)
+        self.assertEqual(set(group['reader_states']), {q['id'] for q in group['questions']})
+        with closing(sqlite3.connect(self.root/'learning.sqlite3')) as con:
+            self.assertEqual(con.execute('SELECT COUNT(*) FROM training_attempts').fetchone()[0], 0)
+            self.assertEqual(con.execute('SELECT COUNT(*) FROM training_memory').fetchone()[0], 0)
+        again = self.call('GET', path)
+        self.assertEqual(group, again)
+        for value in group['reader_states'].values():
+            self.assertTrue(value['preview'])
+            self.assertIsNone(value['explanation_html'])
+            self.assertFalse(value.get('reference_answer'))
+            self.assertNotIn('answer_key', value['question']['interaction'] or {})
+        preview = group['reader_states']['exact']
+        opened = self.call('POST', '/api/training/open', {'request_id': preview['attempt_id'],
+            'bank_id': group['bank_id'], 'group_id': group['id'], 'question_id': 'exact'})
+        self.assertEqual(preview['question'], opened['question'])
+        self.assertNotIn('preview', opened)
+        self.answer(opened)
+        loaded = self.call('GET', path)
+        self.assertEqual(loaded['reader_states']['exact']['phase'], 'done')
+        self.assertTrue(loaded['reader_states']['essay']['preview'])
+        with closing(sqlite3.connect(self.root/'learning.sqlite3')) as con:
+            self.assertEqual(con.execute('SELECT COUNT(*) FROM training_attempts').fetchone()[0], 1)
+        self.call('GET', path.replace('subject_id=math', 'subject_id=physics'), status=403)
+        login = self.account()
+        self.app.state.access_store.set_permissions(login['access']['learner_id'], topic_ids=[])
+        self.call('GET', path, status=403)
+
     def setUp(self):
         temporary = temporary_test_directory(); self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name); write_catalog(self.root)

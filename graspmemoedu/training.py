@@ -5,6 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import sqlite3
+from uuid import NAMESPACE_URL, uuid5
 
 from .fsrs_engine import FSRSEngine, utc_time
 from .judging import judge_answer
@@ -411,6 +412,44 @@ class TrainingService:
                                'latest_attempt_mode': recent[q['id']]['mode'] if recent[q['id']] else None,
                                'latest_attempt_phase': recent[q['id']]['phase'] if recent[q['id']] else None}
                               for q in group.get('questions', [])]}
+
+    def reader(self, bank_id, group_id, *, history=True, self_rating=False):
+        """Read the whole group without opening attempts or changing learning data.
+
+        Unseen questions carry a stable presentation id. The first explicit
+        learning action opens that id, preserving shuffled option order.
+        """
+        result = self.group(bank_id, group_id, history=history)
+        bank = self.catalog.bank(bank_id)
+        source = next(g for g in bank['groups'] if g['id'] == group_id)
+        questions = {q['id']: q for q in source.get('questions', [])}
+        states, histories = {}, {}
+        for item in result['questions']:
+            qid = item['id']
+            if item['latest_attempt_id']:
+                value = self.state(item['latest_attempt_id'], history=history, self_rating=self_rating)
+            else:
+                ident = str(uuid5(NAMESPACE_URL, packed([self.learner_id, bank_id, bank['version'], qid])))
+                question = present_choice(questions[qid], ident)
+                media = getattr(self.catalog, 'formats', {}).get(bank_id, {}).get('media')
+                if media:
+                    from .training_presentation import present_book_question
+                    question = present_book_question(question, media)
+                value = {'attempt_id': ident, 'preview': True, 'bank_id': bank_id, 'group_id': group_id,
+                         'question_id': qid, 'version': bank['version'], 'phase': 'answer',
+                         'question': {'id': qid, 'title': question.get('title', qid), 'html': question['html'],
+                                      'interaction': public_interaction(question)},
+                         'answer': '', 'answer_display': '', 'explanation_html': None,
+                         'can_self_rate': self_rating and is_reproduction(question)
+                                          and not (question.get('academy') or question.get('hyperskill')),
+                         **reference_fields(question, False),
+                         **({'academy': {**question['academy'], 'round_id': None, 'checks': 0, 'opened': False}}
+                            if question.get('academy') else {}),
+                         **self._hyperskill_state(question, None)}
+            states[qid] = value
+            if history:
+                histories[qid] = self.history(bank_id, qid)
+        return {**result, 'reader_states': states, 'reader_histories': histories}
 
     def history(self, bank_id, question_id, offset=0):
         with closing(self._connect()) as con:

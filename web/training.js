@@ -1,16 +1,16 @@
-import {t, translateMessage} from './i18n.js?v=dff64e5bebb46993';
-import {answerReady, answerEmpty} from './question-input.js?v=dff64e5bebb46993';
-import {createLearningCache} from './learning-cache.js?v=dff64e5bebb46993';
-import {helpableContent} from './content-report.js?v=dff64e5bebb46993';
-import {ratingChoices} from './self-assessment.js?v=dff64e5bebb46993';
-import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=dff64e5bebb46993';
+import {t, translateMessage} from './i18n.js?v=bb697b0eb1be42ed';
+import {answerReady, answerEmpty} from './question-input.js?v=bb697b0eb1be42ed';
+import {createLearningCache} from './learning-cache.js?v=bb697b0eb1be42ed';
+import {helpableContent} from './content-report.js?v=bb697b0eb1be42ed';
+import {ratingChoices} from './self-assessment.js?v=bb697b0eb1be42ed';
+import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=bb697b0eb1be42ed';
 
 const node = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const button = (text, cls, action) => { const n = node('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
 const encode = encodeURIComponent;
 const query = fields => new URLSearchParams(fields).toString();
 const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy', 'training.retire'];
-import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, renderReviewReader} from './learning-ui.js?v=dff64e5bebb46993';
+import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, renderReviewReader} from './learning-ui.js?v=bb697b0eb1be42ed';
 
 export function createTrainingView(bridge) {
   const {root, request, href, formatDate, getAccess} = bridge;
@@ -25,13 +25,53 @@ export function createTrainingView(bridge) {
   let hyperskillBusy = false;
   let hyperskillAvailability = null, hyperskillProbe = null;
   const hyperskillWarm = new Map();
+  const attempts = new Map(), histories = new Map(), opening = new Map();
+  let validationTimer = null;
+  let writes = 0, change = 0;
   const key = (kind, id) => `graspmemoedu:training:${cacheAccess?.learner_id}:${kind}:${id}`;
   const read = (kind, id) => cache.read(localStorage, key(kind, id));
   const save = (kind, id, value) => cache.write(localStorage, key(kind, id), value);
   const alive = (e, s = selection) => e === epoch && s === selection;
   const link = (label, path, cls = '') => { const a = node('a', cls, label); a.href = href(path); return a; };
   const groupPath = (bank, id, question) => `/banks/${encode(bank)}/${encode(id)}${question ? '?question=' + encode(question) : ''}`;
-  const post = (name, body) => request(`training/${name}`, {method: 'POST', body});
+  function remember(value) {
+    if (value?.attempt_id) attempts.set(value.attempt_id, value);
+    return value;
+  }
+  async function ensureAttempt(id) {
+    const value = attempts.get(id);
+    if (!value?.preview) return;
+    if (opening.has(id)) return opening.get(id);
+    const e = epoch;
+    const task = request('training/open', {method: 'POST', body: {request_id: id,
+      bank_id: value.bank_id, group_id: value.group_id, question_id: value.question_id}}).then(next => {
+      if (e !== epoch || cacheAccess?.learner_id !== getAccess()?.learner_id) throw Error(t('review.invalidState'));
+      remember(next);
+      const q = group.questions.find(q => q.id === next.question_id);
+      if (q) q.latest_attempt_id = next.attempt_id;
+      if (current?.attempt_id === id) current = next;
+      if (next.version !== value.version) throw Error(t('review.invalidState'));
+    }).finally(() => opening.delete(id));
+    opening.set(id, task);
+    return task;
+  }
+  const post = async (name, body) => {
+    const e = epoch, prior = attempts.get(body.attempt_id);
+    writes++; change++;
+    try {
+      if (body.attempt_id) await ensureAttempt(body.attempt_id);
+      const next = remember(await request(`training/${name}`, {method: 'POST', body}));
+      if (e === epoch && next.phase === 'done' && prior && prior.phase !== 'done') {
+        const q = group?.questions.find(q => q.id === next.question_id && q.latest_attempt_id === next.attempt_id);
+        if (q) {
+          if (q.completed_count !== null) q.completed_count = (q.completed_count || 0) + 1;
+          q.latest_attempt_phase = 'done';
+          renderSidebar();
+        }
+      }
+      return next;
+    } finally { writes--; change++; }
+  };
   function flushClock() {
     if (activeSince !== null) elapsed += performance.now() - activeSince;
     activeSince = null;
@@ -46,6 +86,7 @@ export function createTrainingView(bridge) {
     flushClock(); clockKey = null; ++epoch; ++selection; clearTimeout(timer);
     if (visibilityHandler) document.removeEventListener('visibilitychange', visibilityHandler);
     visibilityHandler = null; group = current = selectedIntroduction = null; cache.clear();
+    clearTimeout(validationTimer); attempts.clear(); histories.clear(); opening.clear();
     hyperskillAvailability = hyperskillProbe = null; hyperskillWarm.clear();
     reader?.destroy(); reader = null;
     reviewCard = false; reviewQuestion = null;
@@ -97,9 +138,11 @@ export function createTrainingView(bridge) {
         target: task => groupPath(bank.id, task.id)});
       if (!data.tasks.length) pending.append(node('p', 'portalEmpty', t('training.empty')));
     } else if (parts.length === 3) {
-      const nextGroup = await request('training/group?' + query({bank_id: parts[1], group_id: parts[2]}));
+      const nextGroup = await request('training/group?' + query({bank_id: parts[1], group_id: parts[2], reader: 1}));
       if (e !== epoch) return;
       group = cardGroup(nextGroup);
+      for (const value of Object.values(nextGroup.reader_states || {})) remember(value);
+      for (const [id, value] of Object.entries(nextGroup.reader_histories || {})) histories.set(id + ':0', value);
       if(group.external_providers?.includes('hyperskill')) void probeHyperskill(e);
       const style = node('style'); style.id = 'trainingMathStyle'; style.textContent = group.math_css; document.head.append(style);
       reader = readerFrame(readerTemplate, 'training');
@@ -124,6 +167,7 @@ export function createTrainingView(bridge) {
       else if (selected) await select(selected.id, params.get('review') === '1'
         && !(selected.latest_attempt_mode === 'review' && selected.latest_attempt_phase !== 'done'),
         reviewCard ? params.get('attempt') : null);
+      scheduleValidation();
     } else throw new Error(t('portal.this.page.does.not.exist.24'));
   }
   function cardGroup(source) {
@@ -148,7 +192,7 @@ export function createTrainingView(bridge) {
         status: q.completed_count ? t('training.completed', {count: q.completed_count}) : t('training.unanswered'),
         className: q.completed_count ? 'completed' : '', items: [{label: q.title, className: 'trainingQuestionLink',
           onSelect: () => select(q.id), dataset: {questionId: q.id},
-          selected: current?.question_id === q.id && current.attempt_id === q.latest_attempt_id}]});
+          selected: current?.question_id === q.id && (current.preview || current.attempt_id === q.latest_attempt_id)}]});
       sidebar.append(section);
       if (current?.question_id === q.id && getAccess()?.features?.includes('review_history')) void loadHistory(items, epoch, selection, q.id);
     });
@@ -196,12 +240,13 @@ export function createTrainingView(bridge) {
     reader.closeOnMobile();
     selectedIntroduction = null;
     const e = epoch, s = ++selection, q = group.questions.find(q => q.id === questionId);
-    main.replaceChildren(node('p', '', t('training.loading')));
     try {
       const previous = attemptId || (!fresh && q.latest_attempt_id);
       let state;
-      if (previous) state = await request('training/state?' + query({attempt_id: previous}));
-      else {
+      if (!fresh) state = previous ? attempts.get(previous) : group.reader_states?.[questionId];
+      if (!state) main.replaceChildren(node('p', '', t('training.loading')));
+      if (!state && previous) state = await request('training/state?' + query({attempt_id: previous}));
+      else if (!state) {
         const openKey = `${group.bank_id}:${group.id}:${questionId}:open`;
         const requestId = read('submission', openKey) || crypto.randomUUID();
         save('submission', openKey, requestId);
@@ -213,13 +258,14 @@ export function createTrainingView(bridge) {
       if (state.bank_id !== group.bank_id || state.group_id !== group.id || state.question_id !== questionId) throw new Error(t('portal.this.page.does.not.exist.24'));
       history.replaceState(null, '', href(groupPath(group.bank_id, group.id, questionId)
         + (reviewCard ? '&card=1&attempt=' + encode(state.attempt_id) : '')));
-      current = state; startClock(state); renderSidebar(); renderQuestion();
-      if(state.hyperskill && state.phase==='answer' && state.can_submit) void warmHyperskill(state,e);
+      current = remember(state); startClock(state); renderSidebar(); renderQuestion();
+      if(state.hyperskill && !state.preview && state.phase==='answer' && state.can_submit) void warmHyperskill(state,e);
     } catch (failure) { if (alive(e, s)) error(main, failure, () => select(questionId, fresh, attemptId)); }
   }
   function renderQuestion() {
     clearTimeout(timer);
     const state = current, e = epoch, s = selection;
+    remember(state);
     if (reviewCard) renderSidebar();
     const index = group.questions.findIndex(q => q.id === state.question_id);
     const reportContext = {topic_id: 'training.' + state.bank_id, bank_id: state.bank_id,
@@ -265,7 +311,7 @@ export function createTrainingView(bridge) {
         return body;
       }});
     reader.refs.footerPosition.textContent = t('reader.modulePosition', {current: index + 1, total: group.questions.length});
-    reader.refs.saveStatus.textContent = t(state.submission_status === 'pending' || state.submission_status === 'running' ? '答案已提交，正在判题' : '学习进度已保存');
+    reader.refs.saveStatus.textContent = state.preview ? '' : t(state.submission_status === 'pending' || state.submission_status === 'running' ? '答案已提交，正在判题' : '学习进度已保存');
     let primary; const extra = [];
     if (state.phase === 'answer' && state.hyperskill) {
       hyperskillAnswer(state, e, s);
@@ -379,6 +425,7 @@ export function createTrainingView(bridge) {
     entry={ready:false};hyperskillWarm.set(state.attempt_id,entry);
     entry.promise=(async()=>{
       try {
+        await ensureAttempt(state.attempt_id);
         const grant=await request('academy/training/launch',{method:'POST',body:{attempt_id:state.attempt_id}});
         if(e!==epoch)return null;
         const result=await localHyperskill('open',{ticket:grant.ticket});
@@ -473,7 +520,10 @@ export function createTrainingView(bridge) {
     else if (data?.last?.status==='correct' && !hyperskillBusy) timer=setTimeout(()=>pollAcademy(e,s,state),1500);
   }
   function academyAnswer(state, e, s) {
-    const adapter = (name, body) => request('academy/training/' + name, {method: 'POST', body});
+    const adapter = async (name, body) => {
+      await ensureAttempt(body.attempt_id);
+      return request('academy/training/' + name, {method: 'POST', body});
+    };
     const open = button(t(state.academy.opened ? 'academy.resume' : 'academy.open'), 'primaryButton academyTrainingOpen', async () => {
       open.disabled = true;
       try {
@@ -522,7 +572,8 @@ export function createTrainingView(bridge) {
   async function refreshGroup(e, s) {
     const updated = await request('training/group?' + query({bank_id: group.bank_id, group_id: group.id}));
     if (!alive(e, s)) return;
-    group = cardGroup(updated); renderSidebar();
+    group = {...group, ...cardGroup(updated)};
+    histories.clear(); renderSidebar();
   }
   async function poll(e, s, state) {
     try {
@@ -535,8 +586,10 @@ export function createTrainingView(bridge) {
   }
   async function loadHistory(box, e, s, questionId, offset = 0) {
     try {
-      const data = await request('training/history?' + query({bank_id: group.bank_id, question_id: questionId, offset}));
+      const key = questionId + ':' + offset;
+      const data = histories.get(key) || await request('training/history?' + query({bank_id: group.bank_id, question_id: questionId, offset}));
       if (!alive(e, s) || !box.isConnected) return;
+      histories.set(key, data);
       for (const item of data.items) {
         if (item.id === group.questions.find(q => q.id === questionId).latest_attempt_id) continue;
         const entry = button(`${formatDate(item.created_at)} · ${t(item.phase === 'done' ? 'training.saved' : item.phase === 'shown' ? 'training.finishRating' : 'training.resume')}`,
@@ -545,6 +598,39 @@ export function createTrainingView(bridge) {
       }
       if (data.next_offset !== null) { const more = button(t('training.more'), 'textButton', () => { more.remove(); void loadHistory(box, e, s, questionId, data.next_offset); }); box.append(more); }
     } catch (failure) { if (alive(e, s)) error(box, failure, () => loadHistory(box, e, s, questionId, offset)); }
+  }
+  function scheduleValidation() {
+    clearTimeout(validationTimer);
+    if (group) validationTimer = setTimeout(async () => {
+      const e = epoch, revision = change;
+      try {
+        if (document.hidden || opening.size || writes || root.inert || !group) return;
+        const next = await request('training/group?' + query({bank_id: group.bank_id, group_id: group.id, reader: 1}), {fresh: true});
+        if (e !== epoch || revision !== change || writes) return;
+        const old = current;
+        const sidebarChanged = JSON.stringify(group.questions) !== JSON.stringify(next.questions);
+        const versionChanged = group.version !== next.version;
+        if (versionChanged) { attempts.clear(); histories.clear(); }
+        group = cardGroup(next);
+        for (const value of Object.values(next.reader_states || {})) remember(value);
+        for (const [id, value] of Object.entries(next.reader_histories || {})) histories.set(id + ':0', value);
+        if (versionChanged) {
+          if (selectedIntroduction && group.introductions?.some(i => i.id === selectedIntroduction)) selectIntroduction(selectedIntroduction);
+          else if (group.questions.length) await select(group.questions.find(q => q.id === old?.question_id)?.id || group.questions[0].id);
+          else if (group.introductions?.length) selectIntroduction(group.introductions[0].id);
+          else { current = null; main.replaceChildren(); renderSidebar(); }
+        } else if (old) {
+          const updated = old.preview ? next.reader_states[old.question_id] : attempts.get(old.attempt_id);
+          if (updated && JSON.stringify(updated) !== JSON.stringify(old)) {
+            current = updated; renderSidebar(); renderQuestion();
+          } else if (sidebarChanged) renderSidebar();
+        } else if (sidebarChanged) {
+          renderSidebar();
+        }
+      } catch (failure) {
+        if (e === epoch && main) error(main, failure);
+      } finally { if (e === epoch) scheduleValidation(); }
+    }, 5000);
   }
   function renderReviews(data) {
     const section = node('section', 'trainingReviewSection'); section.append(node('h2', 'trainingSectionTitle', t('training.reviewCards')));

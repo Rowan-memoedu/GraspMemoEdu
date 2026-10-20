@@ -28,9 +28,58 @@ export function contentKey(path) {
 export function readLifetime(path) {
   const name = path.split('?')[0];
   if (name === 'access') return 10000;
-  if (['subjects', 'profile', 'catalog', 'training/catalog', 'training/bank', 'training/group', 'guide', 'graphs'].includes(name)) return 15000;
+  if (['subjects', 'profile', 'catalog', 'training/catalog', 'training/bank', 'training/group', 'guide', 'graphs'].includes(name)) return 300000;
   if (name === 'dashboard') return 5000;
   return 0;
+}
+
+// Fresh server checks can reuse a complete response without moving it over the
+// network again. These projections (including learning state) are memory only.
+export function createValidationCache() {
+  const records = new Map();
+  let epoch = 0, bytes = 0;
+  return {
+    clear() { epoch++; records.clear(); bytes = 0; },
+    prepare(key) { return {key, epoch, record: records.get(key)}; },
+    decode(value, ticket, decodeContent, access) {
+      const envelope = value?.$gme_state === 1 ? value : null;
+      if (envelope && !Object.hasOwn(envelope, 'value')) {
+        if (!ticket.record || ticket.record.revision !== envelope.revision) throw Error('state_cache_miss');
+        value = clone(ticket.record.value);
+        for (const [path, clock] of envelope.clocks || []) {
+          let target = value;
+          for (const key of path.slice(0, -1)) target = target[key];
+          target[path.at(-1)] = clock;
+        }
+      } else {
+        value = decodeContent(envelope ? envelope.value : value);
+        const restore = item => {
+          if (Array.isArray(item)) return item.map(restore);
+          if (!item || typeof item !== 'object') return item;
+          if (item.$gme_access) {
+            if (item.$gme_access !== access?.access_revision) throw Error('access_cache_miss');
+            return clone(access);
+          }
+          return Object.fromEntries(Object.entries(item).map(([key, child]) => [key, restore(child)]));
+        };
+        value = restore(value);
+      }
+      if (envelope && ticket.epoch === epoch) {
+        const size = JSON.stringify(value).length * 2;
+        bytes -= records.get(ticket.key)?.size || 0;
+        records.delete(ticket.key);
+        if (size <= MAX_BYTES) {
+          records.set(ticket.key, {revision: envelope.revision, value: clone(value), size});
+          bytes += size;
+        }
+        while (bytes > MAX_BYTES || records.size > MAX_ENTRIES) {
+          const key = records.keys().next().value;
+          bytes -= records.get(key).size; records.delete(key);
+        }
+      }
+      return value;
+    },
+  };
 }
 
 export function createReadCache({now = Date.now} = {}) {

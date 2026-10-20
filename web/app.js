@@ -1,13 +1,13 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=dff64e5bebb46993";
-import {answerReady} from './question-input.js?v=dff64e5bebb46993';
-import {reportableContent} from './content-report.js?v=dff64e5bebb46993';
-import {createLearningCache} from './learning-cache.js?v=dff64e5bebb46993';
-import {createReadCache, createContentCache, readLifetime, contentPath, contentKey} from './response-cache.js?v=dff64e5bebb46993';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=bb697b0eb1be42ed";
+import {answerReady} from './question-input.js?v=bb697b0eb1be42ed';
+import {reportableContent} from './content-report.js?v=bb697b0eb1be42ed';
+import {createLearningCache} from './learning-cache.js?v=bb697b0eb1be42ed';
+import {createReadCache, createContentCache, createValidationCache, readLifetime, contentPath, contentKey} from './response-cache.js?v=bb697b0eb1be42ed';
 
-import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, readerHistorySteps, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState} from './learning-ui.js?v=dff64e5bebb46993';
-import {selfAssessment} from './self-assessment.js?v=dff64e5bebb46993';
-import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=dff64e5bebb46993';
-import {renderSourceReader} from './learning-ui.js?v=dff64e5bebb46993';
+import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, readerHistorySteps, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState} from './learning-ui.js?v=bb697b0eb1be42ed';
+import {selfAssessment} from './self-assessment.js?v=bb697b0eb1be42ed';
+import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=bb697b0eb1be42ed';
+import {renderSourceReader} from './learning-ui.js?v=bb697b0eb1be42ed';
 
 applyStaticTranslations();
 
@@ -68,9 +68,10 @@ let identityToken = "";
 let access = null;
 const learningCache = createLearningCache(() => access);
 const responseCache = createReadCache(), contentCache = createContentCache();
+const validationCache = createValidationCache();
 const cacheScope = () => JSON.stringify([apiBase, access?.learner_id, access?.role,
   access?.purpose, access?.is_admin, access?.is_student, access?.is_advanced_learner,
-  access?.features, access?.topics]);
+  access?.access_revision || [access?.features, access?.topics]]);
 let identityPromise = null;
 let identityBusy = false;
 let identityRecoveryAllowed = true;
@@ -100,6 +101,8 @@ let topicSubjectId = null;
 let pageActive = document.hasFocus();
 let answerClock = { key: null, total: 0, started: null };
 let historyOpen = true;
+let localStep = null;
+let accessRefresh = null, accessCheckedAt = 0;
 const narrowLayout = window.matchMedia("(max-width: 1000px)");
 const drafts = new Map();
 
@@ -245,7 +248,7 @@ async function request(path, options = {}) {
   } finally { if (mutation) responseCache.clear(); }
 }
 
-async function requestNetwork(path, { method = "GET", body, bootstrap = false, timeout = REQUEST_TIMEOUT, reauthenticated = false, skipIdentity = false, suppressIdentity = false, identityOverride, identityOperation = false, deploymentRetried = false, keepalive = false, contentRetried = false } = {}) {
+async function requestNetwork(path, { method = "GET", body, bootstrap = false, timeout = REQUEST_TIMEOUT, reauthenticated = false, skipIdentity = false, suppressIdentity = false, identityOverride, identityOperation = false, deploymentRetried = false, keepalive = false, contentRetried = false, stateRetried = false } = {}) {
   const identityEpoch = identityGeneration;
   if (!deploymentReady) await ensureDeployment();
   if (!bootstrap && !skipIdentity) await ensureIdentity();
@@ -267,11 +270,15 @@ async function requestNetwork(path, { method = "GET", body, bootstrap = false, t
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
   try {
+    const accessSnapshot = access;
+    const validationTicket = validationCache.prepare(JSON.stringify([cacheScope(), identityEpoch, path]));
     const contentTicket = contentPath(path, method) && access && !bootstrap
       ? await contentCache.prepare(cacheScope(), contentKey(path), !access.is_admin) : null;
     if (changed()) throw new ApiError(t("身份或学习页面已更新，请重试。"), 0, "connection_changed");
     const contentQuery = contentTicket ? `${path.includes('?') ? '&' : '?'}content_revision=${contentRetried ? '1' : contentTicket.record?.revision || '1'}` : '';
-    const response = await fetch(`${base}/api/${path}${contentQuery}`, {
+    const query = new URLSearchParams({access_revision: accessSnapshot?.access_revision || '1'});
+    if (method === 'GET') query.set('state_revision', stateRetried ? '1' : validationTicket.record?.revision || '1');
+    const response = await fetch(`${base}/api/${path}${contentQuery}${(path + contentQuery).includes('?') ? '&' : '?'}${query}`, {
       method,
       keepalive,
       headers,
@@ -296,12 +303,14 @@ async function requestNetwork(path, { method = "GET", body, bootstrap = false, t
       const message = ["authentication_required", "invalid_session"].includes(detail?.code) ? t("服务暂不可用，请稍后重试。") : typeof detail === "string" ? detail : detail?.message || t("操作未完成，请刷新学习进度后重试。");
       throw new ApiError(message, response.status, detail?.code || "request_error");
     }
-    if (contentTicket) {
-      try { result = contentCache.decode(result, contentTicket); }
-      catch (error) {
-        if (error.message !== 'content_cache_miss' || contentRetried || method !== 'GET') throw error;
-        return requestNetwork(path, {method, body, timeout, skipIdentity, contentRetried: true});
-      }
+    try {
+      result = validationCache.decode(result, validationTicket,
+        value => contentTicket ? contentCache.decode(value, contentTicket) : value, accessSnapshot);
+    } catch (error) {
+      if (!['content_cache_miss', 'state_cache_miss', 'access_cache_miss'].includes(error.message)
+          || stateRetried || method !== 'GET') throw error;
+      return requestNetwork(path, {method, body, timeout, skipIdentity, suppressIdentity, identityOverride,
+        identityOperation, contentRetried: true, stateRetried: true});
     }
     if (!bootstrap && !skipIdentity) identityRecoveryAllowed = true;
     return result;
@@ -502,6 +511,7 @@ function invalidateIdentityView() {
   learningCache.clear();
   responseCache.clear();
   contentCache.clear();
+  validationCache.clear();
   portal?.suspendIdentity();
 }
 
@@ -547,6 +557,7 @@ async function syncExternalIdentity() {
 }
 
 function clearLearningView() {
+  localStep = null;
   stopPolling();
   state = null;
   renderedKey = null;
@@ -654,10 +665,23 @@ function renderAccessUnavailable() {
 }
 
 async function refreshAccess(fresh = false) {
-  const next = await request("access", { skipIdentity: true, timeout: STATE_TIMEOUT, fresh });
-  if (next.learner_id !== access?.learner_id && access) throw new ApiError(t("当前身份已更新，请重新读取。"), 0, "connection_changed");
-  access = next;
-  renderIdentity();
+  if (accessRefresh) return accessRefresh;
+  if (!fresh && access && Date.now() - accessCheckedAt < 5000) return;
+  accessRefresh = (async () => {
+    const previous = access;
+    const next = await request("access", { skipIdentity: true, timeout: STATE_TIMEOUT, fresh: true });
+    if (next.learner_id !== access?.learner_id && access) throw new ApiError(t("当前身份已更新，请重新读取。"), 0, "connection_changed");
+    accessCheckedAt = Date.now();
+    access = next;
+    renderIdentity();
+    if (previous?.access_revision && next.access_revision !== previous.access_revision) {
+      responseCache.clear(); validationCache.clear();
+      // Route authorization errors can themselves refresh access. Do not await
+      // that route from the access flight, or both promises would wait forever.
+      void portal?.identityChanged();
+    }
+  })();
+  try { await accessRefresh; } finally { accessRefresh = null; }
 }
 
 function persistSubmission(record) {
@@ -734,6 +758,9 @@ function applyState(next, { force = false, announceChange = false } = {}) {
   if (state && next.course_version === state.course_version && next.revision < state.revision) return;
   const accessChanged = next.access && JSON.stringify(next.access) !== JSON.stringify(access);
   if (next.access) access = next.access;
+  if (force || next.course_version !== state?.course_version || !can('review_history')
+      || !next.steps.some(step => step.id === localStep)) localStep = null;
+  if (localStep) next = {...next, current_step_id: localStep};
   const changed = accessChanged || !state || next.course_version !== state.course_version || next.revision !== state.revision || next.current_step_id !== state.current_step_id || next.dependency_ready !== state.dependency_ready || JSON.stringify(next.content_references) !== JSON.stringify(state.content_references);
   const previousStep = state?.current_step_id;
   state = next;
@@ -755,8 +782,6 @@ function applyState(next, { force = false, announceChange = false } = {}) {
 
 async function refreshState({ quiet = true, force = false } = {}) {
   if (!topicId || stateBusy || identityProblem) return;
-  // Immutable source reading has no progress to poll; opening/reloading still forces a read.
-  if (!force && state?.read_only && state.topic_id === topicId) return;
   const generation = connectionGeneration;
   stateBusy = true;
   try {
@@ -1121,7 +1146,11 @@ function selectStep(id) {
   if (!allowFeature("review_history")) return;
   if (narrowLayout.matches) setHistoryOpen(false);
   if (id === state.current_step_id) return;
-  mutate("select", mutationPayload({ step_id: id }));
+  syncAnswerClock(true);
+  localStep = id;
+  state = {...state, current_step_id: id};
+  render();
+  focusStep();
 }
 
 function setHistoryOpen(open, { focus = false } = {}) {
@@ -1445,7 +1474,7 @@ setHistoryOpen(true);
 $("pauseButton").addEventListener("click", () => {
   if (readingStatus() === "in_progress" && !pauseBusy) mutate("skip", mutationPayload(), { pause: true });
 });
-window.addEventListener("focus", () => { responseCache.clear(); pageActive = true; syncAnswerClock(); scheduleIdentitySync(); if (!actionBusy && !pauseBusy) refreshState(); });
+window.addEventListener("focus", () => { pageActive = true; syncAnswerClock(); scheduleIdentitySync(); if (!actionBusy && !pauseBusy) refreshState(); });
 window.addEventListener("blur", () => { pageActive = false; syncAnswerClock(); });
 window.addEventListener("pagehide", () => syncAnswerClock(true));
 window.addEventListener("online", () => { responseCache.clear(); refreshState({ force: true }); });
@@ -1466,6 +1495,9 @@ window.addEventListener("storage", (event) => {
 });
 setInterval(() => {
   if (!document.hidden && !actionBusy && !pauseBusy && !state?.pending_submission_id) refreshState();
+  if (!document.hidden && access && !identityProblem) void refreshAccess().catch(error => {
+    if (identityFailure(error)) void recoverIdentity(error);
+  });
 }, 5000);
 $("skipContent").addEventListener("click", (event) => { event.preventDefault(); (topicId ? $("lessonContent") : $("portalContent")).focus(); });
 $("topicFeedbackButton").addEventListener("click", () => portal?.showFeedback({ topic_id: topicId, question_id: selectedStep()?.question_id }));
@@ -1492,16 +1524,16 @@ async function openTopic(id, subjectId, initial = null) {
   if (nodeId && state?.topic_id === id) {
     const destination = state.content_references?.locations?.find(item => item.node_id === nodeId);
     if (destination && destination.step_id !== state.current_step_id && can('review_history')) {
-      await mutate('select', mutationPayload({step_id: destination.step_id}));
+      selectStep(destination.step_id);
     }
     await new Promise(requestAnimationFrame);
     if (topicId === id) focusContentNode($('stepCard'), nodeId);
   }
 }
 
-const { initPortal } = await import("./portal.js?v=dff64e5bebb46993");
-const {startPresence} = await import('./presence.js?v=dff64e5bebb46993');
-const {visibleContentTopics} = await import('./content-report.js?v=dff64e5bebb46993');
+const { initPortal } = await import("./portal.js?v=bb697b0eb1be42ed");
+const {startPresence} = await import('./presence.js?v=bb697b0eb1be42ed');
+const {visibleContentTopics} = await import('./content-report.js?v=bb697b0eb1be42ed');
 startPresence({getAccess: () => identityProblem ? null : access, request, getTopics: visibleContentTopics});
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {
@@ -1522,8 +1554,9 @@ portal = initPortal({
   getAccess: () => access,
   getIdentityProblem: () => identityProblem,
   refreshAccess: async () => {
-    try { await refreshAccess(); }
-    catch (error) { if (identityFailure(error)) await recoverIdentity(error); throw error; }
+    // Navigation uses the verified memory projection immediately. Validation
+    // continues independently and replaces the route if permissions change.
+    void refreshAccess().catch(error => { if (identityFailure(error)) void recoverIdentity(error); });
   },
   getApiOrigin: () => apiBase || window.location.origin,
   setAccess: next => { access = next; renderIdentity(); },

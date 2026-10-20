@@ -1,7 +1,27 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createHash} from 'node:crypto';
-import {createReadCache, createContentCache, contentPath, contentKey, readLifetime} from '../web/response-cache.js';
+import {createReadCache, createContentCache, createValidationCache, contentPath, contentKey, readLifetime} from '../web/response-cache.js';
+
+test('conditional reads retain state only in memory, update clocks and fence logout', () => {
+  const cache = createValidationCache(), access = {access_revision: 'verified', learner_id: 'a'};
+  const first = cache.prepare('a/topic');
+  const initial = cache.decode({$gme_state: 1, revision: 'one', value: {
+    access: {$gme_access: 'verified'}, html: 'question', server_time: 'old', answer: 'private'}}, first, v => v, access);
+  assert.equal(initial.access.learner_id, 'a');
+  const ticket = cache.prepare('a/topic');
+  const updated = cache.decode({$gme_state: 1, revision: 'one', clocks: [[['server_time'], 'now']]}, ticket, v => v, access);
+  assert.equal(updated.server_time, 'now');
+  assert.equal(updated.answer, 'private');
+  updated.html = 'caller changed';
+  assert.equal(cache.prepare('a/topic').record.value.html, 'question');
+  assert.equal(cache.prepare('b/topic').record, undefined);
+  assert.throws(() => cache.decode({access: {$gme_access: 'wrong'}}, first, v => v, access), /access_cache_miss/);
+  cache.clear();
+  cache.decode({$gme_state: 1, revision: 'late', value: {html: 'late'}}, ticket, v => v, access);
+  assert.equal(cache.prepare('a/topic').record, undefined);
+  assert.throws(() => cache.decode({$gme_state: 1, revision: 'one'}, cache.prepare('a/topic'), v => v, access), /state_cache_miss/);
+});
 
 test('reads coalesce, callers cannot mutate shared data, writes invalidate pending reads', async () => {
   let time = 0, count = 0, release;
