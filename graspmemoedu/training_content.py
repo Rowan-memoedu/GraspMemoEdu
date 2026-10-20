@@ -14,6 +14,7 @@ from .subject_registry import SUBJECT_IDS
 
 IDENTIFIER = re.compile(r'[a-z0-9][a-z0-9_-]{0,63}\Z')
 DIRECTORY = 'training-banks'
+MAX_GROUPS = 5000
 
 
 def permission_id(bank_id):
@@ -44,7 +45,8 @@ def validate(bank):
     require(isinstance(bank.get('math_css', ''), str), 'Invalid math style')
     require(bank.get('version') == fingerprint(bank), 'Training bank version differs from content')
     groups = bank.get('groups')
-    require(isinstance(groups, list) and 1 <= len(groups) <= 200, 'Missing question groups')
+    require(isinstance(groups, list) and 1 <= len(groups) <= MAX_GROUPS,
+            f'Question group count must be between 1 and {MAX_GROUPS}')
     ids, questions, introductions = set(), set(), set()
     for group in groups:
         require(isinstance(group, dict) and identifier(group.get('id')) and group['id'] not in ids,
