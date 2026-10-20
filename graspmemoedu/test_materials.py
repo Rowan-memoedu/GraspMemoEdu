@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 
 from .service import DomainError
+from .subject_registry import SUBJECT_IDS
 
 FILENAME = 'test-materials.json'
 KINDS = ('courses', 'topics', 'banks', 'guides')
@@ -20,7 +21,7 @@ def validate(raw):
                 or any(not isinstance(v, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,127}', v) for v in values)
                 or len(values) != len(set(values))):
             raise ValueError('Invalid test material IDs')
-        if key == 'guides' and set(values) - {'math', 'physics', 'english', 'chinese', 'biology', 'chemistry'}:
+        if key == 'guides' and set(values) - SUBJECT_IDS:
             raise ValueError('Unknown test guide subject')
     return raw
 

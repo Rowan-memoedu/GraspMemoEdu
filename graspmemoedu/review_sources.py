@@ -62,7 +62,7 @@ class ReviewSources:
                                       'due_at': memory['due_at'], 'source_title': bank['title'] + ' · ' + group['title'],
                                       'math_css': bank.get('math_css', ''),
                                       # The source was already shown when its memory was created.
-                                      'uses': uses.get(cid, 0) + (1 if subject == 'math' and cid.startswith('training:') else 0)})
+                                      'uses': uses.get(cid, 0) + int(cid.startswith('training:'))})
         for topic_id, backend in self.atoms.items():
             topic = backend.course
             if topic.get('academy') or topic.get('source_adapter') == 'hyperskill':

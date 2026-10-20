@@ -10,7 +10,7 @@ import sys
 from .catalog import Catalog
 from .question_types import validate_interaction
 from .service import DomainError
-from .subjects import DEFAULTS
+from .subject_registry import SUBJECT_IDS
 
 IDENTIFIER = re.compile(r'[a-z0-9][a-z0-9_-]{0,63}\Z')
 DIRECTORY = 'training-banks'
@@ -38,7 +38,7 @@ def validate(bank):
 
     require(isinstance(bank, dict) and type(bank.get('schema')) is int and bank['schema'] == 1, 'Invalid training bank schema')
     require(identifier(bank.get('id')) and text(bank.get('title'), 200), 'Invalid bank identity')
-    require(bank.get('subject_id') in {row[0] for row in DEFAULTS}, 'Unknown subject')
+    require(bank.get('subject_id') in SUBJECT_IDS, 'Unknown subject')
     require(isinstance(bank.get('description', ''), str) and len(bank.get('description', '')) <= 4000,
             'Invalid bank description')
     require(isinstance(bank.get('math_css', ''), str), 'Invalid math style')
@@ -137,6 +137,30 @@ class TrainingCatalog:
         if set(existing) & {row['id'] for row in result}:
             raise ValueError('Training permissions collide with existing Topic IDs')
         return result
+
+    def validate_ownership(self, catalog, subjects):
+        """A bank is a native bank, never a second UI over course Topics."""
+        for tid, target in self.topic_redirects.items():
+            course = catalog.courses.get(target['bank_id'])
+            if (not course or course.get('placement') != 'question_bank'
+                    or tid not in {t['id'] for t in course['topics']}
+                    or catalog.topic_courses.get(tid) != {course['id']}):
+                raise DomainError('ambiguous_content_owner', '同一内容不能同时由课程和题库两套流程管理。', 422)
+        for cid, course in catalog.courses.items():
+            if course.get('placement') != 'question_bank':
+                if cid in self.banks:
+                    raise DomainError('ambiguous_content_owner', '课程和题库不能共用同一个容器标识。', 422)
+                continue
+            bank = self.banks.get(cid)
+            if bank is None:
+                raise DomainError('bank_conversion_required',
+                    '题库归属需要完整题库转换，不能仅修改目录位置。请先完成内容及学习记录迁移。', 422)
+            if bank['subject_id'] != subjects.course_subjects[cid]:
+                raise DomainError('subject_bank_mismatch', '题库与原内容的学科归属不一致。', 422)
+            members = {t['id'] for t in course['topics']}
+            mapped = {tid for tid, target in self.topic_redirects.items() if target['bank_id'] == cid}
+            if members != mapped:
+                raise DomainError('incomplete_bank_conversion', '题库转换必须完整保留原内容及链接对应关系。', 422)
 
     def bank(self, bank_id):
         if bank_id not in self.banks:

@@ -22,6 +22,14 @@ def place_in_question_bank(data_dir, container_id):
         settings = Settings.load(data_dir)
         old = Catalog.load(settings)
         container = old.course(container_id)
+        from .training_content import TrainingCatalog
+        # A placement-only projection must never become an alternative runtime.
+        training = TrainingCatalog(data_dir)
+        candidate = deepcopy(old)
+        candidate.courses[container_id]['placement'] = 'question_bank'
+        training.validate_ownership(candidate, Subjects(settings, candidate))
+        from .academy_training_import import require_content_only_install
+        require_content_only_install(data_dir / 'learning.sqlite3', training.bank(container_id))
         if container.get('placement') == 'question_bank':
             return {'status': 'unchanged', 'bank_id': container_id, 'learning_records_changed': False}
         pointer = (data_dir / POINTER).read_bytes() if (data_dir / POINTER).exists() else None

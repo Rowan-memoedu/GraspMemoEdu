@@ -1,16 +1,16 @@
-import {t, translateMessage} from './i18n.js?v=ef2c550f81dc4066';
-import {answerReady, answerEmpty} from './question-input.js?v=ef2c550f81dc4066';
-import {createLearningCache} from './learning-cache.js?v=ef2c550f81dc4066';
-import {helpableContent} from './content-report.js?v=ef2c550f81dc4066';
-import {ratingChoices} from './self-assessment.js?v=ef2c550f81dc4066';
-import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=ef2c550f81dc4066';
+import {t, translateMessage} from './i18n.js?v=4504fc54be2f366f';
+import {answerReady, answerEmpty} from './question-input.js?v=4504fc54be2f366f';
+import {createLearningCache} from './learning-cache.js?v=4504fc54be2f366f';
+import {helpableContent} from './content-report.js?v=4504fc54be2f366f';
+import {ratingChoices} from './self-assessment.js?v=4504fc54be2f366f';
+import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=4504fc54be2f366f';
 
 const node = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const button = (text, cls, action) => { const n = node('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
 const encode = encodeURIComponent;
 const query = fields => new URLSearchParams(fields).toString();
 const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy', 'training.retire'];
-import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation} from './learning-ui.js?v=ef2c550f81dc4066';
+import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation} from './learning-ui.js?v=4504fc54be2f366f';
 
 export function createTrainingView(bridge) {
   const {root, request, href, formatDate, getAccess} = bridge;
@@ -87,10 +87,7 @@ export function createTrainingView(bridge) {
       root.replaceChildren(layout);
       bridge.taskTree(pending, data, {training: true, label: t('training.groups'), startLabel: t('training.start'),
         sourceOrder: bank.groups.map(g => g.id),
-        target: task => {
-          const entry = bank.groups.find(g => g.id === task.id);
-          return entry?.topic_id ? `/topic/${encode(entry.topic_id)}?bank=${encode(bank.id)}` : groupPath(bank.id, task.id);
-        }});
+        target: task => groupPath(bank.id, task.id)});
       if (!data.tasks.length) pending.append(node('p', 'portalEmpty', t('training.empty')));
     } else if (parts.length === 3) {
       const nextGroup = await request('training/group?' + query({bank_id: parts[1], group_id: parts[2]}));

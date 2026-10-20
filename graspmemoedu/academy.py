@@ -186,7 +186,7 @@ class AcademyLearningService(AtomicLearningService):
                   else f"首次通过前的错误负担：{result['burden']:g}") + ' · ' + labels[rating]
         ratings = {}
         for pid in active['point_ids']:
-            register_point(con, 'atomic', self.topic_id, self.course['version'], pid, 'cs', now.isoformat())
+            register_point(con, 'atomic', self.topic_id, self.course['version'], pid, self.course['subject_id'], now.isoformat())
             memory = state['points'][pid]
             scheduled = self.engine.schedule(memory['card_json'], rating, now, None)
             memory.update(card_json=scheduled['card_json'], due_at=scheduled['due_at'], last_rating=rating, mastered=True)

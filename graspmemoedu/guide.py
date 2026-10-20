@@ -242,9 +242,9 @@ def register_guide_routes(app, settings, access_store, subjects=None):
         access = asset_access(request)
         if subjects:
             subjects.require(subject_id)
-            if subject_id != 'math' and access is None:
-                # Preserve the existing non-math identity boundary. Anonymous
-                # public-asset compatibility applies to math/legacy only.
+            if access is None:
+                # Every subject-scoped endpoint uses the same identity boundary.
+                # Anonymous compatibility remains on the legacy /guide-assets URL.
                 access = access_store.resolve(None)
             if access is not None:
                 subjects.authorize_subject(access, subject_id)

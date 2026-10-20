@@ -227,8 +227,10 @@ class GuideVisibilityHTTPTests(GuideHTTPAcceptanceTests):
                 for asset, label in [('student', 'STUDENT'), ('hierarchy', 'HIERARCHY'), ('timeout', 'ADVANCED')]:
                     response = self.client.get('/subject-guide-assets/math/'+asset+'.png', headers=headers)
                     self.assertEqual(response.status_code, 200 if label in expected else 404)
-        self.assertEqual(self.client.get('/subject-guide-assets/math/public.png').status_code, 200)
-        self.assertEqual(self.client.get('/subject-guide-assets/math/student.png').status_code, 404)
+        self.assertEqual(self.client.get('/subject-guide-assets/math/public.png').status_code, 401)
+        self.assertEqual(self.client.get('/subject-guide-assets/math/student.png').status_code, 401)
+        self.assertEqual(self.client.get('/guide-assets/public.png').status_code, 200)
+        self.assertEqual(self.client.get('/guide-assets/student.png').status_code, 404)
 
 
 def load_tests(loader, tests, pattern):

@@ -5,7 +5,7 @@ import re
 from .question_types import validate_interaction
 
 MODE = 'atomic_retrieval'
-SUBJECTS = {'math', 'physics', 'english', 'chinese', 'biology', 'chemistry', 'cs'}
+from .subject_registry import SUBJECT_IDS as SUBJECTS
 DEFAULT_POLICY = {'version': 'atomic-v1', 'first_review_seconds': 21600, 'correct_rating': 3}
 GAP_SECONDS = 180
 IDENTIFIER = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z')
@@ -127,8 +127,8 @@ def validate_atomic(topic):
         validate_binding(topic)
     if 'academy' in topic:
         binding = topic['academy']
-        require(topic['subject_id'] == 'cs' and len(cards) == len(point_ids) == 1,
-                'An Academy exercise owns exactly one CS card and memory point')
+        require(len(cards) == len(point_ids) == 1,
+                'An Academy exercise owns exactly one card and memory point')
         require(isinstance(binding, dict) and set(binding) == {'task_key', 'kind'}
                 and identifier(binding.get('task_key')) and binding.get('kind') in ('automated', 'manual'),
                 'Invalid Academy binding; local paths must stay on the device')

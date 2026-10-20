@@ -132,6 +132,9 @@ class ServiceCache(dict):
 def create_app(settings: Settings | None = None, service: LearningService | None = None, *, atomic_clock=None):
     settings = settings or Settings.load()
     catalog = Catalog.load(settings, service.course if service else None)
+    subjects = Subjects(settings, catalog)
+    training = TrainingCatalog(settings.data_dir)
+    training.validate_ownership(catalog, subjects)
     if service is None:
         course = catalog.topic(catalog.default_topic_id)
         service = create_learning_service(course, settings.data_dir, ExistingJudge(settings.judge_project),
@@ -142,8 +145,6 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     # Store only a salted cryptographic hash of the remote pairing credential.
     pairing_file = settings.data_dir / 'pairing.json'
     executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='answer-judge')
-    subjects = Subjects(settings, catalog)
-    training = TrainingCatalog(settings.data_dir)
     access_store = AccessStore(settings.data_dir, [{'id': topic['id'], 'title': topic['title']} for topic in catalog.topics.values()] + training.permissions(catalog.topics),
                                test_materials=subjects.test_materials)
     dashboard_store = DashboardStore(catalog, access_store, subjects, atomic_clock=atomic_clock)

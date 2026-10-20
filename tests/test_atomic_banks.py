@@ -9,6 +9,7 @@ import uuid
 from fastapi.testclient import TestClient
 from graspmemoedu.api import create_app
 from graspmemoedu.bank_placement import place_in_question_bank
+from graspmemoedu.academy_training_import import install as migrate_bank
 from graspmemoedu.catalog import Catalog
 from graspmemoedu.config import Settings
 from graspmemoedu.service import DomainError
@@ -62,7 +63,13 @@ class AtomicBankTests(unittest.TestCase):
             return {name: [tuple(r) for r in con.execute('SELECT * FROM ' + name + ' ORDER BY rowid')]
                     for name in ('topics', 'submissions', 'events', 'training_memory')}
 
-    def test_move_preserves_card_fsrs_content_and_hierarchy_and_is_read_only(self):
+    def legacy_placement(self):
+        """Reproduce an already-published legacy projection, not a new import."""
+        old = copy.deepcopy(self.course)
+        old['placement'] = 'question_bank'
+        (self.root / 'catalog.json').write_bytes(encoded({'courses': [old]}))
+
+    def test_placement_only_rejected_and_explicit_migration_preserves_evidence(self):
         self.call('POST', '/api/catalog/select?subject_id=cs', {'course_id': 'practice'})
         self.call('GET', '/api/state?topic_id=academy-fixture&subject_id=cs')
         backend = self.app.state.learning_services[(self.learner, 'academy-fixture')]
@@ -77,10 +84,15 @@ class AtomicBankTests(unittest.TestCase):
             'id': str(uuid.uuid4()), 'sequence': 1, 'category': 'passed', 'code_hash': 'a' * 64,
             'occurred_at': backend._time().isoformat()})
         before = self.rows()
-        old_state = backend.state()
-        result = place_in_question_bank(self.root, 'practice')
-        self.assertEqual(result['status'], 'placed_in_question_bank')
+        with self.assertRaisesRegex(DomainError, '完整题库转换'):
+            place_in_question_bank(self.root, 'practice')
         self.assertEqual(before, self.rows())
+        self.assertFalse((self.root / 'active-content.json').exists())
+        self.legacy_placement()
+        with self.assertRaisesRegex(DomainError, '完整题库转换'):
+            create_app(Settings.load(self.root))
+        self.assertEqual(before, self.rows())
+        migrate_bank(self.root, 'practice')
         loaded = Catalog.load(Settings.load(self.root))
         self.assertEqual(loaded.topics, self.contents)
         self.assertEqual(loaded.courses['practice']['units'], self.units)
@@ -93,28 +105,32 @@ class AtomicBankTests(unittest.TestCase):
         self.assertEqual([b['id'] for b in banks], ['practice'])
         bank = self.call('GET', '/api/training/bank?bank_id=practice&subject_id=cs')
         self.assertEqual([(g['id'], g.get('parent_id')) for g in bank['groups']],
-                         [('section', None), ('lesson', 'section')] + [(tid, 'lesson') for tid in self.contents])
+                         [('section', None), ('lesson', 'section')])
         self.assertEqual(sum(g['question_count'] for g in bank['groups']), 2)
         self.assertEqual(sum(g['introduction_count'] for g in bank['groups']), 1)
         self.assertEqual(sum(g['completed_count'] for g in bank['groups']), 1)
-        self.assertEqual(before, self.rows())
+        after_rows = self.rows()
+        for name in ('topics', 'submissions', 'events'):
+            self.assertEqual(before[name], after_rows[name])
+        self.assertEqual(len(after_rows['training_memory']), 1)
         after = self.call('GET', '/api/state?topic_id=academy-fixture&subject_id=cs')
-        self.assertEqual(after['current']['ratings'], old_state['current']['ratings'])
-        self.assertEqual(after['next_available_at'], old_state['next_available_at'])
+        self.assertEqual(after['training_target']['bank_id'], 'practice')
+        self.assertIn('question_id', after['training_target'])
 
     def test_permissions_subject_and_test_materials_are_not_bypassed(self):
-        place_in_question_bank(self.root, 'practice')
+        self.legacy_placement()
+        migrate_bank(self.root, 'practice')
         self.open_app()
         self.call('GET', '/api/training/bank?bank_id=practice&subject_id=math', status=403)
         self.assertEqual(self.call('GET', '/api/training/catalog?subject_id=math')['banks'], [])
-        self.account(topic_ids=['second-exercise'], is_student=True)
+        self.account(topic_ids=['training.practice'], is_student=True)
         bank = self.call('GET', '/api/training/bank?bank_id=practice&subject_id=cs')
-        self.assertEqual([g['topic_id'] for g in bank['groups'] if 'topic_id' in g], ['second-exercise'])
+        self.assertEqual(sum(g['question_count'] for g in bank['groups']), 2)
         self.account(topic_ids=[])
         self.assertEqual(self.call('GET', '/api/training/catalog?subject_id=cs')['banks'], [])
         self.call('GET', '/api/training/bank?bank_id=practice', status=403)
         active = Settings.load(self.root).content_dir
-        (active / 'test-materials.json').write_bytes(encoded({'schema': 1, 'courses': ['practice']}))
+        (active / 'test-materials.json').write_bytes(encoded({'schema': 1, 'courses': ['practice'], 'banks': ['practice']}))
         self.open_app()
         self.account(is_admin=True, purpose='learner')
         self.assertEqual(self.call('GET', '/api/training/catalog')['banks'], [])
@@ -130,3 +146,34 @@ class AtomicBankTests(unittest.TestCase):
             place_in_question_bank(self.root, 'practice')
         self.assertEqual((self.root / 'catalog.json').read_bytes(), before)
         self.assertFalse((self.root / 'active-content.json').exists())
+
+    def test_incomplete_mapping_and_dual_ownership_fail_before_state_initialization(self):
+        self.legacy_placement()
+        migrate_bank(self.root, 'practice')
+        from graspmemoedu.training_content import fingerprint
+        bank_path = self.root / 'training-banks/practice.json'
+        bank_bytes = bank_path.read_bytes()
+        before = self.rows()
+        broken = json.loads(bank_bytes)
+        question = next(q for group in broken['groups'] for q in group.get('questions', []))
+        del question['legacy_topic_id']
+        broken['version'] = fingerprint(broken)
+        bank_path.write_bytes(encoded(broken))
+        with self.assertRaisesRegex(DomainError, '完整保留'):
+            create_app(Settings.load(self.root))
+        self.assertEqual(before, self.rows())
+        bank_path.write_bytes(bank_bytes)
+        catalog_path = Settings.load(self.root).content_dir / 'catalog.json'
+        catalog = json.loads(catalog_path.read_bytes())
+        extra = copy.deepcopy(catalog['courses'][0])
+        extra['id'] = 'another-course'
+        extra.pop('placement')
+        catalog['courses'].append(extra)
+        catalog_path.write_bytes(encoded(catalog))
+        subjects_path = Settings.load(self.root).content_dir / 'subjects.json'
+        subjects = json.loads(subjects_path.read_bytes())
+        next(s for s in subjects['subjects'] if s['id'] == 'cs')['course_ids'].append(extra['id'])
+        subjects_path.write_bytes(encoded(subjects))
+        with self.assertRaisesRegex(DomainError, '两套流程'):
+            create_app(Settings.load(self.root))
+        self.assertEqual(before, self.rows())

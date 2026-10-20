@@ -9,7 +9,6 @@ from .service import DomainError
 from .training import TrainingService
 from .training_content import permission_id
 from .access import feature_eligible
-from .atomic_banks import AtomicBanks
 
 PUBLIC_PATHS = {'/api/training/' + name for name in (
     'catalog', 'bank', 'group', 'open', 'state', 'submit', 'submission', 'reveal', 'rate',
@@ -48,9 +47,6 @@ class Preferences(BaseModel):
 def register_training_routes(app, training, access_store, subjects, service_for,
                              admission_lock, limits, schedule, outstanding_count, clock=None):
     settings = app.state.settings
-    atomic_banks = AtomicBanks(app.state.catalog, subjects, access_store.test_materials)
-    # Compatibility for older installations only. A native bank is authoritative.
-    atomic_banks.banks = {k: v for k, v in atomic_banks.banks.items() if k not in training.banks}
 
     def backend_for(access, scope_digest=None):
         runtime = service_for(access['learner_id'], scope_digest=scope_digest).runtime if access.get('is_admin') else None
@@ -103,14 +99,11 @@ def register_training_routes(app, training, access_store, subjects, service_for,
     def catalog(request: Request):
         access, _ = context(request)
         return {'banks': [{k: bank.get(k, '') for k in ('id', 'title', 'subject_id', 'description', 'version')}
-                          for bank in visible(request, access)]
-                         + atomic_banks.visible(access, request.query_params.get('subject_id'))}
+                          for bank in visible(request, access)]}
 
     @app.get('/api/training/bank')
     def bank(request: Request, bank_id: str):
         access, backend = context(request)
-        if bank_id in atomic_banks.banks:
-            return atomic_banks.bank(bank_id, access, request.query_params.get('subject_id'), backend)
         authorize_bank(request, access, bank_id)
         return backend.bank(bank_id, history='review_history' in access['features'])
 

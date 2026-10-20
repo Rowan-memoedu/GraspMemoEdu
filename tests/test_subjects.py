@@ -215,12 +215,13 @@ class SubjectAcceptanceTests(unittest.TestCase):
         self.assertEqual(denied['detail']['code'], 'manual_pause_removed')
         self.assertEqual(chosen, self.call('GET', '/api/state?topic_id=topic-b'))
 
-    def test_nonmath_assets_accept_guests_and_still_require_valid_identity(self):
+    def test_subject_assets_accept_guests_and_share_one_identity_boundary(self):
         path = '/subject-guide-assets/physics/plot.png'
         self.assertEqual(self.client.get(path).status_code, 401)
         self.assertEqual(self.client.get(path, headers=self.headers).status_code, 200)
         self.assertIn('/subject-guide-assets/physics/plot.png', self.call('GET', '/api/guide?subject_id=physics')['html'])
-        self.assertEqual(self.client.get('/subject-guide-assets/math/plot.png').status_code, 200)
+        self.assertEqual(self.client.get('/subject-guide-assets/math/plot.png').status_code, 401)
+        self.assertEqual(self.client.get('/guide-assets/plot.png').status_code, 200)
         preflight = self.client.options(path, headers={'Origin': self.origin,
             'Access-Control-Request-Method': 'GET', 'Access-Control-Request-Headers': 'X-Learning-Identity,X-Learning-Session'})
         self.assertEqual(preflight.status_code, 200)

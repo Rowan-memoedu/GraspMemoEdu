@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 
 from .service import DomainError
+from .subject_registry import SUBJECT_IDS as SUBJECTS
 
 
 def point_id(kind, container, version, source_point):
@@ -111,7 +112,6 @@ def assemble(cards, requirements):
 
 TYPE_LABELS = {'单选': 'choice', '多选': 'multiple', '填空': 'fill_blank',
                '问答': 'text', '判断': 'true_false', '配对': 'matching'}
-SUBJECTS = {'math', 'physics', 'english', 'chinese', 'biology', 'chemistry'}
 
 
 def load_paper_types(path=None):

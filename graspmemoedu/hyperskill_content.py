@@ -5,7 +5,7 @@ SUPPORTED = {'choice', 'matching', 'number', 'string', 'fill-blanks', 'sorting',
 
 def validate_binding(topic):
     binding = topic.get('hyperskill')
-    if (topic.get('subject_id') != 'cs' or topic.get('memory_chunks') != []
+    if (topic.get('memory_chunks') != []
             or not isinstance(binding, dict) or set(binding) != {'topic_id', 'theory_id'}
             or any(type(v) is not int or v <= 0 for v in binding.values())):
         raise ValueError('Invalid Hyperskill topic binding')
