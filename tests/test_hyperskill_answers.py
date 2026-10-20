@@ -35,6 +35,14 @@ class SharedHyperskillAnswersTests(unittest.TestCase):
             q['hyperskill_presentation'].update(dataset={}, interaction=None)
             self.old['flashcards'][0]['hyperskill']['type'] = kind
             (self.data / 'topic.json').write_bytes(encoded(self.old))
+        if kind == 'fill-blanks':
+            q['hyperskill_presentation'].update(
+                dataset={'components': [{'type': 'text', 'text': 'Use ▭'},
+                                        {'type': 'select', 'options': ['A', 'B']}]},
+                interaction={'version': 1, 'type': 'hyperskill_fill', 'template': 'Use ▭',
+                             'fields': [{'type': 'select', 'options': ['A', 'B']}]})
+            self.old['flashcards'][0]['hyperskill']['type'] = kind
+            (self.data / 'topic.json').write_bytes(encoded(self.old))
         self.bank['version'] = fingerprint(self.bank)
         name = 'training-banks/hyperskill-practice.json'
         raw = encoded(self.bank); (self.package / name).write_bytes(raw)
@@ -142,7 +150,7 @@ class SharedHyperskillAnswersTests(unittest.TestCase):
         evidence = {'submissions': [{'id': r['submission_id'], 'attempt': r['attempt_id'],
                     'step': r['step_id'], 'time': r['time'], 'status': 'correct', 'reply': r['reply']}],
                     'attempts': [{'id': r['attempt_id'], 'step': r['step_id'],
-                                 'dataset': q['hyperskill_presentation']['dataset']}]}
+                                 'dataset': {**q['hyperskill_presentation']['dataset'], 'unused_api_field': ''}}]}
         self.assertEqual(backfill(self.data, evidence)['verified_reference_submissions'], [r['submission_id']])
         self.assertEqual(len(AnswerStore(backend).references(q)), 1)
         backfill(self.data, evidence)
@@ -152,6 +160,25 @@ class SharedHyperskillAnswersTests(unittest.TestCase):
         evidence['submissions'][0]['reply'] = {'choices': [False, True]}
         with self.assertRaises(ValueError):
             backfill(self.data, evidence)
+
+    def test_backfill_raw_fill_components_ignore_empty_fields_but_reject_changed_question(self):
+        from scripts.backfill_hyperskill_answers import backfill
+        q = self.prepared('fill-blanks'); backend = self.native()
+        adapter, run = self.begin(backend)
+        event = self.event(); event['receipt']['reply'] = {'blanks': ['A']}
+        adapter.check_event(run['round_id'], run['step_id'], event)
+        r = event['receipt']
+        raw = {'components': [{'type': 'text', 'text': 'Use ▭', 'options': []},
+                              {'type': 'select', 'text': '', 'options': ['B', 'A']}]}
+        evidence = {'submissions': [{'id': r['submission_id'], 'attempt': r['attempt_id'],
+                    'step': r['step_id'], 'time': r['time'], 'status': 'correct', 'reply': r['reply']}],
+                    'attempts': [{'id': r['attempt_id'], 'step': r['step_id'], 'dataset': raw}]}
+        raw['components'][0]['text'] = 'Changed requirement ▭'
+        self.assertEqual(backfill(self.data, evidence)['verified_reference_submissions'], [])
+        self.assertEqual(AnswerStore(backend).references(q), [])
+        raw['components'][0]['text'] = 'Use ▭'
+        self.assertEqual(backfill(self.data, evidence)['verified_reference_submissions'], [r['submission_id']])
+        self.assertEqual(len(AnswerStore(backend).references(q)), 1)
 
     def test_semantic_equivalent_text_uses_existing_judge_and_never_becomes_source_key(self):
         q = self.prepared('string'); backend = self.native()
