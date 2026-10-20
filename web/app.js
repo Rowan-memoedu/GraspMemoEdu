@@ -1,12 +1,12 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=80ba278a52ec527d";
-import {answerReady} from './question-input.js?v=80ba278a52ec527d';
-import {reportableContent} from './content-report.js?v=80ba278a52ec527d';
-import {createLearningCache} from './learning-cache.js?v=80ba278a52ec527d';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=9c8f312d3f7a7155";
+import {answerReady} from './question-input.js?v=9c8f312d3f7a7155';
+import {reportableContent} from './content-report.js?v=9c8f312d3f7a7155';
+import {createLearningCache} from './learning-cache.js?v=9c8f312d3f7a7155';
 
-import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, readerHistorySteps, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState} from './learning-ui.js?v=80ba278a52ec527d';
-import {selfAssessment} from './self-assessment.js?v=80ba278a52ec527d';
-import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=80ba278a52ec527d';
-import {renderSourceReader} from './learning-ui.js?v=80ba278a52ec527d';
+import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, readerHistorySteps, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState} from './learning-ui.js?v=9c8f312d3f7a7155';
+import {selfAssessment} from './self-assessment.js?v=9c8f312d3f7a7155';
+import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=9c8f312d3f7a7155';
+import {renderSourceReader} from './learning-ui.js?v=9c8f312d3f7a7155';
 
 applyStaticTranslations();
 
@@ -1459,9 +1459,9 @@ async function openTopic(id, subjectId) {
   }
 }
 
-const { initPortal } = await import("./portal.js?v=80ba278a52ec527d");
-const {startPresence} = await import('./presence.js?v=80ba278a52ec527d');
-const {visibleContentTopics} = await import('./content-report.js?v=80ba278a52ec527d');
+const { initPortal } = await import("./portal.js?v=9c8f312d3f7a7155");
+const {startPresence} = await import('./presence.js?v=9c8f312d3f7a7155');
+const {visibleContentTopics} = await import('./content-report.js?v=9c8f312d3f7a7155');
 startPresence({getAccess: () => identityProblem ? null : access, request, getTopics: visibleContentTopics});
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {

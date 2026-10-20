@@ -65,11 +65,13 @@ def validate(bank):
             require(isinstance(q, dict) and identifier(q.get('id')) and q['id'] not in questions,
                     'Question IDs must be unique within the bank')
             questions.add(q['id'])
-            require(all(text(q.get(key)) for key in ('question', 'reference_answer', 'answer_type', 'constraints')),
+            external = 'hyperskill' in q
+            require(all(text(q.get(key)) for key in ('question', 'answer_type', 'constraints')
+                        + (() if external else ('reference_answer',))),
                     'Question needs a stem, reference answer and explanation')
             # Offline SVG formulae and embedded PNGs are larger than source prose.
             # The complete bank still has the existing 32 MB file limit.
-            require(all(text(q.get(key), 1000000) for key in ('html', 'explanation_html')),
+            require(all(text(q.get(key), 1000000) for key in (('html',) if external else ('html', 'explanation_html'))),
                     'Missing or oversized rendered question or explanation')
             require(text(q.get('title', q['id']), 200), 'Invalid question title')
             validate_interaction(q.get('interaction'), q['question'])
@@ -78,6 +80,15 @@ def validate(bank):
                 require(isinstance(a, dict) and set(a) == {'task_key', 'kind', 'version'}
                         and identifier(a['task_key']) and a['kind'] in ('automated', 'manual')
                         and text(a['version'], 128), 'Invalid Academy grading binding')
+            if external:
+                from .hyperskill_content import SUPPORTED
+                h = q['hyperskill']
+                require(isinstance(h, dict) and set(h) == {'topic_id', 'theory_id', 'step_id', 'type'}
+                        and all(type(h[k]) is int and h[k] > 0 for k in ('topic_id', 'theory_id', 'step_id'))
+                        and h['type'] in SUPPORTED and q.get('answer_type') == 'external'
+                        and q.get('reference_answer') == '' and q.get('explanation_html') == ''
+                        and q.get('interaction') is None and 'academy' not in q,
+                        'Invalid Hyperskill grading binding')
         if 'content_order' in group:
             order = group['content_order']
             expected = {('introduction', i['id']) for i in intros} | {('question', q['id']) for q in rows}

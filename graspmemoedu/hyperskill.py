@@ -5,6 +5,25 @@ from .academy import AcademyLearningService
 from .service import DomainError, encode
 
 
+def validate_receipt(event):
+    receipt = event.get('receipt') if isinstance(event, dict) else None
+    fields = {'submission_id', 'attempt_id', 'step_id', 'status', 'time',
+              'reply', 'answer_display', 'feedback'}
+    if (not isinstance(receipt, dict) or set(receipt) != fields
+            or any(type(receipt[k]) is not int or receipt[k] <= 0
+                   for k in ('submission_id', 'attempt_id', 'step_id'))
+            or receipt['status'] not in ('correct', 'wrong')
+            or receipt['time'] != event.get('occurred_at')
+            or event.get('category') != ('passed' if receipt['status'] == 'correct' else 'wrong')
+            or not isinstance(receipt['reply'], dict)
+            or not isinstance(receipt['answer_display'], str)
+            or not 1 <= len(receipt['answer_display']) <= 8000
+            or not isinstance(receipt['feedback'], str) or len(receipt['feedback']) > 12000
+            or len(encode(receipt)) > 40000):
+        raise DomainError('invalid_hyperskill_receipt', 'Hyperskill 判题回执格式不正确。', 422)
+    return receipt
+
+
 class HyperskillLearningService(AcademyLearningService):
     event_fields = AcademyLearningService.event_fields | {'receipt'}
 
@@ -32,21 +51,7 @@ class HyperskillLearningService(AcademyLearningService):
         return run['events'][-1]['receipt']['answer_display']
 
     def check_event(self, round_id, step_id, event):
-        receipt = event.get('receipt') if isinstance(event, dict) else None
-        fields = {'submission_id', 'attempt_id', 'step_id', 'status', 'time',
-                  'reply', 'answer_display', 'feedback'}
-        if (not isinstance(receipt, dict) or set(receipt) != fields
-                or any(type(receipt[k]) is not int or receipt[k] <= 0
-                       for k in ('submission_id', 'attempt_id', 'step_id'))
-                or receipt['status'] not in ('correct', 'wrong')
-                or receipt['time'] != event.get('occurred_at')
-                or event.get('category') != ('passed' if receipt['status'] == 'correct' else 'wrong')
-                or not isinstance(receipt['reply'], dict)
-                or not isinstance(receipt['answer_display'], str)
-                or not 1 <= len(receipt['answer_display']) <= 8000
-                or not isinstance(receipt['feedback'], str) or len(receipt['feedback']) > 12000
-                or len(encode(receipt)) > 40000):
-            raise DomainError('invalid_hyperskill_receipt', 'Hyperskill 判题回执格式不正确。', 422)
+        validate_receipt(event)
         return super().check_event(round_id, step_id, event)
 
     def validate_check(self, con, state, round_id, step_id, event):

@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .access import credential_digest
 from .academy import AcademyLearningService
 from .academy_training import AcademyTraining
+from .hyperskill_training import external_training
 from .training_api import AttemptAction
 from .training_content import permission_id
 from .service import DomainError
@@ -59,7 +60,7 @@ def register_academy_routes(app, settings, access_store, service_for, identity, 
         access = access_store.resolve_digest(row['identity_digest'])
         access_store.authorize(access, row['topic'], 'submit_answer')
         if row['topic'].startswith('training.'):
-            backend = AcademyTraining(app.state.training_backend_for(access, row['preview_scope']), row['step'])
+            backend = external_training(app.state.training_backend_for(access, row['preview_scope']), row['step'])
             if (access['learner_id'] != row['learner'] or backend.version != row['version']
                     or permission_id(backend.bank_id) != row['topic']):
                 raise DomainError('stale_academy_ticket', '题库已更新，请从网页重新打开。', 409)
@@ -88,9 +89,10 @@ def register_academy_routes(app, settings, access_store, service_for, identity, 
     @app.post('/api/academy/training/launch')
     def training_launch(payload: AttemptAction, request: Request):
         access, training = app.state.training_attempt_context(request, payload.attempt_id, 'submit_answer')
-        backend = AcademyTraining(training, payload.attempt_id)
+        backend = external_training(training, payload.attempt_id)
         token = grant(request, access, permission_id(backend.bank_id), backend.launch())
-        return {'url': 'graspmemoedu://academy/open?ticket=' + token,
+        return {**({'ticket': token} if backend.provider == 'hyperskill'
+                   else {'url': 'graspmemoedu://academy/open?ticket=' + token}),
                 'state': app.state.training_public_state(request, access, training, payload.attempt_id)}
 
     class TrainingFinish(AttemptAction):
@@ -99,7 +101,7 @@ def register_academy_routes(app, settings, access_store, service_for, identity, 
     @app.post('/api/academy/training/finish')
     def training_finish(payload: TrainingFinish, request: Request):
         access, training = app.state.training_attempt_context(request, payload.attempt_id, 'submit_answer')
-        AcademyTraining(training, payload.attempt_id).finish(payload.rating)
+        external_training(training, payload.attempt_id).finish(payload.rating)
         return app.state.training_public_state(request, access, training, payload.attempt_id)
 
     @app.post('/api/academy/launch')

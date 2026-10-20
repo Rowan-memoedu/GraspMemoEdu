@@ -1,4 +1,4 @@
-/** One source Topic -> translated Introduction, independent problem memories. */
+/** One source Topic -> ordered theory sections and a native practice group. */
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
@@ -6,6 +6,7 @@ import {renderSourceHtml} from './render_mathacademy.mjs';
 import {embedSourceImages} from './hyperskill_media.mjs';
 import {supportedTypes} from './hyperskill_protocol.mjs';
 import {fileURLToPath} from 'node:url';
+import {splitTheory,bankFingerprint} from './hyperskill_sections.mjs';
 
 export async function prepareTopic(translatedPath, livePath, output) {
 if (!output) throw Error('Usage: prepare_hyperskill.mjs translated.json live-source.json output');
@@ -26,25 +27,29 @@ const media = await embedSourceImages([translated.step.block.text,...live.practi
   base_url:translated.source_url,
 });
 const rendered = renderSourceHtml(media.html[0]);
+const introductions = splitTheory(media.html[0],topicId).map(({source_html,...section}) =>
+  ({...section,html:renderSourceHtml(source_html).html}));
 const escape=value=>String(value).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const samples=p=>(p.block.options?.samples||[]).map((sample,i)=>
   `<section><h5>示例 ${i+1}</h5><p>输入</p><pre><code>${escape(sample[0])}</code></pre><p>输出</p><pre><code>${escape(sample[1])}</code></pre></section>`).join('');
 const topic = {
   id: topicId, title: translated.topic.title, subject_id:'cs', source_adapter:'hyperskill',
-  source_url:translated.source_url, training_mode:'atomic_retrieval',
+  source_url:translated.source_url, training_mode:'paradigm', topic_format_version:2,
+  topic_kind:'introduction',
   hyperskill:{topic_id:live.topic.id,theory_id:live.theory.id},
-  introduction:{html:rendered.html}, math_css:rendered.css || '',
-  modules:[], memory_chunks:[],
-  memory_points:live.practices.map(p=>({id:`problem-${p.id}`,text:p.title})),
-  flashcards:live.practices.map((p,i)=>({
+  introductions, content_order:introductions.map(i=>({kind:'introduction',id:i.id})),
+  math_css:rendered.css || '',
+  modules:[], memory_chunks:[], memory_points:[], flashcards:[],
+};
+topic.content_version=hash(encode(introductions));
+const questions=live.practices.map((p,i)=>({
     id:`hyperskill-step-${p.id}`, title:p.title, question:p.block.text,
     html:renderSourceHtml(media.html[i+1]+samples(p)).html,
-    point_ids:[`problem-${p.id}`],
     reference_answer:'', explanation_html:'', answer_type:'external',
     constraints:'由 Hyperskill 判题；选项与答案绑定当前练习实例。',
-    hyperskill:{step_id:p.id,type:p.type},
-  })),
-};
+    source_url:`https://hyperskill.org/learn/step/${p.id}`,
+    hyperskill:{...topic.hyperskill,step_id:p.id,type:p.type},
+  }));
 topic.version = hash(encode(topic));
 const units = translated.knowledge_graph.path.map((p,i,rows)=>({
   id:`hyperskill-group-${p.id}`, title:p.title,
@@ -53,13 +58,20 @@ const units = translated.knowledge_graph.path.map((p,i,rows)=>({
 }));
 const course = {id:'hyperskill',title:'Hyperskill',description:'',
   topics:[{id:topicId,path:`topics/${topicId}.json`,prerequisites:[]}],units};
-const report = {topic_id:topicId,practice_count:topic.flashcards.length,memory_chunks:0,
+const bank = {schema:1,id:'hyperskill-practice',title:'Hyperskill',subject_id:'cs',description:'',
+  math_css:topic.math_css,groups:[
+    ...units.map(({topic_ids,...u})=>({...u,questions:[]})),
+    {id:topicId,title:topic.title,parent_id:units.at(-1)?.id || null,questions},
+  ]};
+bank.version=bankFingerprint(bank);
+const report = {topic_id:topicId,practice_count:questions.length,introduction_count:introductions.length,memory_chunks:0,
   theory_sha256:hash(translatedRaw),practice_source_sha256:hash(liveRaw),
   source_hierarchy:translated.knowledge_graph.path_text,
   learner_progress_imported:false,answer_keys_invented:false};
 if(Object.keys(media.assets).length)report.assets=media.assets;
 const files = {
   [`topics/${topicId}.json`]:encode(topic),'catalog.json':encode({courses:[course]}),
+  'training-banks/hyperskill-practice.json':encode(bank),
   'report.json':encode(report),
   [`sources/${topicId}.translated.json`]:translatedRaw,
   [`sources/${topicId}.practices.json`]:liveRaw,
@@ -74,11 +86,12 @@ if(Object.keys(media.assets).length) {
     hashes['assets/'+name]=hash(await fs.readFile(path.join(output,'assets',name)));
 }
 await fs.writeFile(path.join(output,'manifest.json'),encode({
-  schema:1,adapter:'hyperskill',test_materials:{topics:[topicId]},
+  schema:1,adapter:'hyperskill',topic_format_version:2,
+  test_materials:{topics:[topicId],banks:[bank.id]},
   files:hashes,
 }),{flag:'wx'});
 console.log(JSON.stringify({topic_id:topicId,practice_count:report.practice_count,images:Object.keys(media.assets).length}));
-return {topic,course,report};
+return {topic,course,bank,report};
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url))
   await prepareTopic(...process.argv.slice(2));

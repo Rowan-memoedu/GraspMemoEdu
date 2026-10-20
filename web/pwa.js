@@ -22,7 +22,7 @@ document.querySelectorAll('[data-pwa-install]').forEach(button => button.addEven
 renderInstall();
 if ('serviceWorker' in navigator && isSecureContext) {
   // Activation never reloads a page: an unfinished answer must stay on screen.
-  navigator.serviceWorker.register(new URL('./sw.js?v=80ba278a52ec527d', import.meta.url), { scope: './', updateViaCache: 'none' })
+  navigator.serviceWorker.register(new URL('./sw.js?v=9c8f312d3f7a7155', import.meta.url), { scope: './', updateViaCache: 'none' })
     .then(registration => {
       const update = () => registration.update().catch(() => {});
       addEventListener('online', update);

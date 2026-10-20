@@ -180,10 +180,11 @@ class TrainingService:
                              'html': question['html'], 'interaction': public_interaction(question)},
                 'explanation_html': question['explanation_html'] if revealed else None,
                 **reference_fields(question, revealed),
-                'can_self_rate': self_rating and is_reproduction(question) and not question.get('academy'),
+                'can_self_rate': self_rating and is_reproduction(question) and not (question.get('academy') or question.get('hyperskill')),
                 **({'academy': {**question['academy'], 'round_id': run['id'] if run else None,
                                'checks': len(run['events']) if run else 0,
                                'opened': bool(run and run.get('opened_at'))}} if question.get('academy') else {}),
+                **self._hyperskill_state(question, run),
                 'submission_id': row['submission_id'], 'submission_status': submission['status'] if submission else None,
                 'answer': submission['answer'] if submission else '',
                 'answer_display': display_answer(question, submission['answer']) if submission else '',
@@ -192,6 +193,13 @@ class TrainingService:
                 'in_error_notebook': memory is not None and not stopped,
                 'awaiting_first_learning': bool(memory and memory['card_json'] is None and not stopped),
                 'due_at': memory['due_at'] if memory and not stopped else None}
+
+    @staticmethod
+    def _hyperskill_state(question, run):
+        if not question.get('hyperskill'):
+            return {}
+        from .hyperskill_training import public_binding
+        return {'hyperskill': public_binding(question, run)}
 
     @staticmethod
     def submission_fingerprint(data):
@@ -203,6 +211,8 @@ class TrainingService:
             if row['phase'] != 'done':
                 require_unreserved(con, self.learner_id, 'training', row['bank'], row['version'], row['question'], now=utc_time(self.clock()).isoformat())
             question = json.loads(row['snapshot'])
+            if question.get('hyperskill'):
+                raise DomainError('hyperskill_check_required', '请连接 Hyperskill 后提交此题。', 409)
             if question.get('academy'):
                 raise DomainError('academy_check_required', '请在 IDEA 中检查此题。', 409)
             answer = data['answer']
@@ -318,6 +328,8 @@ class TrainingService:
     def reveal(self, attempt_id):
         with self.transaction() as con:
             row = self._attempt(con, attempt_id)
+            if json.loads(row['snapshot']).get('hyperskill'):
+                raise DomainError('hyperskill_check_required', '本题由 Hyperskill 判题。', 409)
             if json.loads(row['snapshot']).get('academy'):
                 raise DomainError('academy_check_required', '请在 IDEA 中完成本题后记录结果。', 409)
             if not is_reproduction(json.loads(row['snapshot'])):

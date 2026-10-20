@@ -206,7 +206,7 @@ class PaperService:
         banks = []
         for b in self.training.catalog.banks.values():
             if b['subject_id'] == subject and 'training.' + b['id'] in allowed:
-                banks.append({**b, 'groups': [{**g, 'questions': [q for q in g.get('questions', []) if q.get('academy')]}
+                banks.append({**b, 'groups': [{**g, 'questions': [q for q in g.get('questions', []) if q.get('academy') or q.get('hyperskill')]}
                                               for g in b['groups']]})
         external = self.training.reviews(banks)
         # Do not put IDE questions into a web-graded paper. They still use the

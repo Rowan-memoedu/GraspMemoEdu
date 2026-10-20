@@ -1,5 +1,6 @@
 """Add a prepared Academy course through the existing atomic content pointer."""
 from copy import deepcopy
+from contextlib import nullcontext
 from dataclasses import replace
 import hashlib
 import json
@@ -33,7 +34,7 @@ def contains_extension(old, incoming, package):
     return True
 
 
-def _install(package, data_dir, *, extend_course=False):
+def _install(package, data_dir, *, extend_course=False, migration=None):
     package, data_dir = Path(package).resolve(), Path(data_dir).resolve()
     if (data_dir / 'cloud-authoritative.json').exists():
         raise ValueError('Do not install into the local production rollback snapshot')
@@ -49,18 +50,21 @@ def _install(package, data_dir, *, extend_course=False):
     with import_lock(data_dir):
         settings = Settings.load(data_dir)
         old = Catalog.load(settings)
+        if migration:
+            migration.prepare(old)
         old_root = settings.content_dir
         pointer = (data_dir / POINTER).read_bytes() if (data_dir / POINTER).exists() else None
         baseline = {p: p.read_bytes() for p in [settings.catalog_path, old_root / 'subjects.json']}
         extra_config = {p: p.read_bytes() for p in [old_root / 'test-materials.json', *sorted((old_root / 'graphs').glob('*.json'))] if p.exists()}
         existing = {c['id'] for c in candidate['courses']} & old.courses.keys()
-        if extend_course and all(contains_extension(old, c, package) for c in candidate['courses']):
+        if extend_course and all(contains_extension(old, c, package) for c in candidate['courses']) and (
+                migration is None or migration.unchanged()):
             return {'status': 'unchanged', 'learning_records_changed': False}
         if existing:
             if all(c['id'] in existing and old.courses[c['id']] == {**c, 'description': c.get('description', ''),
                     'topics': [{k: v for k, v in t.items() if k != 'path'} for t in c['topics']]}
                    and all(old.topics[t['id']] == json.loads((package / t['path']).read_bytes()) for t in c['topics'])
-                   for c in candidate['courses']):
+                   for c in candidate['courses']) and (migration is None or migration.unchanged()):
                 return {'status': 'unchanged', 'learning_records_changed': False}
             if not extend_course:
                 raise ValueError('An existing course must not be replaced by the importer')
@@ -89,10 +93,13 @@ def _install(package, data_dir, *, extend_course=False):
             for declaration in incoming['topics']:
                 if declaration['id'] in old.topics:
                     previous = known_topics.get(declaration['id'])
-                    if (previous is None or old.topics[declaration['id']] != json.loads((package / declaration['path']).read_bytes())
+                    changed = old.topics[declaration['id']] != json.loads((package / declaration['path']).read_bytes())
+                    if (previous is None or changed and not (migration and declaration['id'] in migration.replacements)
                             or {k: v for k, v in previous.items() if k != 'path'} !=
                             {k: v for k, v in declaration.items() if k != 'path'}):
                         raise ValueError('An existing Topic cannot be changed by a course extension')
+                    if changed:
+                        previous['path'] = declaration['path']
                 else:
                     current['topics'].append(declaration)
             known_units = {u['id']: u for u in current.get('units', [])}
@@ -114,7 +121,7 @@ def _install(package, data_dir, *, extend_course=False):
         policy_path = old_root / 'test-materials.json'
         policy = json.loads(policy_path.read_bytes()) if policy_path.exists() else {'schema': 1}
         for kind, ids in manifest.get('test_materials', {}).items():
-            if kind not in ('courses', 'topics'):
+            if kind not in ('courses', 'topics', 'banks'):
                 raise ValueError('Unsupported package test-material kind')
             policy[kind] = list(dict.fromkeys(policy.get(kind, []) + ids))
         if policy_path.exists() or manifest.get('test_materials'):
@@ -131,19 +138,26 @@ def _install(package, data_dir, *, extend_course=False):
             raise ValueError('Content changed concurrently; no activation performed')
         history = data_dir / 'content-activation-history'; history.mkdir(exist_ok=True)
         (history / (generation + '.json')).write_bytes(encoded({'previous': json.loads(pointer) if pointer else None, 'generation': generation}))
-        pending = data_dir / (POINTER + '.academy-pending')
-        with pending.open('xb') as stream:
-            stream.write(encoded({'schema': 1, 'generation': generation})); stream.flush(); os.fsync(stream.fileno())
-        os.replace(pending, data_dir / POINTER)
-        final = Catalog.load(Settings.load(data_dir))
-        assert all(final.topics[t['id']] == loaded.topics[t['id']] for c in candidate['courses'] for t in c['topics'])
+        with migration.activate(old, loaded) if migration else nullcontext():
+            pending = data_dir / (POINTER + '.academy-pending')
+            with pending.open('xb') as stream:
+                stream.write(encoded({'schema': 1, 'generation': generation})); stream.flush(); os.fsync(stream.fileno())
+            os.replace(pending, data_dir / POINTER)
+            final = Catalog.load(Settings.load(data_dir))
+            assert all(final.topics[t['id']] == loaded.topics[t['id']] for c in candidate['courses'] for t in c['topics'])
         return {'status': 'installed', 'courses': [c['id'] for c in candidate['courses']],
-                'topics': sum(len(c['topics']) for c in candidate['courses']), 'generation': generation, 'learning_records_changed': False}
+                'topics': sum(len(c['topics']) for c in candidate['courses']), 'generation': generation,
+                'learning_records_changed': bool(migration and migration.counts),
+                **({'migration': migration.counts} if migration else {})}
 
 
 def install(package, data_dir, *, extend_course=False):
-    result = _install(package, data_dir, extend_course=extend_course)
     manifest = json.loads((Path(package) / 'manifest.json').read_bytes())
+    migration = None
+    if manifest['adapter'] == 'hyperskill' and manifest.get('topic_format_version') == 2:
+        from .hyperskill_import import HyperskillImport
+        migration = HyperskillImport(package, data_dir)
+    result = _install(package, data_dir, extend_course=extend_course, migration=migration)
     if manifest['adapter'] == 'jetbrains-academy':
         from .academy_training_import import install as install_bank
         courses = json.loads((Path(package) / 'catalog.json').read_bytes())['courses']

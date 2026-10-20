@@ -19,6 +19,7 @@ def main():
         raise ValueError('Use the configured maintenance stage')
     app, data = Path('/opt/graspmemoedu/app'), Path('/var/lib/graspmemoedu')
     release = json.loads((stage / 'release.json').read_bytes())
+    migration = release.get('hyperskill_migration', False)
     def digest(path): return hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
     for name, spec in release['files'].items():
         if not (app / name).resolve().is_relative_to(app) or not (stage / 'source' / name).resolve().is_relative_to(stage / 'source'):
@@ -42,6 +43,11 @@ def main():
             if target.is_symlink():
                 raise ValueError('Bank must not be a symbolic link')
             bank_before[target] = target.read_bytes() if target.exists() else None
+        if migration:
+            target = bank_root / 'hyperskill-practice.json'
+            if target.is_symlink():
+                raise ValueError('Bank must not be a symbolic link')
+            bank_before[target] = target.read_bytes() if target.exists() else None
     timer = subprocess.run(['systemctl', 'is-active', '--quiet', 'graspmemoedu-healthcheck.timer']).returncode == 0
     if timer: subprocess.run(['systemctl', 'stop', 'graspmemoedu-healthcheck.timer'], check=True)
     subprocess.run(['systemctl', 'stop', 'graspmemoedu'], check=True)
@@ -50,6 +56,7 @@ def main():
             names = [r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
             return {name: hashlib.sha256(repr(con.execute('SELECT * FROM "' + name.replace('"', '""') + '" ORDER BY rowid').fetchall()).encode()).hexdigest() for name in names}
     changed = []
+    database_backup = stage / 'before-migration.sqlite3'
     def healthy():
         for _ in range(60):
             try:
@@ -60,6 +67,9 @@ def main():
         raise RuntimeError('Production health check failed')
     try:
         before_state = snapshot()
+        if migration:
+            with sqlite3.connect(data / 'learning.sqlite3') as source, sqlite3.connect(database_backup) as destination:
+                source.backup(destination)
         for name, spec in release['files'].items():
             if digest(app / name) != spec['before']:
                 raise ValueError('Source changed during release preparation: ' + name)
@@ -82,10 +92,18 @@ def main():
             *operation, '--data-dir', str(data)],
             cwd=app, text=True, capture_output=True, check=True)
         installed = json.loads(result.stdout.strip().splitlines()[-1])
-        if snapshot() != before_state: raise RuntimeError('Content installation unexpectedly changed existing database rows')
+        transition = {}
+        if migration:
+            sys.path.insert(0, str(app))
+            from graspmemoedu.hyperskill_import import verify_database_transition
+            bank = json.loads((bank_root / 'hyperskill-practice.json').read_bytes())
+            ids = {t['id'] for c in package_catalog['courses'] for t in c['topics']}
+            transition = verify_database_transition(database_backup, data / 'learning.sqlite3', ids, bank)
+        elif snapshot() != before_state:
+            raise RuntimeError('Content installation unexpectedly changed existing database rows')
         subprocess.run(['systemctl', 'start', 'graspmemoedu'], check=True); healthy()
         receipt = {'target': 'production', 'health': 'passed', 'source_commit': release['commit'],
-                   'existing_database_rows_unchanged_at_install': True, **installed}
+                   'existing_database_rows_unchanged_at_install': not migration, **transition, **installed}
         (data / 'content-activation-history' / (installed.get('generation', 'academy') + '.production.json')).write_text(json.dumps(receipt, indent=2))
         print(json.dumps(receipt), flush=True)
     except BaseException:
@@ -102,6 +120,9 @@ def main():
                 target.unlink(missing_ok=True)
             else:
                 target.write_bytes(previous)
+        if migration and database_backup.exists():
+            with sqlite3.connect(database_backup) as source, sqlite3.connect(data / 'learning.sqlite3') as destination:
+                source.backup(destination)
         subprocess.run(['systemctl', 'start', 'graspmemoedu'], check=True); healthy()
         raise
     finally:

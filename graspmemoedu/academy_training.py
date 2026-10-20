@@ -13,13 +13,16 @@ from .review_cards import require_unreserved
 
 
 class AcademyTraining:
+    provider = 'academy'
+    event_fields = {'id', 'sequence', 'category', 'code_hash', 'occurred_at'}
+
     def __init__(self, training, attempt_id):
         self.training, self.attempt_id = training, attempt_id
         self.learner_id = training.learner_id
         with training.transaction() as con:
             row = training._attempt(con, attempt_id)
             self.question = json.loads(row['snapshot'])
-            if not self.question.get('academy'):
+            if not self.question.get(self.provider):
                 raise DomainError('not_academy', '本题未绑定 JetBrains Academy。', 422)
             self.bank_id, self.version = row['bank'], row['version']
 
@@ -71,13 +74,13 @@ class AcademyTraining:
 
     def _complete(self, con, attempt, run, result):
         rating = result['rating']
-        manual = self.question['academy']['kind'] == 'manual'
+        manual = self.manual
         reason = ('自主评分' if manual else f"首次通过前的错误负担：{result['burden']:g}")
         reason += ' · ' + {1: 'Again', 2: 'Hard', 3: 'Good', 4: 'Easy'}[rating]
         now = utc_time(self.training.clock())
         if result['passed'] and run['events']:
             now = max(utc_time(run['started_at']), min(now, utc_time(run['events'][-1]['occurred_at'])))
-        answer = '自主评分：' + str(rating) if manual else f"IDEA：{len(run['events'])} 次检查"
+        answer = self.answer_summary(run, rating)
         con.execute('INSERT INTO training_submissions VALUES (?,?,?,?,?,NULL,?,?)',
                     (run['id'], self.learner_id, self.attempt_id, hashlib.sha256(packed(run).encode()).hexdigest(),
                      answer, 'judged', reason))
@@ -87,9 +90,19 @@ class AcademyTraining:
         self.training._complete(con, attempt, correct=result['passed'], reason=reason, rating=rating,
                                 self_rating=manual, completed_at=now, enroll=True)
 
+    @property
+    def manual(self):
+        return self.question[self.provider].get('kind') == 'manual'
+
+    def answer_summary(self, run, rating):
+        return '自主评分：' + str(rating) if self.manual else f"IDEA：{len(run['events'])} 次检查"
+
+    def validate_check(self, con, run, event):
+        pass
+
     def check_event(self, round_id, step_id, event):
         if (step_id != self.attempt_id or not isinstance(event, dict)
-                or set(event) != {'id', 'sequence', 'category', 'code_hash', 'occurred_at'}
+                or set(event) != self.event_fields
                 or not isinstance(event['id'], str) or not re.fullmatch(r'[a-zA-Z0-9-]{16,64}', event['id'])
                 or type(event['sequence']) is not int or event['sequence'] < 1
                 or not isinstance(event['category'], str)
@@ -107,7 +120,7 @@ class AcademyTraining:
                 if prior != event:
                     raise DomainError('idempotency_conflict', '检查结果标识已用于其他内容。', 409)
                 return {'accepted': True, 'duplicate': True, 'closed': attempt['phase'] != 'answer'}
-            if attempt['phase'] != 'answer' or self.question['academy']['kind'] != 'automated':
+            if attempt['phase'] != 'answer' or self.manual:
                 raise DomainError('academy_round_closed', '此题不接受新的自动检查结果。', 409)
             if not run.get('opened_at') or event['sequence'] != len(run['events']) + 1:
                 raise DomainError('academy_event_order', '请按检查顺序重传结果。', 409)
@@ -115,6 +128,7 @@ class AcademyTraining:
                     or when > utc_time(self.training.clock()) + timedelta(minutes=5)
                     or run['events'] and when < utc_time(run['events'][-1]['occurred_at'])):
                 raise DomainError('invalid_academy_time', '检查时间或数量超出此轮范围。', 422)
+            self.validate_check(con, run, event)
             run['events'].append(event)
             result = outcome(run['events'])
             if result['rating'] is not None:
@@ -125,7 +139,7 @@ class AcademyTraining:
     def finish(self, rating=None):
         with self.training.transaction() as con:
             attempt, run = self._read(con)
-            manual = self.question['academy']['kind'] == 'manual'
+            manual = self.manual
             if attempt['phase'] == 'done':
                 saved = json.loads(attempt['result'])
                 if saved.get('self_rating') != rating:
