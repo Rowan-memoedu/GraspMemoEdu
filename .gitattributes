@@ -1,2 +1,3 @@
-# Keep pinned chat bundles, licenses and fonts byte-identical across checkouts.
+# Keep pinned vendor bundles, licenses and fonts byte-identical across checkouts.
 /web/vendor/chat/** -text
+/web/vendor/mermaid/** -text
