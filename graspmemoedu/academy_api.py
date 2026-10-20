@@ -81,7 +81,7 @@ def register_academy_routes(app, settings, access_store, service_for, identity, 
         if backend.course.get('source_adapter') == 'hyperskill':
             result['ticket'] = token
         else:
-            result['url'] = 'jetbrains://idea/graspmemoedu/open?ticket=' + token
+            result['url'] = 'graspmemoedu://academy/open?ticket=' + token
         return result
 
     @app.post('/api/academy/claim')

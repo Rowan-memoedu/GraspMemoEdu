@@ -5,7 +5,7 @@ param(
     [string]$Output = 'D:\Artifacts\GraspMemoEdu\academy-bridge\build'
 )
 $ErrorActionPreference = 'Stop'
-$classes = Join-Path $Output 'classes'
+$classes = Join-Path $Output ('classes-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path $classes | Out-Null
 $sources = Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'src') -Filter '*.java' -Recurse | ForEach-Object FullName
 & (Join-Path $Jdk 'bin\javac.exe') -encoding UTF-8 -classpath "$IdeaHome\lib\*;$AcademyLib\*" -d $classes $sources

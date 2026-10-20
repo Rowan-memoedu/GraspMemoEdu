@@ -50,8 +50,11 @@ class Catalog:
                 raise ValueError('Catalog requires courses')
             course_ids = set()
             for value in raw['courses']:
-                if not isinstance(value, dict) or set(value) - {'id', 'title', 'description', 'topics', 'units'}:
+                if not isinstance(value, dict) or set(value) - {'id', 'title', 'description', 'topics', 'units', 'placement'}:
                     raise ValueError('Unknown course field')
+                placement = value.get('placement', 'learning')
+                if placement not in ('learning', 'question_bank'):
+                    raise ValueError('Invalid content placement')
                 course_id = cls._identifier(value.get('id'))
                 if course_id in course_ids:
                     raise ValueError('Duplicate course')
@@ -114,6 +117,16 @@ class Catalog:
                 cls._validate_unit_tree(validated_units)
                 courses.append({'id': course_id, 'title': title, 'description': description,
                                 'topics': metadata, 'units': validated_units})
+                if 'placement' in value:
+                    courses[-1]['placement'] = placement
+                if placement == 'question_bank':
+                    from .topic_runtime import is_introduction
+                    if any(t['prerequisites'] or not (
+                            is_introduction(topics[t['id']]) or
+                            (topics[t['id']].get('training_mode') == 'atomic_retrieval'
+                             and len(topics[t['id']].get('flashcards', [])) == 1))
+                           for t in metadata):
+                        raise ValueError('Question-bank entries require one atomic card or pure reading')
             if not topics:
                 raise ValueError('Catalog has no topic content')
             for course in courses:

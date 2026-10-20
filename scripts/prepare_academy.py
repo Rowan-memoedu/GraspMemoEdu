@@ -149,6 +149,7 @@ def prepare(student, author, course_id, classifications, output, local_manifest)
     report = {'course_id': course_id, 'topics': len(tasks), 'automated': sum(t['kind'] == 'automated' for t in tasks),
               'manual': sum(t['kind'] == 'manual' for t in tasks), 'reading': sum(t['kind'] == 'reading' for t in tasks),
               'source_files_verified': len(baseline), 'hierarchy_preserved': True, 'learner_progress_imported': False}
+    course['placement'] = 'question_bank'
     (output / 'catalog.json').write_bytes(encoded({'courses': [course]}))
     (output / 'report.json').write_bytes(encoded(report))
     names = ['catalog.json', 'report.json', *['topics/' + t['id'] + '.json' for t in tasks]]

@@ -1,21 +1,21 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=262b13fc445222cb";
-import { createReviewView } from "./review.js?v=262b13fc445222cb";
-import { renderCourseGraph } from "./course-graph.js?v=262b13fc445222cb";
-import {questionInput, choiceTypeField} from './question-input.js?v=262b13fc445222cb';
-import {enhanceTopicContent} from './topic-content.js?v=262b13fc445222cb';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=262b13fc445222cb';
-import {createCatalogPicker} from './catalog-picker.js?v=262b13fc445222cb';
-import {createAtomicView} from './atomic.js?v=262b13fc445222cb';
-import {createTrainingView} from './training.js?v=262b13fc445222cb';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=262b13fc445222cb";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=32ffeaca690540b1";
+import { createReviewView } from "./review.js?v=32ffeaca690540b1";
+import { renderCourseGraph } from "./course-graph.js?v=32ffeaca690540b1";
+import {questionInput, choiceTypeField} from './question-input.js?v=32ffeaca690540b1';
+import {enhanceTopicContent} from './topic-content.js?v=32ffeaca690540b1';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=32ffeaca690540b1';
+import {createCatalogPicker} from './catalog-picker.js?v=32ffeaca690540b1';
+import {createAtomicView} from './atomic.js?v=32ffeaca690540b1';
+import {createTrainingView} from './training.js?v=32ffeaca690540b1';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=32ffeaca690540b1";
 
-import {createPaperView} from './review-papers.js?v=262b13fc445222cb';
+import {createPaperView} from './review-papers.js?v=32ffeaca690540b1';
 
-import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=262b13fc445222cb';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=262b13fc445222cb';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=262b13fc445222cb';
-import {attachChatEditor, renderChatMarkdown, configureChatImages} from './vendor/chat/chat.js?v=262b13fc445222cb';
-import {createStudentDashboard} from './student-dashboard.js?v=262b13fc445222cb';
+import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=32ffeaca690540b1';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=32ffeaca690540b1';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=32ffeaca690540b1';
+import {attachChatEditor, renderChatMarkdown, configureChatImages} from './vendor/chat/chat.js?v=32ffeaca690540b1';
+import {createStudentDashboard} from './student-dashboard.js?v=32ffeaca690540b1';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -107,7 +107,12 @@ export function initPortal(bridge) {
       currentHash = routeKey(); currentRoute = parseRoute();
     },
   });
-  const atomic = createAtomicView({...bridge, request: call, root, homeHref: learnHref,
+  const topicHomeHref = () => {
+    const bank = currentRoute?.params?.get('bank');
+    return bank ? localHref(`/banks/${encode(bank)}`) : learnHref();
+  };
+  const atomic = createAtomicView({...bridge, request: call, root, homeHref: topicHomeHref,
+    homeLabel: () => t(currentRoute?.params?.has('bank') ? 'training.back' : 'nav.backHome'),
     reviewHref: () => subjectHref(currentRoute?.subjectId, '/reviews'), formatDate: value => apiDate(value, true),
     progressChanged: () => { dashboards.clear(); answerCache.clear(); }});
   const training = createTrainingView({...bridge, request: call, root, href: localHref,
@@ -170,7 +175,7 @@ export function initPortal(bridge) {
       item.hidden = section === 'qa' ? !canUseHelp() : !subject && !currentRoute?.path.startsWith('/qa');
       item.href = section === 'qa' ? '#/qa' : subjectHref(subject?.id || navigationSubjectId, `/${section}`);
     }
-    $("topicHomeLink").href = learnHref();
+    $("topicHomeLink").href = topicHomeHref();
     if (changed && subject) void refreshHelpSummary(true);
   }
   function updateUser() {
@@ -305,7 +310,7 @@ export function initPortal(bridge) {
     root.classList.toggle("reviewShell", currentRoute.path.startsWith("/review/"));
     if (bridge.getIdentityProblem()) { root.hidden = true; root.replaceChildren(); return; }
     updateSubjectContext(subjects?.find(subject => subject.id === currentRoute.subjectId) || null);
-    setNavigation(currentRoute.path.startsWith('/qa') ? 'qa' : !currentRoute.subjectId ? "subjects" : currentRoute.path.startsWith('/banks') ? 'banks' : currentRoute.path.startsWith("/courses") ? "courses" : currentRoute.path === "/guide" ? "guide" : currentRoute.path.startsWith('/reviews') ? 'reviews' : "learn");
+    setNavigation(currentRoute.path.startsWith('/qa') ? 'qa' : !currentRoute.subjectId ? "subjects" : currentRoute.path.startsWith('/banks') || currentRoute.params.has('bank') ? 'banks' : currentRoute.path.startsWith("/courses") ? "courses" : currentRoute.path === "/guide" ? "guide" : currentRoute.path.startsWith('/reviews') ? 'reviews' : "learn");
     root.replaceChildren(loading()); window.scrollTo(0, 0);
     try {
       if (profile) await bridge.refreshAccess();

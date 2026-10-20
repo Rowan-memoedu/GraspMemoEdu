@@ -1,15 +1,15 @@
-import {t, translateMessage} from './i18n.js?v=262b13fc445222cb';
-import {answerReady, answerEmpty} from './question-input.js?v=262b13fc445222cb';
-import {createLearningCache} from './learning-cache.js?v=262b13fc445222cb';
-import {helpableContent} from './content-report.js?v=262b13fc445222cb';
-import {ratingChoices} from './self-assessment.js?v=262b13fc445222cb';
+import {t, translateMessage} from './i18n.js?v=32ffeaca690540b1';
+import {answerReady, answerEmpty} from './question-input.js?v=32ffeaca690540b1';
+import {createLearningCache} from './learning-cache.js?v=32ffeaca690540b1';
+import {helpableContent} from './content-report.js?v=32ffeaca690540b1';
+import {ratingChoices} from './self-assessment.js?v=32ffeaca690540b1';
 
 const node = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const button = (text, cls, action) => { const n = node('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
 const encode = encodeURIComponent;
 const query = fields => new URLSearchParams(fields).toString();
 const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy', 'training.retire'];
-import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation} from './learning-ui.js?v=262b13fc445222cb';
+import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation} from './learning-ui.js?v=32ffeaca690540b1';
 
 export function createTrainingView(bridge) {
   const {root, request, href, formatDate, getAccess} = bridge;
@@ -74,7 +74,7 @@ export function createTrainingView(bridge) {
       const data = {course: {id: bank.id, title: bank.title, progress: count ? completed / count * 100 : 0},
         tasks: bank.groups.filter(g => g.question_count || g.introduction_count).map(g => ({id: g.id, topic_id: g.id, type: 'Lesson',
           title: g.title, topic_kind: g.question_count ? 'lesson' : 'introduction',
-          question_count: g.question_count, progress: g.question_count ? g.completed_count / g.question_count * 100 : 0})),
+          question_count: g.question_count, progress: g.progress ?? (g.question_count ? g.completed_count / g.question_count * 100 : 0)})),
         pending_hierarchy: containers.map(g => ({...g, topic_ids: bank.groups.filter(child => (child.question_count || child.introduction_count)
           && (child.id === g.id || child.parent_id === g.id && !containers.some(c => c.id === child.id))).map(child => child.id)}))};
       const layout = node('div', 'dashboardLayout'), tasks = node('div', 'dashboardTasks');
@@ -85,7 +85,10 @@ export function createTrainingView(bridge) {
       root.replaceChildren(layout);
       bridge.taskTree(pending, data, {training: true, label: t('training.groups'), startLabel: t('training.start'),
         sourceOrder: bank.groups.map(g => g.id),
-        target: task => groupPath(bank.id, task.id)});
+        target: task => {
+          const entry = bank.groups.find(g => g.id === task.id);
+          return entry?.topic_id ? `/topic/${encode(entry.topic_id)}?bank=${encode(bank.id)}` : groupPath(bank.id, task.id);
+        }});
       if (!data.tasks.length) pending.append(node('p', 'portalEmpty', t('training.empty')));
     } else if (parts.length === 3) {
       const nextGroup = await request('training/group?' + query({bank_id: parts[1], group_id: parts[2]}));

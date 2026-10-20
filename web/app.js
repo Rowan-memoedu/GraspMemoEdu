@@ -1,12 +1,12 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=262b13fc445222cb";
-import {answerReady} from './question-input.js?v=262b13fc445222cb';
-import {reportableContent} from './content-report.js?v=262b13fc445222cb';
-import {createLearningCache} from './learning-cache.js?v=262b13fc445222cb';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=32ffeaca690540b1";
+import {answerReady} from './question-input.js?v=32ffeaca690540b1';
+import {reportableContent} from './content-report.js?v=32ffeaca690540b1';
+import {createLearningCache} from './learning-cache.js?v=32ffeaca690540b1';
 
-import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, readerHistorySteps, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState} from './learning-ui.js?v=262b13fc445222cb';
-import {selfAssessment} from './self-assessment.js?v=262b13fc445222cb';
-import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=262b13fc445222cb';
-import {renderSourceReader} from './learning-ui.js?v=262b13fc445222cb';
+import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, readerHistorySteps, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState} from './learning-ui.js?v=32ffeaca690540b1';
+import {selfAssessment} from './self-assessment.js?v=32ffeaca690540b1';
+import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=32ffeaca690540b1';
+import {renderSourceReader} from './learning-ui.js?v=32ffeaca690540b1';
 
 applyStaticTranslations();
 
@@ -1172,7 +1172,7 @@ function renderStepNavigation(target, step, actions) {
     primary.setAttribute('aria-label', t('Continue，继续学习'));
   } else if (actions.includes('submit')) primary = target.querySelector('#submitButton');
   else if (step.kind === 'completion') primary = button(t(state.skipped_modules?.length ? 'nav.backHome' : 'reader.finishLearning'), 'primaryButton', () => {
-    portal?.progressChanged(); location.hash = `/subjects/${topicSubjectId || 'math'}/learn`;
+    portal?.progressChanged(); location.hash = $("topicHomeLink").hash || `/subjects/${topicSubjectId || 'math'}/learn`;
   });
   readerNavigation(target, {previous: index > 0 ? pages[index - 1] : null, next: index >= 0 ? pages[index + 1] : null,
     onSelect: page => selectStep(page.id), canNavigate: can('review_history'), titleOf: readerStepTitle, primary});
@@ -1442,9 +1442,9 @@ async function openTopic(id, subjectId) {
   }
 }
 
-const { initPortal } = await import("./portal.js?v=262b13fc445222cb");
-const {startPresence} = await import('./presence.js?v=262b13fc445222cb');
-const {visibleContentTopics} = await import('./content-report.js?v=262b13fc445222cb');
+const { initPortal } = await import("./portal.js?v=32ffeaca690540b1");
+const {startPresence} = await import('./presence.js?v=32ffeaca690540b1');
+const {visibleContentTopics} = await import('./content-report.js?v=32ffeaca690540b1');
 startPresence({getAccess: () => identityProblem ? null : access, request, getTopics: visibleContentTopics});
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {

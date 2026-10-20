@@ -123,7 +123,8 @@ class Subjects:
 
     def public(self, access=None):
         return {'subjects': [{**subject, 'course_count': sum(self.test_materials.course_visible(self.catalog.courses[cid], access)
-                                                            for cid in self.course_ids(subject_id)),
+                                                            for cid in self.course_ids(subject_id)
+                                                            if self.catalog.courses[cid].get('placement') != 'question_bank'),
                              'available': True,
                              'requires_account': False}
                              for subject_id, subject in self.subjects.items()],

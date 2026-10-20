@@ -68,6 +68,8 @@ class DashboardStore:
             self.subjects.authorize_subject(access, self.subjects.course_subjects.get(course_id))
             self.subjects.authorize_course(subject_id, course_id)
         course = self.catalog.course(course_id)
+        if course.get('placement') == 'question_bank':
+            raise DomainError('unknown_course', '此内容已归入题库。', 404)
         if not self._allowed_topics(access).intersection(topic['id'] for topic in course['topics']):
             raise DomainError('course_forbidden', '当前身份没有访问此课程的权限。', 403)
         return course
@@ -76,8 +78,9 @@ class DashboardStore:
         with closing(self.access_store._connect()) as con:
             row = con.execute('SELECT * FROM learner_preferences WHERE learner_id=?', (access['learner_id'],)).fetchone()
         selected = row['selected_course_id'] if row else None
-        if selected not in self.catalog.courses or not self._allowed_topics(access).intersection(
-                topic['id'] for topic in self.catalog.courses[selected]['topics']):
+        if (selected not in self.catalog.courses or self.catalog.courses[selected].get('placement') == 'question_bank'
+                or not self._allowed_topics(access).intersection(
+                topic['id'] for topic in self.catalog.courses[selected]['topics'])):
             selected = None
         return {'display_name': access['display_name'], 'timezone': row['timezone'] if row else None,
                 'selected_course_id': selected,
@@ -124,8 +127,9 @@ class DashboardStore:
             row = con.execute('SELECT selected_course_id FROM learner_subject_preferences WHERE learner_id=? AND subject_id=?',
                               (access['learner_id'], subject_id)).fetchone()
         selected = row['selected_course_id'] if row else self.profile(access)['selected_course_id'] if subject_id == 'math' else None
-        if selected not in ids or not self._allowed_topics(access).intersection(
-                topic['id'] for topic in self.catalog.courses[selected]['topics']):
+        if (selected not in ids or self.catalog.courses[selected].get('placement') == 'question_bank'
+                or not self._allowed_topics(access).intersection(
+                topic['id'] for topic in self.catalog.courses[selected]['topics'])):
             return None
         return selected
 
@@ -139,6 +143,7 @@ class DashboardStore:
                              'available': bool(allowed.intersection(topic['id'] for topic in course['topics'])),
                              'topic_count': sum(self.access_store.test_materials.topic_visible(t['id'], access) for t in course['topics'])}
                             for course in self.catalog.courses.values() if course['id'] in ids
+                            and course.get('placement') != 'question_bank'
                             and self.access_store.test_materials.course_visible(course, access)],
                 'selected_course_id': self._selection(access, subject_id)}
 

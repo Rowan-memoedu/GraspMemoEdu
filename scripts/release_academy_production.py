@@ -44,15 +44,22 @@ def main():
         raise RuntimeError('Production health check failed')
     try:
         before_state = snapshot()
+        for name, spec in release['files'].items():
+            if digest(app / name) != spec['before']:
+                raise ValueError('Source changed during release preparation: ' + name)
         for name in release['files']:
             target, rollback = app / name, stage / 'rollback' / name
             if target.exists():
                 rollback.parent.mkdir(parents=True, exist_ok=True); shutil.copy2(target, rollback)
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(stage / 'source' / name, target); changed.append(name)
-        subprocess.run(['chown', '-R', 'graspmemoedu:graspmemoedu', str(stage / 'package')], check=True)
+        if release.get('question_bank_id'):
+            operation = ['-m', 'graspmemoedu.bank_placement', '--container-id', release['question_bank_id']]
+        else:
+            subprocess.run(['chown', '-R', 'graspmemoedu:graspmemoedu', str(stage / 'package')], check=True)
+            operation = ['-m', 'graspmemoedu.academy_import', '--package', str(stage / 'package')]
         result = subprocess.run(['runuser', '-u', 'graspmemoedu', '--', '/opt/graspmemoedu/venv/bin/python',
-            '-m', 'graspmemoedu.academy_import', '--package', str(stage / 'package'), '--data-dir', str(data)],
+            *operation, '--data-dir', str(data)],
             cwd=app, text=True, capture_output=True, check=True)
         installed = json.loads(result.stdout.strip().splitlines()[-1])
         if snapshot() != before_state: raise RuntimeError('Content installation unexpectedly changed existing database rows')

@@ -2,7 +2,7 @@
   <id>edu.graspmemo.academy</id>
   <name>GraspMemoEdu Academy Bridge</name>
   <vendor>GraspMemoEdu</vendor>
-  <version>0.1.0</version>
+  <version>0.1.1</version>
   <idea-version since-build="262" until-build="262.*"/>
   <depends>com.intellij.modules.platform</depends>
   <depends>com.jetbrains.edu</depends>
@@ -10,6 +10,7 @@
   <extensions defaultExtensionNs="com.intellij">
     <applicationService serviceImplementation="edu.graspmemo.academy.BridgeService"/>
     <jbProtocolCommand implementation="edu.graspmemo.academy.AcademyProtocol"/>
+    <protocolHandler implementation="edu.graspmemo.academy.DesktopProtocol"/>
     <postStartupActivity implementation="edu.graspmemo.academy.BridgeStartup"/>
     <notificationGroup id="GraspMemoEdu Academy" displayType="BALLOON"/>
   </extensions>

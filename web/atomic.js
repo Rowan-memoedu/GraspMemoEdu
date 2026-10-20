@@ -1,9 +1,9 @@
-import {t, translateMessage} from './i18n.js?v=262b13fc445222cb';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=262b13fc445222cb';
-import {selfAssessment, referenceAnswer, prepareAnswerContent, ratingChoices} from './self-assessment.js?v=262b13fc445222cb';
-import {reportableContent, helpableContent} from './content-report.js?v=262b13fc445222cb';
-import {createLearningCache} from './learning-cache.js?v=262b13fc445222cb';
-import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=262b13fc445222cb';
+import {t, translateMessage} from './i18n.js?v=32ffeaca690540b1';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=32ffeaca690540b1';
+import {selfAssessment, referenceAnswer, prepareAnswerContent, ratingChoices} from './self-assessment.js?v=32ffeaca690540b1';
+import {reportableContent, helpableContent} from './content-report.js?v=32ffeaca690540b1';
+import {createLearningCache} from './learning-cache.js?v=32ffeaca690540b1';
+import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=32ffeaca690540b1';
 
 const node = (tag, cls = '', text) => {
   const el = document.createElement(tag); el.className = cls;
@@ -110,7 +110,7 @@ export function createAtomicView(bridge) {
     try {
       const result = await call('academy/launch', {method: 'POST', body: payload()});
       if (!active(ticket)) return;
-      if (!/^jetbrains:\/\/idea\/graspmemoedu\/open\?ticket=[A-Za-z0-9_-]{40,100}$/.test(result.url)) throw new Error(t('review.invalidState'));
+      if (!/^(?:graspmemoedu:\/\/academy|jetbrains:\/\/idea\/graspmemoedu)\/open\?ticket=[A-Za-z0-9_-]{40,100}$/.test(result.url)) throw new Error(t('review.invalidState'));
       academyLink = result.url; busy = false; accept(result.state, true);
       const link = root.querySelector('[data-academy-link]');
       link?.click();
@@ -269,7 +269,7 @@ export function createAtomicView(bridge) {
       row.append(node('span', record.mastered ? 'atomicMastered' : 'atomicUnmastered', t(record.mastered ? 'atomic.mastered' : 'atomic.unmastered')));
       sidebar.append(row);
     });
-    const back = node('a', 'subjectBack', t('nav.backHome')); back.href = bridge.homeHref(); main.append(back);
+    const back = node('a', 'subjectBack', bridge.homeLabel?.() || t('nav.backHome')); back.href = bridge.homeHref(); main.append(back);
     main.append(node('p', 'eyebrow', t(state.mode === 'review' ? 'atomic.reviewTitle' : 'atomic.title')),
       node('h1', 'lessonTitle', state.title), node('p', 'atomicProgress', t('atomic.progress', {done: state.learned_count, total: state.point_count})));
     const status = node('p', 'fieldError', failure || ''); status.id = 'atomicNotice'; status.hidden = !failure; status.setAttribute('role', 'status'); main.append(status);
