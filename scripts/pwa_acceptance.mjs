@@ -53,7 +53,7 @@ try {
   const installability = await cdp.send('Page.getInstallabilityErrors');
   report.installability = installability.installabilityErrors;
   assert.deepEqual(report.installability,[]);
-  pass('Chrome recognizes an installable PWA with correct subdirectory scope');
+  pass('Chromium recognizes an installable PWA with correct subdirectory scope');
   for (const width of [320,375,414,768,1365]) {
     await page.setViewportSize({width,height:950});
     const size = await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,width:innerWidth}));
