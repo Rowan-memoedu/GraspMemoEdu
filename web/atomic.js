@@ -1,10 +1,10 @@
-import {t, translateMessage} from './i18n.js?v=e972693e74f485ba';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=e972693e74f485ba';
-import {selfAssessment, referenceAnswer, prepareAnswerContent, ratingChoices} from './self-assessment.js?v=e972693e74f485ba';
-import {reportableContent, helpableContent} from './content-report.js?v=e972693e74f485ba';
-import {createLearningCache} from './learning-cache.js?v=e972693e74f485ba';
-import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=e972693e74f485ba';
-import {enhanceSourceContent} from './topic-content.js?v=e972693e74f485ba';
+import {t, translateMessage} from './i18n.js?v=dff64e5bebb46993';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=dff64e5bebb46993';
+import {selfAssessment, referenceAnswer, prepareAnswerContent, ratingChoices} from './self-assessment.js?v=dff64e5bebb46993';
+import {reportableContent, helpableContent} from './content-report.js?v=dff64e5bebb46993';
+import {createLearningCache} from './learning-cache.js?v=dff64e5bebb46993';
+import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=dff64e5bebb46993';
+import {enhanceSourceContent} from './topic-content.js?v=dff64e5bebb46993';
 
 const node = (tag, cls = '', text) => {
   const el = document.createElement(tag); el.className = cls;

@@ -1,15 +1,15 @@
-import {t, translateMessage} from './i18n.js?v=e972693e74f485ba';
-import {answerEditor, readerFrame, renderReviewReader} from './learning-ui.js?v=e972693e74f485ba';
-import {answerReady, questionInput, choiceTypeField} from './question-input.js?v=e972693e74f485ba';
-import {createLearningCache} from './learning-cache.js?v=e972693e74f485ba';
-import {helpableContent, reportableContent} from './content-report.js?v=e972693e74f485ba';
+import {t, translateMessage} from './i18n.js?v=dff64e5bebb46993';
+import {answerEditor, readerFrame, renderReviewReader} from './learning-ui.js?v=dff64e5bebb46993';
+import {answerReady, questionInput, choiceTypeField} from './question-input.js?v=dff64e5bebb46993';
+import {createLearningCache} from './learning-cache.js?v=dff64e5bebb46993';
+import {helpableContent, reportableContent} from './content-report.js?v=dff64e5bebb46993';
 
 const node = (tag, cls = '', text) => { const x = document.createElement(tag); x.className = cls; if (text !== undefined) x.textContent = text; return x; };
 const button = (label, cls, action) => { const x = node('button', cls, label); x.type = 'button'; x.addEventListener('click', action); return x; };
 const html = content => { const x = node('div', 'courseContent'); x.innerHTML = content || ''; return x; };
-import {createContentTimer} from './content-timer.js?v=e972693e74f485ba';
-import {renderReviewDirectory, paperNumber} from './review-directory.js?v=e972693e74f485ba';
-import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=e972693e74f485ba';
+import {createContentTimer} from './content-timer.js?v=dff64e5bebb46993';
+import {renderReviewDirectory, paperNumber} from './review-directory.js?v=dff64e5bebb46993';
+import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=dff64e5bebb46993';
 
 export function createPaperView({root, request, href, getAccess, formatDate, progressChanged, courseSidebar, taskTree}) {
   const template = document.getElementById('appLayout').cloneNode(true);

@@ -44,6 +44,7 @@ from .review_paper_api import register_paper_routes, PUBLIC_PATHS as PAPER_PATHS
 from .review_papers import PaperService
 from .content_references import ContentReferenceIndex
 from .self_assessment import enabled as self_rating_enabled, protect as protect_assessment
+from .response_content import compact_response
 
 
 class Action(BaseModel):
@@ -546,6 +547,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                 except DomainError as exc:
                     return deny(exc.code, exc.message, exc.status_code)
         response = await call_next(request)
+        response = await compact_response(request, response)
         response.headers['Cache-Control'] = 'no-store'
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['Referrer-Policy'] = 'no-referrer'

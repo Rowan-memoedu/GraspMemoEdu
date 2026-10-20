@@ -1,16 +1,16 @@
-import {t, translateMessage} from './i18n.js?v=e972693e74f485ba';
-import {answerReady, answerEmpty} from './question-input.js?v=e972693e74f485ba';
-import {createLearningCache} from './learning-cache.js?v=e972693e74f485ba';
-import {helpableContent} from './content-report.js?v=e972693e74f485ba';
-import {ratingChoices} from './self-assessment.js?v=e972693e74f485ba';
-import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=e972693e74f485ba';
+import {t, translateMessage} from './i18n.js?v=dff64e5bebb46993';
+import {answerReady, answerEmpty} from './question-input.js?v=dff64e5bebb46993';
+import {createLearningCache} from './learning-cache.js?v=dff64e5bebb46993';
+import {helpableContent} from './content-report.js?v=dff64e5bebb46993';
+import {ratingChoices} from './self-assessment.js?v=dff64e5bebb46993';
+import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=dff64e5bebb46993';
 
 const node = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const button = (text, cls, action) => { const n = node('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
 const encode = encodeURIComponent;
 const query = fields => new URLSearchParams(fields).toString();
 const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy', 'training.retire'];
-import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, renderReviewReader} from './learning-ui.js?v=e972693e74f485ba';
+import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, renderReviewReader} from './learning-ui.js?v=dff64e5bebb46993';
 
 export function createTrainingView(bridge) {
   const {root, request, href, formatDate, getAccess} = bridge;

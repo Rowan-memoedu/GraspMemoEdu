@@ -1,21 +1,21 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=e972693e74f485ba";
-import { createReviewView } from "./review.js?v=e972693e74f485ba";
-import { renderCourseGraph } from "./course-graph.js?v=e972693e74f485ba";
-import {questionInput, choiceTypeField} from './question-input.js?v=e972693e74f485ba';
-import {enhanceTopicContent} from './topic-content.js?v=e972693e74f485ba';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=e972693e74f485ba';
-import {createCatalogPicker} from './catalog-picker.js?v=e972693e74f485ba';
-import {createAtomicView} from './atomic.js?v=e972693e74f485ba';
-import {createTrainingView} from './training.js?v=e972693e74f485ba';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=e972693e74f485ba";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=dff64e5bebb46993";
+import { createReviewView } from "./review.js?v=dff64e5bebb46993";
+import { renderCourseGraph } from "./course-graph.js?v=dff64e5bebb46993";
+import {questionInput, choiceTypeField} from './question-input.js?v=dff64e5bebb46993';
+import {enhanceTopicContent} from './topic-content.js?v=dff64e5bebb46993';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=dff64e5bebb46993';
+import {createCatalogPicker} from './catalog-picker.js?v=dff64e5bebb46993';
+import {createAtomicView} from './atomic.js?v=dff64e5bebb46993';
+import {createTrainingView} from './training.js?v=dff64e5bebb46993';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=dff64e5bebb46993";
 
-import {createPaperView} from './review-papers.js?v=e972693e74f485ba';
+import {createPaperView} from './review-papers.js?v=dff64e5bebb46993';
 
-import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=e972693e74f485ba';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=e972693e74f485ba';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=e972693e74f485ba';
-import {attachChatEditor, renderChatMarkdown, configureChatImages} from './vendor/chat/chat.js?v=e972693e74f485ba';
-import {createStudentDashboard} from './student-dashboard.js?v=e972693e74f485ba';
+import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=dff64e5bebb46993';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=dff64e5bebb46993';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=dff64e5bebb46993';
+import {attachChatEditor, renderChatMarkdown, configureChatImages} from './vendor/chat/chat.js?v=dff64e5bebb46993';
+import {createStudentDashboard} from './student-dashboard.js?v=dff64e5bebb46993';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -330,7 +330,9 @@ export function initPortal(bridge) {
     if (bridge.getIdentityProblem()) { root.hidden = true; root.replaceChildren(); return; }
     updateSubjectContext(subjects?.find(subject => subject.id === currentRoute.subjectId) || null);
     setNavigation(currentRoute.path.startsWith('/qa') ? 'qa' : !currentRoute.subjectId ? "subjects" : bankReview(currentRoute) ? 'reviews' : currentRoute.path.startsWith('/banks') || currentRoute.params.has('bank') ? 'banks' : currentRoute.path.startsWith("/courses") ? "courses" : currentRoute.path === "/guide" ? "guide" : currentRoute.path.startsWith('/reviews') ? 'reviews' : "learn");
-    root.replaceChildren(loading()); window.scrollTo(0, 0);
+    // Keep the existing view visible during navigation, but disable old actions.
+    root.inert = true; root.setAttribute('aria-busy', 'true');
+    if (!root.childElementCount) root.replaceChildren(loading());
     try {
       if (profile) await bridge.refreshAccess();
       if (ticket !== sequence) return;
@@ -403,7 +405,7 @@ export function initPortal(bridge) {
           return;
         }
         if (state.training_mode === 'atomic_retrieval') await atomic.open(topicId, 'learn', state);
-        else { root.hidden = true; await bridge.openTopic(topicId, subjectId); }
+        else { root.hidden = true; await bridge.openTopic(topicId, subjectId, state); }
       } else if (/^\/review\/[^/]+\/[^/]+$/.test(path)) {
         if (path.split('/')[3] === 'atomic') await atomic.open(decodeURIComponent(path.split('/')[2]), 'review', null, params.get('card'));
         else await review.open(decodeURIComponent(path.split("/")[2]), decodeURIComponent(path.split("/")[3]), params.get("session"));
@@ -431,6 +433,8 @@ export function initPortal(bridge) {
       }
       const forbidden = error.status === 403 && ["feature_forbidden", "topic_forbidden", "course_forbidden"].includes(error.code);
       root.hidden = false; root.replaceChildren(errorBox(translateMessage(error.message), forbidden ? () => navigate("/courses") : () => location.reload(), forbidden ? t("portal.content.unavailable.26") : t("portal.service.unavailable.27")));
+    } finally {
+      if (ticket === sequence) { root.inert = false; root.removeAttribute('aria-busy'); }
     }
   }
 

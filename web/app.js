@@ -1,12 +1,13 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=e972693e74f485ba";
-import {answerReady} from './question-input.js?v=e972693e74f485ba';
-import {reportableContent} from './content-report.js?v=e972693e74f485ba';
-import {createLearningCache} from './learning-cache.js?v=e972693e74f485ba';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=dff64e5bebb46993";
+import {answerReady} from './question-input.js?v=dff64e5bebb46993';
+import {reportableContent} from './content-report.js?v=dff64e5bebb46993';
+import {createLearningCache} from './learning-cache.js?v=dff64e5bebb46993';
+import {createReadCache, createContentCache, readLifetime, contentPath, contentKey} from './response-cache.js?v=dff64e5bebb46993';
 
-import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, readerHistorySteps, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState} from './learning-ui.js?v=e972693e74f485ba';
-import {selfAssessment} from './self-assessment.js?v=e972693e74f485ba';
-import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=e972693e74f485ba';
-import {renderSourceReader} from './learning-ui.js?v=e972693e74f485ba';
+import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, readerHistorySteps, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState} from './learning-ui.js?v=dff64e5bebb46993';
+import {selfAssessment} from './self-assessment.js?v=dff64e5bebb46993';
+import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=dff64e5bebb46993';
+import {renderSourceReader} from './learning-ui.js?v=dff64e5bebb46993';
 
 applyStaticTranslations();
 
@@ -66,6 +67,10 @@ let sessionPromise = null;
 let identityToken = "";
 let access = null;
 const learningCache = createLearningCache(() => access);
+const responseCache = createReadCache(), contentCache = createContentCache();
+const cacheScope = () => JSON.stringify([apiBase, access?.learner_id, access?.role,
+  access?.purpose, access?.is_admin, access?.is_student, access?.is_advanced_learner,
+  access?.features, access?.topics]);
 let identityPromise = null;
 let identityBusy = false;
 let identityRecoveryAllowed = true;
@@ -221,7 +226,26 @@ function retireLegacyConnection() {
   legacyGuestIdentities = [];
 }
 
-async function request(path, { method = "GET", body, bootstrap = false, timeout = REQUEST_TIMEOUT, reauthenticated = false, skipIdentity = false, suppressIdentity = false, identityOverride, identityOperation = false, deploymentRetried = false, keepalive = false } = {}) {
+async function request(path, options = {}) {
+  const method = options.method || 'GET';
+  const mutation = method !== 'GET' && path.split('?')[0] !== 'presence';
+  if (mutation) responseCache.clear();
+  try {
+    const ttl = readLifetime(path);
+    if (method === 'GET' && ttl && access && !options.fresh && !options.bootstrap
+        && !options.identityOverride && !options.suppressIdentity && !options.identityOperation) {
+      const generation = identityGeneration, connection = connectionGeneration;
+      const result = await responseCache.get(JSON.stringify([cacheScope(), generation, path]), ttl,
+        () => requestNetwork(path, options), connection);
+      if (generation !== identityGeneration || connection !== connectionGeneration)
+        throw new ApiError(t("身份或学习页面已更新，请重试。"), 0, "connection_changed");
+      return result;
+    }
+    return await requestNetwork(path, options);
+  } finally { if (mutation) responseCache.clear(); }
+}
+
+async function requestNetwork(path, { method = "GET", body, bootstrap = false, timeout = REQUEST_TIMEOUT, reauthenticated = false, skipIdentity = false, suppressIdentity = false, identityOverride, identityOperation = false, deploymentRetried = false, keepalive = false, contentRetried = false } = {}) {
   const identityEpoch = identityGeneration;
   if (!deploymentReady) await ensureDeployment();
   if (!bootstrap && !skipIdentity) await ensureIdentity();
@@ -243,7 +267,11 @@ async function request(path, { method = "GET", body, bootstrap = false, timeout 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
   try {
-    const response = await fetch(`${base}/api/${path}`, {
+    const contentTicket = contentPath(path, method) && access && !bootstrap
+      ? await contentCache.prepare(cacheScope(), contentKey(path), !access.is_admin) : null;
+    if (changed()) throw new ApiError(t("身份或学习页面已更新，请重试。"), 0, "connection_changed");
+    const contentQuery = contentTicket ? `${path.includes('?') ? '&' : '?'}content_revision=${contentRetried ? '1' : contentTicket.record?.revision || '1'}` : '';
+    const response = await fetch(`${base}/api/${path}${contentQuery}`, {
       method,
       keepalive,
       headers,
@@ -267,6 +295,13 @@ async function request(path, { method = "GET", body, bootstrap = false, timeout 
       }
       const message = ["authentication_required", "invalid_session"].includes(detail?.code) ? t("服务暂不可用，请稍后重试。") : typeof detail === "string" ? detail : detail?.message || t("操作未完成，请刷新学习进度后重试。");
       throw new ApiError(message, response.status, detail?.code || "request_error");
+    }
+    if (contentTicket) {
+      try { result = contentCache.decode(result, contentTicket); }
+      catch (error) {
+        if (error.message !== 'content_cache_miss' || contentRetried || method !== 'GET') throw error;
+        return requestNetwork(path, {method, body, timeout, skipIdentity, contentRetried: true});
+      }
     }
     if (!bootstrap && !skipIdentity) identityRecoveryAllowed = true;
     return result;
@@ -465,6 +500,8 @@ function invalidateIdentityView() {
   clearLearningView();
   drafts.clear();
   learningCache.clear();
+  responseCache.clear();
+  contentCache.clear();
   portal?.suspendIdentity();
 }
 
@@ -616,8 +653,8 @@ function renderAccessUnavailable() {
   renderIdentity();
 }
 
-async function refreshAccess() {
-  const next = await request("access", { skipIdentity: true, timeout: STATE_TIMEOUT });
+async function refreshAccess(fresh = false) {
+  const next = await request("access", { skipIdentity: true, timeout: STATE_TIMEOUT, fresh });
   if (next.learner_id !== access?.learner_id && access) throw new ApiError(t("当前身份已更新，请重新读取。"), 0, "connection_changed");
   access = next;
   renderIdentity();
@@ -656,6 +693,7 @@ async function prefillDemoAnswer(step) {
 }
 function announce(message) { $("announcer").textContent = message; }
 function notifyOtherTabs() {
+  responseCache.clear();
   channel?.postMessage({ type: "state-changed", scope: scope(), learner_id: learnerScope(), topic_id: topicId, revision: state?.revision });
   portal?.progressChanged();
 }
@@ -731,7 +769,7 @@ async function refreshState({ quiet = true, force = false } = {}) {
     if (generation !== connectionGeneration) return;
     if (await recoverIdentity(error)) return;
     if (error.code === "topic_forbidden") {
-      try { await refreshAccess(); } catch { /* Preserve the last verified identity. */ }
+      try { await refreshAccess(true); } catch { /* Preserve the last verified identity. */ }
       renderAccessUnavailable();
       return;
     }
@@ -1364,8 +1402,9 @@ async function returnToGuest() {
   }
 }
 
-async function start() {
-  await refreshState({ quiet: false, force: true });
+async function start(initial = null) {
+  if (initial) applyState(initial, {force: true});
+  else await refreshState({ quiet: false, force: true });
   if (!state) return;
   const record = readJSON(recordKey());
   if (record?.payload && record.payload.step_id === state.active_step_id && record.payload.attempt_id === state.attempt_id && state.status === "in_progress") {
@@ -1406,16 +1445,17 @@ setHistoryOpen(true);
 $("pauseButton").addEventListener("click", () => {
   if (readingStatus() === "in_progress" && !pauseBusy) mutate("skip", mutationPayload(), { pause: true });
 });
-window.addEventListener("focus", () => { pageActive = true; syncAnswerClock(); scheduleIdentitySync(); if (!actionBusy && !pauseBusy) refreshState(); });
+window.addEventListener("focus", () => { responseCache.clear(); pageActive = true; syncAnswerClock(); scheduleIdentitySync(); if (!actionBusy && !pauseBusy) refreshState(); });
 window.addEventListener("blur", () => { pageActive = false; syncAnswerClock(); });
 window.addEventListener("pagehide", () => syncAnswerClock(true));
-window.addEventListener("online", () => refreshState({ force: true }));
+window.addEventListener("online", () => { responseCache.clear(); refreshState({ force: true }); });
 document.addEventListener("visibilitychange", () => { syncAnswerClock(); if (!document.hidden && !actionBusy && !pauseBusy) refreshState(); });
 try {
   channel = new BroadcastChannel("graspmemoedu-progress");
   channel.onmessage = (event) => {
     if (event.data?.type === "identity-changed" && event.data.scope === scope()) scheduleIdentitySync();
     if (event.data?.type === "state-changed" && event.data.scope === scope() && event.data.learner_id === learnerScope()) {
+      responseCache.clear();
       portal?.progressChanged();
       if (event.data.topic_id === topicId && event.data.revision > (state?.revision ?? -1) && !actionBusy && !pauseBusy) refreshState();
     }
@@ -1440,14 +1480,14 @@ function leaveTopic() {
   document.body.classList.remove("historyDrawerOpen", "topicPage");
 }
 
-async function openTopic(id, subjectId) {
+async function openTopic(id, subjectId, initial = null) {
   leaveTopic();
   topicId = id;
   topicSubjectId = subjectId;
   $("appLayout").hidden = false;
   document.body.classList.add("topicPage");
   setHistoryOpen(narrowLayout.matches ? false : historyOpen);
-  await start();
+  await start(initial?.topic_id === id && initial.learner_id === learnerScope() ? initial : null);
   const nodeId = new URLSearchParams(location.hash.split('?')[1] || '').get('node');
   if (nodeId && state?.topic_id === id) {
     const destination = state.content_references?.locations?.find(item => item.node_id === nodeId);
@@ -1459,9 +1499,9 @@ async function openTopic(id, subjectId) {
   }
 }
 
-const { initPortal } = await import("./portal.js?v=e972693e74f485ba");
-const {startPresence} = await import('./presence.js?v=e972693e74f485ba');
-const {visibleContentTopics} = await import('./content-report.js?v=e972693e74f485ba');
+const { initPortal } = await import("./portal.js?v=dff64e5bebb46993");
+const {startPresence} = await import('./presence.js?v=dff64e5bebb46993');
+const {visibleContentTopics} = await import('./content-report.js?v=dff64e5bebb46993');
 startPresence({getAccess: () => identityProblem ? null : access, request, getTopics: visibleContentTopics});
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {
@@ -1473,7 +1513,7 @@ portal = initPortal({
     catch (error) {
       if (identityFailure(error)) await recoverIdentity(error);
       else if (permissionFailure(error)) {
-        try { await refreshAccess(); portal?.permissionsChanged(); }
+        try { await refreshAccess(true); portal?.permissionsChanged(); }
         catch (accessError) { if (identityFailure(accessError)) await recoverIdentity(accessError); }
       }
       throw error;

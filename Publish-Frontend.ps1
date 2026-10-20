@@ -18,6 +18,7 @@ $expected += @('hyperskill.js')
 $expected += @('topic-content.js','topic-content.css','topic-callouts.css')
 $expected += @('student-dashboard.js','presence.js')
 $expected += @('composite-input.js')
+$expected += @('response-cache.js')
 $expected += @('download.html','install.css','pwa.css','pwa.js','sw.js','manifest.webmanifest','icon-180.png','icon-192.png','icon-512.png','icon-maskable-512.png')
 $vendor = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'scripts/topic-presentation-assets.json') -Raw | ConvertFrom-Json -AsHashtable
 foreach ($name in $vendor.files.Keys) {
