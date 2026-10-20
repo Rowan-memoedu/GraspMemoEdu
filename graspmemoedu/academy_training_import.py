@@ -108,7 +108,7 @@ def migrate_records(con, bank, topics):
                                   'stop_requested': False, 'practice_only': False}
                     con.execute('INSERT INTO training_attempts VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                         (aid, learner, bank['id'], group['id'], q['id'], bank['version'], packed(q),
-                         'review' if revision else 'initial', revision, 'done' if done else 'answer',
+                         'review' if active.get('mode') == 'review' else 'initial', revision, 'done' if done else 'answer',
                          created, active.get('answered_at') if done else None,
                          packed(result) if done else None, run['id'] if done and run else None))
                     counts['attempts'] += 1

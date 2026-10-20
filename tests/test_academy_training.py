@@ -114,6 +114,7 @@ class NativeAcademyTests(unittest.TestCase):
             'request_id': str(uuid.uuid4()), 'answer': 'passed'})
         with self.assertRaises(DomainError): backend.reveal(adapter.attempt_id)
         with self.assertRaises(DomainError): self.send(adapter, run, 3, 'passed')
+        with self.assertRaises(DomainError): self.send(adapter, run, 2, [])
         bad = self.event(2, 'passed'); bad['occurred_at'] = 'bad'
         with self.assertRaises(DomainError): adapter.check_event(run['round_id'], run['step_id'], bad)
         with closing(backend._connect()) as con:
@@ -163,6 +164,8 @@ class NativeAcademyTests(unittest.TestCase):
             self.assertEqual(capability['topic'], 'training.' + self.course['id'])
             self.assertEqual(con.execute('SELECT body FROM topics WHERE learner=?', ('learner',)).fetchone()[0], original)
             self.assertEqual(con.execute('SELECT COUNT(*) FROM training_attempts').fetchone()[0], 2)
+            self.assertEqual(con.execute("SELECT mode FROM training_attempts WHERE phase='done'").fetchone()[0], 'initial')
+            self.assertEqual(con.execute("SELECT mode FROM training_attempts WHERE phase='answer'").fetchone()[0], 'review')
         adapter = AcademyTraining(backend, capability['step'])
         self.assertEqual(adapter.claim(run['round_id'])['next_sequence'], 2)
         self.assertEqual(adapter.claim(run['round_id'])['version'], self.topic['version'])

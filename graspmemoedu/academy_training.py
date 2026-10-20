@@ -92,6 +92,7 @@ class AcademyTraining:
                 or set(event) != {'id', 'sequence', 'category', 'code_hash', 'occurred_at'}
                 or not isinstance(event['id'], str) or not re.fullmatch(r'[a-zA-Z0-9-]{16,64}', event['id'])
                 or type(event['sequence']) is not int or event['sequence'] < 1
+                or not isinstance(event['category'], str)
                 or event['category'] not in {*WEIGHTS, 'passed', 'environment'}
                 or not isinstance(event['code_hash'], str) or not re.fullmatch('[0-9a-f]{64}', event['code_hash'])):
             raise DomainError('invalid_academy_event', '检查结果格式不正确。', 422)
