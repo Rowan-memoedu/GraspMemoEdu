@@ -1,15 +1,16 @@
-import {t, translateMessage} from './i18n.js?v=7a9ca1380fb8c0fe';
-import {answerEditor, readerFrame, renderReviewReader} from './learning-ui.js?v=7a9ca1380fb8c0fe';
-import {answerReady, questionInput, choiceTypeField} from './question-input.js?v=7a9ca1380fb8c0fe';
-import {createLearningCache} from './learning-cache.js?v=7a9ca1380fb8c0fe';
-import {helpableContent, reportableContent} from './content-report.js?v=7a9ca1380fb8c0fe';
+import {t, translateMessage} from './i18n.js?v=5957696006f188e4';
+import {answerEditor, readerFrame, renderReviewReader} from './learning-ui.js?v=5957696006f188e4';
+import {answerReady, questionInput, choiceTypeField} from './question-input.js?v=5957696006f188e4';
+import {createLearningCache} from './learning-cache.js?v=5957696006f188e4';
+import {helpableContent, reportableContent} from './content-report.js?v=5957696006f188e4';
 
 const node = (tag, cls = '', text) => { const x = document.createElement(tag); x.className = cls; if (text !== undefined) x.textContent = text; return x; };
 const button = (label, cls, action) => { const x = node('button', cls, label); x.type = 'button'; x.addEventListener('click', action); return x; };
 const html = content => { const x = node('div', 'courseContent'); x.innerHTML = content || ''; return x; };
-import {createContentTimer} from './content-timer.js?v=7a9ca1380fb8c0fe';
-import {renderReviewDirectory, paperNumber} from './review-directory.js?v=7a9ca1380fb8c0fe';
-import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=7a9ca1380fb8c0fe';
+import {createContentTimer} from './content-timer.js?v=5957696006f188e4';
+import {renderReviewDirectory, paperNumber} from './review-directory.js?v=5957696006f188e4';
+import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=5957696006f188e4';
+import {chunkPeek} from './memory-chunk.js?v=5957696006f188e4';
 
 export function createPaperView({root, request, href, getAccess, formatDate, progressChanged, courseSidebar, taskTree}) {
   const template = document.getElementById('appLayout').cloneNode(true);
@@ -300,6 +301,8 @@ export function createPaperView({root, request, href, getAccess, formatDate, pro
       try { remember(); await flush(); state = await post('cancel', {paper_id: state.id}); render(); } catch (failure) { error(failure); }
     }));
     main.append(navigation);
+    const peek = chunkPeek(item.memory_chunks, {topicId: item.content_context?.topic_id, version: item.content_version});
+    if (peek) main.append(peek);
   }
   return {inbox, open, stop};
 }

@@ -337,6 +337,11 @@ class PaperService:
                           'self_rating': item.get('self_rating')})
             if self_rating and item.get('revealed'):
                 items[-1]['explanation_html'] = question.get('explanation_html', '')
+            if source['kind'] == 'atomic':
+                from .atomic_content import card_chunks
+                topic = self.catalog.topic(source['container'])
+                if topic['version'] == source['version']:
+                    items[-1]['memory_chunks'] = card_chunks(topic, {'point_ids': source['local_points']})
         return {'id': paper['id'], 'title': paper['title'], 'subject': paper['subject'], 'mode': self._mode(paper),
                 'phase': paper['phase'], 'revision': paper['revision'], 'items': items,
                 'kind': paper['metadata'].get('kind'), 'paper_number': paper['metadata'].get('paper_number'),

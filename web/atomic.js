@@ -1,10 +1,12 @@
-import {t, translateMessage} from './i18n.js?v=7a9ca1380fb8c0fe';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=7a9ca1380fb8c0fe';
-import {selfAssessment, referenceAnswer, prepareAnswerContent, ratingChoices} from './self-assessment.js?v=7a9ca1380fb8c0fe';
-import {reportableContent, helpableContent} from './content-report.js?v=7a9ca1380fb8c0fe';
-import {createLearningCache} from './learning-cache.js?v=7a9ca1380fb8c0fe';
-import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=7a9ca1380fb8c0fe';
-import {enhanceSourceContent} from './topic-content.js?v=7a9ca1380fb8c0fe';
+import {t, translateMessage} from './i18n.js?v=5957696006f188e4';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=5957696006f188e4';
+import {selfAssessment, referenceAnswer, prepareAnswerContent, ratingChoices} from './self-assessment.js?v=5957696006f188e4';
+import {reportableContent} from './content-report.js?v=5957696006f188e4';
+import {createLearningCache} from './learning-cache.js?v=5957696006f188e4';
+import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=5957696006f188e4';
+import {enhanceSourceContent} from './topic-content.js?v=5957696006f188e4';
+import {memoryChunk, chunkPeek} from './memory-chunk.js?v=5957696006f188e4';
+import {topicProgress, topicHistory} from './learning-ui.js?v=5957696006f188e4';
 
 const node = (tag, cls = '', text) => {
   const el = document.createElement(tag); el.className = cls;
@@ -56,11 +58,13 @@ export function createAtomicView(bridge) {
     if (next?.training_mode !== 'atomic_retrieval' || next.topic_id !== topic || next.learner_id !== learner) throw new Error(t('review.invalidState'));
     if (state && next.revision < state.revision) return;
     const changed = !state || state.revision !== next.revision || JSON.stringify(state.access) !== JSON.stringify(next.access);
-    if (state?.active_step_id !== next.active_step_id) { selected = null; academyLink = null; }
+    const stepChanged = state?.active_step_id !== next.active_step_id;
+    if (stepChanged) { selected = null; academyLink = null; }
     state = next;
     if (state.access) bridge.setAccess(state.access);
     if (state.phase !== 'answer' || state.pause) write(submissionKey(), null);
     if (changed || force) render();
+    if (stepChanged) window.scrollTo(0, 0);
     schedule();
   }
   async function refresh() {
@@ -247,21 +251,18 @@ export function createAtomicView(bridge) {
       box.append(feedback);
       if (!history && !state.pause) box.append(button(t('atomic.continue'), () => mutate('continue'), 'primaryButton'));
     }
+    if (!history) {
+      const peek = chunkPeek(question.memory_chunks, {topicId: topic, version: state.course_version});
+      if (peek) box.append(peek);
+    }
     return box;
   }
   function renderChunk(chunk) {
-    const box = node('section', 'atomicChunk'); box.dataset.chunkId = chunk.id;
-    box.append(node('h2', '', chunk.title));
-    const annotation = node('div', 'atomicAnnotation'), source = node('div', 'atomicSource');
-    source.append(node('p', 'eyebrow', t('atomic.fromIntroduction')));
-    for (const anchor of chunk.anchors) source.append(node('p', 'atomicAnchor', anchor.quote));
-    source.classList.add('courseContent');
-    helpableContent(source, {topic_id: topic}, 'introduction', state.course_version);
-    const arrow = node('span', 'atomicArrow', '↘'); arrow.setAttribute('aria-hidden', 'true');
-    const note = node('aside', 'atomicChunkNote'); note.append(helpableContent(content(chunk.html), {topic_id: topic}, `chunk:${chunk.id}`, state.course_version));
-    annotation.append(source, arrow, note); box.append(annotation);
-    box.append(button(t('atomic.startCards'), () => mutate('continue'), 'primaryButton'),
-      node('p', 'inputHint', t('atomic.startCardsHint')));
+    const box = memoryChunk(chunk, {topicId: topic, version: state.course_version});
+    const footer = node('footer', 'atomicChunkFooter');
+    footer.append(node('p', 'inputHint', t('atomic.startCardsHint')),
+      button(t('atomic.startCards'), () => mutate('continue'), 'primaryButton'));
+    box.append(footer);
     return box;
   }
   function render() {
@@ -269,27 +270,36 @@ export function createAtomicView(bridge) {
     const style = document.getElementById('atomicMathStyle') || node('style'); style.id = 'atomicMathStyle';
     style.textContent = state.math_css || ''; if (!style.isConnected) document.head.append(style);
     const page = node('div', 'atomicLayout'), sidebar = node('aside', 'atomicHistory'), main = node('main', 'atomicMain');
+    if (state.chunk && !selected) page.classList.add('atomicReadingLayout');
     if (state.current) {
       selected = null;
       sidebar.hidden = true;
       page.classList.add('atomicAnswerLayout');
     }
     sidebar.append(node('h2', '', t('history.title')));
-    const intro = button(t('Introduction'), () => { selected = 'introduction'; render(); });
-    intro.disabled = !state.introduction; sidebar.append(intro);
-    for (const section of state.unified_history || []) {
-      const row = button(section.title, () => { selected = section.id; render(); });
-      row.dataset.historyId = section.id; sidebar.append(row);
-    }
-    state.history.forEach((record, index) => {
-      const row = button(t('atomic.cardNumber', {number: index + 1}), () => { selected = record.id; render(); });
+    const cardRow = record => {
+      const row = button(record.title || t('atomic.cardNumber', {number: state.history.indexOf(record) + 1}), () => { selected = record.id; render(); });
       row.disabled = !record.viewable; row.dataset.historyId = record.id;
       row.append(node('span', record.mastered ? 'atomicMastered' : 'atomicUnmastered', t(record.mastered ? 'atomic.mastered' : 'atomic.unmastered')));
-      sidebar.append(row);
-    });
+      return row;
+    };
+    sidebar.append(...topicHistory(state.learning_sections, {
+      records: state.history, currentIntroduction: state.introduction_id || state.learning_sections?.[0]?.id,
+      currentChunk: state.chunk?.id, card: cardRow,
+      introduction: section => {
+        const previous = state.unified_history?.find(item => item.introduction_id === section.id);
+        const current = section.id === (state.introduction_id || state.learning_sections?.[0]?.id);
+        const row = button(section.title.replace(/^Introduction(?=\s*[:：]|$)/i, t('Introduction')),
+          () => { selected = current ? 'introduction' : previous.id; render(); });
+        row.classList.add('topicHistoryIntroduction');
+        row.disabled = current ? !state.introduction : !previous;
+        if (previous) row.dataset.historyId = previous.id;
+        return row;
+      }
+    }));
     const back = node('a', 'subjectBack', bridge.homeLabel?.() || t('nav.backHome')); back.href = bridge.homeHref(); main.append(back);
     main.append(node('p', 'eyebrow', t(state.mode === 'review' ? 'atomic.reviewTitle' : 'atomic.title')),
-      node('h1', 'lessonTitle', state.title), node('p', 'atomicProgress', t('atomic.progress', {done: state.learned_count, total: state.point_count})));
+      node('h1', 'lessonTitle', state.title), topicProgress(state.topic_progress));
     const status = node('p', 'fieldError', failure || ''); status.id = 'atomicNotice'; status.hidden = !failure; status.setAttribute('role', 'status'); main.append(status);
     if (selected) {
       const previous = selected === 'introduction' ? null : state.history.find(r => r.id === selected && r.viewable);

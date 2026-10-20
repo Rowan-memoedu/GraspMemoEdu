@@ -495,3 +495,118 @@ body.portalModalOpen { overflow: hidden; }
 .courseHierarchySetting { display: flex; align-items: center; gap: 10px; }
 .profileForm .courseHierarchySetting input { width: auto; }
 @media (max-width: 600px) { .courseUnitBody { padding-right: 4px; padding-left: 4px; } .courseUnitHeading { padding: 12px 8px; } }
+
+/* Hallmark · component: memory chunk reader · genre: modern-minimal
+ * theme: existing subject tokens · source context / focused memory field
+ * pre-emit critique: P4 H5 E4 S5 R5 V4 */
+:root {
+  --chunk-paper: #fff;
+  --chunk-muted: #536274;
+  --chunk-shadow: 0 12px 36px #182c4610;
+  --chunk-overlay: #14223970;
+  --chunk-radius: 16px;
+}
+.portalShell:has(.atomicReadingLayout) { max-width: 1480px; }
+.atomicLayout { grid-template-columns: minmax(0, 1fr) 200px; gap: 28px; }
+.atomicMain { grid-column: 1; grid-row: 1; min-width: 0; }
+.atomicHistory { grid-column: 2; grid-row: 1; width: 100%; border: 0; padding: 0; align-self: start; position: sticky; top: 84px; max-height: calc(100dvh - 110px); overflow-y: auto; }
+.atomicReadingLayout { grid-template-columns: minmax(0, 1fr) 200px; gap: 28px; }
+.atomicAnswerLayout { grid-template-columns: minmax(0, 860px); }
+.topicProgress { display: flex; gap: 24px; margin: 22px 0 26px; }
+.topicProgressItem { flex: 1; min-width: 0; }
+.topicProgressCaption { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--chunk-muted); white-space: nowrap; }
+.topicProgressCaption strong { color: var(--ma-navy); font-variant-numeric: tabular-nums; font-weight: 600; }
+.topicProgress progress { display: block; appearance: none; width: 100%; height: 5px; margin-top: 10px; border: 0; border-radius: 8px; overflow: hidden; background: var(--subtle-accent-background); color: var(--link-color); }
+.topicProgress progress::-webkit-progress-bar { background: var(--subtle-accent-background); }
+.topicProgress progress::-webkit-progress-value { background: var(--link-color); border-radius: 8px; }
+.topicProgress progress::-moz-progress-bar { background: var(--link-color); }
+.topicHistorySection { border: 1px solid var(--ma-border); border-radius: 10px; padding: 12px; margin: 0 0 14px; background: var(--chunk-paper); }
+.topicHistorySection .topicHistoryIntroduction { width: 100%; margin: 0; padding: 6px 0 10px; border: 0; border-radius: 0; background: transparent; font-weight: 600; color: var(--ma-navy); font-size: 13px; text-align: left; overflow-wrap: anywhere; }
+.topicHistoryChunk { margin-top: 14px; }
+.topicHistoryChunk h3 { font-size: 12px; font-weight: 500; line-height: 1.7; color: var(--chunk-muted); margin: 0 0 8px; overflow-wrap: anywhere; }
+.topicHistoryCards { margin-left: 16px; padding-left: 10px; border-left: 1px solid var(--control-border); }
+.topicHistoryCards button { width: 100%; margin: 6px 0; font-size: 12px; }
+.topicHistorySection button[aria-current="step"] { border-color: var(--link-color); background: var(--soft-blue); color: var(--ma-navy); }
+.atomicChunk { min-width: 0; margin-top: 32px; }
+.atomicChunkHeading { margin-bottom: 22px; }
+.atomicChunkHeading h2 { margin: 4px 0 0; font-size: clamp(23px, 2vw, 29px); line-height: 1.4; color: var(--ma-navy); overflow-wrap: anywhere; }
+.atomicChunkHeading .eyebrow { color: var(--chunk-muted); letter-spacing: .08em; font-size: 11px; }
+.atomicAnnotation { grid-template-columns: minmax(0, 1.25fr) 36px minmax(0, 1fr); gap: 18px; margin: 0; align-items: start; }
+.atomicSource { min-width: 0; border: 1px solid var(--ma-border); border-radius: 12px; background: var(--chunk-paper); color: var(--ma-ink); overflow: clip; }
+.atomicSourceHeader { padding: 18px 18px 14px; border-bottom: 1px solid var(--ma-border); }
+.atomicSourceHeader h3 { margin: 0; font-size: 13px; color: var(--ma-navy); font-weight: 600; }
+.atomicSourceHeader p { margin: 6px 0 0; color: var(--chunk-muted); font-size: 12px; }
+.atomicSourceViewport { --source-height: clamp(320px, 52dvh, 560px); overflow: scroll; height: var(--source-height); scrollbar-gutter: stable; overscroll-behavior: contain; scrollbar-color: var(--muted-accent-border) var(--subtle-accent-background); }
+.atomicSourceViewport:focus-visible { outline: 3px solid var(--link-color); outline-offset: -3px; }
+.atomicSourceViewport::-webkit-scrollbar { display: block; width: 12px; height: 12px; }
+.atomicSourceViewport::-webkit-scrollbar-track, .atomicSourceViewport::-webkit-scrollbar-corner { background: var(--subtle-accent-background); }
+.atomicSourceViewport::-webkit-scrollbar-thumb { background: var(--muted-accent-border); border: 3px solid var(--subtle-accent-background); border-radius: 8px; }
+.atomicSourceDocument { width: 660px; min-width: 660px; max-width: none; margin-inline: calc(50% - 24px); padding: calc(var(--source-height) / 2) 24px; font-size: 13.5px; line-height: 1.85; }
+.atomicSourceDocument > :first-child { margin-top: 0; }
+.atomicSourceMark { background: transparent; color: inherit; text-decoration: underline dashed var(--link-color) 2px; text-underline-offset: 6px; }
+.atomicArrow { display: block; margin-top: 120px; font-size: 42px; line-height: 1; color: var(--link-color); }
+.atomicChunkNote { min-width: 0; min-height: 350px; margin: 0; padding: clamp(22px, 3vw, 38px); border: 1px solid var(--control-border); border-top: 3px solid var(--link-color); border-radius: var(--chunk-radius); background: var(--soft-blue); color: var(--ma-ink); box-shadow: var(--chunk-shadow); overflow-wrap: anywhere; }
+.atomicFieldLabel { margin: 0 0 18px; color: var(--chunk-muted); font-size: 12px; line-height: 1.4; font-weight: 600; letter-spacing: .06em; }
+.atomicChunkCore { font-size: 18px; line-height: 1.9; }
+.atomicChunkCore > :first-child, .atomicMnemonicBody > :first-child { margin-top: 0; }
+.atomicChunkCore > :last-child, .atomicMnemonicBody > :last-child { margin-bottom: 0; }
+.atomicChunkNote :is(img, svg, video) { max-width: 100%; }
+.atomicMnemonic { margin-top: 32px; padding: 22px 24px; border: 1px solid var(--control-border); border-left: 3px solid var(--link-color); border-radius: 10px; background: var(--chunk-paper); color: var(--ma-ink); }
+.atomicMnemonic .atomicFieldLabel { color: var(--ma-navy); margin-bottom: 12px; }
+.atomicMnemonicBody { font-size: 16px; line-height: 1.85; }
+.atomicChunkFooter { display: flex; align-items: center; justify-content: flex-end; gap: 20px; margin-top: 28px; }
+.atomicChunkFooter .inputHint { margin: 0; max-width: none; color: var(--chunk-muted); font-size: 12px; }
+.atomicMain .atomicChunkFooter .primaryButton { margin: 0; min-height: 46px; border-radius: 8px; white-space: nowrap; }
+.atomicChunkActions { display: flex; justify-content: flex-end; margin-top: 24px; }
+.atomicPeekButton, .memoryChunkClose { min-height: 44px; padding: 10px 16px; border: 1px solid var(--control-border); border-radius: 8px; background: var(--chunk-paper); color: var(--ma-blue); white-space: nowrap; }
+.atomicPeekButton:focus-visible, .memoryChunkClose:focus-visible, .memoryChunkTab:focus-visible { outline: 3px solid var(--link-color); outline-offset: 3px; }
+.atomicPeekButton:active, .memoryChunkClose:active, .memoryChunkTab:active { transform: translateY(1px); }
+.memoryChunkDialog { position: fixed; inset: 0; margin: auto; width: min(1360px, calc(100vw - 56px)); max-width: none; max-height: calc(100dvh - 56px); padding: 0; border: 1px solid var(--control-border); border-radius: 20px; background: var(--chunk-paper); color: var(--ma-ink); box-shadow: var(--chunk-shadow); overflow: auto; overscroll-behavior: contain; }
+.memoryChunkDialog::backdrop { background: var(--chunk-overlay); }
+.memoryChunkDialogHeader { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 20px 28px; border-bottom: 1px solid var(--ma-border); }
+.memoryChunkDialogHeader h2 { font-size: 16px; margin: 0; color: var(--ma-navy); }
+.memoryChunkDialogBody { padding: 0 32px 32px; }
+.memoryChunkDialogBody .atomicChunk { margin-top: 26px; }
+.memoryChunkDialog .atomicChunkNote { min-height: 420px; }
+.memoryChunkTabs { display: flex; gap: 8px; overflow-x: auto; padding: 16px 28px 0; }
+.memoryChunkTab { flex: 0 0 auto; min-height: 44px; padding: 10px 16px; font: inherit; border: 1px solid var(--control-border); border-radius: 8px; background: var(--chunk-paper); color: var(--chunk-muted); white-space: nowrap; }
+.memoryChunkTab[aria-selected="true"] { color: var(--ma-navy); background: var(--soft-blue); border-color: var(--link-color); }
+@media (hover: hover) {
+  .atomicPeekButton:hover:not(:disabled), .memoryChunkClose:hover, .memoryChunkTab:hover { background: var(--soft-blue); color: var(--ma-navy); }
+}
+@media (min-width: 1001px) {
+  .unifiedTopicLayout { grid-template-columns: minmax(0, 1fr) 250px; }
+  .unifiedTopicLayout.historyCollapsed { grid-template-columns: minmax(0, 1fr) 40px; }
+  .unifiedTopicLayout > .historySidebar { grid-column: 2; grid-row: 1; }
+  .unifiedTopicLayout > .pageShell { grid-column: 1; grid-row: 1; }
+}
+@media (max-width: 1080px) and (min-width: 768px) {
+  .atomicReadingLayout { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .atomicReadingLayout .atomicHistory { position: static; grid-column: 1; grid-row: 2; max-height: 300px; }
+  .atomicAnnotation { grid-template-columns: minmax(0, 1.2fr) 28px minmax(0, 1fr); gap: 12px; }
+  .atomicArrow { font-size: 32px; }
+  .atomicChunkNote { padding: 24px; }
+}
+@media (max-width: 767px) {
+  .atomicReadingLayout { display: flex; }
+  .atomicMain { order: 0; }
+  .atomicHistory { position: static; order: 1; max-height: 300px; }
+  .topicProgress { gap: 12px; }
+  .topicProgressCaption { flex-direction: column; gap: 4px; }
+  .topicHistoryCards button { display: flex; width: 100%; margin: 6px 0; }
+  .atomicChunk { margin-top: 22px; }
+  .atomicAnnotation { grid-template-columns: minmax(0, 1fr) 36px; gap: 12px; }
+  .atomicSource { width: min(100%, 320px); }
+  .atomicSourceViewport { --source-height: 240px; }
+  .atomicArrow { margin-top: 120px; font-size: 36px; }
+  .atomicChunkNote { grid-column: 1 / -1; min-height: 0; margin: 0; padding: 24px 20px; }
+  .atomicChunkCore { font-size: 17px; }
+  .atomicMnemonic { padding: 18px; margin-top: 24px; }
+  .atomicChunkFooter { flex-direction: column; align-items: stretch; gap: 14px; }
+  .atomicChunkFooter .primaryButton { align-self: flex-end; }
+  .memoryChunkDialog { width: calc(100vw - 20px); max-height: calc(100dvh - 24px); border-radius: 14px; }
+  .memoryChunkDialogHeader { padding: 14px 16px; gap: 12px; }
+  .memoryChunkDialogBody { padding: 0 16px 22px; }
+  .memoryChunkDialog .atomicChunkNote { min-height: 0; }
+  .memoryChunkTabs { padding: 14px 16px 0; }
+}

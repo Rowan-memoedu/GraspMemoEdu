@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 import uuid
 
 from .atomic import AtomicLearningService
-from .atomic_content import point_chunks
+from .atomic_content import point_chunks, learning_presentation
 from .fsrs_engine import FSRSEngine
 from .ordered_learning import OrderedLearningService
 from .service import DomainError, LearningService, now
@@ -310,8 +310,9 @@ class UnifiedLearningService(OrderedLearningService):
             return state['atomic']['active'] is None
         return True
 
-    def _point_history(self, state):
-        records = AtomicLearningService._public(self.atomic, PointState(state))['history']
+    def _point_history(self, state, records=None):
+        if records is None:
+            records = AtomicLearningService._public(self.atomic, PointState(state))['history']
         result = []
         for record in records:
             if not record['viewable']:
@@ -347,16 +348,17 @@ class UnifiedLearningService(OrderedLearningService):
             ident = step.get('introduction_id')
             if step['kind'] == 'introduction' and not self._intro_open(state, ident):
                 step.update(html='', unlocked=False, visible=False, actions=[])
-        result['steps'].extend(self._point_history(state))
+        atomic = AtomicLearningService._public(self.atomic, PointState(state))
+        result['steps'].extend(self._point_history(state, atomic['history']))
+        result['atomic_history'] = atomic['history']
         if state['display'] == 'atomic':
-            points = PointState(state)
-            atomic = AtomicLearningService._public(self.atomic, points)
             atomic['introduction'] = section['introduction'] if self._intro_open(state, section['id']) else None
             atomic['unified_history'] = [
-                {key: step.get(key) for key in ('id', 'title', 'html', 'explanation_html')}
+                {key: step.get(key) for key in ('id', 'introduction_id', 'title', 'html', 'explanation_html')}
                 for step in result['steps'] if step['kind'] == 'introduction' and step['unlocked']
                 and step['introduction_id'] != section['id']]
             result = atomic
+        result.update(learning_presentation(self.course, state['atomic'], state['read_introductions']))
         result.update(unified_topic=True, introduction_id=section['id'],
                       atomic_progress={'completed': sum(p['mastered'] for p in state['atomic']['points'].values()),
                                        'total': len(state['atomic']['points'])},

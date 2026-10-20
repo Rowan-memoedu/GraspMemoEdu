@@ -21,11 +21,10 @@ export async function compileStructured(source, bytes) {
     catch (error) { throw new Error(error.message + ': ' + JSON.stringify(text).slice(0, 1800)); }
   };
   for (const chunk of topic.memory_chunks) {
-    chunk.html = html(chunk.content);
-    if (chunk.mnemonic_markdown) chunk.html += html(chunk.mnemonic_markdown);
-    if (chunk.mnemonic_html) chunk.html += chunk.mnemonic_html;
+    chunk.content_html = html(chunk.content);
+    chunk.mnemonic_html = (chunk.mnemonic_markdown ? html(chunk.mnemonic_markdown) : '') + (chunk.mnemonic_html || '');
+    chunk.html = chunk.content_html + chunk.mnemonic_html;
     delete chunk.mnemonic_markdown;
-    delete chunk.mnemonic_html;
   }
   for (const card of topic.flashcards) {
     card.html = html(card.question);

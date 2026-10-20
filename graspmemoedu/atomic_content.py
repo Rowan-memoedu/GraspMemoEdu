@@ -46,6 +46,50 @@ def point_groups(topic):
         if topic.get('memory_points') else [])
 
 
+def chunk_presentation(topic, chunk):
+    """Read-only teaching fields, retaining the authored content/version."""
+    from .topic_structure import sections
+    section = next(s for s in sections(topic) if any(c['id'] == chunk['id'] for c in s['chunks']))
+    result = {key: chunk[key] for key in ('id', 'title', 'html', 'anchors')}
+    result['introduction'] = {key: section['introduction'][key]
+                              for key in ('id', 'title', 'html') if key in section['introduction']}
+    for key in ('content_html', 'mnemonic_html'):
+        if key in chunk:
+            result[key] = chunk[key]
+    mnemonic = chunk.get('mnemonic') or {}
+    result['has_mnemonic'] = bool(mnemonic.get('asset_ids') or mnemonic.get('source_quotes')
+                                  or chunk.get('mnemonic_html'))
+    return result
+
+
+def card_chunks(topic, card):
+    """A bundled card can refer to several chunks, each with its own guidance."""
+    points = set(card['point_ids'])
+    return [chunk_presentation(topic, chunk) for chunk in topic.get('memory_chunks', [])
+            if points.intersection(point['id'] for point in chunk['points'])]
+
+
+def learning_presentation(topic, state, read_introductions):
+    """Whole-Topic counts and compact authored grouping, without new state."""
+    from .topic_structure import sections
+    groups = sections(topic)
+    read, seen = set(read_introductions), set(state['seen_chunks'])
+    return {
+        'topic_progress': {
+            'introductions': {'completed': sum(s['id'] in read for s in groups), 'total': len(groups)},
+            'chunks': {'completed': sum(c['id'] in seen for s in groups for c in s['chunks']),
+                       'total': sum(len(s['chunks']) for s in groups)},
+            'points': {'completed': sum(p['mastered'] for p in state['points'].values()),
+                       'total': len(state['points'])}},
+        'learning_sections': [
+            {'id': s['id'], 'title': s['introduction'].get('title') or 'Introduction',
+             'read': s['id'] in read, 'point_ids': s['point_ids'],
+             'module_ids': [m['id'] for m in s['modules']],
+             'chunks': [{'id': c['id'], 'title': c['title'], 'seen': c['id'] in seen,
+                         'point_ids': [p['id'] for p in c['points']]} for c in s['chunks']]}
+            for s in groups]}
+
+
 def policy_for(topic):
     policy = {**DEFAULT_POLICY, **topic.get('atomic_policy', {})}
     if (set(policy) != set(DEFAULT_POLICY) or not isinstance(policy['version'], str)

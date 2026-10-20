@@ -10,7 +10,7 @@ import uuid
 
 from fsrs import Card
 
-from .atomic_content import GAP_SECONDS, MODE, policy_for, point_chunks
+from .atomic_content import GAP_SECONDS, MODE, policy_for, point_chunks, chunk_presentation, card_chunks, learning_presentation
 from .fsrs_engine import FSRSEngine, utc_time
 from .judging import judge_answer
 from .question_types import public_interaction, parse_answer, display_answer
@@ -152,9 +152,13 @@ class AtomicLearningService(LearningService):
                   or state['phase'] == 'chunk' or state.get('preview_single_card') else None}
         if state['active']:
             result['current'] = self._question(state['active'], feedback=state['active']['phase'] == 'feedback')
+            result['current']['memory_chunks'] = card_chunks(self.course, result['current'])
         if state['phase'] == 'chunk' and not state['pause']:
             chunk = self.chunks[state['pending_chunk']]
-            result['chunk'] = {key: chunk[key] for key in ('id', 'title', 'html', 'anchors')}
+            result['chunk'] = chunk_presentation(self.course, chunk)
+        from .topic_structure import sections
+        result.update(learning_presentation(self.course, state,
+                      [s['id'] for s in sections(self.course)] if state['started_at'] or learned else []))
         return result
 
     def preview_card(self, card_id, request_id):

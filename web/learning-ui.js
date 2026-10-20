@@ -1,7 +1,7 @@
-import {t, learningTitle} from './i18n.js?v=7a9ca1380fb8c0fe';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=7a9ca1380fb8c0fe';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=7a9ca1380fb8c0fe';
-import {enhanceTopicContent} from './topic-content.js?v=7a9ca1380fb8c0fe';
+import {t, learningTitle} from './i18n.js?v=5957696006f188e4';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=5957696006f188e4';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=5957696006f188e4';
+import {enhanceTopicContent} from './topic-content.js?v=5957696006f188e4';
 
 const node = (tag, cls = '', text) => {
   const item = document.createElement(tag); item.className = cls;
@@ -135,6 +135,47 @@ export function readerProgress(refs, {label, status, percent, segments, reading 
   } else refs.lessonProgress.replaceChildren(...(segments || []).map(segment => {
     const item = node('span', `progressSegment ${segment.status}`); item.title = segment.title || ''; return item;
   }));
+}
+
+export function topicProgress(progress) {
+  const group = node('div', 'topicProgress');
+  group.setAttribute('aria-label', t('atomic.topicProgress'));
+  for (const [key, label] of [['introductions', 'Introduction'], ['chunks', 'atomic.chunk'], ['points', 'atomic.points']]) {
+    const count = progress?.[key];
+    if (!count?.total) continue;
+    const item = node('div', 'topicProgressItem'), caption = node('div', 'topicProgressCaption');
+    item.dataset.progress = key;
+    caption.append(node('span', '', t(label)), node('strong', '', `${count.completed} / ${count.total}`));
+    const bar = node('progress'); bar.max = count.total; bar.value = count.completed;
+    bar.setAttribute('aria-label', t(label)); item.append(caption, bar); group.append(item);
+  }
+  return group;
+}
+
+// Compact section metadata supplies hierarchy; callers retain navigation and
+// permission checks. One record may belong to multiple chunks (bundled cards).
+export function topicHistory(sections, {records = [], currentIntroduction, currentChunk, introduction,
+  card, modules = () => []} = {}) {
+  return (sections || []).flatMap(section => {
+    const related = records.filter(record => record.point_ids?.some(id => section.point_ids.includes(id)));
+    const moduleNodes = modules(section);
+    if (!section.read && section.id !== currentIntroduction && !related.length && !moduleNodes.length) return [];
+    const group = node('section', 'topicHistorySection'); group.dataset.introductionId = section.id;
+    group.append(introduction(section));
+    const grouped = new Set();
+    for (const chunk of section.chunks) {
+      const children = related.filter(record => record.point_ids.some(id => chunk.point_ids.includes(id)));
+      if (!chunk.seen && chunk.id !== currentChunk && !children.length) continue;
+      const chunkGroup = node('section', 'topicHistoryChunk'); chunkGroup.dataset.chunkId = chunk.id;
+      chunkGroup.append(node('h3', '', chunk.title));
+      const items = node('div', 'topicHistoryCards');
+      for (const record of children) { grouped.add(record.id); items.append(card(record)); }
+      chunkGroup.append(items); group.append(chunkGroup);
+    }
+    for (const record of related.filter(record => !grouped.has(record.id))) group.append(card(record));
+    group.append(...moduleNodes);
+    return [group];
+  });
 }
 
 export function readerNavigation(target, {previous, next, onSelect, canNavigate = true,

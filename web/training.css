@@ -24,3 +24,23 @@
   .trainingRatings { gap: 4px; }
   .trainingRating { padding-inline: 2px; }
 }
+
+/* Shared rating strip: preserve all four or five choices in one row. */
+:root { --rating-ink: #fff; }
+.trainingRatings, .selfAssessment .trainingRatings { grid-template-columns: repeat(var(--rating-count, 5), minmax(0, 1fr)); gap: 10px; }
+.trainingRating { min-width: 0; min-height: 82px; justify-content: center; padding: 12px 6px; border-radius: 9px; gap: 6px; color: var(--rating-ink); }
+.trainingRating > span { font-size: 21px; line-height: 1.1; font-weight: 600; }
+.trainingRating > small { font-size: 12px; white-space: nowrap; }
+.trainingRating .ratingCompactLabel { display: none; }
+.trainingRating:focus-visible { outline: 3px solid var(--ma-navy); outline-offset: 3px; }
+.trainingRating:active:not(:disabled) { transform: translateY(1px); }
+.trainingRating:disabled { cursor: default; opacity: .5; }
+.trainingRating[aria-busy="true"] { opacity: .8; cursor: progress; }
+.trainingRating[aria-busy="true"] > span { opacity: .5; }
+@media (max-width: 700px) {
+  .trainingRatings, .selfAssessment .trainingRatings { gap: 5px; }
+  .trainingRating { padding: 12px 2px; min-height: 74px; border-radius: 8px; }
+  .trainingRating > span { font-size: 18px; }
+  .trainingRating .ratingLabel { display: none; }
+  .trainingRating .ratingCompactLabel { display: block; font-size: 11px; }
+}

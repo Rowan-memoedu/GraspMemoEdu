@@ -46,8 +46,8 @@ try {
   await screenshot('introduction-desktop');
   await next();
   await page.locator('.atomicChunkNote').waitFor();
-  await page.getByText('请确保已理解该内容，开始训练后不可再回看知识', {exact: true}).waitFor();
-  await page.locator('.atomicHistory').getByRole('button', {name: '指导', exact: true}).click();
+  await page.getByText('请确保已理解该内容，再开始原子卡训练。', {exact: true}).waitFor();
+  await page.locator('.atomicHistory [data-introduction-id="intro-a"] .topicHistoryIntroduction').click();
   assert.equal(await page.locator('.atomicChunkNote').count(), 0);
   await page.getByRole('button', {name: '返回当前训练', exact: true}).click();
   await page.locator('.atomicChunkNote').waitFor();
@@ -71,6 +71,14 @@ try {
   await atomNext();
   await page.locator('#stepCard').getByRole('button', {name: '未掌握，先学习', exact: true}).waitFor();
   assert.equal((await page.locator('#historyPanel').textContent()).includes('测试原子卡'), true);
+  assert.deepEqual(await page.locator('#topicAtomicProgress .topicProgressCaption strong').allTextContents(), ['1 / 2', '1 / 2', '2 / 3']);
+  const hierarchy = await page.locator('#historyPanel .topicHistoryChunk').first().evaluate(group => {
+    const label = group.querySelector('h3').getBoundingClientRect(), card = group.querySelector('button').getBoundingClientRect();
+    return {indent: card.left - label.left, framed: Boolean(group.closest('.topicHistorySection')),
+      sidebarX: document.querySelector('#historySidebar').getBoundingClientRect().left,
+      mainRight: document.querySelector('#appLayout .pageShell').getBoundingClientRect().right};
+  });
+  assert.ok(hierarchy.indent >= 16 && hierarchy.framed && hierarchy.sidebarX > hierarchy.mainRight);
   pass('Introduction, annotated chunk, atomic learning, then Example in the same Topic');
   await page.locator('#stepCard').getByRole('button', {name: '未掌握，先学习', exact: true}).click();
   await next();

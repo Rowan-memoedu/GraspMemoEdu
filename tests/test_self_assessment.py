@@ -206,6 +206,8 @@ class PaperAssessmentTests(unittest.TestCase):
         paper = self.call('POST', '/api/review-papers/open?subject_id=english',
                           {'candidate_id': candidate['id'], 'request_id': str(uuid.uuid4())})
         self.assertTrue(paper['items'][0]['can_stop_reviews'])
+        self.assertEqual([c['id'] for c in paper['items'][0]['memory_chunks']], ['colors'])
+        self.assertEqual(paper['items'][0]['memory_chunks'][0]['introduction']['html'], topic['introduction']['html'])
         paper = self.call('POST', '/api/review-papers/reveal', {
             'paper_id': paper['id'], 'index': 0, 'expected_revision': paper['revision']})
         paper = self.call('POST', '/api/review-papers/draft', {

@@ -1,6 +1,6 @@
-import {t} from './i18n.js?v=7a9ca1380fb8c0fe';
-import {answerEmpty} from './question-input.js?v=7a9ca1380fb8c0fe';
-import {prepareLiteralMath} from './math-presentation.js?v=7a9ca1380fb8c0fe';
+import {t} from './i18n.js?v=5957696006f188e4';
+import {answerEmpty} from './question-input.js?v=5957696006f188e4';
+import {prepareLiteralMath} from './math-presentation.js?v=5957696006f188e4';
 
 const element = (tag, cls, text) => {
   const node = document.createElement(tag); node.className = cls;
@@ -62,15 +62,22 @@ export function referenceAnswer(question) {
 
 export function ratingChoices({labels, selected, disabled = false, onRate}) {
   const ratings = element('div', 'trainingRatings');
+  ratings.style.setProperty('--rating-count', String(labels.length));
   labels.forEach((label, index) => {
     const rating = index + 1, control = element('button', `trainingRating rating${rating}`);
     control.type = 'button'; control.disabled = disabled; control.dataset.rating = rating;
     control.setAttribute('aria-pressed', String(selected === rating));
-    control.append(element('span', '', String(rating)), element('small', '', t(label)));
+    control.setAttribute('aria-label', `${rating} · ${t(label)}`); control.title = t(label);
+    control.append(element('span', '', String(rating)), element('small', 'ratingLabel', t(label)),
+      element('small', 'ratingCompactLabel', t(`atomic.ratingShort${rating}`)));
     control.addEventListener('click', async () => {
+      control.setAttribute('aria-busy', 'true');
       for (const child of ratings.children) child.disabled = true;
       try { await onRate(rating); }
-      finally { if (ratings.isConnected) for (const child of ratings.children) child.disabled = disabled; }
+      finally {
+        control.removeAttribute('aria-busy');
+        if (ratings.isConnected) for (const child of ratings.children) child.disabled = disabled;
+      }
     });
     ratings.append(control);
   });

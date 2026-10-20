@@ -24,6 +24,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--port', type=int, default=18864)
     parser.add_argument('--real-judge', action='store_true')
+    parser.add_argument('--visual-chunks', action='store_true')
     args = parser.parse_args()
     root = args.output.resolve()
     if not root.is_relative_to(Path('D:/Artifacts/GraspMemoEdu').resolve()) or root.exists() or args.port in (8765, 18768):
@@ -32,6 +33,15 @@ def main():
         probe.bind(('127.0.0.1', args.port))
     root.mkdir(parents=True)
     topic = composed_topic()
+    if args.visual_chunks:
+        intro = topic['introductions'][0]
+        intro['html'] += '<h3>完整指导的后续讲解</h3>' + ''.join(
+            f'<p>补充讲解 {i}：标签、名称与属性应在上下文中理解。此段不属于当前组块的划线范围。</p>'
+            for i in range(1, 16))
+        intro['html'] += '<pre><code>const example = \"' + 'long_source_line_' * 12 + '\";</code></pre>'
+        topic['memory_chunks'][0].update(
+            content_html='<p>甲标签对应<strong>红色</strong>，乙标签对应<strong>蓝色</strong>。</p><p>记住名称与属性之间的对应关系。</p>',
+            mnemonic_html='<p>把甲、乙想象成两个不同颜色的标签：<strong>甲红，乙蓝</strong>。</p>')
     topic['flashcards'] = [card for card in topic['flashcards'] if len(card['point_ids']) == 1]
     if args.real_judge:
         topic['flashcards'][0]['interaction'] = {'version': 1, 'type': 'text', 'grading': 'semantic'}

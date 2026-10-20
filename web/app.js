@@ -1,13 +1,13 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=7a9ca1380fb8c0fe";
-import {answerReady} from './question-input.js?v=7a9ca1380fb8c0fe';
-import {reportableContent} from './content-report.js?v=7a9ca1380fb8c0fe';
-import {createLearningCache} from './learning-cache.js?v=7a9ca1380fb8c0fe';
-import {createReadCache, createContentCache, createValidationCache, readLifetime, contentPath, contentKey} from './response-cache.js?v=7a9ca1380fb8c0fe';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=5957696006f188e4";
+import {answerReady} from './question-input.js?v=5957696006f188e4';
+import {reportableContent} from './content-report.js?v=5957696006f188e4';
+import {createLearningCache} from './learning-cache.js?v=5957696006f188e4';
+import {createReadCache, createContentCache, createValidationCache, readLifetime, contentPath, contentKey} from './response-cache.js?v=5957696006f188e4';
 
-import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, readerHistorySteps, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState} from './learning-ui.js?v=7a9ca1380fb8c0fe';
-import {selfAssessment} from './self-assessment.js?v=7a9ca1380fb8c0fe';
-import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=7a9ca1380fb8c0fe';
-import {renderSourceReader} from './learning-ui.js?v=7a9ca1380fb8c0fe';
+import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, readerHistorySteps, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState, topicProgress, topicHistory} from './learning-ui.js?v=5957696006f188e4';
+import {selfAssessment} from './self-assessment.js?v=5957696006f188e4';
+import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=5957696006f188e4';
+import {renderSourceReader} from './learning-ui.js?v=5957696006f188e4';
 
 applyStaticTranslations();
 
@@ -1062,9 +1062,9 @@ function renderPageNotice() {
 function renderProgress() {
   const refs = {progressCaption: $('progressCaption'), lessonProgress: $('lessonProgress')};
   let atoms = $('topicAtomicProgress');
-  if (state.atomic_progress?.total) {
-    if (!atoms) { atoms = el('p', 'atomicProgress'); atoms.id = 'topicAtomicProgress'; refs.lessonProgress.before(atoms); }
-    atoms.textContent = t('atomic.progress', {done: state.atomic_progress.completed, total: state.atomic_progress.total});
+  if (state.topic_progress) {
+    const progress = topicProgress(state.topic_progress); progress.id = 'topicAtomicProgress';
+    if (atoms) atoms.replaceWith(progress); else refs.progressCaption.before(progress);
   } else atoms?.remove();
   if (state.read_only) { readerProgress(refs, {label: '可阅读', status: '暂不可训练', percent: 0, hidden: true}); return; }
   if (state.topic_kind === 'introduction') {
@@ -1097,12 +1097,42 @@ function renderPause() {
 
 function renderHistory() {
   const target = $("historyPanel");
+  $('appLayout').classList.toggle('unifiedTopicLayout', Boolean(state.learning_sections));
   if (!can("review_history")) {
     target.replaceChildren(el("p", "historyHint", featureMessage("review_history")));
     return;
   }
   const nodes = [];
   const visited = readingSteps();
+  if (state.learning_sections) {
+    const recordRow = record => {
+      const step = visited.find(item => item.id === record.id);
+      const row = button(record.title || t('atomic.cardNumber', {number: state.atomic_history.indexOf(record) + 1}),
+        'historyItem', () => selectStep(record.id), !step || actionBusy);
+      row.dataset.historyId = record.id;
+      row.dataset.historyAvailable = String(Boolean(step));
+      if (record.id === state.current_step_id) row.setAttribute('aria-current', 'step');
+      return row;
+    };
+    nodes.push(...topicHistory(state.learning_sections, {
+      records: state.atomic_history, currentIntroduction: state.introduction_id, card: recordRow,
+      introduction: section => {
+        const step = visited.find(item => item.kind === 'introduction' && item.introduction_id === section.id);
+        const row = button(section.title.replace(/^Introduction(?=\s*[:：]|$)/i, t('Introduction')),
+          'historyItem topicHistoryIntroduction', () => selectStep(step.id), !step || actionBusy);
+        row.dataset.historyAvailable = String(Boolean(step));
+        return row;
+      },
+      modules: section => state.modules.filter(module => section.module_ids.includes(module.id)).flatMap(module => {
+        const steps = visited.filter(step => step.module_id === module.id && !['introduction', 'completion'].includes(step.kind));
+        return steps.length ? [historyGroup(learningTitle(module.title), module.status === 'completed' ? t('已完成') : t('学习中'),
+          steps, module.status, module.attempt_id)] : [];
+      })
+    }));
+    const completion = visited.filter(step => step.kind === 'completion');
+    if (completion.length) nodes.push(historyGroup(t('Topic 完成'), t('已完成'), completion, 'completed'));
+    target.replaceChildren(...nodes); return;
+  }
   if (state.topic_format_version === 2) {
     for (const step of visited) {
       if (step.kind === 'introduction') nodes.push(historyGroup(readerStepTitle(step), step.phase === 'completed' ? t('已读') : t('阅读中'), [step]));
@@ -1347,7 +1377,7 @@ function renderBusy() {
   }
   $("answerInput")?.questionControl?.setDisabled(disabled || !can('submit_answer'));
   if ($("submitButton") && !disabled) $("submitButton").disabled = !answerReady($("answerInput")) || !can("submit_answer");
-  for (const element of $("historyPanel").querySelectorAll("button")) element.disabled = disabled || !can("review_history");
+  for (const element of $("historyPanel").querySelectorAll("button")) element.disabled = disabled || !can("review_history") || element.dataset.historyAvailable === 'false';
   for (const element of $("reviewNotice").querySelectorAll("button")) element.disabled = disabled || !can("review_history");
   const skipVisible = readingStatus() === 'in_progress' && !state.topic_locked && state.topic_kind !== 'introduction'
     && state.current_step_id === state.active_step_id
@@ -1531,9 +1561,9 @@ async function openTopic(id, subjectId, initial = null) {
   }
 }
 
-const { initPortal } = await import("./portal.js?v=7a9ca1380fb8c0fe");
-const {startPresence} = await import('./presence.js?v=7a9ca1380fb8c0fe');
-const {visibleContentTopics} = await import('./content-report.js?v=7a9ca1380fb8c0fe');
+const { initPortal } = await import("./portal.js?v=5957696006f188e4");
+const {startPresence} = await import('./presence.js?v=5957696006f188e4');
+const {visibleContentTopics} = await import('./content-report.js?v=5957696006f188e4');
 startPresence({getAccess: () => identityProblem ? null : access, request, getTopics: visibleContentTopics});
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {
