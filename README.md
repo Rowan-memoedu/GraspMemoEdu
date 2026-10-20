@@ -195,6 +195,10 @@ node scripts/inspect_page.mjs
 
 既有结果：[验收报告](D:/Artifacts/GraspMemoEdu/验收报告.md)。公网初次接入记录位于 `D:/Artifacts/GraspMemoEdu/public-internet`，主页与指南证据位于 `D:/Artifacts/GraspMemoEdu/homepage`，账号测试证据位于 `D:/Artifacts/GraspMemoEdu/accounts`。浏览器验收使用独立 Chrome 上下文，不修改用户浏览器记录。账号先在独立目录验收，再使用正式批次中保留的测试账号验证公网登录、跨设备进度、真实判题、权限与退出；不使用 10 个正式学习账号。测试框架仍提示 HTTPX 接口弃用警告，当前固定版本通过测试后继续使用。
 
+## 安装到手机和 Windows
+
+[发布与安装页](https://rowan-memoedu.github.io/GraspMemoEdu-Pages/download.html) 提供 iPhone / iPad、安卓和 Windows 的 PWA 安装说明，现有网站用户菜单也可进入。使用同一云端账号与进度，保持联网学习；网页更新无需重新安装。维护及独立安装验收边界见 [PWA 说明](docs/pwa.md)。
+
 ## 打开公开页面
 
 公开页面仅含 HTML、JS、CSS、图标、`.nojekyll` 和只含 `api_origin` 的 `deployment.json`。连接配置由发布时写入，网页没有配置入口。服务不可用时只显示提示和重试。游客身份在切换后端网址时会先到新后端验证，成功后迁移；连接错误不会清除旧身份或悄悄创建替代身份。

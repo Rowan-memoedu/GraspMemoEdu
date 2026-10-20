@@ -16,6 +16,7 @@ $expected += @('review-directory.js','task-tree.js','content-timer.js','self-ass
 $expected += @('topic-content.js','topic-content.css','topic-callouts.css')
 $expected += @('student-dashboard.js','presence.js')
 $expected += @('composite-input.js')
+$expected += @('download.html','install.css','pwa.css','pwa.js','sw.js','manifest.webmanifest','icon-180.png','icon-192.png','icon-512.png','icon-maskable-512.png')
 $vendor = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'scripts/topic-presentation-assets.json') -Raw | ConvertFrom-Json -AsHashtable
 foreach ($name in $vendor.files.Keys) {
     if ($name -notmatch '^vendor/(mermaid/[A-Za-z0-9_.-]+\.js|document-backlinks\.mjs)$') { throw 'Invalid vendor asset path.' }
@@ -84,7 +85,7 @@ if ($priorTree.truncated -or @($priorTree.tree | Where-Object { ($_.type -eq 'bl
 }
 $treeItems = @($files | ForEach-Object {
     $entry = @{path=[IO.Path]::GetRelativePath($ExportDirectory, $_.FullName).Replace('\','/');mode='100644';type='blob'}
-    if ($_.Extension -eq '.woff2') {
+    if ($_.Extension -in @('.woff2','.png')) {
         $blob = Invoke-Api POST ('repos/' + $Repository + '/git/blobs') @{content=[Convert]::ToBase64String([IO.File]::ReadAllBytes($_.FullName));encoding='base64'}
         $entry.sha = $blob.sha
     } else { $entry.content = [IO.File]::ReadAllText($_.FullName) }
