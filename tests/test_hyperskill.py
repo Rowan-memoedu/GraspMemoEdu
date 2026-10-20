@@ -58,7 +58,9 @@ class HyperskillTests(unittest.TestCase):
                             'reply': {'choices': [True, False]}, 'answer_display': 'A', 'feedback': ''}}
 
     def test_eight_independent_memories_without_chunks_and_complete_only_at_end(self):
+        from graspmemoedu.topic_runtime import learning_units
         validate_atomic(topic())
+        self.assertEqual(learning_units(topic()), 8)
         self.assertIsInstance(create_learning_service(topic(), Path(self.temp.name)), HyperskillLearningService)
         self.assertEqual(self.backend.state()['point_count'], 8)
         self.start()

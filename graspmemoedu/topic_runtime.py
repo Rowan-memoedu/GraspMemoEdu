@@ -107,7 +107,8 @@ def learning_units(topic):
     if is_introduction(topic):
         return 1
     if topic.get('training_mode') == 'atomic_retrieval':
-        return sum(len(c['points']) for c in topic['memory_chunks'])
+        from .atomic_content import memory_points
+        return len(memory_points(topic))
     return len(topic['modules'])
 
 

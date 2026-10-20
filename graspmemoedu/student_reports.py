@@ -16,6 +16,7 @@ from .service import DomainError
 from .topic_runtime import introductions, is_introduction
 from .training_content import permission_id
 from .course_hierarchy import project_hierarchy
+from .atomic_content import point_groups
 
 
 def unpack(value, default=None):
@@ -247,7 +248,7 @@ class StudentReport:
                 modules.append({'id': definition['id'], 'title': definition['title'],
                     'status': 'completed' if done else 'skipped' if skipped else 'in_progress' if latest.get('learning_path') or latest.get('example_result') else 'not_started',
                     'mastery': done.get('mastery') if done else None})
-            for chunk in topic.get('memory_chunks', []):
+            for chunk in point_groups(topic):
                 for point in chunk['points']:
                     memory = progress.get('points', {}).get(point['id'], {})
                     points.append({'id': point['id'], 'title': point['id'] if self.own and not memory.get('mastered') else point['text'], 'chunk_title': chunk['title'],
@@ -316,7 +317,7 @@ class StudentReport:
                 continue
             last = events[-1]
             title = last['group_title'] if kind == 'topic' else last['title']
-            for chunk in self.owner.catalog.topics.get(cid, {}).get('memory_chunks', []):
+            for chunk in point_groups(self.owner.catalog.topics.get(cid, {})):
                 title = next((p['text'] for p in chunk['points'] if p['id'] == point), title)
             if self.own and self.locked(last): title = point
             weak.append({'kind': kind, 'container': cid, 'version': version, 'point': point, 'question': last['question'],
