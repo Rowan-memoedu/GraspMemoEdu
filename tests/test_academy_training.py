@@ -204,6 +204,14 @@ class NativeAcademyTests(unittest.TestCase):
             self.assertTrue(call('POST', 'academy/event', {'kind': 'check', 'event': event}, plugin)['duplicate'])
             done = call('GET', 'training/state?attempt_id=' + state['attempt_id'])
             self.now = datetime.fromisoformat(done['due_at']) + timedelta(seconds=1)
+            legacy = AcademyLearningService(self.topic, self.root, learner_id=identity['access']['learner_id'])
+            with legacy._transaction() as con:
+                archived = legacy._load(con)
+                archived['completed_at'] = (self.now - timedelta(days=1)).isoformat()
+                for point in archived['points'].values():
+                    point.update(mastered=True, due_at=archived['completed_at'])
+                legacy._save(con, archived)
+            self.assertEqual(call('GET', 'atomic/reviews?subject_id=cs')['items'], [])
             inbox = call('GET', 'review-papers/inbox?subject_id=cs')
             self.assertEqual(inbox['due_count'], 1)
             self.assertEqual(inbox['items'], [])
@@ -229,6 +237,23 @@ class NativeAcademyTests(unittest.TestCase):
         policy = TestMaterials(self.root)
         self.assertIn(self.course['id'], policy.banks)
         self.assertFalse(policy.topic_visible('training.' + self.course['id'], {'role': 'guest'}))
+
+    def test_portable_backup_keeps_active_external_round_and_scheduled_card(self):
+        from graspmemoedu.site_backup import backup_site, restore_site
+        AcademyLearningService(self.topic, self.root, learner_id='archive-source')
+        backend = self.native()
+        adapter = self.open(backend); run = self.launch(adapter)
+        self.send(adapter, run, 1, 'passed')
+        pending = self.open(backend, 'manual'); active = self.launch(pending)
+        saved = backend.state(adapter.attempt_id)
+        archive = self.root / 'site.zip'
+        backup_site(Settings.load(self.root), archive)
+        restored = self.root / 'restored'; restore_site(archive, restored)
+        other = TrainingService(TrainingCatalog(restored), restored, backend.learner_id, clock=lambda: self.now)
+        self.assertEqual(other.state(adapter.attempt_id), saved)
+        self.assertEqual(AcademyTraining(other, pending.attempt_id).claim(active['round_id'])['next_sequence'], 1)
+        AcademyTraining(other, pending.attempt_id).finish(3)
+        self.assertEqual(other.state(pending.attempt_id)['result']['rating'], 3)
 
 
 if __name__ == '__main__':

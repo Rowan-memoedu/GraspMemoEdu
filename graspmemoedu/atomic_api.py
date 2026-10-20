@@ -37,14 +37,18 @@ def register_atomic_routes(app, catalog, access_store, subjects, dependencies, *
         if 'learn' not in access['features']:
             raise DomainError('feature_forbidden', '当前账号没有使用此功能的权限。', 403)
         allowed = {t['id'] for t in access['topics']}
+        redirected = app.state.training_catalog.topic_redirects
         if access.get('is_admin'):
             from .materials import material_inventory
             return {'items': [entry for entry in material_inventory(catalog, subjects, access, subject_id)
-                              if entry['kind'] == 'atomic_card'], 'next_due_at': None, 'all_materials': True}
+                              if entry['kind'] == 'atomic_card' and entry['topic_id'] not in redirected],
+                    'next_due_at': None, 'all_materials': True}
         items, next_dates = [], []
         with closing(access_store._connect()) as con:
             con.execute('BEGIN')
             for topic_id, topic in catalog.topics.items():
+                if topic_id in redirected:
+                    continue
                 if not is_atomic(topic) or topic_id not in allowed or (subject_id and topic['subject_id'] != subject_id):
                     continue
                 row = con.execute('SELECT version,body FROM topics WHERE learner=? AND topic=?', (access['learner_id'], topic_id)).fetchone()
