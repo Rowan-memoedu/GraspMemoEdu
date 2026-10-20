@@ -817,6 +817,9 @@ def create_learning_service(course, data_dir, judge=None, learner_id='local', **
     if not trainable(course):
         return SourceReader(course, data_dir, judge, learner_id, **options)
     if course.get('training_mode') == 'atomic_retrieval':
+        if course.get('academy'):
+            from .academy import AcademyLearningService
+            return AcademyLearningService(course, data_dir, judge, learner_id, **options)
         from .atomic import AtomicLearningService
         return AtomicLearningService(course, data_dir, judge, learner_id, **options)
     if course.get('topic_format_version') == 2:

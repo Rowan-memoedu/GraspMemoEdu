@@ -1,0 +1,24 @@
+<idea-plugin>
+  <id>edu.graspmemo.academy</id>
+  <name>GraspMemoEdu Academy Bridge</name>
+  <vendor>GraspMemoEdu</vendor>
+  <version>0.1.0</version>
+  <idea-version since-build="262" until-build="262.*"/>
+  <depends>com.intellij.modules.platform</depends>
+  <depends>com.jetbrains.edu</depends>
+  <description>Open registered Academy exercises, archive previous code, and report checks to the existing GraspMemoEdu atomic FSRS cards.</description>
+  <extensions defaultExtensionNs="com.intellij">
+    <applicationService serviceImplementation="edu.graspmemo.academy.BridgeService"/>
+    <jbProtocolCommand implementation="edu.graspmemo.academy.AcademyProtocol"/>
+    <postStartupActivity implementation="edu.graspmemo.academy.BridgeStartup"/>
+    <notificationGroup id="GraspMemoEdu Academy" displayType="BALLOON"/>
+  </extensions>
+  <extensions defaultExtensionNs="Educational">
+    <checkListener implementation="edu.graspmemo.academy.AcademyListener"/>
+  </extensions>
+  <actions>
+    <action id="GraspMemoEdu.Archives" class="edu.graspmemo.academy.ArchiveAction" text="GraspMemoEdu: 打开代码存档">
+      <add-to-group group-id="ToolsMenu" anchor="last"/>
+    </action>
+  </actions>
+</idea-plugin>

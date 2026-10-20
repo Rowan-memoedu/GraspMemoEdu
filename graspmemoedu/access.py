@@ -199,10 +199,14 @@ class AccessStore:
             raise DomainError('identity_required', '请先选择游客访问或使用邀请码登录。', 401)
         if not isinstance(token, str) or len(token) > 256:
             raise DomainError('invalid_identity', '访问身份已失效，请重新选择访问方式。', 401)
+        return self.resolve_digest(credential_digest('identity', token))
+
+    def resolve_digest(self, digest):
+        """Internal capability delegation; the original identity is still revocable."""
         with closing(self._connect()) as con:
             row = con.execute('''SELECT p.*,i.expires_at FROM access_principals p
                 JOIN access_identities i ON i.learner_id=p.learner_id WHERE i.token_digest=?''',
-                (credential_digest('identity', token),)).fetchone()
+                (digest,)).fetchone()
         if not row or not row['enabled']:
             raise DomainError('invalid_identity', '访问身份已失效，请重新选择访问方式。', 401)
         if row['role'] == 'account':

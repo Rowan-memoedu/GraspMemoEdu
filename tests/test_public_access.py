@@ -607,9 +607,15 @@ class PublicAccessAcceptanceTests(unittest.TestCase):
                        'submission', 'reveal', 'rate', 'history', 'reviews', 'preferences', 'stop'))
         allowed.update('/api/review-papers/' + name for name in ('inbox', 'open', 'state', 'draft', 'submit', 'cancel', 'preferences', 'activity', 'reveal'))
         allowed.add('/api/training/notebook')
+        allowed.update('/api/academy/' + name for name in ('launch', 'claim', 'event', 'finish'))
         self.assertLessEqual({route.path for route in self.app.routes}, allowed)
         atomic_route = next(route for route in self.app.routes if route.path == '/api/atomic/reviews')
         self.assertEqual(atomic_route.methods, {'GET'})
+        for name in ('launch', 'claim', 'event', 'finish'):
+            route = next(route for route in self.app.routes if route.path == '/api/academy/' + name)
+            self.assertEqual(route.methods, {'POST'})
+        self._assert_error(self.client.post('/api/academy/claim', json={}, headers=self._headers()), 401, 'invalid_academy_ticket')
+        self._assert_error(self.client.post('/api/academy/event', json={'kind': 'opened'}, headers=self._headers()), 401, 'invalid_academy_ticket')
         identity, _ = self._guest()
         before = self._state(identity)
         # These two explicitly authorized admin routes remain inaccessible to learners.

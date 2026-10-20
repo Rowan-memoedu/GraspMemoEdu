@@ -183,6 +183,20 @@ class PaperService:
                 if tid not in allowed or backend.course['subject_id'] != subject:
                     continue
                 old = backend._load(con)
+                if backend.course.get('academy'):
+                    from .atomic_api import review_summary
+                    summary = review_summary(backend.course, old, self._now())
+                    if not old.get('completed_at'):
+                        continue
+                    if summary['due_count'] or old.get('active'):
+                        legacy.append({'id': 'legacy:' + tid, 'kind': 'single', 'source': {'kind': 'atomic', 'container': tid},
+                                       'topic_id': tid, 'title': backend.course['title'], 'count': 1,
+                                       'paused': bool(old.get('pause')), 'academy': True,
+                                       'can_resume': not old.get('pause') and self.sources.dependencies.ready(con, self.access, tid)})
+                        count += summary['due_count']
+                    if summary['next_due_at']:
+                        next_due = min(filter(None, [next_due, summary['next_due_at']]))
+                    continue
                 if old.get('pause') or old.get('mode') == 'review' and old.get('active'):
                     legacy.append({'id': 'legacy:' + tid, 'kind': 'single', 'source': {'kind': 'atomic', 'container': tid},
                                    'topic_id': tid, 'title': backend.course['title'], 'paused': bool(old.get('pause')),

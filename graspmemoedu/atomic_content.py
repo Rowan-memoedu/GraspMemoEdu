@@ -5,7 +5,7 @@ import re
 from .question_types import validate_interaction
 
 MODE = 'atomic_retrieval'
-SUBJECTS = {'english', 'chinese', 'biology', 'chemistry'}
+SUBJECTS = {'english', 'chinese', 'biology', 'chemistry', 'cs'}
 DEFAULT_POLICY = {'version': 'atomic-v1', 'first_review_seconds': 21600, 'correct_rating': 3}
 GAP_SECONDS = 180
 IDENTIFIER = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z')
@@ -51,7 +51,7 @@ def validate_atomic(topic):
     def text(value):
         return isinstance(value, str) and bool(value.strip()) and '\x00' not in value
 
-    require(is_atomic(topic) and topic.get('subject_id') in SUBJECTS, 'Atomic retrieval is limited to four subjects')
+    require(is_atomic(topic) and topic.get('subject_id') in SUBJECTS, 'Unsupported atomic retrieval subject')
     require(identifier(topic.get('id')) and text(topic.get('title')) and text(topic.get('version')), 'Missing topic identity')
     require(not topic.get('modules'), 'Atomic topics cannot contain Example modules')
     intro = topic.get('introduction', {}).get('html')
@@ -94,4 +94,11 @@ def validate_atomic(topic):
         validate_interaction(card.get('interaction'), card['question'])
         questions[card['id']] = card
     require(singles == point_ids, 'Each memory point requires an individual flashcard for initial learning')
+    if 'academy' in topic:
+        binding = topic['academy']
+        require(topic['subject_id'] == 'cs' and len(cards) == len(point_ids) == 1,
+                'An Academy exercise owns exactly one CS card and memory point')
+        require(isinstance(binding, dict) and set(binding) == {'task_key', 'kind'}
+                and identifier(binding.get('task_key')) and binding.get('kind') in ('automated', 'manual'),
+                'Invalid Academy binding; local paths must stay on the device')
     return questions

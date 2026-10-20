@@ -2,6 +2,7 @@
 import path from 'node:path';
 import os from 'node:os';
 import readline from 'node:readline';
+import {fileURLToPath} from 'node:url';
 import crypto from 'node:crypto';
 import {createRequire} from 'node:module';
 const req = dir => createRequire(path.join(dir, '_entry.cjs'));
@@ -117,6 +118,12 @@ function transform(value) {
   }
   return value;
 }
+export function renderSourceMarkdown(source) {
+  references=[]; occurrence=0;
+  const html=render(source);
+  return {html, css:adaptor.textContent(svg.styleSheet(doc)), references};
+}
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
 const lines=readline.createInterface({input:process.stdin,crlfDelay:Infinity});
 for await(const line of lines){
   try {references=[];occurrence=0;const topic=transform(JSON.parse(line));
@@ -124,4 +131,5 @@ for await(const line of lines){
     topic.math_css=adaptor.textContent(svg.styleSheet(doc));
     process.stdout.write(JSON.stringify({ok:true,topic})+'\n');
   } catch(error){process.stdout.write(JSON.stringify({ok:false,error:error.message})+'\n');}
+}
 }

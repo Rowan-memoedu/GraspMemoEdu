@@ -1,8 +1,8 @@
-import {t, translateMessage} from './i18n.js?v=47ddee1c1105887d';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=47ddee1c1105887d';
-import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=47ddee1c1105887d';
-import {reportableContent, helpableContent} from './content-report.js?v=47ddee1c1105887d';
-import {createLearningCache} from './learning-cache.js?v=47ddee1c1105887d';
+import {t, translateMessage} from './i18n.js?v=e95839540a8bb6dd';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=e95839540a8bb6dd';
+import {selfAssessment, referenceAnswer, prepareAnswerContent, ratingChoices} from './self-assessment.js?v=e95839540a8bb6dd';
+import {reportableContent, helpableContent} from './content-report.js?v=e95839540a8bb6dd';
+import {createLearningCache} from './learning-cache.js?v=e95839540a8bb6dd';
 
 const node = (tag, cls = '', text) => {
   const el = document.createElement(tag); el.className = cls;
@@ -20,6 +20,7 @@ export function createAtomicView(bridge) {
   const write = (key, value) => cache.write(sessionStorage, key, value);
   const root = bridge.root;
   let state = null, topic = null, learner = null, epoch = 0, timer = null, busy = false, selected = null, failure = null;
+  let academyLink = null;
   const active = ticket => ticket === epoch && topic && learner === bridge.getAccess()?.learner_id;
   const prefix = () => `graspmemoedu:atomic:${bridge.getApiOrigin()}:${learner}:${topic}:${state?.course_version}`;
   const draftKey = () => `${prefix()}:draft:${state.active_step_id}`;
@@ -29,7 +30,7 @@ export function createAtomicView(bridge) {
   const payload = () => ({request_id: crypto.randomUUID(), expected_revision: state.revision,
     attempt_id: state.attempt_id, step_id: state.active_step_id});
   const can = feature => (state?.access || bridge.getAccess())?.features?.includes(feature);
-  function stop() { epoch++; clearTimeout(timer); topic = null; state = null; busy = false; selected = null; failure = null; }
+  function stop() { epoch++; clearTimeout(timer); topic = null; state = null; busy = false; selected = null; failure = null; academyLink = null; }
   function notice(message) {
     failure = message;
     const target = root.querySelector('#atomicNotice');
@@ -43,7 +44,7 @@ export function createAtomicView(bridge) {
     if (next?.training_mode !== 'atomic_retrieval' || next.topic_id !== topic || next.learner_id !== learner) throw new Error(t('review.invalidState'));
     if (state && next.revision < state.revision) return;
     const changed = !state || state.revision !== next.revision || JSON.stringify(state.access) !== JSON.stringify(next.access);
-    if (state?.active_step_id !== next.active_step_id) selected = null;
+    if (state?.active_step_id !== next.active_step_id) { selected = null; academyLink = null; }
     state = next;
     if (state.access) bridge.setAccess(state.access);
     if (state.phase !== 'answer' || state.pause) write(submissionKey(), null);
@@ -97,12 +98,59 @@ export function createAtomicView(bridge) {
   function marked(html, block, cardId) {
     return reportableContent(content(html), {topic_id: topic, ...(cardId ? {question_id: cardId} : {})}, block, state.course_version);
   }
+  async function launchAcademy() {
+    if (busy) return;
+    const ticket = epoch; busy = true; failure = null; render();
+    try {
+      const result = await call('academy/launch', {method: 'POST', body: payload()});
+      if (!active(ticket)) return;
+      if (!/^jetbrains:\/\/idea\/graspmemoedu\/open\?ticket=[A-Za-z0-9_-]{40,100}$/.test(result.url)) throw new Error(t('review.invalidState'));
+      academyLink = result.url; busy = false; accept(result.state, true);
+      const link = root.querySelector('[data-academy-link]');
+      link?.click();
+    } catch (error) {
+      if (active(ticket)) { busy = false; render(); notice(translateMessage(error.message)); }
+    } finally { if (active(ticket)) { busy = false; schedule(); } }
+  }
+  function academyQuestion(box, question, history) {
+    box.classList.add('academyQuestion');
+    const disabled = history || busy || Boolean(state.pause) || !state.can_submit;
+    if (question.phase === 'feedback') {
+      const feedback = node('div', 'feedback');
+      feedback.append(node('strong', '', t('academy.recorded')), node('p', '', question.reason || ''));
+      box.append(feedback);
+      if (!history && !state.pause) box.append(button(t('atomic.continue'), () => mutate('continue'), 'primaryButton'));
+      return box;
+    }
+    const open = button(t(busy ? 'academy.launching' : question.academy.round_id ? 'academy.resume' : 'academy.open'), launchAcademy, 'primaryButton');
+    open.disabled = disabled; box.append(open, node('p', 'inputHint', t('academy.reset')));
+    if (academyLink && !history) {
+      const link = node('a', 'secondaryButton', t('academy.retry'));
+      link.href = academyLink; link.dataset.academyLink = ''; link.rel = 'noreferrer';
+      box.append(node('p', 'inputHint', t('academy.connection')), link);
+    }
+    const status = node('p', 'inputHint', t(question.academy.checks ? 'academy.checks' : 'academy.waiting', {count: question.academy.checks}));
+    status.setAttribute('role', 'status');
+    if (question.academy.round_id) box.append(status);
+    if (question.academy.kind === 'manual') {
+      box.append(node('p', '', t('academy.manual')), ratingChoices({
+        labels: ['training.again', 'training.hard', 'training.good', 'training.easy'],
+        disabled: disabled || !question.academy.opened,
+        onRate: rating => mutate('academy/finish', {rating}),
+      }));
+    } else if (question.academy.checks && !history) {
+      const finish = button(t('academy.finish'), () => mutate('academy/finish'));
+      finish.disabled = disabled; box.append(finish);
+    }
+    return box;
+  }
   function renderQuestion(question, history = false) {
     const box = node('section', 'atomicQuestion'); box.dataset.cardId = question.card_id;
     box.append(node('h2', '', question.title));
     const stem = marked(question.html, `question:${question.card_id}`, question.card_id);
     const typeField = choiceTypeField(question.interaction); if (typeField) box.append(typeField);
     box.append(stem);
+    if (question.academy) return academyQuestion(box, question, history);
     const form = node('form', 'atomicAnswerForm'); form.id = 'atomicAnswerForm';
     const disabled = history || question.phase !== 'answer' || busy || Boolean(state.pause || state.pending_submission_id) || !state.can_submit;
     let input;

@@ -1,15 +1,15 @@
-import {t, translateMessage} from './i18n.js?v=47ddee1c1105887d';
-import {answerEditor, readerFrame} from './learning-ui.js?v=47ddee1c1105887d';
-import {answerReady, questionInput, choiceTypeField} from './question-input.js?v=47ddee1c1105887d';
-import {createLearningCache} from './learning-cache.js?v=47ddee1c1105887d';
-import {helpableContent, reportableContent} from './content-report.js?v=47ddee1c1105887d';
+import {t, translateMessage} from './i18n.js?v=e95839540a8bb6dd';
+import {answerEditor, readerFrame} from './learning-ui.js?v=e95839540a8bb6dd';
+import {answerReady, questionInput, choiceTypeField} from './question-input.js?v=e95839540a8bb6dd';
+import {createLearningCache} from './learning-cache.js?v=e95839540a8bb6dd';
+import {helpableContent, reportableContent} from './content-report.js?v=e95839540a8bb6dd';
 
 const node = (tag, cls = '', text) => { const x = document.createElement(tag); x.className = cls; if (text !== undefined) x.textContent = text; return x; };
 const button = (label, cls, action) => { const x = node('button', cls, label); x.type = 'button'; x.addEventListener('click', action); return x; };
 const html = content => { const x = node('div', 'courseContent'); x.innerHTML = content || ''; return x; };
-import {createContentTimer} from './content-timer.js?v=47ddee1c1105887d';
-import {renderReviewDirectory, paperNumber} from './review-directory.js?v=47ddee1c1105887d';
-import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=47ddee1c1105887d';
+import {createContentTimer} from './content-timer.js?v=e95839540a8bb6dd';
+import {renderReviewDirectory, paperNumber} from './review-directory.js?v=e95839540a8bb6dd';
+import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=e95839540a8bb6dd';
 
 export function createPaperView({root, request, href, getAccess, formatDate, progressChanged, courseSidebar, taskTree}) {
   const template = document.getElementById('appLayout').cloneNode(true);

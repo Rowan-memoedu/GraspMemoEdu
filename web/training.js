@@ -1,15 +1,15 @@
-import {t, translateMessage} from './i18n.js?v=47ddee1c1105887d';
-import {answerReady, answerEmpty} from './question-input.js?v=47ddee1c1105887d';
-import {createLearningCache} from './learning-cache.js?v=47ddee1c1105887d';
-import {helpableContent} from './content-report.js?v=47ddee1c1105887d';
-import {ratingChoices} from './self-assessment.js?v=47ddee1c1105887d';
+import {t, translateMessage} from './i18n.js?v=e95839540a8bb6dd';
+import {answerReady, answerEmpty} from './question-input.js?v=e95839540a8bb6dd';
+import {createLearningCache} from './learning-cache.js?v=e95839540a8bb6dd';
+import {helpableContent} from './content-report.js?v=e95839540a8bb6dd';
+import {ratingChoices} from './self-assessment.js?v=e95839540a8bb6dd';
 
 const node = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const button = (text, cls, action) => { const n = node('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
 const encode = encodeURIComponent;
 const query = fields => new URLSearchParams(fields).toString();
 const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy', 'training.retire'];
-import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation} from './learning-ui.js?v=47ddee1c1105887d';
+import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation} from './learning-ui.js?v=e95839540a8bb6dd';
 
 export function createTrainingView(bridge) {
   const {root, request, href, formatDate, getAccess} = bridge;

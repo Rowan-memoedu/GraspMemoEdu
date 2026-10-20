@@ -413,6 +413,8 @@ body.portalModalOpen { overflow: hidden; }
 .atomicMain h2 { font-size: 21px; color: var(--ma-navy); }
 .atomicMain .primaryButton { display: inline-block; margin-top: 18px; }
 .atomicMain textarea { box-sizing: border-box; display: block; width: 100%; margin: 10px 0; }
+.academyQuestion .inputHint { font-size: 14px; line-height: 1.6; max-width: 620px; margin: 10px 0 !important; }
+.academyQuestion .trainingRatings { margin-top: 18px; }
 .atomicAnnotation { display: grid; grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr); gap: 12px; align-items: start; margin: 24px 0; }
 .atomicAnchor { text-decoration-line: underline; text-decoration-style: dashed; text-decoration-color: var(--link-color); text-decoration-thickness: 2px; text-underline-offset: 7px; line-height: 2; }
 .atomicArrow { color: var(--link-color); font-size: 40px; margin-top: 40px; }

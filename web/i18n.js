@@ -1,10 +1,11 @@
 // UI strings only. Course HTML, names, answers and explanations never enter this module.
-import {trainingMessages} from './training-messages.js?v=47ddee1c1105887d';
-import {readerMessages} from './reader-messages.js?v=47ddee1c1105887d';
-import {portalMessages} from './portal-messages.js?v=47ddee1c1105887d';
-import {staticMessages} from './static-messages.js?v=47ddee1c1105887d';
+import {trainingMessages} from './training-messages.js?v=e95839540a8bb6dd';
+import {readerMessages} from './reader-messages.js?v=e95839540a8bb6dd';
+import {portalMessages} from './portal-messages.js?v=e95839540a8bb6dd';
+import {staticMessages} from './static-messages.js?v=e95839540a8bb6dd';
 
-import {paperMessages} from './review-paper-messages.js?v=47ddee1c1105887d';
+import {paperMessages} from './review-paper-messages.js?v=e95839540a8bb6dd';
+import {academyMessages} from './academy-messages.js?v=e95839540a8bb6dd';
 
 export const LANGUAGE_KEY = 'graspmemoedu:ui-language';
 // Read the previous namespace once on the same origin. Renaming the public
@@ -29,7 +30,7 @@ export function migrateLegacyStorage(storage) {
 for (const name of ['localStorage', 'sessionStorage']) {
   try { migrateLegacyStorage(globalThis[name]); } catch { /* Storage may be disabled. */ }
 }
-export const messages = {...staticMessages, ...readerMessages, ...portalMessages, ...trainingMessages, ...paperMessages};
+export const messages = {...staticMessages, ...readerMessages, ...portalMessages, ...trainingMessages, ...paperMessages, ...academyMessages};
 const translatedMessages = new Map(Object.values(messages).flatMap(pair => pair.map(value => [value, pair])));
 const validLanguage = value => value === 'en' ? 'en' : 'zh-CN';
 let language = 'zh-CN';

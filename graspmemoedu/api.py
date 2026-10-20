@@ -167,16 +167,19 @@ def create_app(settings: Settings | None = None, service: LearningService | None
 
     def forget_preview(token):
         scope = credential_digest('preview', token or '')
+        with closing(access_store._connect()) as con:
+            con.execute('DELETE FROM academy_capabilities WHERE identity_digest=?', (credential_digest('identity', token or ''),))
+            con.commit()
         with services_lock:
             for key in [key for key in learning_services if len(key) == 3 and key[2] == scope]:
                 learning_services.pop(key)
             for key in [key for key in preview_stores if key[1] == scope]:
                 preview_stores.pop(key).close()
 
-    def service_for(learner_id, topic_id=None, session_scope=None):
+    def service_for(learner_id, topic_id=None, session_scope=None, *, scope_digest=None):
         topic_id = topic_id or catalog.default_topic_id
         admin = administrator(settings.data_dir, learner_id)
-        scope = credential_digest('preview', session_scope or '')
+        scope = scope_digest or credential_digest('preview', session_scope or '')
         key = (learner_id, topic_id, scope) if admin else (learner_id, topic_id)
         with services_lock:
             if key not in learning_services:
@@ -420,6 +423,8 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         origin = request.headers.get('origin')
         path = request.url.path
         # Do not regard localhost and 127.0.0.1 as interchangeable origins.
+        from .academy_api import CAPABILITY_PATHS, PUBLIC_PATHS as ACADEMY_PATHS
+        academy_callback = path in CAPABILITY_PATHS
         own_origin = settings.public_api_origin if public else f'http://{host}'
         permitted_origins = {*settings.allowed_origins, own_origin}
         is_own = origin == own_origin
@@ -462,6 +467,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                         '/api/state', '/api/demo-answer', '/api/guest/reset', '/api/choose', '/api/continue', '/api/select', '/api/pause', '/api/skip', '/api/submit', '/api/reveal',
                         '/api/subjects', '/api/catalog', '/api/catalog/select', '/api/dashboard', '/api/profile', '/api/feedback', '/api/help-requests', '/api/guide', '/api/atomic/reviews'}
         public_paths.update(TRAINING_PATHS)
+        public_paths.update(ACADEMY_PATHS)
         public_paths.update(PAPER_PATHS)
         public_paths.update(ADMIN_PAUSE_PATHS)
         student_read = admin_student_route(path)
@@ -491,7 +497,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
             if remote or not (is_own or fetch_site == 'same-origin'):
                 return deny('session_forbidden', '仅本机同源页面可建立会话。')
         elif path.startswith('/api/') and path != '/api/health':
-            if not public:
+            if not public and not academy_callback:
                 supplied = request.headers.get('x-learning-session', '')
                 authorized = paired(request.headers.get('authorization', '')) if remote else (
                     hmac.compare_digest(supplied, session_token) or paired(request.headers.get('authorization', '')))
@@ -521,7 +527,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                     access_store.authorize(access, requested_topic(request), feature)
                 except DomainError as exc:
                     return deny(exc.code, exc.message, exc.status_code)
-            elif path not in ('/api/access/guest', '/api/access/login'):
+            elif path not in ('/api/access/guest', '/api/access/login') and not academy_callback:
                 try:
                     access = access_store.resolve(request.headers.get('x-learning-identity'))
                     if (path in ADMIN_PAUSE_PATHS or student_read and path.startswith('/api/admin/')) and not access.get('is_admin'):
@@ -787,6 +793,8 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     register_admin_student_routes(app, catalog, access_store, subjects, dashboard_store, training, atomic_clock)
     register_material_routes(app, catalog, access_store, subjects, identity, public_state)
     register_atomic_routes(app, catalog, access_store, subjects, dependency_policy, clock=atomic_clock)
+    from .academy_api import register_academy_routes
+    register_academy_routes(app, settings, access_store, service_for, identity, public_state, Action, dependency_policy, atomic_clock)
     register_training_routes(app, training, access_store, subjects, service_for,
                              admission_lock, public_limits, schedule, outstanding_count, clock=atomic_clock)
     register_paper_routes(app, training, catalog, dependency_policy, access_store, subjects, service_for,
