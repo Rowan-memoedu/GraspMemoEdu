@@ -147,7 +147,8 @@ def install(package, data_dir, *, extend_course=False):
     if manifest['adapter'] == 'jetbrains-academy':
         from .academy_training_import import install as install_bank
         courses = json.loads((Path(package) / 'catalog.json').read_bytes())['courses']
-        result['banks'] = [install_bank(data_dir, c['id']) for c in courses if c.get('placement') == 'question_bank']
+        result['banks'] = [install_bank(data_dir, c['id'], migrate_existing=False)
+                           for c in courses if c.get('placement') == 'question_bank']
         result['learning_records_changed'] = any(b['status'] == 'migrated' for b in result['banks'])
     return result
 

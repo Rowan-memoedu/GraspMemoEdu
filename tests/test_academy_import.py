@@ -1,9 +1,11 @@
 from copy import deepcopy
+from contextlib import closing
 import hashlib
 import json
 from pathlib import Path
 import tempfile
 import unittest
+import sqlite3
 
 from graspmemoedu.academy_import import install
 from graspmemoedu.catalog import Catalog
@@ -14,6 +16,12 @@ from test_academy import exercise
 
 class AcademyImportTests(unittest.TestCase):
     def test_atomic_install_preserves_course_hierarchy_and_does_not_write_progress(self):
+        self.check_install()
+
+    def test_native_bank_install_preserves_existing_database_and_schema(self):
+        self.check_install(native_bank=True)
+
+    def check_install(self, native_bank=False):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary); data = root / 'data'; package = root / 'package'
             data.mkdir(); (package / 'topics').mkdir(parents=True)
@@ -27,6 +35,12 @@ class AcademyImportTests(unittest.TestCase):
             course = {'id': 'new', 'title': 'New', 'topics': [{'id': topic['id'], 'path': 'topics/exercise.json', 'prerequisites': []}],
                       'units': [{'id': 'section', 'title': 'Section', 'topic_ids': [], 'parent_id': None},
                                 {'id': 'lesson', 'title': 'Lesson', 'topic_ids': [topic['id']], 'parent_id': 'section'}]}
+            if native_bank:
+                course['placement'] = 'question_bank'
+                with closing(sqlite3.connect(data / 'learning.sqlite3')) as con, con:
+                    con.execute('CREATE TABLE evidence (id TEXT PRIMARY KEY, body TEXT)')
+                    con.execute('INSERT INTO evidence VALUES (?,?)', ('existing', 'keep'))
+                database_before = (data / 'learning.sqlite3').read_bytes()
             (package / 'catalog.json').write_bytes(encoded({'courses': [course]}))
             (package / 'report.json').write_bytes(encoded({'topics': 1}))
             (package / 'manifest.json').write_bytes(encoded({'schema': 1, 'adapter': 'jetbrains-academy', 'files': {
@@ -38,8 +52,17 @@ class AcademyImportTests(unittest.TestCase):
             catalog = Catalog.load(Settings.load(data))
             self.assertEqual(catalog.courses['new']['units'], course['units'])
             self.assertEqual((data / 'existing.json').read_bytes(), before)
-            self.assertFalse(list(data.glob('*.sqlite*')))
+            if native_bank:
+                self.assertEqual(result['banks'][0]['status'], 'installed')
+                self.assertFalse(result['learning_records_changed'])
+                from graspmemoedu.training_content import TrainingCatalog
+                self.assertEqual(len(TrainingCatalog(data).bank('new')['groups']), 2)
+                self.assertEqual((data / 'learning.sqlite3').read_bytes(), database_before)
+            else:
+                self.assertFalse(list(data.glob('*.sqlite*')))
             self.assertEqual(install(package, data)['status'], 'unchanged')
+            if native_bank:
+                self.assertEqual((data / 'learning.sqlite3').read_bytes(), database_before)
             (package / 'topics/exercise.json').write_text('{}')
             with self.assertRaises(ValueError): install(package, data)
 

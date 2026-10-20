@@ -47,6 +47,19 @@ class NativeAcademyTests(unittest.TestCase):
         catalog = TrainingCatalog(self.root)
         return TrainingService(catalog, self.root, learner, clock=lambda: self.now)
 
+    def test_content_import_requires_explicit_legacy_migration(self):
+        legacy = AcademyLearningService(self.topic, self.root, learner_id='learner', clock=lambda: self.now)
+        legacy.state()
+        before = (self.root / 'learning.sqlite3').read_bytes()
+        with self.assertRaisesRegex(ValueError, 'explicit academy_training_import'):
+            install(self.root, self.course['id'], migrate_existing=False)
+        self.assertEqual((self.root / 'learning.sqlite3').read_bytes(), before)
+        self.assertFalse((self.root / 'training-banks' / (self.course['id'] + '.json')).exists())
+        self.assertEqual(install(self.root, self.course['id'])['status'], 'migrated')
+        before = (self.root / 'learning.sqlite3').read_bytes()
+        self.assertEqual(install(self.root, self.course['id'], migrate_existing=False)['status'], 'unchanged')
+        self.assertEqual((self.root / 'learning.sqlite3').read_bytes(), before)
+
     def open(self, backend, question=None):
         return AcademyTraining(backend, backend.open(self.course['id'], 'lesson',
             question or self.topic['id'], str(uuid.uuid4())))

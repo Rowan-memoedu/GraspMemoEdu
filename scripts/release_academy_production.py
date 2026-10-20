@@ -4,6 +4,7 @@ import grp
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -27,6 +28,20 @@ def main():
     subprocess.run(['/usr/local/sbin/graspmemoedu-backup'], check=True)
     pointer = data / 'active-content.json'
     previous_pointer = pointer.read_bytes() if pointer.exists() else None
+    # A failed content release must not leave newly published native banks behind.
+    bank_root = data / 'training-banks'
+    bank_before = {}
+    if not release.get('question_bank_id'):
+        package_catalog = json.loads((stage / 'package' / 'catalog.json').read_bytes())
+        for course in package_catalog['courses']:
+            if course.get('placement') != 'question_bank':
+                continue
+            if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*', course['id']):
+                raise ValueError('Invalid bank identity')
+            target = bank_root / (course['id'] + '.json')
+            if target.is_symlink():
+                raise ValueError('Bank must not be a symbolic link')
+            bank_before[target] = target.read_bytes() if target.exists() else None
     timer = subprocess.run(['systemctl', 'is-active', '--quiet', 'graspmemoedu-healthcheck.timer']).returncode == 0
     if timer: subprocess.run(['systemctl', 'stop', 'graspmemoedu-healthcheck.timer'], check=True)
     subprocess.run(['systemctl', 'stop', 'graspmemoedu'], check=True)
@@ -82,6 +97,11 @@ def main():
         if previous_pointer is None: pointer.unlink(missing_ok=True)
         else:
             pending = pointer.with_suffix('.rollback'); pending.write_bytes(previous_pointer); os.replace(pending, pointer)
+        for target, previous in bank_before.items():
+            if previous is None:
+                target.unlink(missing_ok=True)
+            else:
+                target.write_bytes(previous)
         subprocess.run(['systemctl', 'start', 'graspmemoedu'], check=True); healthy()
         raise
     finally:

@@ -131,7 +131,29 @@ def migrate_records(con, bank, topics):
     return {'status': 'migrated', **counts}
 
 
-def install(data_dir, course_id):
+def require_content_only_install(db, bank):
+    """A regular content import must not silently migrate learning records."""
+    if not db.exists():
+        return
+    with closing(sqlite3.connect(db.as_uri() + '?mode=ro', uri=True)) as con:
+        tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        if 'training_topic_migrations' in tables:
+            row = con.execute('SELECT version FROM training_topic_migrations WHERE bank=?', (bank['id'],)).fetchone()
+            if row:
+                if row[0] != bank['version']:
+                    raise ValueError('Migration already refers to a different bank version')
+                return
+        ids = {q['legacy_topic_id'] for g in bank['groups'] for q in g['questions'] + g['introductions']}
+        if 'topics' in tables and any(con.execute('SELECT 1 FROM topics WHERE topic=? LIMIT 1', (tid,)).fetchone() for tid in ids):
+            raise ValueError('Existing Academy records require an explicit academy_training_import migration')
+        if 'access_principals' in tables:
+            for raw, inherited in con.execute('SELECT topic_ids,topics_default FROM access_principals'):
+                permissions = set(json.loads(raw))
+                if not inherited and ids & permissions:
+                    raise ValueError('Legacy Academy permissions require an explicit academy_training_import migration')
+
+
+def install(data_dir, course_id, *, migrate_existing=True):
     data_dir = Path(data_dir).resolve()
     if (data_dir / 'cloud-authoritative.json').exists():
         raise ValueError('Do not migrate the local production rollback snapshot')
@@ -158,7 +180,9 @@ def install(data_dir, course_id):
         if target.exists() and json.loads(target.read_bytes()) != bank:
             raise ValueError('Existing native bank must not be overwritten')
         db = data_dir / 'learning.sqlite3'
-        if db.exists():
+        if not migrate_existing:
+            require_content_only_install(db, bank)
+        if migrate_existing and db.exists():
             backup = data_dir / 'migration-backups' / ('academy-bank-' + bank['version'][:16] + '.sqlite3')
             backup.parent.mkdir(exist_ok=True)
             if not backup.exists():
@@ -174,9 +198,11 @@ def install(data_dir, course_id):
                     created = True
                     handle.write(encoded(bank))
         try:
-            if not db.exists():
+            if not migrate_existing or not db.exists():
+                existed = target.exists()
                 publish()
-                return {'status': 'installed', 'bank_id': bank['id'], 'records': 'none'}
+                return {'status': 'unchanged' if existed else 'installed', 'bank_id': bank['id'],
+                        'version': bank['version'], 'records': 'unchanged'}
             backend = TrainingService(TrainingCatalog(data_dir), data_dir, 'bank-migration')
             with backend.transaction() as con:
                 result = migrate_records(con, bank, catalog.topics)
