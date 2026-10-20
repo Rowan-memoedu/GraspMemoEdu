@@ -5,7 +5,7 @@ import json
 
 from fastapi import Request
 
-from .atomic_content import GAP_SECONDS, is_atomic
+from .atomic_content import GAP_SECONDS, is_atomic, point_chunks
 from .service import DomainError
 
 
@@ -13,7 +13,7 @@ def review_summary(topic, state, current=None):
     current = current or datetime.now(timezone.utc)
     if not state or not state.get('completed_at') or state.get('pause'):
         return {'due_count': 0, 'next_due_at': None, 'active': False}
-    chunks = {p['id']: c['id'] for c in topic['memory_chunks'] for p in c['points']}
+    chunks = point_chunks(topic)
     dates = []
     for point_id, memory in state['points'].items():
         if not memory['due_at']:

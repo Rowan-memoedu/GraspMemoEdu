@@ -32,6 +32,18 @@ def outcome(events, *, finished=False):
 
 
 class AcademyLearningService(AtomicLearningService):
+    event_fields = {'id', 'sequence', 'category', 'code_hash', 'occurred_at'}
+
+    def binding(self, active=None):
+        return self.course['academy']
+
+    def answer_summary(self, run, result):
+        return (f"IDEA：{len(run['events'])} 次检查" if self.binding()['kind'] == 'automated'
+                else '自主评分：' + str(result['rating']))
+
+    def validate_check(self, con, state, round_id, step_id, event):
+        pass
+
     def _next(self, state):
         # The exercise is itself the card; there is no extra memorisation screen.
         state['seen_chunks'] = list(self.chunks)
@@ -42,7 +54,7 @@ class AcademyLearningService(AtomicLearningService):
     def _question(self, active, *, feedback=False):
         result = super()._question(active, feedback=feedback)
         run = active.get('academy_round')
-        result['academy'] = {**self.course['academy'], 'round_id': run['id'] if run else None,
+        result['academy'] = {**self.binding(active), 'round_id': run['id'] if run else None,
                              'checks': len(run['events']) if run else 0,
                              'opened': bool(run and run.get('opened_at')),
                              'policy': POLICY}
@@ -67,8 +79,8 @@ class AcademyLearningService(AtomicLearningService):
                        'events': [], 'policy': POLICY}
                 active['academy_round'] = run
                 self._save(con, state)
-            return {'round_id': run['id'], 'step_id': active['id'], 'mode': state['mode'],
-                    'version': self.course['version'], **self.course['academy']}
+            return {**self.binding(active), 'round_id': run['id'], 'step_id': active['id'],
+                    'mode': state['mode'], 'version': self.course['version']}
 
     def _run(self, state, round_id, step_id):
         active = state.get('active') or {}
@@ -90,7 +102,7 @@ class AcademyLearningService(AtomicLearningService):
             return {'round_id': round_id, 'next_sequence': len(run['events']) + 1}
 
     def check_event(self, round_id, step_id, event):
-        if (not isinstance(event, dict) or set(event) != {'id', 'sequence', 'category', 'code_hash', 'occurred_at'}
+        if (not isinstance(event, dict) or set(event) != self.event_fields
                 or not isinstance(event['id'], str) or not re.fullmatch(r'[a-zA-Z0-9-]{16,64}', event['id'])
                 or type(event['sequence']) is not int or event['sequence'] < 1
                 or event['category'] not in {*WEIGHTS, 'passed', 'environment'}
@@ -110,13 +122,14 @@ class AcademyLearningService(AtomicLearningService):
                 if saved['check'] != event or saved['step_id'] != step_id or saved['course_version'] != self.course['version']:
                     raise DomainError('idempotency_conflict', '检查结果标识已用于其他内容。', 409)
                 return {'accepted': True, 'duplicate': True, 'closed': state['phase'] != 'answer' or state['active_step_id'] != step_id}
+            self.validate_check(con, state, round_id, step_id, event)
             run = self._run(state, round_id, step_id)
             old = next((e for e in run['events'] if e['id'] == event['id']), None)
             if old:
                 if old != event:
                     raise DomainError('idempotency_conflict', '检查结果标识已用于其他内容。', 409)
                 return {'accepted': True, 'duplicate': True, 'closed': state['phase'] != 'answer'}
-            if state['phase'] != 'answer' or self.course['academy']['kind'] != 'automated':
+            if state['phase'] != 'answer' or self.binding(state['active'])['kind'] != 'automated':
                 raise DomainError('academy_round_closed', '此题不接受新的自动检查结果。', 409)
             if not run.get('opened_at') or event['sequence'] != len(run['events']) + 1:
                 raise DomainError('academy_event_order', '请按检查顺序重传结果。', 409)
@@ -143,7 +156,7 @@ class AcademyLearningService(AtomicLearningService):
             run = active.get('academy_round')
             if state['phase'] != 'answer' or not run or not run.get('opened_at'):
                 raise DomainError('academy_not_opened', '请先打开 IDEA 中的本题。', 409)
-            if self.course['academy']['kind'] == 'manual':
+            if self.binding(active)['kind'] == 'manual':
                 rating = payload.get('rating')
                 if type(rating) is not int or rating not in (1, 2, 3, 4):
                     raise DomainError('invalid_rating', '请选择 1–4 评分。', 422)
@@ -169,7 +182,7 @@ class AcademyLearningService(AtomicLearningService):
             now = max(utc_time(run['started_at']), min(now, utc_time(run['events'][-1]['occurred_at'])))
         rating, passed = result['rating'], result['passed']
         labels = {1: 'Again', 2: 'Hard', 3: 'Good', 4: 'Easy'}
-        reason = ('自主评分' if self.course['academy']['kind'] == 'manual'
+        reason = ('自主评分' if self.binding(active)['kind'] == 'manual'
                   else f"首次通过前的错误负担：{result['burden']:g}") + ' · ' + labels[rating]
         ratings = {}
         for pid in active['point_ids']:
@@ -184,7 +197,7 @@ class AcademyLearningService(AtomicLearningService):
                         submission_id=run['id'], rating=rating, review_log=scheduled['review_log_json'],
                         algorithm=scheduled['algorithm'], scheduler=scheduled['scheduler_json'], mode=state['mode'],
                         policy=POLICY, error_burden=result['burden'])
-        answer = f"IDEA：{len(run['events'])} 次检查" if self.course['academy']['kind'] == 'automated' else '自主评分：' + str(rating)
+        answer = self.answer_summary(run, result)
         con.execute('INSERT INTO submissions VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                     (run['id'], *self.key, active['id'], active['id'], active['card_id'], answer,
                      hashlib.sha256(encode(run).encode()).hexdigest(), 'judged', int(passed), reason,
@@ -192,4 +205,6 @@ class AcademyLearningService(AtomicLearningService):
         active.update(phase='feedback', answer=answer, correct=passed, reason=reason,
                       ratings=ratings, answered_at=now.isoformat())
         state['history'].append(json.loads(encode(active)))
-        state.update(phase='feedback', status='completed', completed_at=state.get('completed_at') or now.isoformat())
+        complete = all(p['mastered'] for p in state['points'].values())
+        state.update(phase='feedback', status='completed' if complete else 'in_progress',
+                     completed_at=state.get('completed_at') or (now.isoformat() if complete else None))

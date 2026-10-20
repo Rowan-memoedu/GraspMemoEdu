@@ -10,7 +10,7 @@ import uuid
 
 from fsrs import Card
 
-from .atomic_content import GAP_SECONDS, MODE, policy_for
+from .atomic_content import GAP_SECONDS, MODE, policy_for, point_chunks
 from .fsrs_engine import FSRSEngine, utc_time
 from .judging import judge_answer
 from .question_types import public_interaction, parse_answer, display_answer
@@ -23,7 +23,7 @@ class AtomicLearningService(LearningService):
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self.engine = engine or FSRSEngine()
         self.chunks = {c['id']: c for c in course['memory_chunks']}
-        self.point_chunks = {p['id']: c['id'] for c in course['memory_chunks'] for p in c['points']}
+        self.point_chunks = point_chunks(course)
         super().__init__(course, data_dir, judge, learner_id, runtime=runtime)
 
     def _time(self):

@@ -77,8 +77,12 @@ def register_academy_routes(app, settings, access_store, service_for, identity, 
                          access['learner_id'], backend.topic_id, run['version'], run['step_id'], run['round_id'],
                          (now() + timedelta(minutes=10)).isoformat()))
             con.commit()
-        return {'url': 'jetbrains://idea/graspmemoedu/open?ticket=' + token,
-                'state': public_state(backend.state(), access, backend)}
+        result = {'state': public_state(backend.state(), access, backend)}
+        if backend.course.get('source_adapter') == 'hyperskill':
+            result['ticket'] = token
+        else:
+            result['url'] = 'jetbrains://idea/graspmemoedu/open?ticket=' + token
+        return result
 
     @app.post('/api/academy/claim')
     def claim(request: Request):
@@ -92,7 +96,7 @@ def register_academy_routes(app, settings, access_store, service_for, identity, 
             con.execute('UPDATE academy_capabilities SET claimed=1,expires=? WHERE digest=? AND claimed=0',
                         ((now() + timedelta(days=7)).isoformat(), row['digest']))
             con.commit()
-        return {**backend.course['academy'], 'version': backend.course['version'], 'round_id': row['round'],
+        return {**backend.binding(state['active']), 'version': backend.course['version'], 'round_id': row['round'],
                 'next_sequence': len(run['events']) + 1, 'mode': state['mode'], 'reset_policy': 'archive_then_template'}
 
     @app.post('/api/academy/event')

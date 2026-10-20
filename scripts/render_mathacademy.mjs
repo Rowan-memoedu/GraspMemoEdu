@@ -123,6 +123,12 @@ export function renderSourceMarkdown(source) {
   const html=render(source);
   return {html, css:adaptor.textContent(svg.styleSheet(doc)), references};
 }
+export function renderSourceHtml(source) {
+  references=[]; occurrence=0;
+  // HTML must bypass Markdown punctuation parsing, including inside source code.
+  const html=render('',`<div>${source}</div>`);
+  return {html, css:adaptor.textContent(svg.styleSheet(doc)), references};
+}
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
 const lines=readline.createInterface({input:process.stdin,crlfDelay:Infinity});
 for await(const line of lines){

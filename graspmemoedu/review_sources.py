@@ -61,7 +61,7 @@ class ReviewSources:
                                       'uses': uses.get(cid, 0) + (1 if subject == 'math' and cid.startswith('training:') else 0)})
         for topic_id, backend in self.atoms.items():
             topic = backend.course
-            if topic.get('academy'):
+            if topic.get('academy') or topic.get('source_adapter') == 'hyperskill':
                 # IDE rounds use the same atomic state, but cannot be answered in a paper.
                 continue
             if topic['subject_id'] != subject or topic_id not in allowed:

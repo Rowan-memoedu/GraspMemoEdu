@@ -124,7 +124,8 @@ class AdminStudents:
             if module_id not in by_module or attempt['status'] == 'completed' or by_module[module_id]['status'] != 'completed':
                 by_module[module_id] = record
         item['modules'] = list(by_module.values())
-        known_points = {p['id']: p for c in topic.get('memory_chunks', []) for p in c['points']}
+        from .atomic_content import memory_points
+        known_points = {p['id']: p for p in memory_points(topic)}
         for point_id, memory in state.get('points', {}).items():
             if memory.get('mastered') or memory.get('card_json') or memory.get('first_passed_at'):
                 item['points'].append({'id': point_id, 'text': known_points.get(point_id, {}).get('text', point_id),
@@ -176,7 +177,8 @@ class AdminStudents:
                 blocked = self.blockers(con, student, topic_id, state, rows[topic_id]['version'] if topic_id in rows else topic['version'], tables, current)
                 if not state.get('completed_at'): blocked.append('initial_learning')
                 dates = {}
-                for chunk in topic['memory_chunks']:
+                from .atomic_content import point_groups
+                for chunk in point_groups(topic):
                     last = state.get('chunk_last_seen', {}).get(chunk['id'])
                     for point in chunk['points']:
                         memory = points.get(point['id'], {})

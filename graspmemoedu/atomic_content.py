@@ -29,6 +29,22 @@ def is_atomic(topic):
     return topic.get('training_mode') == MODE
 
 
+def memory_points(topic):
+    return [p for c in topic.get('memory_chunks', []) for p in c['points']] + topic.get('memory_points', [])
+
+
+def point_chunks(topic):
+    return {**{p['id']: c['id'] for c in topic.get('memory_chunks', []) for p in c['points']},
+            **{p['id']: None for p in topic.get('memory_points', [])}}
+
+
+def point_groups(topic):
+    """Report grouping does not create teaching chunks or additional memories."""
+    return topic.get('memory_chunks', []) + (
+        [{'id': 'problems', 'title': topic['title'], 'points': topic['memory_points']}]
+        if topic.get('memory_points') else [])
+
+
 def policy_for(topic):
     policy = {**DEFAULT_POLICY, **topic.get('atomic_policy', {})}
     if (set(policy) != set(DEFAULT_POLICY) or not isinstance(policy['version'], str)
@@ -59,7 +75,8 @@ def validate_atomic(topic):
     intro_text = plain_text(intro)
     policy_for(topic)
     chunks = topic.get('memory_chunks')
-    require(isinstance(chunks, list) and 1 <= len(chunks) <= 200, 'Missing memory chunks')
+    external = topic.get('source_adapter') == 'hyperskill'
+    require(isinstance(chunks, list) and (0 if external else 1) <= len(chunks) <= 200, 'Missing memory chunks')
     chunk_ids, point_ids = set(), set()
     for chunk in chunks:
         require(identifier(chunk.get('id')) and chunk['id'] not in chunk_ids, 'Duplicate memory chunk')
@@ -77,13 +94,22 @@ def validate_atomic(topic):
             require(identifier(point.get('id')) and point['id'] not in point_ids and text(point.get('text')),
                     'Duplicate or incomplete memory point')
             point_ids.add(point['id'])
+    loose = topic.get('memory_points', [])
+    require(isinstance(loose, list) and (external or not loose), 'Standalone points require an external exercise provider')
+    for point in loose:
+        require(identifier(point.get('id')) and point['id'] not in point_ids and text(point.get('text')),
+                'Duplicate or incomplete memory point')
+        point_ids.add(point['id'])
+    require(bool(point_ids), 'Missing atomic memory points')
     cards = topic.get('flashcards')
     require(isinstance(cards, list) and 1 <= len(cards) <= 5000, 'Missing flashcards')
     questions, singles = {}, set()
     for card in cards:
         require(identifier(card.get('id')) and card['id'] not in questions, 'Duplicate flashcard')
-        require(all(text(card.get(field)) for field in
-                    ('title', 'question', 'html', 'reference_answer', 'explanation_html', 'answer_type', 'constraints')),
+        required_fields = ('title', 'question', 'html', 'answer_type', 'constraints')
+        if not external:
+            required_fields += ('reference_answer', 'explanation_html')
+        require(all(text(card.get(field)) for field in required_fields),
                 'Flashcard is missing its question, answer or explanation')
         targets = card.get('point_ids')
         require(isinstance(targets, list) and 1 <= len(targets) <= 20
@@ -94,6 +120,9 @@ def validate_atomic(topic):
         validate_interaction(card.get('interaction'), card['question'])
         questions[card['id']] = card
     require(singles == point_ids, 'Each memory point requires an individual flashcard for initial learning')
+    if external:
+        from .hyperskill_content import validate_binding
+        validate_binding(topic)
     if 'academy' in topic:
         binding = topic['academy']
         require(topic['subject_id'] == 'cs' and len(cards) == len(point_ids) == 1,

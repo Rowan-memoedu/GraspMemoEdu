@@ -19,7 +19,7 @@ def install(package, data_dir):
     if (data_dir / 'cloud-authoritative.json').exists():
         raise ValueError('Do not install into the local production rollback snapshot')
     manifest = json.loads((package / 'manifest.json').read_bytes())
-    if manifest.get('adapter') != 'jetbrains-academy' or manifest.get('schema') != 1:
+    if manifest.get('adapter') not in ('jetbrains-academy', 'hyperskill') or manifest.get('schema') != 1:
         raise ValueError('Invalid Academy package')
     for name, expected in manifest['files'].items():
         path = package / name
@@ -61,8 +61,15 @@ def install(package, data_dir):
         if cs is None: cs = {'id': 'cs', 'course_ids': []}; subjects['subjects'].append(cs)
         cs.setdefault('course_ids', []).extend(c['id'] for c in candidate['courses'])
         (batch / 'subjects.json').write_bytes(encoded(subjects))
-        for name in ('test-materials.json',):
-            if (old_root / name).exists(): shutil.copyfile(old_root / name, batch / name)
+        policy_path = old_root / 'test-materials.json'
+        policy = json.loads(policy_path.read_bytes()) if policy_path.exists() else {'schema': 1}
+        for kind, ids in manifest.get('test_materials', {}).items():
+            if kind not in ('courses', 'topics'):
+                raise ValueError('Unsupported package test-material kind')
+            policy[kind] = list(dict.fromkeys(policy.get(kind, []) + ids))
+        if policy_path.exists() or manifest.get('test_materials'):
+            from .test_materials import validate
+            (batch / 'test-materials.json').write_bytes(encoded(validate(policy)))
         for folder in ('graphs', 'mathacademy-sources'):
             if (old_root / folder).exists(): shutil.copytree(old_root / folder, batch / folder)
         staged = replace(settings, catalog_path=batch / 'catalog.json'); staged.content_dir = batch

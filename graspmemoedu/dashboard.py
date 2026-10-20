@@ -179,7 +179,8 @@ class DashboardStore:
                     'reread_pending': reread_pending(topic, state),
                     'reading_progress': round(100 * read / len(topic['introductions']), 2)}
         if topic.get('training_mode') == 'atomic_retrieval':
-            count = sum(len(c['points']) for c in topic['memory_chunks'])
+            from .atomic_content import memory_points
+            count = len(memory_points(topic))
             completed = sum(p['mastered'] for p in state['points'].values()) if state else 0
             return {'state': state, 'status': state['status'] if state and state['started_at'] else 'not_started',
                     'started_at': state['started_at'] if state else None,
@@ -486,7 +487,8 @@ class DashboardStore:
                     raise DomainError('unknown_task_answers', '此身份尚无该任务的已完成作答记录。', 404)
                 questions = {q['id']: q for q in topic['flashcards']}
                 groups = []
-                for chunk in topic['memory_chunks']:
+                from .atomic_content import point_groups
+                for chunk in point_groups(topic):
                     points = {p['id'] for p in chunk['points']}
                     records = [r for r in state['history'] if r['mode'] == 'learn' and set(r['point_ids']) <= points]
                     answers = [{'id': r['id'], 'question_id': r['card_id'], 'html': questions[r['card_id']]['html'],

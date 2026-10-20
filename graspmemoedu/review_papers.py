@@ -183,14 +183,14 @@ class PaperService:
                 if tid not in allowed or backend.course['subject_id'] != subject:
                     continue
                 old = backend._load(con)
-                if backend.course.get('academy'):
+                if backend.course.get('academy') or backend.course.get('source_adapter') == 'hyperskill':
                     from .atomic_api import review_summary
                     summary = review_summary(backend.course, old, self._now())
                     if not old.get('completed_at'):
                         continue
                     if summary['due_count'] or old.get('active'):
                         legacy.append({'id': 'legacy:' + tid, 'kind': 'single', 'source': {'kind': 'atomic', 'container': tid},
-                                       'topic_id': tid, 'title': backend.course['title'], 'count': 1,
+                                       'topic_id': tid, 'title': backend.course['title'], 'count': summary['due_count'] or 1,
                                        'paused': bool(old.get('pause')), 'academy': True,
                                        'can_resume': not old.get('pause') and self.sources.dependencies.ready(con, self.access, tid)})
                         count += summary['due_count']
