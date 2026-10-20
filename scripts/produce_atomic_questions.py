@@ -92,7 +92,7 @@ def run_point(source, root, config, generation, review, examples, attempts):
                     print(f'{ident} attempt={ordinal} reviewing', flush=True)
                     verdict = _object(trial.call(client, work, 'review', review,
                                       {'source': source, 'candidate': candidate}))
-                    trial.validate_review(verdict, ident, source['variant_count'])
+                    trial.validate_review(verdict, ident, source.get('variant_count', 2))
                     attempt.update(review=verdict, status='accepted' if verdict['approved'] else 'rejected')
             except Exception as error:
                 attempt.update(error_type=type(error).__name__,
@@ -100,13 +100,15 @@ def run_point(source, root, config, generation, review, examples, attempts):
                 if any((work / f'{phase}.started.json').exists() and not (work / f'{phase}.response.json').exists()
                        for phase in ('generation', 'review')):
                     attempt['status'] = 'outcome_unknown'
+                elif not isinstance(error, ValueError):
+                    attempt['status'] = 'internal_error'
             trial.save(receipt, attempt)
         if attempt['status'] == 'accepted':
             result.update(status='accepted', variants=attempt['candidate']['variants'], attempt=ordinal)
             break
         feedback = attempt.get('review', {}).get('checks') or attempt.get('error', 'Candidate rejected')
         result.update(status=attempt['status'], attempt=ordinal, error=feedback)
-        if attempt['status'] == 'outcome_unknown':
+        if attempt['status'] in ('outcome_unknown', 'internal_error'):
             break
     trial.save(final, result)
     print(f'{ident} {result["status"]}', flush=True)
@@ -129,7 +131,10 @@ def assemble(document, tasks, results):
                     section['flashcards'].append({'id': ident, **variant, 'learning_phases': ['review']})
                     added += 1
     value['summary'] = {**value.get('summary', {}), 'flashcards': sum(len(s['flashcards']) for t in value['topics'] for s in t['sections']),
-                        'added_review_flashcards': added, 'source_unchanged': True, 'imported': False}
+                        'added_review_flashcards': added,
+                        'new_card_interactions': trial.interaction_summary(
+                            card for result in accepted.values() for card in result['variants']),
+                        'source_unchanged': True, 'imported': False}
     return value
 
 

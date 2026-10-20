@@ -1,9 +1,12 @@
 """Production count, provenance and phase boundaries using independent synthetic input."""
 from copy import deepcopy
+from pathlib import Path
+import tempfile
 import unittest
+from unittest.mock import patch
 
 from scripts import atomic_question_trial as trial
-from scripts.produce_atomic_questions import assemble, refill_required, source_tasks
+from scripts.produce_atomic_questions import assemble, refill_required, run_point, source_tasks
 
 
 def document():
@@ -66,6 +69,45 @@ class AtomicQuestionProductionTests(unittest.TestCase):
         trial.validate_review(value, 'p', 3)
         with self.assertRaisesRegex(ValueError, 'Incomplete'):
             trial.validate_review(value, 'p')
+
+    def test_receipt_distinguishes_structured_semantic_from_mechanical_grading(self):
+        cards = [{'interaction': {'type': 'text', 'grading': 'semantic'}},
+                 {'interaction': {'type': 'fill_blank', 'grading': 'semantic'}},
+                 {'interaction': {'type': 'fill_blank', 'grading': 'exact'}},
+                 {'interaction': {'type': 'choice'}}, {'interaction': {'type': 'matching'}},
+                 {'interaction': {'type': 'true_false'}}]
+        summary = trial.interaction_summary(cards)
+        self.assertEqual(summary['semantic_graded'], 2)
+        self.assertEqual(summary['mechanically_graded'], 4)
+        self.assertEqual(summary['by_type']['fill_blank'], 2)
+
+    def test_a_blank_stem_cannot_silently_fall_back_to_a_text_box(self):
+        value = candidate(2)
+        value['variants'][0]['question'] = 'The label is {{blank:b1}}.'
+        with self.assertRaisesRegex(ValueError, 'Blank markers require fill_blank'):
+            trial.validate_pair(value, source_tasks(document(), 'english', 2)[0])
+
+    def test_default_two_card_source_also_reaches_review_without_rebilling(self):
+        source = source_tasks(document(), 'english', 2)[0]
+        source.pop('variant_count')
+        review = {'point_id': 'p', 'approved': True, 'checks': [
+            {'index': i, 'approved': True, 'issues': [], 'rationale': 'The target is preserved.'} for i in (1, 2)]}
+        with tempfile.TemporaryDirectory() as temporary, \
+                patch('scripts.produce_atomic_questions.CompatibleClient'), \
+                patch.object(trial, 'generation_payload', return_value={}), \
+                patch.object(trial, 'call', return_value={}) as call, \
+                patch('scripts.produce_atomic_questions._object', side_effect=[candidate(2), review]):
+            result = run_point(source, Path(temporary), (), 'generate', 'review', {}, 4)
+            self.assertEqual(result['status'], 'accepted')
+            self.assertEqual(call.call_count, 2)
+
+    def test_internal_program_error_stops_instead_of_repeating_provider_calls(self):
+        source = source_tasks(document(), 'english', 2)[0]
+        with tempfile.TemporaryDirectory() as temporary, \
+                patch('scripts.produce_atomic_questions.CompatibleClient', side_effect=KeyError('internal')) as client:
+            result = run_point(source, Path(temporary), (), 'generate', 'review', {}, 4)
+            self.assertEqual(result['status'], 'internal_error')
+            self.assertEqual(client.call_count, 1)
 
 
 if __name__ == '__main__':

@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from graspmemoedu.author_import import CompatibleClient, _object
-from graspmemoedu.question_types import validate_interaction
+from graspmemoedu.question_types import is_reproduction, validate_interaction
 from graspmemoedu.subject_registry import DEFAULTS
 
 SUBJECTS = {row[0]: row[1] for row in DEFAULTS}
@@ -94,6 +94,15 @@ def generation_payload(source, catalog):
     return {'few_shot_examples': examples, 'task': source}
 
 
+def interaction_summary(cards):
+    """Distinguish actual controls from semantic grading in production receipts."""
+    cards = list(cards)
+    semantic = sum(is_reproduction(card) for card in cards)
+    return {'cards': len(cards),
+            'by_type': dict(Counter((card.get('interaction') or {}).get('type', 'text') for card in cards)),
+            'mechanically_graded': len(cards) - semantic, 'semantic_graded': semantic}
+
+
 def validate_pair(candidate, source):
     if set(candidate) != {'point_id', 'status', 'reason', 'variants'}:
         raise ValueError('Unexpected response fields')
@@ -126,6 +135,8 @@ def validate_pair(candidate, source):
         validate_interaction(card['interaction'], card['question'])
         if card['interaction'] is None:
             raise ValueError('Explicit interaction required')
+        if card['interaction']['type'] == 'text' and re.search(r'\{\{blank:[A-Za-z][A-Za-z0-9_-]*\}\}', card['question']):
+            raise ValueError('Blank markers require fill_blank interaction, not a text box')
         if card['interaction'].get('type') == 'true_false' and len(card['interaction']['statements']) != 1:
             raise ValueError('Only one judgment per point-bound card')
         if card['interaction'].get('type') == 'matching':
