@@ -122,7 +122,7 @@ try {
   }
   await go('#/subjects/cs/banks/bank-cs', '.hideLockedInput');
   await filter().uncheck();
-  await page.locator('.taskListOptions > .textButton').click();
+  await page.locator('.coursePercent').click();
   await page.locator('.courseGraph [data-topic-id="group:bank-cs:group-a"]').waitFor();
   await page.locator('.courseGraph [data-topic-id="group:bank-cs:group-a"]').click();
   assert((await page.locator('.cgDetails').textContent()).includes('Prerequisite Topic'));

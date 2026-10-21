@@ -139,6 +139,31 @@ body { padding-top: 50px; }
 .courseDescription { color: #747474; font-size: 15px; margin: 0 0 24px; flex: 1; }
 .courseLearn { width: 100%; background: var(--link-color); border-color: var(--link-color); }
 .courseAvailability { color: #909090; font-size: 12px; margin: 10px 0 0; }
+.hasCatalogOutline { grid-column: 1 / -1; min-width: 0; }
+.catalogSelection > .catalogCourse { width: 100%; }
+.catalogOutline { margin-top: 16px; min-width: 0; }
+.catalogOutline .catalogOutlineBranch { margin: 8px 0; border-color: var(--control-border); border-radius: 3px; }
+.catalogOutline .courseUnitHeading { padding: 8px; }
+.catalogOutline .courseUnitBody { padding: 0 8px 8px; }
+.catalogOutlineRow.courseChoice { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; min-height: 0; padding: 10px; border: 0; }
+.catalogOutlineRow h2 { grid-column: 1; margin: 0; overflow-wrap: anywhere; min-width: 0; font-size: 15px; }
+.catalogOutlineRow .courseDescription:empty { display: none; }
+.catalogOutlineRow .courseLearn { grid-column: 2; grid-row: 1 / span 2; width: auto; align-self: center; white-space: nowrap; }
+.catalogOutlineRow .courseTools { grid-column: 1; grid-row: 2; flex-wrap: wrap; margin: 0; gap: 6px 12px; }
+.catalogOutlineRow .courseTools .textButton { font-size: 12px; }
+.catalogOutlineRow .courseTools > * { white-space: nowrap; }
+.catalogOutlineRow.catalogCourse { width: 100%; padding: 10px; }
+.catalogOutlineBranch > summary > .catalogOutlineRow { display: inline-flex; width: calc(100% - 24px); vertical-align: middle; }
+.catalogOutlineBranch > summary > .catalogOutlineRow.courseChoice { display: inline-grid; }
+.catalogOutlineBranch > summary:hover { background: var(--soft-blue); }
+.catalogOutlineBranch > summary:active { background: var(--selection-border); }
+@media (max-width: 600px) {
+  .hasCatalogOutline.courseChoice { padding: 12px; }
+  .catalogOutline .courseUnitBody { padding-right: 0; padding-left: 4px; }
+  .catalogOutline .courseUnitHeading { padding: 6px 2px; }
+  .catalogOutlineRow.courseChoice { padding: 6px 0; }
+  .catalogOutlineRow h2 { font-size: 15px; }
+}
 .dashboardLayout { display: grid; grid-template-columns: 350px minmax(0, 680px); gap: 40px; align-items: start; }
 .courseSidebar { min-width: 0; }
 .courseOverview { border: 1px solid #e0e0e0; border-radius: 3px; position: relative; }

@@ -1,6 +1,6 @@
-import {mountMermaid} from './vendor/mermaid/index.js?v=5b029a38e9b602c2';
-import {renderBacklinks} from './vendor/document-backlinks.mjs?v=5b029a38e9b602c2';
-import {t} from './i18n.js?v=5b029a38e9b602c2';
+import {mountMermaid} from './vendor/mermaid/index.js?v=8405fcd52d52c0b6';
+import {renderBacklinks} from './vendor/document-backlinks.mjs?v=8405fcd52d52c0b6';
+import {t} from './i18n.js?v=8405fcd52d52c0b6';
 
 export function referenceHref(target) {
   const base = `#/subjects/${encodeURIComponent(target.subject_id)}/topic/${encodeURIComponent(target.topic_id)}`;

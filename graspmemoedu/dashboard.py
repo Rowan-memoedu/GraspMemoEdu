@@ -20,7 +20,7 @@ from .reference_answers import reference_fields
 from .content_reports import validate_correction
 from .question_bank import QuestionBank
 from .topic_structure import has_atomic, sectioned_training, atomic_state
-from .course_hierarchy import pending_hierarchy
+from .course_hierarchy import pending_hierarchy, project_hierarchy, course_scope
 from .topic_runtime import is_introduction, learning_units, reread_pending
 
 
@@ -141,6 +141,7 @@ class DashboardStore:
         scope = 'math' if self.subjects and subject_id is None and access['role'] == 'guest' else subject_id
         ids = self.subjects.course_ids(scope) if scope is not None and self.subjects else set(self.catalog.courses)
         return {'courses': [{'id': course['id'], 'title': course['title'], 'description': course['description'],
+                             'outline': project_hierarchy(course['units'], allowed, {course['id']}),
                              'available': bool(allowed.intersection(topic['id'] for topic in course['topics'])),
                              'topic_count': sum(self.access_store.test_materials.topic_visible(t['id'], access) for t in course['topics'])}
                             for course in self.catalog.courses.values() if course['id'] in ids
@@ -350,17 +351,20 @@ class DashboardStore:
         except (ValueError, TypeError, UnicodeDecodeError):
             raise DomainError('invalid_cursor', '历史分页位置无效，请重新加载。', 422)
 
-    def dashboard(self, access, course_id=None, cursor=None, limit=25, subject_id=None):
+    def dashboard(self, access, course_id=None, cursor=None, limit=25, subject_id=None, root_id=None):
         if subject_id is not None and self.subjects:
             self.subjects.authorize_subject(access, subject_id)
         course_id = course_id or self._selection(access, subject_id)
         if not course_id:
             raise DomainError('course_required', '请先选择课程。', 409)
-        course = self._course(access, course_id, subject_id)
+        course = course_scope(self._course(access, course_id, subject_id), root_id)
         allowed = self._allowed_topics(access)
         visible = [topic for topic in course['topics'] if topic['id'] in allowed]
+        if root_id and not visible:
+            raise DomainError('course_forbidden', '此目录下没有可访问的学习内容。', 403)
         dependencies = self._dependencies(course_id)
-        boundary = self._decode_cursor(cursor, course_id, access['learner_id'])
+        cursor_scope = f'{course_id}:{root_id}' if root_id else course_id
+        boundary = self._decode_cursor(cursor, cursor_scope, access['learner_id'])
         with closing(self.access_store._connect()) as con:
             # One consistent SQLite snapshot for progress, tasks and history.
             con.execute('BEGIN')
@@ -397,6 +401,7 @@ class DashboardStore:
         all_complete = bool(visible) and len(finished) == len(counted) and not any(
             (item['state'] or {}).get('skipped_modules') for item in snapshots.values())
         overview = {'id': course['id'], 'title': course['title'], 'description': course['description'],
+                    'root_id': root_id,
                     'progress': progress, 'start_date': min(started) if started else None,
                     'end_date': max(finished) if all_complete else None, 'estimated_completion': None}
         tasks, history, topics, units = review_tasks, review_history, [], []
@@ -457,11 +462,11 @@ class DashboardStore:
         next_cursor = None
         if has_more and page:
             next_cursor = base64.urlsafe_b64encode(json.dumps(
-                [course_id, access['learner_id'], page[-1]['completed_at'] or '', page[-1]['id']]).encode()).decode().rstrip('=')
+                [cursor_scope, access['learner_id'], page[-1]['completed_at'] or '', page[-1]['id']]).encode()).decode().rstrip('=')
         hierarchy_enabled = self.profile(access)['course_hierarchy_enabled']
         return {'course': overview, 'units': units, 'topics': topics, 'tasks': tasks, 'history': page,
                 'course_hierarchy_enabled': hierarchy_enabled,
-                'pending_hierarchy': pending_hierarchy(course['units'], tasks) if hierarchy_enabled else [],
+                'pending_hierarchy': pending_hierarchy(course['units'], tasks, root_id) if hierarchy_enabled else [],
                 'history_cursor': next_cursor, 'has_more': has_more, 'history_revision': history_revision,
                 'next_review_due_at': next_review_due_at}
 

@@ -1,16 +1,17 @@
-import {t, translateMessage} from './i18n.js?v=5b029a38e9b602c2';
-import {answerReady, answerEmpty} from './question-input.js?v=5b029a38e9b602c2';
-import {createLearningCache} from './learning-cache.js?v=5b029a38e9b602c2';
-import {helpableContent} from './content-report.js?v=5b029a38e9b602c2';
-import {ratingChoices} from './self-assessment.js?v=5b029a38e9b602c2';
-import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=5b029a38e9b602c2';
+import {t, translateMessage} from './i18n.js?v=8405fcd52d52c0b6';
+import {answerReady, answerEmpty} from './question-input.js?v=8405fcd52d52c0b6';
+import {createLearningCache} from './learning-cache.js?v=8405fcd52d52c0b6';
+import {appendCatalogOutline} from './catalog-outline.js?v=8405fcd52d52c0b6';
+import {helpableContent} from './content-report.js?v=8405fcd52d52c0b6';
+import {ratingChoices} from './self-assessment.js?v=8405fcd52d52c0b6';
+import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=8405fcd52d52c0b6';
 
 const node = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const button = (text, cls, action) => { const n = node('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
 const encode = encodeURIComponent;
 const query = fields => new URLSearchParams(fields).toString();
 const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy', 'training.retire'];
-import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, renderReviewReader} from './learning-ui.js?v=5b029a38e9b602c2';
+import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, renderReviewReader} from './learning-ui.js?v=8405fcd52d52c0b6';
 
 export function createTrainingView(bridge) {
   const {root, request, href, formatDate, getAccess} = bridge;
@@ -20,6 +21,8 @@ export function createTrainingView(bridge) {
   let epoch = 0, selection = 0, timer = null, group = null, current = null, sidebar, main;
   let elapsed = 0, activeSince = null, clockKey = null, visibilityHandler = null;
   let reader = null;
+  let selectedRoot = null;
+  const expandedCatalog = new Map();
   let reviewCard = false, reviewQuestion = null;
   let selectedIntroduction = null;
   let hyperskillBusy = false;
@@ -33,7 +36,13 @@ export function createTrainingView(bridge) {
   const save = (kind, id, value) => cache.write(localStorage, key(kind, id), value);
   const alive = (e, s = selection) => e === epoch && s === selection;
   const link = (label, path, cls = '') => { const a = node('a', cls, label); a.href = href(path); return a; };
-  const groupPath = (bank, id, question) => `/banks/${encode(bank)}/${encode(id)}${question ? '?question=' + encode(question) : ''}`;
+  const bankPath = bank => `/banks/${encode(bank)}${selectedRoot ? '?root=' + encode(selectedRoot) : ''}`;
+  const groupPath = (bank, id, question) => {
+    const params = new URLSearchParams();
+    if (question) params.set('question', question);
+    if (selectedRoot && !reviewCard) params.set('root', selectedRoot);
+    return `/banks/${encode(bank)}/${encode(id)}${params.size ? '?' + params : ''}`;
+  };
   function remember(value) {
     if (value?.attempt_id) attempts.set(value.attempt_id, value);
     return value;
@@ -104,6 +113,7 @@ export function createTrainingView(bridge) {
     cacheAccess = getAccess();
     reviewCard = params.get('review') === '1' || params.get('card') === '1';
     reviewQuestion = reviewCard ? params.get('question') : null;
+    selectedRoot = reviewCard ? null : params.get('root');
     const e = ++epoch; ++selection;
     root.replaceChildren(node('p', '', t('training.loading')));
     const parts = path.split('/').filter(Boolean).map(decodeURIComponent);
@@ -111,37 +121,43 @@ export function createTrainingView(bridge) {
       const data = await request('training/catalog'); if (e !== epoch) return;
       const grid = node('div', 'courseGrid'); root.replaceChildren(node('h1', 'portalPageTitle', t('training.banks')), grid);
       grid.before(bridge.taskVisibilityOptions(root));
-      for (const bank of data.banks) {
+      const bankCard = (bank, rootId = null) => {
         const card = node('article', 'courseChoice');
+        card.dataset.bankId = bank.id;
         card.dataset.dependencyReady = String(bank.dependency_ready !== false);
         card.append(node('h2', '', bank.title), node('p', 'courseDescription', bank.description),
-          link(t('training.train'), `/banks/${encode(bank.id)}`, 'primaryButton courseLearn'));
-        grid.append(card);
+          link(t('training.train'), `/banks/${encode(bank.id)}${rootId ? '?root=' + encode(rootId) : ''}`, 'primaryButton courseLearn'));
+        return card;
+      };
+      for (const bank of data.banks) {
+        const card = bankCard(bank);
+        appendCatalogOutline(card, bank, bankCard, {expanded: expandedCatalog, keyPrefix: 'select:bank'}); grid.append(card);
       }
       if (!data.banks.length) grid.append(node('p', 'portalEmpty', t('training.empty')));
     } else if (parts.length === 2) {
-      const bank = await request('training/bank?' + query({bank_id: parts[1]})); if (e !== epoch) return;
+      const bank = await request('training/bank?' + query({bank_id: parts[1], ...(selectedRoot ? {root_id: selectedRoot} : {})})); if (e !== epoch) return;
       const count = bank.groups.reduce((n, g) => n + g.question_count, 0);
       const completed = bank.groups.reduce((n, g) => n + (g.completed_count || 0), 0);
-      const containers = bank.groups.filter(g => bank.groups.some(child => child.parent_id === g.id));
+      const containers = bank.groups.filter(g => g.id !== selectedRoot && !(g.id === bank.id && !g.parent_id)
+        && bank.groups.some(child => child.parent_id === g.id));
       const groupTasks = bank.groups.filter(g => g.question_count || g.introduction_count).map(g => ({id: g.id, topic_id: g.id, type: 'Lesson',
           title: g.title, topic_kind: g.question_count ? 'lesson' : 'introduction',
           status: g.completed ? 'completed' : g.completed_count ? 'in_progress' : 'not_started', completed_at: g.completed_at,
           result: g.completed ? 'completed' : null,
           dependency_ready: g.dependency_ready, prerequisites: g.prerequisites, prerequisite_details: g.prerequisite_details,
           question_count: g.question_count, progress: g.progress ?? (g.question_count ? g.completed_count / g.question_count * 100 : 0)}));
-      const data = {course: {id: bank.id, title: bank.title, progress: count ? completed / count * 100 : 0},
+      const data = {course: {id: bank.id, title: bank.title, root_id: selectedRoot, progress: count ? completed / count * 100 : 0},
         tasks: groupTasks.filter(g => g.status !== 'completed'),
         history: groupTasks.filter(g => g.status === 'completed').sort((a, b) => (b.completed_at || '').localeCompare(a.completed_at || '')),
-        pending_hierarchy: containers.map(g => ({...g, topic_ids: bank.groups.filter(child => (child.question_count || child.introduction_count)
+        pending_hierarchy: containers.map(g => ({...g, parent_id: containers.some(parent => parent.id === g.parent_id) ? g.parent_id : null,
+          topic_ids: bank.groups.filter(child => (child.question_count || child.introduction_count)
           && (child.id === g.id || child.parent_id === g.id && !containers.some(c => c.id === child.id))).map(child => child.id)}))};
       const layout = node('div', 'dashboardLayout'), tasks = node('div', 'dashboardTasks');
       const pending = node('section', 'incompleteTasks'); pending.setAttribute('aria-label', t('training.groups'));
-      tasks.append(bridge.taskVisibilityOptions(tasks, {extra: [button(t('portal.view.knowledge.map.91'), 'textButton', () => bridge.openGraph(data))]}));
+      tasks.append(bridge.taskVisibilityOptions(tasks));
       const historyList = node('section', 'completedTasks'); historyList.setAttribute('aria-label', t('portal.completed.tasks.68'));
       tasks.append(pending, historyList);
-      layout.append(bridge.courseSidebar(data, {training: true, href: `/banks/${encode(bank.id)}`, questionCount: count,
-        onProgress: () => pending.scrollIntoView({block: 'start'})}), tasks);
+      layout.append(bridge.courseSidebar(data, {training: true, href: bankPath(bank.id), questionCount: count}), tasks);
       root.replaceChildren(layout);
       const view = {training: true, label: t('training.groups'), startLabel: t('training.start'),
         sourceOrder: bank.groups.map(g => g.id),
@@ -162,7 +178,7 @@ export function createTrainingView(bridge) {
       sidebar = refs.historyPanel; main = refs.stepCard;
       root.hidden = true; root.after(reader.frame); document.body.classList.add('topicPage');
       refs.loadingState.hidden = true; refs.courseShell.hidden = false;
-      refs.topicHomeLink.href = href(reviewCard ? '/reviews' : `/banks/${encode(group.bank_id)}`);
+      refs.topicHomeLink.href = href(reviewCard ? '/reviews' : bankPath(group.bank_id));
       refs.topicHomeLink.textContent = '← ' + t(reviewCard ? 'paper.back' : 'training.back');
       refs.topicFeedbackButton.hidden = true;
       refs.lessonTitle.textContent = reviewCard ? group.questions[0].title : group.title;
@@ -237,7 +253,7 @@ export function createTrainingView(bridge) {
         && (!current || current.phase === 'done')) {
       primary = button(t('training.finishLearning'), 'primaryButton trainingFinish', () => {
         bridge.progressChanged();
-        bridge.completeGroup(group.bank_id, group.id);
+        bridge.completeGroup(group.bank_id, group.id, selectedRoot);
       });
     }
     readerNavigation(main, {previous: index > 0 ? pages[index - 1] : null, next: index >= 0 ? pages[index + 1] : null,
@@ -251,7 +267,7 @@ export function createTrainingView(bridge) {
     const step = {...intro, kind: 'introduction'};
     renderReaderStep(main, step, {titleId: 'trainingStepTitle', counter: t('阅读')});
     reader.refs.footerPosition.textContent = readerStepTitle(step); reader.refs.saveStatus.textContent = '';
-    history.replaceState(null, '', href(groupPath(group.bank_id, group.id) + '?introduction=' + encode(id)));
+    history.replaceState(null, '', href(groupPath(group.bank_id, group.id) + (selectedRoot ? '&' : '?') + 'introduction=' + encode(id)));
     navigationFor(id);
   }
   async function select(questionId, fresh = false, attemptId = null) {

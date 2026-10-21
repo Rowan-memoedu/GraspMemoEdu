@@ -1,20 +1,21 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=5b029a38e9b602c2";
-import { createReviewView } from "./review.js?v=5b029a38e9b602c2";
-import { renderCourseGraph } from "./course-graph.js?v=5b029a38e9b602c2";
-import {questionInput, choiceTypeField} from './question-input.js?v=5b029a38e9b602c2';
-import {enhanceTopicContent} from './topic-content.js?v=5b029a38e9b602c2';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=5b029a38e9b602c2';
-import {createCatalogPicker} from './catalog-picker.js?v=5b029a38e9b602c2';
-import {createAtomicView} from './atomic.js?v=5b029a38e9b602c2';
-import {createTrainingView} from './training.js?v=5b029a38e9b602c2';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=5b029a38e9b602c2";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=8405fcd52d52c0b6";
+import { createReviewView } from "./review.js?v=8405fcd52d52c0b6";
+import { renderCourseGraph } from "./course-graph.js?v=8405fcd52d52c0b6";
+import {questionInput, choiceTypeField} from './question-input.js?v=8405fcd52d52c0b6';
+import {enhanceTopicContent} from './topic-content.js?v=8405fcd52d52c0b6';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=8405fcd52d52c0b6';
+import {createCatalogPicker} from './catalog-picker.js?v=8405fcd52d52c0b6';
+import {appendCatalogOutline} from './catalog-outline.js?v=8405fcd52d52c0b6';
+import {createAtomicView} from './atomic.js?v=8405fcd52d52c0b6';
+import {createTrainingView} from './training.js?v=8405fcd52d52c0b6';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=8405fcd52d52c0b6";
 
-import {createPaperView} from './review-papers.js?v=5b029a38e9b602c2';
+import {createPaperView} from './review-papers.js?v=8405fcd52d52c0b6';
 
-import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=5b029a38e9b602c2';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=5b029a38e9b602c2';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=5b029a38e9b602c2';
-import {createStudentDashboard} from './student-dashboard.js?v=5b029a38e9b602c2';
+import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=8405fcd52d52c0b6';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=8405fcd52d52c0b6';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=8405fcd52d52c0b6';
+import {createStudentDashboard} from './student-dashboard.js?v=8405fcd52d52c0b6';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -34,12 +35,12 @@ const roundButton = (text, action) => control(text, "portalStart", action);
 export function initPortal(bridge) {
   let chatModule, attachChatEditor, renderChatMarkdown;
   async function loadChat() {
-    const module = await (chatModule ||= import('./vendor/chat/chat.js?v=5b029a38e9b602c2').catch(error => { chatModule = null; throw error; }));
+    const module = await (chatModule ||= import('./vendor/chat/chat.js?v=8405fcd52d52c0b6').catch(error => { chatModule = null; throw error; }));
     ({attachChatEditor, renderChatMarkdown} = module);
     module.configureChatImages(ident => bridge.request('help-images?image_id=' + encode(ident)));
   }
   const root = $("portalContent");
-  let catalog = null, profile = null, identity = null, selectedCourse = null;
+  let catalog = null, profile = null, identity = null, selectedCourse = null, selectedRoot = null;
   let subjects = null, catalogSubject = null, activeSubject = null, navigationSubjectId = 'math';
   let sequence = 0, currentHash = "", currentRoute = null, busyCourse = false;
   let expandedTask = null, paging = false, historyError = null, guideVersion = null, guideLoaded = false;
@@ -77,12 +78,21 @@ export function initPortal(bridge) {
   const allowed = (feature) => Boolean(bridge.getAccess()?.features?.includes(feature));
   const canUseHelp = () => Boolean(!bridge.getIdentityProblem() && (bridge.getAccess()?.is_admin ||
     (bridge.getAccess()?.is_student && allowed('request_help'))));
-  async function saveCourseSelection(courseId, subjectId) {
+  const rootKey = (courseId, subjectId) => `graspmemoedu:catalog-root:${bridge.getAccess()?.learner_id}:${subjectId}:${courseId}`;
+  function savedCourseRoot(courseId, subjectId) {
+    try { return localStorage.getItem(rootKey(courseId, subjectId)); } catch { return null; }
+  }
+  function rememberCourseRoot(courseId, subjectId, rootId) {
+    try { rootId ? localStorage.setItem(rootKey(courseId, subjectId), rootId) : localStorage.removeItem(rootKey(courseId, subjectId)); } catch {}
+    selectedRoot = rootId || null; dashboards.clear();
+  }
+  async function saveCourseSelection(courseId, subjectId, rootId = null) {
     if (busyCourse) throw new Error(t('portal.selecting.32'));
     busyCourse = true;
     try {
       const result = await scopedRequest('catalog/select', {method: 'POST', body: {course_id: courseId}}, subjectId);
       if (result.selected_course_id !== courseId) throw new Error(t('catalog.saveUnconfirmed'));
+      rememberCourseRoot(courseId, subjectId, rootId);
       return result;
     } finally { busyCourse = false; }
   }
@@ -91,15 +101,15 @@ export function initPortal(bridge) {
     readSubjects: () => subjects ? Promise.resolve({subjects}) : bridge.request('subjects'),
     readCatalog: subjectId => scopedRequest('catalog', undefined, subjectId),
     readBanks: subjectId => scopedRequest('training/catalog', undefined, subjectId),
-    onBankSelected: (bankId, subjectId) => { location.hash = subjectHref(subjectId, `/banks/${encode(bankId)}`); },
-    selectCourse: saveCourseSelection, getSubject: () => currentRoute?.subjectId,
-    onSelected: (courseId, subjectId) => {
+    onBankSelected: (bankId, subjectId, rootId) => { location.hash = subjectHref(subjectId, `/banks/${encode(bankId)}${rootId ? '?root=' + encode(rootId) : ''}`); },
+    selectCourse: saveCourseSelection, getSubject: () => currentRoute?.subjectId, getSelectedRoot: savedCourseRoot,
+    onSelected: (courseId, subjectId, rootId) => {
       catalog = null; selectedCourse = courseId; dashboards.clear();
-      const hash = subjectHref(subjectId, '/learn'); scrolls.delete(hash);
+      const hash = subjectHref(subjectId, '/learn' + (rootId ? '?root=' + encode(rootId) : '')); scrolls.delete(hash);
       if (location.hash === hash) void route(); else location.hash = hash;
     },
   });
-  const learnHref = () => subjectHref(currentRoute?.subjectId || "math", "/learn");
+  const learnHref = () => subjectHref(currentRoute?.subjectId || "math", "/learn" + (selectedRoot ? '?root=' + encode(selectedRoot) : ''));
   const localHref = (path) => {
     const raw = path.replace(/^#/, "");
     return /^\/(learn|courses|banks|guide|topic|review|reviews)(\/|\?|$)/.test(raw)
@@ -133,8 +143,8 @@ export function initPortal(bridge) {
   const training = createTrainingView({...bridge, request: call, root, href: localHref,
     formatDate: value => apiDate(value, true), courseSidebar, taskTree, taskVisibilityOptions, renderHistory,
     openGraph, progressChanged: () => { dashboards.clear(); answerCache.clear(); },
-    completeGroup: (bank, group) => {
-      const target = localHref(`/banks/${encode(bank)}?groupId=${encode(group)}`);
+    completeGroup: (bank, group, rootId) => {
+      const target = localHref(`/banks/${encode(bank)}?${query({groupId: group, root: rootId})}`);
       scrolls.delete(target); navigate(target);
     }});
   const papers = createPaperView({...bridge, request: call, root, href: localHref,
@@ -275,6 +285,11 @@ export function initPortal(bridge) {
     if (!Array.isArray(nextSubjects.subjects) || (subjectId && !subjectRestricted(subject) && !Array.isArray(nextCatalog?.courses))) throw new Error(t("portal.the.course.catalog.is.temporarily.unavailable.17"));
     subjects = nextSubjects.subjects; profile = nextProfile; catalog = nextCatalog; catalogSubject = subjectId;
     selectedCourse = catalog?.selected_course_id || null;
+    selectedRoot = savedCourseRoot(selectedCourse, subjectId);
+    if (!catalog?.courses.find(c => c.id === selectedCourse)?.outline?.some(u => u.id === selectedRoot)) selectedRoot = null;
+    if (currentRoute?.path === '/learn' && currentRoute.params.has('root')) {
+      rememberCourseRoot(selectedCourse, subjectId, currentRoute.params.get('root'));
+    }
     if (!profile.timezone) {
       try {
         const next = await bridge.request("profile", { method: "POST", body: { timezone: timezone() } });
@@ -295,14 +310,14 @@ export function initPortal(bridge) {
     if (home) { root.querySelector('.subjectAccessNotice')?.remove(); root.querySelector('.subjectHomeHeading')?.append(notice); }
     else { document.title = pageTitle(subjectLabel(subject)); root.replaceChildren(node('h1', 'portalPageTitle', subjectLabel(subject)), notice); }
   }
-  async function dashboard(id, cursor = null) {
-    const data = await call(`dashboard?${query({ course_id: id, cursor, limit: 25 })}`);
+  async function dashboard(id, cursor = null, rootId = id === selectedCourse ? selectedRoot : null) {
+    const data = await call(`dashboard?${query({ course_id: id, cursor, limit: 25, root_id: rootId })}`);
     if (!data.course || !Array.isArray(data.tasks) || !Array.isArray(data.history)) throw new Error(t("portal.course.learning.records.are.temporarily.unavailable.18"));
     return data;
   }
   function mergeDashboard(id, data, append = false) {
     const previous = dashboards.get(id);
-    const sameHistory = Boolean(data.history_revision && data.history_revision === previous?.history_revision);
+    const sameHistory = Boolean(data.course.root_id === previous?.course.root_id && data.history_revision && data.history_revision === previous?.history_revision);
     const all = append ? [...(previous?.history || []), ...data.history] : sameHistory ? [...data.history, ...(previous?.history || [])] : data.history;
     const historyRows = [...new Map(all.map((task) => [task.id, task])).values()]
       .sort((a, b) => Date.parse(b.completed_at || 0) - Date.parse(a.completed_at || 0));
@@ -398,7 +413,7 @@ export function initPortal(bridge) {
         document.title = pageTitle(t("nav.settings")); await renderSettings();
       } else if (/^\/courses\/[^/]+\/progress$/.test(path)) {
         const id = decodeURIComponent(path.split("/")[2]);
-        const data = await dashboard(id);
+        const data = await dashboard(id, null, params.get('root'));
         if (ticket !== sequence) return;
         dashboards.set(id, data); renderCourseProgress(data, params);
       } else if (/^\/topic\/[^/]+\/content$/.test(path)) {
@@ -461,7 +476,7 @@ export function initPortal(bridge) {
     root.replaceChildren(heading, grid);
     if (!catalog.courses.length) { root.replaceChildren(renderSubjectEmpty(activeSubject)); await renderGraphLibrary(ticket); return; }
     if (bridge.getAccess()?.role === "account" && !catalog.courses.some((course) => course.available)) root.insertBefore(emptyBox(t("portal.no.courses.are.enabled.for.your.account.please.contact.your.admin.29")), grid);
-    for (const course of catalog.courses) {
+    function courseCard(course, rootId = null) {
       const card = node("article", "courseChoice"); card.dataset.courseId = course.id;
       card.append(node("h2", "", course.title), node("p", "courseDescription", course.description || ""));
       const learn = control(t("portal.learn.31"), "primaryButton courseLearn", async () => {
@@ -470,10 +485,10 @@ export function initPortal(bridge) {
         for (const item of root.querySelectorAll(".courseLearn")) item.disabled = true;
         learn.textContent = t("portal.selecting.32"); card.querySelector(".fieldError")?.remove();
         try {
-          await saveCourseSelection(course.id, subjectId);
+          await saveCourseSelection(course.id, subjectId, rootId);
           if (ticket !== sequence) return;
           selectedCourse = course.id; catalog.selected_course_id = course.id; scrolls.delete(learnHref());
-          navigate("/learn");
+          navigate(learnHref());
         } catch (error) {
           if (ticket !== sequence) return;
           card.append(node("p", "fieldError", translateMessage(error.message))); learn.textContent = t("portal.learn.31");
@@ -482,14 +497,14 @@ export function initPortal(bridge) {
       });
       learn.dataset.available = String(course.available !== false); learn.disabled = course.available === false;
       const tools = node('div', 'courseTools');
-      const progress = link(t('platform.courseProgress'), `#/courses/${encode(course.id)}/progress`, 'textButton courseProgressLink');
+      const progress = link(t('platform.courseProgress'), `#/courses/${encode(course.id)}/progress${rootId ? '?root=' + encode(rootId) : ''}`, 'textButton courseProgressLink');
       const graph = control(t('portal.knowledge.map.93'), 'textButton courseGraphButton', async () => {
         if (graph.disabled) return;
         const ticket = sequence, learner = bridge.getAccess()?.learner_id;
         graph.disabled = true; graph.setAttribute('aria-busy', 'true');
         card.querySelector('.courseGraphStatus')?.remove();
         try {
-          const data = await dashboard(course.id);
+          const data = await dashboard(course.id, null, rootId);
           if (ticket !== sequence || learner !== bridge.getAccess()?.learner_id || !graph.isConnected) return;
           openGraph(data);
         } catch (error) {
@@ -505,6 +520,11 @@ export function initPortal(bridge) {
       }
       tools.append(progress, graph); card.append(tools);
       card.append(learn); if (!course.available) card.append(node("p", "courseAvailability", t("portal.no.learning.content.is.currently.available.33")));
+      return card;
+    }
+    for (const course of catalog.courses) {
+      const card = courseCard(course);
+      appendCatalogOutline(card, course, courseCard, {expanded: expandedUnits, keyPrefix: `select:course:${currentRoute.subjectId}`});
       grid.append(card);
     }
     await renderGraphLibrary(ticket);
@@ -556,8 +576,8 @@ export function initPortal(bridge) {
   }
   function courseSidebar(data, view = {}) {
     const side = node("aside", "courseSidebar"), frame = node("section", "courseOverview"), top = node("div", "courseOverviewTop");
-    const name = link(data.course.title, view.href || `#/courses/${encode(data.course.id)}/progress`, "courseNameLink");
-    const circle = control(percentLabel(data.course.progress), "coursePercent", () => view.onProgress ? view.onProgress() : openGraph(data)); circle.setAttribute("aria-label", view.training ? t('portal.progress.36') : t("portal.graphProgress", { progress: percentLabel(data.course.progress) }));
+    const name = link(data.course.title, view.href || `#/courses/${encode(data.course.id)}/progress${data.course.root_id ? '?root=' + encode(data.course.root_id) : ''}`, "courseNameLink");
+    const circle = control(percentLabel(data.course.progress), "coursePercent", () => view.onProgress ? view.onProgress() : openGraph(data)); circle.setAttribute("aria-label", t("portal.graphProgress", { progress: percentLabel(data.course.progress) }));
     if (view.training) {
       if (view.review) { circle.textContent = String(view.questionCount); circle.setAttribute('aria-label', t(view.allMaterials ? 'paper.materialCount' : 'paper.due', {count: view.questionCount})); }
       top.append(name, circle);
@@ -574,7 +594,7 @@ export function initPortal(bridge) {
       for (const item of tabs.children) item.classList.toggle("selected", item.dataset.courseId === id);
       unitContent.replaceChildren(loading(t("portal.loading.units.35")));
       try {
-        const chosen = dashboards.get(id) || await dashboard(id);
+        const chosen = await dashboard(id, null, null);
         if (tabTicket !== tabSequence) return; dashboards.set(id, chosen); unitContent.replaceChildren(unitList(chosen));
         const selected = tabs.querySelector(`[data-course-id="${CSS.escape(id)}"] .sequencePercent`); if (selected) selected.textContent = percentLabel(chosen.course.progress);
       } catch (error) { if (tabTicket === tabSequence) unitContent.replaceChildren(errorBox(translateMessage(error.message), () => showUnits(id))); }
@@ -970,10 +990,11 @@ export function initPortal(bridge) {
     hidePopovers(); graphScroll = window.scrollY; graphTitle.textContent = t("portal.graphTitle", { title: data.course.title });
     graphContent.replaceChildren(loading(t("portal.initializing.95"))); graphDialog.showModal(); document.body.classList.add("portalModalOpen");
     try {
-      const graph = await call(`graphs/${encode(data.course.id)}`);
+      const graph = await call(`graphs/${encode(data.course.id)}${data.course.root_id ? '?root_id=' + encode(data.course.root_id) : ''}`);
       if (request !== graphRequest || ticket !== sequence || learner !== bridge.getAccess()?.learner_id || !graphDialog.open) return;
       renderCourseGraph(graphContent, graph, {language: getLanguage(), onOpenNode: item => {
-        graphDialog.close(); navigate(item.href || `/topic/${encode(item.topic_id)}`);
+        const rootParam = item.member !== false && item.bank_id === data.course.id && data.course.root_id ? '?root=' + encode(data.course.root_id) : '';
+        graphDialog.close(); navigate((item.href || `/topic/${encode(item.topic_id)}`) + rootParam);
       }});
     } catch (error) {
       if (request === graphRequest && ticket === sequence && graphDialog.open) graphContent.replaceChildren(errorBox(error.message, () => { graphDialog.close(); openGraph(data); }));

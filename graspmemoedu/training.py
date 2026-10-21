@@ -389,8 +389,10 @@ class TrainingService:
         if not self.dependencies.ready(con, self.access, group_key(bank_id, group_id), current_time=utc_time(self.clock()).isoformat()):
             raise DomainError('prerequisites_not_ready', '请先完成前置知识的学习和待复习内容，并解除前置知识的暂停状态。', 409)
 
-    def bank(self, bank_id, *, history=True):
+    def bank(self, bank_id, *, history=True, root_id=None):
         bank = self.catalog.bank(bank_id)
+        from .course_hierarchy import select_subtree
+        groups = select_subtree(bank['groups'], root_id)
         with closing(self._connect()) as con:
             # Initial completion is permanent for this content version. Later
             # reviews keep their own queue and must not move this history date.
@@ -408,12 +410,14 @@ class TrainingService:
                 'completed_count': len(dates) if history else None,
                 'completed_at': max(filter(None, dates), default=None) if completed and history else None}
         return {**{k: bank.get(k, '') for k in ('id', 'title', 'subject_id', 'description', 'version')},
+                'root_id': root_id,
+                'title': next(g['title'] for g in groups if g['id'] == root_id) if root_id else bank['title'],
                 'groups': [{'id': g['id'], 'title': g['title'], 'parent_id': g.get('parent_id'),
                             'question_count': len(g.get('questions', [])),
                             **({'introduction_count': len(g['introductions'])} if 'introductions' in g else {}),
                             **progress[g['id']],
                             **statuses[g['id']]}
-                           for g in bank['groups']]}
+                           for g in groups]}
 
     def group(self, bank_id, group_id, *, history=True):
         bank = self.catalog.bank(bank_id)

@@ -21,11 +21,11 @@ class PublicExportTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue({'training.js', 'training.css', 'training-messages.js', 'learning-ui.js'} <= {p.name for p in output.iterdir()})
             self.assertTrue({'review-papers.js', 'review-paper-messages.js'} <= {p.name for p in output.iterdir()})
-            self.assertTrue({'review-directory.js', 'task-tree.js', 'content-timer.js'} <= {p.name for p in output.iterdir()})
+            self.assertTrue({'review-directory.js', 'task-tree.js', 'catalog-outline.js', 'content-timer.js'} <= {p.name for p in output.iterdir()})
             pwa_files = {'download.html', 'install.css', 'pwa.css', 'pwa.js', 'sw.js', 'manifest.webmanifest',
                          'icon-180.png', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png'}
             self.assertTrue(pwa_files <= {p.name for p in output.iterdir()})
-            self.assertEqual({p.name for p in output.iterdir()} - pwa_files - {'student-dashboard.js', 'presence.js', 'training.js', 'training.css', 'training-messages.js', 'learning-ui.js', 'review-papers.js', 'review-paper-messages.js', 'review-directory.js', 'task-tree.js', 'content-timer.js', 'self-assessment.js', 'academy-messages.js', 'hyperskill.js', 'memory-chunk.js'},
+            self.assertEqual({p.name for p in output.iterdir()} - pwa_files - {'student-dashboard.js', 'presence.js', 'training.js', 'training.css', 'training-messages.js', 'learning-ui.js', 'review-papers.js', 'review-paper-messages.js', 'review-directory.js', 'task-tree.js', 'catalog-outline.js', 'content-timer.js', 'self-assessment.js', 'academy-messages.js', 'hyperskill.js', 'memory-chunk.js'},
                              {'.nojekyll', 'app.js', 'deployment.json', 'favicon.svg', 'index.html', 'portal.js', 'review.js', 'atomic.js','learning-cache.js', 'response-cache.js', 'question-input.js', 'composite-input.js', 'math-presentation.js', 'content-report.js', 'help-feedback.js', 'catalog-picker.js', 'portal.css', 'subjects.js', 'subjects.css', 'styles.css', 'i18n.js', 'reader-messages.js', 'portal-messages.js', 'static-messages.js', 'course-graph.js', 'course-graph.css', 'topic-content.js', 'topic-content.css', 'topic-callouts.css', 'vendor'})
             self.assertEqual(json.loads((output / 'deployment.json').read_text()),
                              {'api_origin': 'https://example.trycloudflare.com'})

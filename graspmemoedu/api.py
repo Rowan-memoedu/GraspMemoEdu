@@ -630,7 +630,8 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                   limit: int = Query(default=25, ge=1, le=50)):
         access = access_store.resolve(request.headers.get('x-learning-identity'))
         recover_cooldowns(access)
-        return dashboard_store.dashboard(access, course_id, cursor, limit, request.query_params.get('subject_id'))
+        return dashboard_store.dashboard(access, course_id, cursor, limit, request.query_params.get('subject_id'),
+                                         request.query_params.get('root_id'))
 
     @app.get('/api/graphs')
     def graph_catalog(request: Request, subject_id: str = 'math'):
@@ -678,6 +679,32 @@ def create_app(settings: Settings | None = None, service: LearningService | None
             if graph['subject_id'] != subject_id:
                 raise DomainError('unknown_graph', '未找到可访问的课程图谱。', 404)
             result = store.public(graph, access)
+            root_id = request.query_params.get('root_id')
+            if root_id:
+                from .course_hierarchy import course_scope, select_subtree
+                from .dependency_nodes import node_key
+                if course_id in training.banks:
+                    scoped = select_subtree(training.bank(course_id)['groups'], root_id)
+                    group_ids = {g['id'] for g in scoped}
+                    member_ids = {node_key(n) for n in result['nodes'] if n.get('bank_id') == course_id and n.get('group_id') in group_ids}
+                    result['title'] = next(g['title'] for g in scoped if g['id'] == root_id)
+                else:
+                    scoped = course_scope(catalog.course(course_id), root_id)
+                    topic_ids = {t['id'] for t in scoped['topics']}
+                    member_ids = {node_key(n) for n in result['nodes'] if n.get('topic_id') in topic_ids}
+                    result['title'] = scoped['title']
+                # A view root hides unrelated branches, but must not erase the
+                # prerequisites that explain why a member is still locked.
+                parents = {}
+                for edge in result['edges']:
+                    parents.setdefault(edge['to'], []).append(edge['from'])
+                retained, pending = set(member_ids), list(member_ids)
+                while pending:
+                    for parent in parents.get(pending.pop(), []):
+                        if parent not in retained:
+                            retained.add(parent); pending.append(parent)
+                result['nodes'] = [{**n, 'member': node_key(n) in member_ids} for n in result['nodes'] if node_key(n) in retained]
+                result['edges'] = [e for e in result['edges'] if e['from'] in retained and e['to'] in retained]
             if not result['nodes']:
                 raise DomainError('unknown_graph', '未找到可访问的课程图谱。', 404)
             # A migrated bank may retain a catalog entry only for old links.

@@ -1,16 +1,16 @@
-import {t, translateMessage} from './i18n.js?v=5b029a38e9b602c2';
-import {answerEditor, readerFrame, renderReviewReader} from './learning-ui.js?v=5b029a38e9b602c2';
-import {answerReady, questionInput, choiceTypeField} from './question-input.js?v=5b029a38e9b602c2';
-import {createLearningCache} from './learning-cache.js?v=5b029a38e9b602c2';
-import {helpableContent, reportableContent} from './content-report.js?v=5b029a38e9b602c2';
+import {t, translateMessage} from './i18n.js?v=8405fcd52d52c0b6';
+import {answerEditor, readerFrame, renderReviewReader} from './learning-ui.js?v=8405fcd52d52c0b6';
+import {answerReady, questionInput, choiceTypeField} from './question-input.js?v=8405fcd52d52c0b6';
+import {createLearningCache} from './learning-cache.js?v=8405fcd52d52c0b6';
+import {helpableContent, reportableContent} from './content-report.js?v=8405fcd52d52c0b6';
 
 const node = (tag, cls = '', text) => { const x = document.createElement(tag); x.className = cls; if (text !== undefined) x.textContent = text; return x; };
 const button = (label, cls, action) => { const x = node('button', cls, label); x.type = 'button'; x.addEventListener('click', action); return x; };
 const html = content => { const x = node('div', 'courseContent'); x.innerHTML = content || ''; return x; };
-import {createContentTimer} from './content-timer.js?v=5b029a38e9b602c2';
-import {renderReviewDirectory, paperNumber} from './review-directory.js?v=5b029a38e9b602c2';
-import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=5b029a38e9b602c2';
-import {chunkPeek} from './memory-chunk.js?v=5b029a38e9b602c2';
+import {createContentTimer} from './content-timer.js?v=8405fcd52d52c0b6';
+import {renderReviewDirectory, paperNumber} from './review-directory.js?v=8405fcd52d52c0b6';
+import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=8405fcd52d52c0b6';
+import {chunkPeek} from './memory-chunk.js?v=8405fcd52d52c0b6';
 
 export function createPaperView({root, request, href, getAccess, formatDate, progressChanged, courseSidebar, taskTree}) {
   const template = document.getElementById('appLayout').cloneNode(true);

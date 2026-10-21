@@ -1,5 +1,6 @@
-import {t, translateMessage} from './i18n.js?v=5b029a38e9b602c2';
-import {subjectLabel, subjectPalette} from './subjects.js?v=5b029a38e9b602c2';
+import {t, translateMessage} from './i18n.js?v=8405fcd52d52c0b6';
+import {subjectLabel, subjectPalette} from './subjects.js?v=8405fcd52d52c0b6';
+import {appendCatalogOutline} from './catalog-outline.js?v=8405fcd52d52c0b6';
 
 const node = (tag, cls, text) => {
   const item = document.createElement(tag); item.className = cls;
@@ -7,8 +8,9 @@ const node = (tag, cls, text) => {
   return item;
 };
 export function createCatalogPicker({button, panel, readSubjects, readCatalog, selectCourse, getSubject, onSelected,
-  readBanks = async () => ({banks: []}), onBankSelected}) {
+  readBanks = async () => ({banks: []}), onBankSelected, getSelectedRoot = () => null}) {
   let sequence = 0, subjects = [], browsing = null, catalog = null, saving = false;
+  const expanded = new Map();
   const open = () => !panel.hidden;
   const current = ticket => ticket === sequence && open();
   function close(focus = true) {
@@ -42,36 +44,46 @@ export function createCatalogPicker({button, panel, readSubjects, readCatalog, s
       content.append(node('h3', '', t('paper.courses')));
       if (!catalog.courses.length) content.append(node('p', 'catalogStatus', t('catalog.empty')));
       const grid = node('div', 'catalogCourseGrid');
-      for (const course of catalog.courses) {
+      const courseCard = (course, rootId = null) => {
         const card = node('button', 'catalogCourse'); card.type = 'button'; card.dataset.courseId = course.id;
-        card.setAttribute('aria-pressed', String(course.id === catalog.selected_course_id));
+        const selected = course.id === catalog.selected_course_id && rootId === getSelectedRoot(course.id, browsing);
+        card.setAttribute('aria-pressed', String(selected));
         card.disabled = saving || course.available === false;
         card.append(node('strong', '', course.title));
         if (course.description) card.append(node('span', '', course.description));
         if (course.available === false) card.append(node('span', 'catalogBadge', t('catalog.restricted')));
-        else if (course.id === catalog.selected_course_id) card.append(node('span', 'catalogBadge', t('catalog.selected')));
+        else if (selected) card.append(node('span', 'catalogBadge', t('catalog.selected')));
         card.addEventListener('click', async () => {
           if (saving) return;
           saving = true; const ticket = sequence, subjectId = browsing;
           render();
           try {
-            await selectCourse(course.id, subjectId);
+            await selectCourse(course.id, subjectId, rootId);
             if (!current(ticket)) return;
-            close(); onSelected(course.id, subjectId);
+            close(); onSelected(course.id, subjectId, rootId);
           } catch (error) {
             if (current(ticket)) { saving = false; render(error); }
           } finally { saving = false; button.disabled = false; }
-        }); grid.append(card);
+        }); return card;
+      };
+      for (const course of catalog.courses) {
+        const entry = node('div', 'catalogSelection'); entry.append(courseCard(course));
+        appendCatalogOutline(entry, course, courseCard, {expanded, keyPrefix: `picker:course:${browsing}`}); grid.append(entry);
       }
       content.append(grid, node('p', 'catalogDraftHint', t('catalog.draftHint')));
       content.append(node('h3', '', t('training.banks')));
       const banks = node('div', 'catalogCourseGrid');
-      for (const bank of catalog.banks) {
+      const bankCard = (bank, rootId = null) => {
         const card = node('button', 'catalogCourse'); card.type = 'button'; card.dataset.bankId = bank.id;
+        card.disabled = saving;
         card.append(node('strong', '', bank.title));
         if (bank.description) card.append(node('span', '', bank.description));
-        card.addEventListener('click', () => { const subjectId = browsing; close(); onBankSelected?.(bank.id, subjectId); });
-        banks.append(card);
+        card.addEventListener('click', () => { const subjectId = browsing; close(); onBankSelected?.(bank.id, subjectId, rootId); });
+        return card;
+      };
+      for (const bank of catalog.banks) {
+        const entry = node('div', 'catalogSelection'); entry.append(bankCard(bank));
+        appendCatalogOutline(entry, bank, bankCard, {expanded, keyPrefix: `picker:bank:${browsing}`}); banks.append(entry);
       }
       if (!catalog.banks.length) banks.append(node('p', 'catalogStatus', t('training.empty')));
       content.append(banks);

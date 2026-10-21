@@ -104,16 +104,27 @@ def register_training_routes(app, training, access_store, subjects, service_for,
         banks = []
         for bank in visible(request, access):
             groups = backend.bank(bank['id'], history=False)['groups']
-            groups = [g for g in groups if g['question_count'] or g.get('introduction_count')]
+            from .course_hierarchy import project_hierarchy
+            members = {g['id'] for g in groups if g['question_count'] or g.get('introduction_count')}
+            outline = project_hierarchy([{**g, 'topic_ids': [g['id']] if g['id'] in members else []}
+                                         for g in groups], members, {bank['id']})
+            parents = {g['id']: g.get('parent_id') for g in groups}
+            ready = set()
+            for group in groups:
+                current = group['id'] if group['id'] in members and group.get('dependency_ready', True) else None
+                while current is not None and current not in ready:
+                    ready.add(current); current = parents.get(current)
+            outline = [{**unit, 'dependency_ready': unit['id'] in ready} for unit in outline]
             banks.append({k: bank.get(k, '') for k in ('id', 'title', 'subject_id', 'description', 'version')} | {
-                'dependency_ready': not groups or any(g.get('dependency_ready', True) for g in groups)})
+                'outline': outline,
+                'dependency_ready': not members or any(g.get('dependency_ready', True) for g in groups if g['id'] in members)})
         return {'banks': banks}
 
     @app.get('/api/training/bank')
     def bank(request: Request, bank_id: str):
         access, backend = context(request)
         authorize_bank(request, access, bank_id)
-        return backend.bank(bank_id, history='review_history' in access['features'])
+        return backend.bank(bank_id, history='review_history' in access['features'], root_id=request.query_params.get('root_id'))
 
     @app.get('/api/training/group')
     def group(request: Request, bank_id: str, group_id: str, reader: bool = False):
