@@ -69,7 +69,14 @@ export function enhanceMarkdownOutline(root, {expanded = new Map(), keyPrefix = 
 export function renderTaskTree(pending, data, {renderTask, expanded, keyPrefix = '', sourceOrder = [], defaultOpen = false}) {
   const tasks = new Map(data.tasks.map(task => [task.topic_id || task.id, task]));
   const containers = new Map(), rendered = new Set();
+  const units = new Map((data.pending_hierarchy || []).map(unit => [unit.id, unit])), needed = new Set();
+  // All task sources share the same pruning: keep only ancestors of tasks
+  // still present in this tree (completed tasks are rendered in history).
+  for (const unit of units.values()) if ((unit.topic_ids || []).some(id => tasks.has(id))) {
+    for (let parent = unit; parent && !needed.has(parent.id); parent = units.get(parent.parent_id)) needed.add(parent.id);
+  }
   for (const unit of data.pending_hierarchy || []) {
+    if (!needed.has(unit.id)) continue;
     const key = `${keyPrefix}:${data.course.id}:${unit.id}`;
     const {group, body} = createOutlineGroup(unit.title, {expanded, key, open: defaultOpen || !unit.parent_id});
     group.dataset.unitId = unit.id;
@@ -79,6 +86,7 @@ export function renderTaskTree(pending, data, {renderTask, expanded, keyPrefix =
     }
   }
   for (const unit of data.pending_hierarchy || []) {
+    if (!containers.has(unit.id)) continue;
     (containers.get(unit.parent_id)?.body || pending).append(containers.get(unit.id).group);
   }
   for (const [id, task] of tasks) if (!rendered.has(id)) pending.append(renderTask(task));

@@ -1,20 +1,20 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=3eed916af62d1e5f";
-import { createReviewView } from "./review.js?v=3eed916af62d1e5f";
-import { renderCourseGraph } from "./course-graph.js?v=3eed916af62d1e5f";
-import {questionInput, choiceTypeField} from './question-input.js?v=3eed916af62d1e5f';
-import {enhanceTopicContent} from './topic-content.js?v=3eed916af62d1e5f';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=3eed916af62d1e5f';
-import {createCatalogPicker} from './catalog-picker.js?v=3eed916af62d1e5f';
-import {createAtomicView} from './atomic.js?v=3eed916af62d1e5f';
-import {createTrainingView} from './training.js?v=3eed916af62d1e5f';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=3eed916af62d1e5f";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=5b029a38e9b602c2";
+import { createReviewView } from "./review.js?v=5b029a38e9b602c2";
+import { renderCourseGraph } from "./course-graph.js?v=5b029a38e9b602c2";
+import {questionInput, choiceTypeField} from './question-input.js?v=5b029a38e9b602c2';
+import {enhanceTopicContent} from './topic-content.js?v=5b029a38e9b602c2';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=5b029a38e9b602c2';
+import {createCatalogPicker} from './catalog-picker.js?v=5b029a38e9b602c2';
+import {createAtomicView} from './atomic.js?v=5b029a38e9b602c2';
+import {createTrainingView} from './training.js?v=5b029a38e9b602c2';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=5b029a38e9b602c2";
 
-import {createPaperView} from './review-papers.js?v=3eed916af62d1e5f';
+import {createPaperView} from './review-papers.js?v=5b029a38e9b602c2';
 
-import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=3eed916af62d1e5f';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=3eed916af62d1e5f';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=3eed916af62d1e5f';
-import {createStudentDashboard} from './student-dashboard.js?v=3eed916af62d1e5f';
+import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=5b029a38e9b602c2';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=5b029a38e9b602c2';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=5b029a38e9b602c2';
+import {createStudentDashboard} from './student-dashboard.js?v=5b029a38e9b602c2';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -34,7 +34,7 @@ const roundButton = (text, action) => control(text, "portalStart", action);
 export function initPortal(bridge) {
   let chatModule, attachChatEditor, renderChatMarkdown;
   async function loadChat() {
-    const module = await (chatModule ||= import('./vendor/chat/chat.js?v=3eed916af62d1e5f').catch(error => { chatModule = null; throw error; }));
+    const module = await (chatModule ||= import('./vendor/chat/chat.js?v=5b029a38e9b602c2').catch(error => { chatModule = null; throw error; }));
     ({attachChatEditor, renderChatMarkdown} = module);
     module.configureChatImages(ident => bridge.request('help-images?image_id=' + encode(ident)));
   }
@@ -47,7 +47,7 @@ export function initPortal(bridge) {
   const guideExpansion = new Map();
   let refreshTimer = null, menuTimer = null, popoverTimer = null, pageTimer = null;
   let guideObjectUrls = [];
-  let graphScroll = 0, feedbackContext = {}, feedbackBusy = false, renderedDay = null;
+  let graphScroll = 0, feedbackContext = {}, feedbackBusy = false, renderedDay = null, activeHistory = null;
   let helpReporting = null;
   let helpSummary = null, helpSummaryBusy = false, helpSummaryAt = 0, helpFeedRefresh = null, helpReadObserver = null;
   const chatEditors = new Set();
@@ -131,7 +131,7 @@ export function initPortal(bridge) {
     reviewHref: () => subjectHref(currentRoute?.subjectId, '/reviews'), formatDate: value => apiDate(value, true),
     progressChanged: () => { dashboards.clear(); answerCache.clear(); }});
   const training = createTrainingView({...bridge, request: call, root, href: localHref,
-    formatDate: value => apiDate(value, true), courseSidebar, taskTree, taskVisibilityOptions,
+    formatDate: value => apiDate(value, true), courseSidebar, taskTree, taskVisibilityOptions, renderHistory,
     openGraph, progressChanged: () => { dashboards.clear(); answerCache.clear(); },
     completeGroup: (bank, group) => {
       const target = localHref(`/banks/${encode(bank)}?groupId=${encode(group)}`);
@@ -691,14 +691,14 @@ export function initPortal(bridge) {
     }
     card.append(toggle, details); return card;
   }
-  function historyCard(task) {
+  function historyCard(task, view = {}) {
     const card = node("article", "portalTask taskCompleted"); card.dataset.taskId = task.id;
-    const href = task.topic_kind === 'introduction' ? `/topic/${encode(task.topic_id)}` : `/learn?taskId=${encode(task.id)}`;
-    const summary = control("", "taskToggle", () => navigate(href)); summary.append(taskSummary(task, true)); card.append(summary);
+    const href = view.target ? view.target(task) : task.topic_kind === 'introduction' ? `/topic/${encode(task.topic_id)}` : `/learn?taskId=${encode(task.id)}`;
+    const summary = control("", "taskToggle", () => navigate(href)); summary.append(taskSummary(task, true, view)); card.append(summary);
     if (bridge.getAccess()?.role === "guest") {
       const actions = node("div", "taskStartRow completedTaskActions");
       actions.append(roundButton(t("portal.review.54"), () => navigate(href)));
-      appendGuestReset(actions, task); card.append(actions);
+      if (!view.training) appendGuestReset(actions, task); card.append(actions);
     }
     return card;
   }
@@ -730,14 +730,15 @@ export function initPortal(bridge) {
     reset.title = t("portal.reset.this.lesson.s.progress.and.start.again.60");
     actions.append(reset);
   }
-  function renderHistory(data, target) {
+  function renderHistory(data, target, view = {}) {
+    activeHistory = {data, target, view};
     target.replaceChildren(); let date = null; renderedDay = dayKey(new Date());
     if (!allowed("review_history")) { target.append(emptyBox(t("portal.review.is.not.enabled.for.your.account.please.contact.your.admini.61"))); return; }
     for (const task of data.history) {
       const valid = task.completed_at && Number.isFinite(Date.parse(task.completed_at));
       const key = valid ? dayKey(task.completed_at) : "unknown";
       if (key !== date) { target.append(node("h2", "completedTasksDate", valid ? key === dayKey(new Date()) ? t("portal.today.62") : apiDate(task.completed_at) : t("portal.completion.date.unknown.63"))); date = key; }
-      target.append(historyCard(task));
+      target.append(historyCard(task, view));
     }
   }
   function taskTree(pending, data, view = {}) {
@@ -757,7 +758,22 @@ export function initPortal(bridge) {
     const bar = node('div', 'taskListOptions'), label = node('label', 'hideLockedControl');
     const input = node('input'); input.type = 'checkbox'; input.checked = checked;
     input.className = 'hideLockedInput';
-    label.append(input, node('span', '', t('portal.hideLocked'))); bar.append(...extra, label);
+    label.append(input, node('span', '', t('portal.hideLocked')));
+    const controls = node('div', 'taskTreeControls');
+    const groups = () => [...container.querySelectorAll('.courseUnitGroup, .sourceReadingGroup')];
+    function syncExpansion() {
+      const items = groups(), expanded = items.length > 0 && items.every(item => item.open);
+      expand.textContent = t(expanded ? 'portal.collapseAll' : 'portal.expandAll');
+      expand.setAttribute('aria-expanded', String(expanded));
+      expand.disabled = !items.length;
+    }
+    const expand = control(t('portal.expandAll'), 'textButton taskTreeExpansion', () => {
+      const items = groups(), open = !items.every(item => item.open);
+      for (const item of items) item.open = open;
+      syncExpansion();
+    });
+    container.addEventListener('toggle', syncExpansion, true);
+    controls.append(label, expand); bar.append(...extra, controls);
     function apply() {
       for (const item of container.querySelectorAll('[data-dependency-ready]')) {
         item.hidden = input.checked && item.dataset.dependencyReady === 'false';
@@ -775,7 +791,7 @@ export function initPortal(bridge) {
       try { localStorage.setItem(key, String(input.checked)); } catch {}
       apply();
     });
-    queueMicrotask(apply);
+    queueMicrotask(() => { apply(); syncExpansion(); });
     return bar;
   }
   function renderLearn(data, taskId, ticket) {
@@ -837,8 +853,8 @@ export function initPortal(bridge) {
     clearTimeout(pageTimer); pageTimer = setTimeout(() => { if (!historyError && window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 1000) loadMore(); }, 100);
   }, { passive: true });
   setInterval(() => {
-    if (document.hidden || currentRoute?.path !== "/learn" || currentRoute.params.has("taskId")) return;
-    if (renderedDay !== dayKey(new Date()) && $("completedTasks") && selectedDashboard()) renderHistory(selectedDashboard(), $("completedTasks"));
+    if (document.hidden || !activeHistory?.target.isConnected) return;
+    if (renderedDay !== dayKey(new Date())) renderHistory(activeHistory.data, activeHistory.target, activeHistory.view);
   }, 30000);
   function waitForTasks(ticket, attempt) {
     const delta = Date.parse(selectedDashboard()?.next_review_due_at) - Date.now();

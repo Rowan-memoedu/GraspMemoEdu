@@ -392,16 +392,26 @@ class TrainingService:
     def bank(self, bank_id, *, history=True):
         bank = self.catalog.bank(bank_id)
         with closing(self._connect()) as con:
-            counts = {row['group_id']: row['count'] for row in con.execute('''
-                SELECT group_id,COUNT(DISTINCT question) AS count FROM training_attempts
-                WHERE learner=? AND bank=? AND version=? AND phase='done' GROUP BY group_id''',
+            # Initial completion is permanent for this content version. Later
+            # reviews keep their own queue and must not move this history date.
+            first = {(row['group_id'], row['question']): row['completed_at'] for row in con.execute('''
+                SELECT group_id,question,MIN(completed_at) AS completed_at FROM training_attempts
+                WHERE learner=? AND bank=? AND version=? AND phase='done' GROUP BY group_id,question''',
                 (self.learner_id, bank_id, bank['version']))}
             statuses = {g['id']: self.group_status(con, bank_id, g['id']) for g in bank['groups']}
+        progress = {}
+        for group in bank['groups']:
+            questions = group.get('questions', [])
+            dates = [first[(group['id'], q['id'])] for q in questions if (group['id'], q['id']) in first]
+            completed = bool(questions) and len(dates) == len(questions)
+            progress[group['id']] = {'completed': completed,
+                'completed_count': len(dates) if history else None,
+                'completed_at': max(filter(None, dates), default=None) if completed and history else None}
         return {**{k: bank.get(k, '') for k in ('id', 'title', 'subject_id', 'description', 'version')},
                 'groups': [{'id': g['id'], 'title': g['title'], 'parent_id': g.get('parent_id'),
                             'question_count': len(g.get('questions', [])),
                             **({'introduction_count': len(g['introductions'])} if 'introductions' in g else {}),
-                            'completed_count': counts.get(g['id'], 0) if history else None,
+                            **progress[g['id']],
                             **statuses[g['id']]}
                            for g in bank['groups']]}
 

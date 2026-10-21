@@ -31,6 +31,12 @@ def main():
     with socket.socket() as probe:
         probe.bind(('127.0.0.1', args.port))
     topics = write_matrix(root / 'data')
+    catalog_path = root / 'data/catalog.json'
+    catalog = json.loads(catalog_path.read_bytes())
+    for course in catalog['courses']:
+        course['units'][0]['parent_id'] = 'outer'
+        course['units'].insert(0, {'id': 'outer', 'title': 'Outer chapter', 'topic_ids': []})
+    catalog_path.write_text(json.dumps(catalog), encoding='utf-8')
     for path in (root / 'data/training-banks').glob('*.json'):
         bank = json.loads(path.read_bytes())
         base = bank['groups'][1]['questions'][1]
@@ -51,6 +57,7 @@ def main():
     app = create_app(Settings(data_dir=root / 'data', port=args.port),
                      LearningService(topics['lesson-math'], root / 'data', DeterministicJudge()))
     account = app.state.access_store.create_account('Mixed dependency fixture', is_student=True, purpose='test')
+    app.state.access_store.set_permissions(account['account']['learner_id'], is_advanced_learner=True)
     login = app.state.access_store.login(account['invitation_code'])
     access = app.state.access_store.resolve(login['identity_token'])
     backend = app.state.training_backend_for(access)

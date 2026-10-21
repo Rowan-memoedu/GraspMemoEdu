@@ -170,6 +170,8 @@ body { padding-top: 50px; }
 .portalInfoRow > :last-child { color: #818181; text-align: right; }
 .dashboardTasks { width: 100%; min-width: 0; }
 .taskListOptions { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 12px 20px; margin: 0 0 16px; }
+.taskTreeControls { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.taskTreeExpansion:disabled { opacity: .5; cursor: default; }
 .hideLockedControl { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; white-space: nowrap; }
 .hideLockedInput { width: 16px; height: 16px; margin: 0; accent-color: var(--link-color); cursor: pointer; }
 .hideLockedControl:hover { color: var(--link-color); }

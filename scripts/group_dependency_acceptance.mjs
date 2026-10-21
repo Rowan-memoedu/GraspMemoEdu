@@ -38,6 +38,20 @@ try {
   page = await context.newPage();
   page.on('pageerror', error => report.errors.push(error.message));
   const filter = () => page.locator('.hideLockedInput');
+  async function checkExpansion(subject, area) {
+    const toggle = page.locator('.taskTreeExpansion');
+    const all = () => page.locator('.incompleteTasks .courseUnitGroup');
+    assert(await all().count() > 0);
+    if (await toggle.textContent() === '一键展开') await toggle.click();
+    await page.waitForFunction(() => [...document.querySelectorAll('.incompleteTasks .courseUnitGroup')].every(g => g.open));
+    assert.equal(await toggle.textContent(), '一键收起');
+    await toggle.click();
+    await page.waitForFunction(() => [...document.querySelectorAll('.incompleteTasks .courseUnitGroup')].every(g => !g.open));
+    assert.equal(await toggle.textContent(), '一键展开');
+    await toggle.click();
+    await page.waitForFunction(() => [...document.querySelectorAll('.incompleteTasks .courseUnitGroup')].every(g => g.open));
+    pass(subject + ': ' + area + ' expands and collapses every hierarchy level');
+  }
   async function go(route, selector) {
     await page.evaluate(route => { location.hash = route; }, route);
     await page.locator(selector).first().waitFor({state: 'visible'});
@@ -50,6 +64,7 @@ try {
     const prefix = '#/subjects/' + subject;
     await go(prefix + '/learn', '.hideLockedInput');
     await filter().uncheck();
+    await checkExpansion(subject, 'learning');
     const atomic = page.locator('[data-task-id="lesson:atomic-' + subject + '"]');
     assert(await atomic.isVisible(), 'Locked Topic visible before filtering');
     await filter().check();
@@ -61,6 +76,7 @@ try {
     assert(!await page.locator('[data-task-id="group-a"]').isVisible());
     assert(!await page.locator('[data-unit-id="chapter"]').isVisible(), 'Empty locked chapter hidden');
     await filter().uncheck();
+    await checkExpansion(subject, 'bank');
     assert(await page.locator('[data-task-id="group-a"]').isVisible());
     await page.locator('[data-task-id="group-a"] .taskToggle').click();
     assert(await page.locator('[data-task-id="group-a"] .prerequisiteBlocked').isDisabled());
@@ -86,7 +102,14 @@ try {
     const position = await page.locator('[data-task-id="group-ready"]').boundingBox();
     assert(position.y >= 0 && position.y < 800, 'Completed group is in viewport');
     assert(await page.evaluate(() => scrollY > 500), 'Returned to actual group position');
-    pass(subject + ': completion opens nested ancestors and returns to exact group');
+    assert.equal(await page.locator('.incompleteTasks [data-task-id="group-ready"]').count(), 0);
+    assert.equal(await page.locator('.incompleteTasks [data-unit-id="tail"]').count(), 0, 'Empty completed ancestors are pruned');
+    const finished = page.locator('.completedTasks [data-task-id="group-ready"]');
+    assert(await finished.isVisible());
+    assert.equal(await finished.locator('.taskIcon').getAttribute('aria-label'), '已结束');
+    assert.equal(await finished.locator('.taskCompletedAt').count(), 1);
+    if (subject === 'cs') await page.screenshot({path: path.join(output, 'cs-completed-history.png'), fullPage: false});
+    pass(subject + ': completion leaves pending hierarchy and returns to the shared history row');
     await page.evaluate(() => scrollTo(0, 120));
     await page.locator('.mainNavigation [data-navigation="guide"]').click();
     await page.locator('.guideBody').waitFor();
@@ -99,7 +122,7 @@ try {
   }
   await go('#/subjects/cs/banks/bank-cs', '.hideLockedInput');
   await filter().uncheck();
-  await page.locator('.taskListOptions .textButton').click();
+  await page.locator('.taskListOptions > .textButton').click();
   await page.locator('.courseGraph [data-topic-id="group:bank-cs:group-a"]').waitFor();
   await page.locator('.courseGraph [data-topic-id="group:bank-cs:group-a"]').click();
   assert((await page.locator('.cgDetails').textContent()).includes('Prerequisite Topic'));
@@ -113,6 +136,8 @@ try {
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'No horizontal overflow at ' + width);
     const label = await page.locator('.hideLockedControl').boundingBox();
     assert(label.width < width && label.x >= 0);
+    const expansion = await page.locator('.taskTreeExpansion').boundingBox();
+    assert(expansion.y >= label.y + label.height, 'Expand control appears below the checkbox');
     await page.screenshot({path: path.join(output, 'bank-' + width + '.png'), fullPage: false});
     pass('Filter layout at width ' + width);
   }

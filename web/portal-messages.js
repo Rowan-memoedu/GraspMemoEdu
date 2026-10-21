@@ -1,5 +1,7 @@
 export const portalMessages = {
   'portal.hideLocked': ['隐藏暂未解锁的内容', 'Hide content with unmet prerequisites'],
+  'portal.expandAll': ['一键展开', 'Expand all'],
+  'portal.collapseAll': ['一键收起', 'Collapse all'],
   'portal.lockedHidden': ['暂未解锁的内容已隐藏，可取消勾选查看。', 'Locked content is hidden. Uncheck the option to show it.'],
   'students.today': ['今日在线情况', 'Today’s online activity'],
   'students.todayDate': ['{date} · 北京时间', '{date} · Beijing time'],

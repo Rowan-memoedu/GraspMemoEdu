@@ -181,4 +181,49 @@ class GroupDependencyTests(unittest.TestCase):
         group = self.backend.group('bank-cs', 'group-b', history=False)
         self.assertTrue(group['questions'][0]['completed'])
         self.assertIsNone(group['questions'][0]['completed_count'])
+        group_row = next(g for g in self.backend.bank('bank-cs', history=False)['groups'] if g['id'] == 'group-b')
+        self.assertTrue(group_row['completed'])
+        self.assertIsNone(group_row['completed_at'])
+        self.assertIsNone(group_row['completed_count'])
         self.assertEqual(GraphStore(self.settings).public(validate_graph(mixed_graph('cs')), self.access)['schema_version'], 3)
+
+    def test_group_initial_completion_survives_due_and_failed_reviews_in_every_subject(self):
+        for subject, *_ in DEFAULTS:
+            bank_id = 'bank-' + subject
+            def group_row():
+                return next(g for g in self.backend.bank(bank_id)['groups'] if g['id'] == 'group-b')
+            self.assertFalse(group_row()['completed'])
+            attempt = self.backend.open(bank_id, 'group-b', 'essay-b', str(uuid4()))
+            self.assertFalse(group_row()['completed'], 'Opening a question is not completion')
+            self.backend.add_to_notebook(attempt)
+            job = self.backend.submit({'attempt_id': attempt, 'request_id': str(uuid4()), 'answer': 'wrong'})
+            self.backend.process_submission(job)
+            first = group_row()
+            self.assertTrue(first['completed'], 'Finished initial work leaves later mistakes to the review queue')
+            self.assertEqual(first['completed_count'], 1)
+            self.assertTrue(first['completed_at'])
+            with self.backend.transaction() as con:
+                con.execute('UPDATE training_memory SET due_at=? WHERE bank=? AND question=?',
+                            ((datetime.now(timezone.utc) - timedelta(days=1)).isoformat(), bank_id, 'essay-b'))
+            self.assertEqual(group_row(), first, 'A due card must not reopen initial learning')
+            review = self.backend.open(bank_id, 'group-b', 'essay-b', str(uuid4()))
+            job = self.backend.submit({'attempt_id': review, 'request_id': str(uuid4()), 'answer': 'wrong'})
+            self.backend.process_submission(job)
+            self.assertEqual(group_row(), first, 'Repeated attempts must not change the initial completion date')
+            chapter = next(g for g in self.backend.bank(bank_id)['groups'] if g['id'] == 'chapter')
+            self.assertFalse(chapter['completed'], 'An empty hierarchy container is not a completed task')
+
+    def test_partial_group_stays_pending_and_current_version_is_required(self):
+        bank_id = 'bank-math'
+        attempt = self.backend.open(bank_id, 'group-a', 'exact', str(uuid4()))
+        job = self.backend.submit({'attempt_id': attempt, 'request_id': str(uuid4()), 'answer': '2'})
+        self.backend.process_submission(job)
+        group = next(g for g in self.backend.bank(bank_id)['groups'] if g['id'] == 'group-a')
+        self.assertEqual(group['completed_count'], 1)
+        self.assertFalse(group['completed'])
+        self.assertIsNone(group['completed_at'])
+        with self.backend.transaction() as con:
+            con.execute('UPDATE training_attempts SET version=? WHERE id=?', ('old-version', attempt))
+        group = next(g for g in self.backend.bank(bank_id)['groups'] if g['id'] == 'group-a')
+        self.assertEqual(group['completed_count'], 0)
+        self.assertFalse(group['completed'])
