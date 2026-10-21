@@ -97,7 +97,8 @@ def prepare(args):
     files = {p.relative_to(args.output).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
              for p in sorted(args.output.rglob('*')) if p.is_file()}
     (args.output / 'manifest.json').write_bytes(encoded({'schema': 1, 'adapter': 'structured-atomic',
-        'subject_id': args.subject, 'reset_reading_progress': getattr(args, 'reset_reading_progress', False), 'files': files}))
+        'subject_id': args.subject, 'reset_reading_progress': getattr(args, 'reset_reading_progress', False),
+        'replace_atomic_and_reset_progress': getattr(args, 'replace_atomic_and_reset_progress', False), 'files': files}))
     return report
 
 
@@ -109,6 +110,7 @@ def main():
     p.add_argument('--topic-prefix', default='atomic-topic-'); p.add_argument('--title-suffix', default='')
     p.add_argument('--node', default='node')
     p.add_argument('--reset-reading-progress', action='store_true', help='Explicitly allow same-ID reading-only upgrades')
+    p.add_argument('--replace-atomic-and-reset-progress', action='store_true', help='Explicitly replace atomic Topics and reset their progress')
     prepare(p.parse_args())
 
 

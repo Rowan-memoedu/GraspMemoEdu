@@ -107,6 +107,7 @@
 - 题面、答案、解析与代码使用既有 Markdown/MathJax 渲染器；代码中的 Unicode 转义和 `$` 按字面保存，来源 URL 只显示文字。
 - 原图按来源字节嵌入并校验哈希，SVG 需通过无活动内容、无外部引用的检查。来源包、图片和答案侧车进入既有备份及恢复验证。
 - 课程、章节和 Topic ID 由调用者明确指定。普通安装不覆盖已有 Topic。用户明确授权纯阅读升级时，才使用 `--reset-reading-progress`：保留原 ID 与章节，仅允许清理这些纯阅读 Topic 的旧阅读行，完整旧行存入私密恢复档案；包含作答或记忆状态的记录会拒绝清理。
+- 用户明确授权替换既有原子内容并归零时，使用 `--replace-atomic-and-reset-progress`。仅替换包内同名、同 ID、无范式模块的原子 Topic；原课程章节顺序保持。内容指针与这些 Topic 全部学习者的进度在同一激活流程内切换，旧行私密归档，失败回滚。在途判题或混有其他材料的复习卷会阻止切换；其他 Topic、账号、答疑及全局设置保持。相同包重复安装返回 `unchanged`，不再次清零新进度。发布器须同时声明 `atomic_topic_replacement: true`，备份后停写、验证仅有授权范围内的行被清理，再恢复服务。
 
 ```powershell
 & 'D:/AppData/GraspMemoEdu/venv/Scripts/python.exe' -B scripts/prepare_structured_atomic.py `

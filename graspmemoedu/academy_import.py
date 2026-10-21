@@ -161,6 +161,11 @@ def _install(package, data_dir, *, extend_course=False, migration=None):
 def install(package, data_dir, *, extend_course=False):
     manifest = json.loads((Path(package) / 'manifest.json').read_bytes())
     migration = None
+    if manifest.get('replace_atomic_and_reset_progress') and manifest.get('reset_reading_progress'):
+        raise ValueError('Choose either atomic replacement or reading-only upgrade')
+    if manifest['adapter'] == 'structured-atomic' and manifest.get('replace_atomic_and_reset_progress') is True:
+        from .atomic_topic_replacement import AtomicTopicReplacement
+        migration = AtomicTopicReplacement(package, data_dir)
     if manifest['adapter'] == 'structured-atomic' and manifest.get('reset_reading_progress') is True:
         from .atomic_reading_upgrade import AtomicReadingUpgrade
         migration = AtomicReadingUpgrade(package, data_dir)

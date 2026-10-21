@@ -25,6 +25,11 @@ from graspmemoedu.topic_install import encoded
 
 
 def verify(package, output):
+    replacement = json.loads((package / 'manifest.json').read_bytes()).get('replace_atomic_and_reset_progress') is True
+    if replacement:
+        from graspmemoedu.atomic_topic_replacement import verify_transition
+    else:
+        from graspmemoedu.atomic_reading_upgrade import verify_transition
     output.mkdir(parents=True, exist_ok=False)
     data = output / 'data'; data.mkdir()
     incoming = json.loads((package / 'catalog.json').read_bytes())['courses'][0]
@@ -33,8 +38,10 @@ def verify(package, output):
     for declaration in course['topics']:
         topic = json.loads((package / declaration['path']).read_bytes())
         topics[topic['id']] = topic
-        old = {k: deepcopy(v) for k, v in topic.items() if k not in ('memory_chunks', 'memory_points', 'flashcards')}
-        old.update(topic_kind='introduction', training_mode='paradigm', version='isolated-reading-before-' + topic['id'])
+        old = deepcopy(topic) if replacement else {k: deepcopy(v) for k, v in topic.items() if k not in ('memory_chunks', 'memory_points', 'flashcards')}
+        old['version'] = 'isolated-before-' + topic['id']
+        if not replacement:
+            old.update(topic_kind='introduction', training_mode='paradigm')
         name = topic['id'] + '.json'; (data / name).write_bytes(encoded(old)); declaration['path'] = name
     parents = {u.get('parent_id') for u in course.get('units', []) if u.get('parent_id')}
     for parent in parents:
@@ -60,9 +67,9 @@ def verify(package, output):
     # exact same point engine. Its clock and records belong only to this directory.
     projected = deepcopy(next(iter(topics.values())))
     chunk = deepcopy(projected['memory_chunks'][0]); chunk['points'] = chunk['points'][:1]
-    point = chunk['points'][0]['id']; chunk.pop('introduction_id', None)
+    point = chunk['points'][0]['id']; introduction_id = chunk.pop('introduction_id', None)
     projected['memory_chunks'] = [chunk]
-    projected['introduction'] = projected['introductions'][0]
+    projected['introduction'] = next((i for i in projected['introductions'] if i['id'] == introduction_id), projected['introductions'][0])
     projected['flashcards'] = [c for c in projected['flashcards'] if c['point_ids'] == [point]]
     for key in ('topic_format_version','topic_kind','introductions','content_order','content_version'):
         projected.pop(key, None)
