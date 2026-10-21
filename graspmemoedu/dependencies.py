@@ -6,11 +6,14 @@ import json
 from .service import DomainError, now
 from .topic_runtime import is_introduction
 from .topic_structure import atomic_state, has_atomic
+from .dependency_nodes import group_key, group_parts
+from .training_content import TrainingCatalog, permission_id
 
 
 class DependencyPolicy:
-    def __init__(self, catalog, access_store, subjects=None):
+    def __init__(self, catalog, access_store, subjects=None, training=None):
         self.catalog, self.access_store, self.subjects = catalog, access_store, subjects
+        self.training = training or (TrainingCatalog(subjects.settings.data_dir) if subjects else None)
 
     def dependencies(self, course_id=None):
         if self.subjects is not None:
@@ -18,7 +21,7 @@ class DependencyPolicy:
             root = self.subjects.settings.content_dir / 'graphs'
             signature = tuple((p.name, p.stat().st_mtime_ns, p.stat().st_size) for p in sorted(root.glob('*.json')))
             if getattr(self, '_graph_signature', None) != signature:
-                self._graph_dependencies = GraphStore(self.subjects.settings, self.catalog, self.subjects).dependencies(course_id)
+                self._graph_dependencies = GraphStore(self.subjects.settings, self.catalog, self.subjects, self.training).dependencies(course_id)
                 self._graph_signature = signature
             dependencies = self._graph_dependencies
         else:
@@ -26,6 +29,8 @@ class DependencyPolicy:
         return dependencies
 
     def scope_members(self, topic_id):
+        if group_parts(topic_id):
+            return None
         topic = self.catalog.topic(topic_id)
         scope = topic.get('prerequisite_scope_course_id')
         return (set(topic.get('prerequisite_scope_topic_ids',
@@ -44,7 +49,7 @@ class DependencyPolicy:
         return self.missing_count(con, access, topic_id, dependencies, current_time) == 0
 
     def missing_count(self, con, access, topic_id, dependencies=None, current_time=None):
-        if is_introduction(self.catalog.topic(topic_id)):
+        if topic_id in self.catalog.topics and is_introduction(self.catalog.topic(topic_id)):
             return 0
         if access.get('is_admin'):
             return 0
@@ -62,6 +67,15 @@ class DependencyPolicy:
         def healthy(node):
             if node in checked:
                 return checked[node]
+            if group_parts(node):
+                if node in visiting:
+                    return False
+                visiting.add(node)
+                valid = self.group_completed(con, access, node, current, tables)
+                valid = valid and all(healthy(parent) for parent in dependencies.get(node, []))
+                visiting.remove(node)
+                checked[node] = bool(valid)
+                return bool(valid)
             if (node in visiting or node not in allowed or node not in self.catalog.topics
                     or not self.catalog.topic(node).get('availability', {}).get('trainable', True)):
                 return False
@@ -95,6 +109,65 @@ class DependencyPolicy:
             return bool(valid)
 
         return sum(not healthy(parent) for parent in set(dependencies.get(topic_id, [])))
+
+    def group_content(self, node_id):
+        parts = group_parts(node_id)
+        bank = self.training.banks.get(parts[0]) if parts and self.training else None
+        group = next((g for g in bank['groups'] if g['id'] == parts[1]), None) if bank else None
+        return bank, group
+
+    def group_completed(self, con, access, node_id, current, tables):
+        bank, group = self.group_content(node_id)
+        if (not group or not group.get('questions') or 'training_attempts' not in tables
+                or permission_id(bank['id']) not in {t['id'] for t in access['topics']}):
+            return False
+        key = (access['learner_id'], bank['id'], bank['version'])
+        questions = {q['id'] for q in group['questions']}
+        completed = {row['question'] for row in con.execute('''SELECT DISTINCT question FROM training_attempts
+            WHERE learner=? AND bank=? AND version=? AND group_id=? AND phase='done' ''', (*key, group['id']))}
+        if not questions <= completed:
+            return False
+        if 'training_memory' in tables:
+            stopped = {r['question'] for r in con.execute('''SELECT question FROM training_suspensions
+                WHERE learner=? AND bank=? AND version=?''', key)} if 'training_suspensions' in tables else set()
+            # Older unfinished rounds cannot block after a newer round updated the
+            # same FSRS card. Match the current revision, as submission does.
+            active = {r['question'] for r in con.execute('''SELECT a.question FROM training_attempts a
+                JOIN training_memory m ON m.learner=a.learner AND m.bank=a.bank AND m.question=a.question
+                    AND m.version=a.version AND m.revision=a.memory_revision
+                WHERE a.learner=? AND a.bank=? AND a.version=? AND a.group_id=?
+                    AND a.mode='review' AND a.phase!='done' ''', (*key, group['id']))}
+            if active - stopped:
+                return False
+            for row in con.execute('SELECT question,mastered,due_at FROM training_memory WHERE learner=? AND bank=? AND version=?', key):
+                if row['question'] in questions - stopped and (not row['mastered'] or datetime.fromisoformat(row['due_at']) <= current):
+                    return False
+        return True
+
+    def describe(self, con, access, node_id):
+        """Permission-filtered links for prerequisites, independent of their kind."""
+        from urllib.parse import quote
+        allowed = {t['id'] for t in access['topics']}
+        if group_parts(node_id):
+            bank, group = self.group_content(node_id)
+            if not group or permission_id(bank['id']) not in allowed:
+                return None
+            return {'id': node_id, 'title': group['title'], 'kind': 'group',
+                    'href': f"/subjects/{quote(bank['subject_id'])}/banks/{quote(bank['id'])}?groupId={quote(group['id'])}"}
+        if node_id not in self.catalog.topics or node_id not in allowed:
+            return None
+        subject = self.subjects.topic_subject(node_id) if self.subjects else 'math'
+        return {'id': node_id, 'title': self.catalog.topic(node_id)['title'], 'kind': 'topic',
+                'href': f'/subjects/{quote(subject)}/topic/{quote(node_id)}'}
+
+    def group_status(self, con, access, bank_id, group_id, current_time=None):
+        node_id = group_key(bank_id, group_id)
+        dependencies = self.dependencies()
+        missing = self.missing_count(con, access, node_id, dependencies, current_time)
+        details = [item for parent in dependencies.get(node_id, [])
+                   if (item := self.describe(con, access, parent)) is not None]
+        return {'dependency_ready': missing == 0, 'missing_prerequisite_count': missing,
+                'prerequisites': details, 'prerequisite_details': details}
 
     def is_ready(self, access, topic_id):
         with closing(self.access_store._connect()) as con:

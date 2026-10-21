@@ -8,6 +8,7 @@ from .fsrs_engine import utc_time
 from .question_types import present_choice
 from .review_cards import point_id, register_point, eligible_presentations
 from .training_content import permission_id
+from .dependency_nodes import group_key
 from .topic_structure import atomic_state, sectioned_training
 
 
@@ -38,6 +39,8 @@ class ReviewSources:
                 JOIN training_submissions s ON s.attempt=a.id WHERE a.learner=? AND a.bank=?
                 AND s.status IN ('pending','running')''', (self.learner, bank_id))}
             for group in bank['groups']:
+                if not self.dependencies.ready(con, self.access, group_key(bank_id, group['id'])):
+                    continue
                 for question in group.get('questions', []):
                     if question.get('academy') or question.get('hyperskill'):
                         # The shared bank owns its schedule; its answer provider is the IDE.
@@ -140,6 +143,7 @@ class ReviewSources:
             local = source['local_points'][0]
             memory = self.training._memory(con, source['container'], local, source['version'])
             return (memory is not None and fingerprint(dict(memory)) == source['memory'][item['point_ids'][0]]
+                    and self.dependencies.ready(con, self.access, group_key(source['container'], source['group_id']))
                     and not self.training._stopped(con, source['container'], local, source['version']))
         backend = self.atoms.get(source['container'])
         if not backend or backend.course['version'] != source['version']:

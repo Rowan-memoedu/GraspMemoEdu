@@ -45,13 +45,13 @@ class Preferences(BaseModel):
 
 
 def register_training_routes(app, training, access_store, subjects, service_for,
-                             admission_lock, limits, schedule, outstanding_count, clock=None):
+                             admission_lock, limits, schedule, outstanding_count, clock=None, dependencies=None):
     settings = app.state.settings
 
     def backend_for(access, scope_digest=None):
         runtime = service_for(access['learner_id'], scope_digest=scope_digest).runtime if access.get('is_admin') else None
         return TrainingService(training, settings.data_dir, access['learner_id'], app.state.service.judge,
-                               runtime=runtime, clock=clock)
+                               runtime=runtime, clock=clock, dependencies=dependencies, access=access)
 
     def context(request, feature=None):
         access = access_store.resolve(request.headers.get('x-learning-identity'))
@@ -60,7 +60,7 @@ def register_training_routes(app, training, access_store, subjects, service_for,
             raise DomainError('feature_forbidden', '当前账号没有使用此功能的权限。', 403)
         runtime = service_for(access['learner_id'], session_scope=request.headers.get('x-learning-identity')).runtime if access.get('is_admin') else None
         backend = TrainingService(training, settings.data_dir, access['learner_id'], app.state.service.judge,
-                                  runtime=runtime, clock=clock)
+                                  runtime=runtime, clock=clock, dependencies=dependencies, access=access)
         return access, backend
 
     def authorize_bank(request, access, bank_id, feature=None):
@@ -83,23 +83,31 @@ def register_training_routes(app, training, access_store, subjects, service_for,
     def state(request, access, backend, attempt_id):
         with closing(backend._connect()) as con:
             row = backend._attempt(con, attempt_id)
+            status = backend.group_status(con, row['bank'], row['group_id'])
         authorize_bank(request, access, row['bank'])
         result = backend.state(attempt_id, history='review_history' in access['features'],
                                self_rating=self_enabled(access, backend))
-        result['can_submit'] = 'submit_answer' in access['features']
-        result['can_learn'] = 'learn' in access['features']
+        result.update(status)
+        result['can_submit'] = 'submit_answer' in access['features'] and status.get('dependency_ready', True)
+        result['can_learn'] = 'learn' in access['features'] and status.get('dependency_ready', True)
         return result
 
     def attempt_context(request, attempt_id, feature):
         access, backend = context(request, feature)
-        state(request, access, backend, attempt_id)
+        value = state(request, access, backend, attempt_id)
+        backend.require_group(value['bank_id'], value['group_id'])
         return access, backend
 
     @app.get('/api/training/catalog')
     def catalog(request: Request):
-        access, _ = context(request)
-        return {'banks': [{k: bank.get(k, '') for k in ('id', 'title', 'subject_id', 'description', 'version')}
-                          for bank in visible(request, access)]}
+        access, backend = context(request)
+        banks = []
+        for bank in visible(request, access):
+            groups = backend.bank(bank['id'], history=False)['groups']
+            groups = [g for g in groups if g['question_count'] or g.get('introduction_count')]
+            banks.append({k: bank.get(k, '') for k in ('id', 'title', 'subject_id', 'description', 'version')} | {
+                'dependency_ready': not groups or any(g.get('dependency_ready', True) for g in groups)})
+        return {'banks': banks}
 
     @app.get('/api/training/bank')
     def bank(request: Request, bank_id: str):
@@ -115,9 +123,13 @@ def register_training_routes(app, training, access_store, subjects, service_for,
             return backend.group(bank_id, group_id, history='review_history' in access['features'])
         result = backend.reader(bank_id, group_id, history='review_history' in access['features'],
                                 self_rating=self_enabled(access, backend))
+        ready = result.get('dependency_ready', True)
+        if not ready and not any(q['latest_attempt_id'] for q in result['questions']):
+            backend.require_group(bank_id, group_id)
         for value in result['reader_states'].values():
-            value['can_submit'] = 'submit_answer' in access['features']
-            value['can_learn'] = 'learn' in access['features']
+            value['dependency_ready'] = ready
+            value['can_submit'] = 'submit_answer' in access['features'] and ready
+            value['can_learn'] = 'learn' in access['features'] and ready
         return result
 
     @app.post('/api/training/open')

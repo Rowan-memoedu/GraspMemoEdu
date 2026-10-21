@@ -1,6 +1,6 @@
-import {t} from './i18n.js?v=5957696006f188e4';
-import {answerEmpty} from './question-input.js?v=5957696006f188e4';
-import {prepareLiteralMath} from './math-presentation.js?v=5957696006f188e4';
+import {t} from './i18n.js?v=3eed916af62d1e5f';
+import {answerEmpty} from './question-input.js?v=3eed916af62d1e5f';
+import {prepareLiteralMath} from './math-presentation.js?v=3eed916af62d1e5f';
 
 const element = (tag, cls, text) => {
   const node = document.createElement(tag); node.className = cls;

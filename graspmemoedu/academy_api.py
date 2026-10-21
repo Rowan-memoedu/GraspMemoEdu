@@ -64,6 +64,9 @@ def register_academy_routes(app, settings, access_store, service_for, identity, 
             if (access['learner_id'] != row['learner'] or backend.version != row['version']
                     or permission_id(backend.bank_id) != row['topic']):
                 raise DomainError('stale_academy_ticket', '题库已更新，请从网页重新打开。', 409)
+            with closing(backend.training._connect()) as con:
+                attempt = backend.training._attempt(con, row['step'])
+                backend.training.require_group(backend.bank_id, attempt['group_id'], con=con)
             return row, backend
         if row['topic'] in app.state.training_catalog.topic_redirects:
             raise DomainError('stale_academy_ticket', '本题已移入题库，请从题库重新打开。', 409)

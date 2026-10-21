@@ -1,6 +1,6 @@
-import { portalMessages } from './portal-messages.js?v=5957696006f188e4';
+import { portalMessages } from './portal-messages.js?v=3eed916af62d1e5f';
 // One dependency-free renderer for the website and self-contained local previews.
-export function renderCourseGraph(target, graph, {language = 'zh', onOpenTopic} = {}) {
+export function renderCourseGraph(target, graph, {language = 'zh', onOpenTopic, onOpenNode} = {}) {
   const t = key => portalMessages[key][language === 'en' ? 1 : 0];
   const el = (tag, cls, text) => {
     const item = document.createElement(tag); if (cls) item.className = cls;
@@ -12,7 +12,8 @@ export function renderCourseGraph(target, graph, {language = 'zh', onOpenTopic} 
     for (const [key, value] of Object.entries(attributes)) item.setAttribute(key, String(value));
     return item;
   };
-  const nodes = graph.nodes || [], edges = graph.edges || [], byId = new Map(nodes.map(n => [n.topic_id, n]));
+  const nodes = (graph.nodes || []).map(n => ({...n, topic_id: n.id || n.topic_id}));
+  const edges = graph.edges || [], byId = new Map(nodes.map(n => [n.topic_id, n]));
   target.replaceChildren(); target.classList.add('courseGraph');
   if (!nodes.length) { target.append(el('p', '', t('graph.empty'))); return; }
   const parents = new Map(nodes.map(n => [n.topic_id, []])), children = new Map(nodes.map(n => [n.topic_id, []]));
@@ -84,8 +85,9 @@ export function renderCourseGraph(target, graph, {language = 'zh', onOpenTopic} 
       for (const key of list) { const button = el('button', '', byId.get(key).title); button.type = 'button'; button.onclick = () => select(key, true); row.append(button); }
       details.append(row);
     }
-    if (onOpenTopic && current.content_status === 'available') {
-      const button = el('button', '', t('graph.open')); button.type = 'button'; button.onclick = () => onOpenTopic(id); details.append(button);
+    if ((onOpenNode || onOpenTopic && current.kind !== 'group') && current.content_status === 'available') {
+      const button = el('button', '', t('graph.open')); button.type = 'button';
+      button.onclick = () => onOpenNode ? onOpenNode(current) : onOpenTopic(id); details.append(button);
     }
     if (focus) {
       const pos = positions.get(id);

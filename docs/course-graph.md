@@ -1,5 +1,33 @@
 # 独立课程图谱：格式与导入工作流
 
+## Topic 与题组共用依赖图
+
+协议 3 在同一图谱中支持两种节点：Topic 沿用 `topic_id`；题组使用 `bank_id` 和 `group_id`，边端点写为 `group:<bank_id>:<group_id>`。两者都需要 `title` 和布尔 `member`。题组使用题库原始稳定 ID，不复制成 Topic，也没有另一套依赖存储。
+
+例如，CS Topic 学完后才开放对应题组：
+
+```json
+{
+  "schema_version": 3,
+  "subject_id": "cs",
+  "course_id": "java-practice",
+  "title": "Java 练习依赖",
+  "nodes": [
+    {"topic_id": "numeric-types", "title": "数值类型", "member": false},
+    {"bank_id": "java-practice", "group_id": "literals", "title": "数值字面量", "member": true}
+  ],
+  "edges": [
+    {"from": "numeric-types", "to": "group:java-practice:literals", "type": "prerequisite"}
+  ]
+}
+```
+
+`course_id` 保留原图谱文件标识的含义；题库图谱使用题库 ID。通过下面同一个 `graph-import` 入口预览、导入、更新和备份。Topic → 题组、题组 → 题组及题组 → Topic 都参与全局前置遍历与环路校验。目录章节和纯指导不是知识节点，不能代替实际题组。未导入、无权访问的前置仍然阻止解锁。
+
+前置题组的直接题目必须全部至少完成一次，并且没有进行中的复习或到期未复习的卡片，才算满足依赖。首次直接答对且未主动加入错题本的题目沿用停止推送规则，不会因为没有 FSRS 复习而阻止解锁。Topic 继续使用原完成、复习和暂停策略；熟练度分数本身不作为解锁门槛。网页作答、IDE 回传和复习取题使用同一个 `DependencyPolicy`。
+
+题库页面使用同一图谱查看器，节点链接分别打开原 Topic 或题组。学习和题库右上角的“隐藏暂未解锁的内容”只控制前置受阻任务的显示，保留每个身份的选项；空章节随之隐藏，取消勾选可恢复。隐藏不修改图谱、进度或复习状态。题组全部题目完成后显示“完成学习”，返回题库时展开并定位该题组。
+
 来源批次支持协议 2：节点增加布尔 `member`，区分本课程成员与外部前置。一个 Topic 可属于多门课程，共用正文与学习身份。运行时合并所有来源的显式前置并检查全局环；外部节点不自动成为课程成员。协议 1 保持兼容。批次激活后，当前图谱位于 `active-content.json` 指向的内容目录内，详见[批次导入](mathacademy-import.md)。
 
 正式图谱自 2026-09-21 起位于腾讯云 `/var/lib/graspmemoedu/graphs`。本文本机命令用于隔离准备和预览；正式导入通过 SSH 在服务器执行，见 [腾讯云运维](tencent-deployment.md)。不要将本机回滚快照当作正式数据源。

@@ -1,20 +1,20 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=5957696006f188e4";
-import { createReviewView } from "./review.js?v=5957696006f188e4";
-import { renderCourseGraph } from "./course-graph.js?v=5957696006f188e4";
-import {questionInput, choiceTypeField} from './question-input.js?v=5957696006f188e4';
-import {enhanceTopicContent} from './topic-content.js?v=5957696006f188e4';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=5957696006f188e4';
-import {createCatalogPicker} from './catalog-picker.js?v=5957696006f188e4';
-import {createAtomicView} from './atomic.js?v=5957696006f188e4';
-import {createTrainingView} from './training.js?v=5957696006f188e4';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=5957696006f188e4";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=3eed916af62d1e5f";
+import { createReviewView } from "./review.js?v=3eed916af62d1e5f";
+import { renderCourseGraph } from "./course-graph.js?v=3eed916af62d1e5f";
+import {questionInput, choiceTypeField} from './question-input.js?v=3eed916af62d1e5f';
+import {enhanceTopicContent} from './topic-content.js?v=3eed916af62d1e5f';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=3eed916af62d1e5f';
+import {createCatalogPicker} from './catalog-picker.js?v=3eed916af62d1e5f';
+import {createAtomicView} from './atomic.js?v=3eed916af62d1e5f';
+import {createTrainingView} from './training.js?v=3eed916af62d1e5f';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=3eed916af62d1e5f";
 
-import {createPaperView} from './review-papers.js?v=5957696006f188e4';
+import {createPaperView} from './review-papers.js?v=3eed916af62d1e5f';
 
-import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=5957696006f188e4';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=5957696006f188e4';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=5957696006f188e4';
-import {createStudentDashboard} from './student-dashboard.js?v=5957696006f188e4';
+import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=3eed916af62d1e5f';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=3eed916af62d1e5f';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=3eed916af62d1e5f';
+import {createStudentDashboard} from './student-dashboard.js?v=3eed916af62d1e5f';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -34,7 +34,7 @@ const roundButton = (text, action) => control(text, "portalStart", action);
 export function initPortal(bridge) {
   let chatModule, attachChatEditor, renderChatMarkdown;
   async function loadChat() {
-    const module = await (chatModule ||= import('./vendor/chat/chat.js?v=5957696006f188e4').catch(error => { chatModule = null; throw error; }));
+    const module = await (chatModule ||= import('./vendor/chat/chat.js?v=3eed916af62d1e5f').catch(error => { chatModule = null; throw error; }));
     ({attachChatEditor, renderChatMarkdown} = module);
     module.configureChatImages(ident => bridge.request('help-images?image_id=' + encode(ident)));
   }
@@ -131,7 +131,12 @@ export function initPortal(bridge) {
     reviewHref: () => subjectHref(currentRoute?.subjectId, '/reviews'), formatDate: value => apiDate(value, true),
     progressChanged: () => { dashboards.clear(); answerCache.clear(); }});
   const training = createTrainingView({...bridge, request: call, root, href: localHref,
-    formatDate: value => apiDate(value, true), courseSidebar, taskTree});
+    formatDate: value => apiDate(value, true), courseSidebar, taskTree, taskVisibilityOptions,
+    openGraph, progressChanged: () => { dashboards.clear(); answerCache.clear(); },
+    completeGroup: (bank, group) => {
+      const target = localHref(`/banks/${encode(bank)}?groupId=${encode(group)}`);
+      scrolls.delete(target); navigate(target);
+    }});
   const papers = createPaperView({...bridge, request: call, root, href: localHref,
     formatDate: value => apiDate(value, true), courseSidebar, taskTree,
     progressChanged: () => { dashboards.clear(); answerCache.clear(); }});
@@ -423,6 +428,14 @@ export function initPortal(bridge) {
         if (ticket !== sequence) return;
         const reportBlock = root.querySelector('.materialBlock.targetBlock') || root.querySelector('.helpContentBlock');
         if (reportBlock) { reportBlock.focus({preventScroll: true}); reportBlock.scrollIntoView({block: 'start'}); }
+        else if (params.has('groupId') && !scrolls.has(currentHash)) {
+          const card = root.querySelector(`[data-task-id="${CSS.escape(params.get('groupId'))}"]`);
+          for (let parent = card?.parentElement; parent && parent !== root; parent = parent.parentElement) {
+            if (parent.tagName === 'DETAILS') parent.open = true;
+          }
+          card?.scrollIntoView({block: 'center'});
+          card?.querySelector('.taskToggle')?.focus({preventScroll: true});
+        }
         else if (target) root.querySelector(`[data-progress-id="${CSS.escape(target)}"]`)?.scrollIntoView({ block: "start" });
         else window.scrollTo(0, scrolls.get(currentHash) || 0);
         const sidebar = $('traininghistoryPanel');
@@ -623,6 +636,7 @@ export function initPortal(bridge) {
   }
   function incompleteTask(task, data, view = {}) {
     const card = node("article", task.dependency_ready === false || task.locked || task.status === 'paused' ? "portalTask taskLocked" : "portalTask taskUnlocked"); card.dataset.taskId = task.id;
+    card.dataset.dependencyReady = String(task.dependency_ready !== false);
     const toggle = control("", "taskToggle", () => { const was = expandedTask === task.id; collapseTasks(); if (!was) { expandedTask = task.id; details.hidden = false; toggle.setAttribute("aria-expanded", "true"); } });
     toggle.append(taskSummary(task, false, view)); toggle.setAttribute("aria-expanded", "false");
     const details = node("div", "taskDetails"); details.hidden = true;
@@ -635,14 +649,18 @@ export function initPortal(bridge) {
       details.append(info);
     } else if (["Quiz", "Exam"].includes(task.type)) {
       const info = node("div", "taskPrerequisites"); info.append(infoRow(t("portal.time.limit.48"), task.time_limit_minutes != null ? t("portal.minutes", { count: Number(task.time_limit_minutes).toLocaleString(locale()) }) : task.time_limit_seconds != null ? t("portal.minutes", { count: Math.round(task.time_limit_seconds / 60).toLocaleString(locale()) }) : "—"), infoRow(t("portal.questions.49"), task.question_count == null ? "—" : Number(task.question_count).toLocaleString(locale()))); details.append(info);
-    } else {
+    }
+    if ((!view.training && !view.review && !['Quiz', 'Exam'].includes(task.type)) || task.prerequisite_details?.length) {
       const requirements = node("div", "taskPrerequisites"); requirements.append(node("h3", "", t("portal.prerequisites.50")));
-      if (!task.prerequisites?.length) requirements.append(node("p", "", t("portal.no.prerequisites.are.required.51")));
-      for (const item of task.prerequisites || []) {
+      const parents = task.prerequisite_details?.length ? task.prerequisite_details : task.prerequisites || [];
+      if (!parents.length) requirements.append(node("p", "", t("portal.no.prerequisites.are.required.51")));
+      for (const item of parents) {
         const id = typeof item === "string" ? item : item.id;
         const known = { ...(typeof item === "object" ? item : {}), ...(data.topics || []).find((topic) => topic.id === id), ...(task.prerequisite_details || []).find((topic) => topic.id === id) };
         const mastery = typeof known.mastery === "number" && Number.isFinite(known.mastery) ? known.mastery.toLocaleString(locale(), { maximumFractionDigits: 2 }) : "—";
-        const row = node("div", "prerequisiteRow"); row.append(node("span", known.status === "completed" ? "prerequisiteCheck complete" : "prerequisiteCheck", known.status === "completed" ? "✓" : "·"), link(known.title || id, `#/courses/${encode(task.course_id || data.course.id)}/progress?topicId=${encode(id)}`), node("span", "prerequisiteMetrics", t("portal.prerequisiteMetrics", { progress: percentLabel(known.progress), mastery }))); requirements.append(row);
+        const row = node("div", "prerequisiteRow"); row.append(node("span", known.status === "completed" ? "prerequisiteCheck complete" : "prerequisiteCheck", known.status === "completed" ? "✓" : "·"), link(known.title || id, known.href || `#/courses/${encode(task.course_id || data.course.id)}/progress?topicId=${encode(id)}`));
+        if (known.progress != null || known.mastery != null) row.append(node("span", "prerequisiteMetrics", t("portal.prerequisiteMetrics", { progress: percentLabel(known.progress), mastery })));
+        requirements.append(row);
       }
       details.append(requirements);
     }
@@ -730,11 +748,42 @@ export function initPortal(bridge) {
       defaultOpen: Boolean(view.review),
     });
   }
+  // One preference and one filter for learning tasks and question-bank groups.
+  // Other locks (pause, cooldown, maintenance) are deliberately unaffected.
+  function taskVisibilityOptions(container, {extra = []} = {}) {
+    const key = `graspmemoedu:hide-locked:${bridge.getAccess()?.learner_id}`;
+    let checked = false;
+    try { checked = localStorage.getItem(key) === 'true'; } catch {}
+    const bar = node('div', 'taskListOptions'), label = node('label', 'hideLockedControl');
+    const input = node('input'); input.type = 'checkbox'; input.checked = checked;
+    input.className = 'hideLockedInput';
+    label.append(input, node('span', '', t('portal.hideLocked'))); bar.append(...extra, label);
+    function apply() {
+      for (const item of container.querySelectorAll('[data-dependency-ready]')) {
+        item.hidden = input.checked && item.dataset.dependencyReady === 'false';
+      }
+      for (const group of [...container.querySelectorAll('.courseUnitGroup')].reverse()) {
+        group.hidden = input.checked && !group.querySelector('.portalTask:not([hidden])');
+      }
+      let message = container.querySelector('.lockedContentEmpty');
+      const allHidden = input.checked && container.querySelector('[data-dependency-ready]')
+        && !container.querySelector('[data-dependency-ready]:not([hidden])');
+      if (allHidden && !message) { message = node('p', 'portalEmpty lockedContentEmpty', t('portal.lockedHidden')); container.append(message); }
+      if (message) message.hidden = !allHidden;
+    }
+    input.addEventListener('change', () => {
+      try { localStorage.setItem(key, String(input.checked)); } catch {}
+      apply();
+    });
+    queueMicrotask(apply);
+    return bar;
+  }
   function renderLearn(data, taskId, ticket) {
     historyError = null;
     const layout = node("div", "dashboardLayout"), tasks = node("div", "dashboardTasks"); tasks.id = "dashboardTasks";
     layout.append(courseSidebar(data), tasks); root.replaceChildren(layout);
     if (taskId) { renderAnswers(tasks, taskId, ticket); return; }
+    tasks.append(taskVisibilityOptions(tasks));
     const pending = node("section", "incompleteTasks"); pending.setAttribute("aria-label", t("portal.pending.tasks.64"));
     if (data.course_hierarchy_enabled && allowed("course_hierarchy")) {
       for (const task of data.tasks.filter(task => task.type !== "Lesson")) pending.append(incompleteTask(task, data));
@@ -907,8 +956,8 @@ export function initPortal(bridge) {
     try {
       const graph = await call(`graphs/${encode(data.course.id)}`);
       if (request !== graphRequest || ticket !== sequence || learner !== bridge.getAccess()?.learner_id || !graphDialog.open) return;
-      renderCourseGraph(graphContent, graph, {language: getLanguage(), onOpenTopic: id => {
-        graphDialog.close(); navigate(`/topic/${encode(id)}`);
+      renderCourseGraph(graphContent, graph, {language: getLanguage(), onOpenNode: item => {
+        graphDialog.close(); navigate(item.href || `/topic/${encode(item.topic_id)}`);
       }});
     } catch (error) {
       if (request === graphRequest && ticket === sequence && graphDialog.open) graphContent.replaceChildren(errorBox(error.message, () => { graphDialog.close(); openGraph(data); }));

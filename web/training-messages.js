@@ -1,4 +1,5 @@
 export const trainingMessages = {
+  'training.finishLearning': ['完成学习', 'Finish learning'],
   'training.banks': ['题库', 'Question banks'],
   'training.train': ['训练', 'Train'],
   'training.start': ['开始训练', 'Start training'],

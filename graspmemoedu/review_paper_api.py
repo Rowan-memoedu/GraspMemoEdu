@@ -76,7 +76,7 @@ def register_paper_routes(app, training, catalog, dependencies, access_store, su
             raise DomainError('feature_forbidden', '当前账号没有使用此功能的权限。', 403)
         runtime = service_for(access['learner_id'], session_scope=token).runtime if access.get('is_admin') else None
         backend = TrainingService(training, app.state.settings.data_dir, access['learner_id'],
-                                  app.state.service.judge, runtime=runtime, clock=clock)
+                                  app.state.service.judge, runtime=runtime, clock=clock, dependencies=dependencies, access=access)
         papers = PaperService(backend, catalog, dependencies, access, app.state.review_paper_types,
                               lambda tid: service_for(access['learner_id'], tid, token),
                               refresh_access=lambda: access_store.resolve(token))

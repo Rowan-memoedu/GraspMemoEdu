@@ -1,4 +1,6 @@
 export const portalMessages = {
+  'portal.hideLocked': ['隐藏暂未解锁的内容', 'Hide content with unmet prerequisites'],
+  'portal.lockedHidden': ['暂未解锁的内容已隐藏，可取消勾选查看。', 'Locked content is hidden. Uncheck the option to show it.'],
   'students.today': ['今日在线情况', 'Today’s online activity'],
   'students.todayDate': ['{date} · 北京时间', '{date} · Beijing time'],
   'students.onlineTime': ['今日在线时长：{minutes} 分 {seconds} 秒', 'Today online: {minutes} min {seconds} sec'],
@@ -910,16 +912,16 @@ export const portalMessages = {
     "A dependency cycle prevents rendering."
   ],
   "graph.search": [
-    "搜索 主题 名称或 ID",
-    "Search Topic title or ID"
+    "搜索节点名称或 ID",
+    "Search node title or ID"
   ],
   "graph.select": [
-    "选择 主题",
-    "Select Topic"
+    "选择节点",
+    "Select node"
   ],
   "graph.diagram": [
-    "由下向上的 主题 前置关系图",
-    "Topic prerequisites, bottom to top"
+    "由下向上的前置关系图",
+    "Learning prerequisites, bottom to top"
   ],
   "graph.pending": [
     "教学内容未导入",
@@ -955,7 +957,7 @@ export const portalMessages = {
   ],
   "portal.prerequisitesRequired": [
     "请先完成前置知识的学习",
-    "Complete the prerequisite topics first"
+    "Complete the prerequisites first"
   ],
   "graph.children": [
     "直接后续",
@@ -966,12 +968,12 @@ export const portalMessages = {
     "None"
   ],
   "graph.open": [
-    "打开 主题",
-    "Open Topic"
+    "打开内容",
+    "Open content"
   ],
   "graph.choose": [
-    "选择 主题…",
-    "Choose Topic…"
+    "选择节点…",
+    "Choose node…"
   ],
   "graph.fit": [
     "适应宽度",

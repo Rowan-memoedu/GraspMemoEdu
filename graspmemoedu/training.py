@@ -14,6 +14,7 @@ from .service import DomainError
 from .learning_storage import administrator
 from .review_cards import register_point, require_unreserved
 from .reference_answers import reference_fields
+from .dependency_nodes import group_key
 
 
 def packed(value):
@@ -23,9 +24,10 @@ def packed(value):
 class TrainingService:
     submission_table = 'training_submissions'
 
-    def __init__(self, catalog, data_dir, learner_id, judge=None, *, runtime=None, clock=None):
+    def __init__(self, catalog, data_dir, learner_id, judge=None, *, runtime=None, clock=None, dependencies=None, access=None):
         self.catalog, self.learner_id, self.judge = catalog, learner_id, judge
         self.db_path, self.runtime = Path(data_dir) / 'learning.sqlite3', runtime
+        self.dependencies, self.access = dependencies, access
         if runtime is None and administrator(data_dir, learner_id):
             raise DomainError('administrator_memory_required', '管理员学习必须使用临时会话。', 409)
         self.clock = clock or (lambda: datetime.now(timezone.utc))
@@ -118,6 +120,7 @@ class TrainingService:
                         self.learner_id, bank_id, group_id, question_id):
                     raise DomainError('request_conflict', '请求标识已用于另一项操作。', 409)
                 return request_id
+            self.require_group(bank_id, group_id, con=con)
             memory = self._memory(con, bank_id, question_id, bank['version'])
             require_unreserved(con, self.learner_id, 'training', bank_id, bank['version'], question_id, now=utc_time(self.clock()).isoformat())
             now = utc_time(self.clock())
@@ -373,6 +376,19 @@ class TrainingService:
             require_unreserved(con, self.learner_id, 'training', row['bank'], row['version'], row['question'], now=utc_time(self.clock()).isoformat())
             self._complete(con, row, stop=True)
 
+    def group_status(self, con, bank_id, group_id):
+        return (self.dependencies.group_status(con, self.access, bank_id, group_id, utc_time(self.clock()).isoformat())
+                if self.dependencies else {})
+
+    def require_group(self, bank_id, group_id, *, con=None):
+        if not self.dependencies:
+            return
+        if con is None:
+            with closing(self._connect()) as connection:
+                return self.require_group(bank_id, group_id, con=connection)
+        if not self.dependencies.ready(con, self.access, group_key(bank_id, group_id), current_time=utc_time(self.clock()).isoformat()):
+            raise DomainError('prerequisites_not_ready', '请先完成前置知识的学习和待复习内容，并解除前置知识的暂停状态。', 409)
+
     def bank(self, bank_id, *, history=True):
         bank = self.catalog.bank(bank_id)
         with closing(self._connect()) as con:
@@ -380,11 +396,13 @@ class TrainingService:
                 SELECT group_id,COUNT(DISTINCT question) AS count FROM training_attempts
                 WHERE learner=? AND bank=? AND version=? AND phase='done' GROUP BY group_id''',
                 (self.learner_id, bank_id, bank['version']))}
+            statuses = {g['id']: self.group_status(con, bank_id, g['id']) for g in bank['groups']}
         return {**{k: bank.get(k, '') for k in ('id', 'title', 'subject_id', 'description', 'version')},
                 'groups': [{'id': g['id'], 'title': g['title'], 'parent_id': g.get('parent_id'),
                             'question_count': len(g.get('questions', [])),
                             **({'introduction_count': len(g['introductions'])} if 'introductions' in g else {}),
-                            'completed_count': counts.get(g['id'], 0) if history else None}
+                            'completed_count': counts.get(g['id'], 0) if history else None,
+                            **statuses[g['id']]}
                            for g in bank['groups']]}
 
     def group(self, bank_id, group_id, *, history=True):
@@ -399,14 +417,16 @@ class TrainingService:
             recent = {q['id']: con.execute('''SELECT id,mode,phase FROM training_attempts WHERE learner=? AND bank=?
                 AND question=? AND version=? ORDER BY created_at DESC,rowid DESC LIMIT 1''',
                 (self.learner_id, bank_id, q['id'], bank['version'])).fetchone() for q in group.get('questions', [])}
+            status = self.group_status(con, bank_id, group_id)
         counts = {r['question']: r['count'] for r in rows}
         return {'id': group_id, 'title': group['title'], 'bank_id': bank_id, 'bank_title': bank['title'],
-                'version': bank['version'], 'math_css': bank.get('math_css', ''),
+                'version': bank['version'], 'math_css': bank.get('math_css', ''), **status,
                 'external_providers': sorted({p for q in group.get('questions', [])
                                               for p in ('hyperskill', 'academy') if q.get(p)}),
                 **({ 'introductions': group['introductions'], 'content_order': group['content_order']}
                    if 'introductions' in group else {}),
                 'questions': [{'id': q['id'], 'title': q.get('title', q['id']),
+                               'completed': bool(counts.get(q['id'], 0)),
                                'completed_count': counts.get(q['id'], 0) if history else None,
                                'latest_attempt_id': recent[q['id']]['id'] if recent[q['id']] else None,
                                'latest_attempt_mode': recent[q['id']]['mode'] if recent[q['id']] else None,
@@ -472,6 +492,9 @@ class TrainingService:
                 AND s.question=m.question AND s.version=m.version) ORDER BY due_at,bank,question''',
                                (self.learner_id,)).fetchall()
         allowed = {b['id']: b for b in banks}
+        with closing(self._connect()) as con:
+            ready = {(b['id'], g['id']): self.group_status(con, b['id'], g['id']).get('dependency_ready', True)
+                     for b in banks for g in b['groups']}
         for row in rows:
             bank = allowed.get(row['bank'])
             if not bank or bank['version'] != row['version']:
@@ -483,6 +506,8 @@ class TrainingService:
                 next_due = min(next_due, due) if next_due else due
                 continue
             for group in bank['groups']:
+                if not ready[(bank['id'], group['id'])]:
+                    continue
                 q = next((q for q in group.get('questions', []) if q['id'] == row['question']), None)
                 if q:
                     items.append({'bank_id': bank['id'], 'bank_title': bank['title'], 'group_id': group['id'],

@@ -12,6 +12,8 @@ from .catalog import Catalog
 from .service import DomainError
 from .subjects import Subjects
 from .topic_install import encoded, import_lock
+from .dependency_nodes import node_key, validate_node_key
+from .training_content import TrainingCatalog, permission_id
 
 
 MAX_BYTES = 4 * 1024 * 1024
@@ -44,37 +46,43 @@ def _source(value):
 def validate_graph(raw):
     """Pure validation; no files, content, permissions or progress are created."""
     _fields(raw, ('schema_version', 'subject_id', 'course_id', 'title', 'nodes', 'edges'))
-    if type(raw['schema_version']) is not int or raw['schema_version'] not in (1, 2):
+    if type(raw['schema_version']) is not int or raw['schema_version'] not in (1, 2, 3):
         raise ValueError('Unsupported graph schema_version')
     graph = {key: raw[key] for key in ('schema_version', 'subject_id', 'course_id')}
     identifier(graph['course_id'])
     Catalog._identifier(graph['subject_id'])
     graph['title'] = Catalog._text(raw['title'], 200)
     if not isinstance(raw['nodes'], list) or not 1 <= len(raw['nodes']) <= 1000:
-        raise ValueError('Graph requires 1–1000 Topic nodes')
+        raise ValueError('Graph requires 1–1000 learning nodes')
     if not isinstance(raw['edges'], list) or len(raw['edges']) > 10000:
         raise ValueError('Graph allows at most 10000 edges')
     nodes, seen = [], set()
     for item in raw['nodes']:
-        _fields(item, ('topic_id', 'title'), ('source', 'member') if raw['schema_version'] == 2 else ('source',))
-        topic_id = Catalog._identifier(item['topic_id'])
+        is_group = raw['schema_version'] == 3 and isinstance(item, dict) and 'group_id' in item
+        required = ('bank_id', 'group_id', 'title') if is_group else ('topic_id', 'title')
+        _fields(item, required, ('source', 'member') if raw['schema_version'] >= 2 else ('source',))
+        for key in ('bank_id', 'group_id') if is_group else ('topic_id',):
+            Catalog._identifier(item[key])
+        topic_id = node_key(item)
         if topic_id.casefold() in seen:
             raise ValueError('Duplicate Topic node')
         seen.add(topic_id.casefold())
-        node = {'topic_id': topic_id, 'title': Catalog._text(item['title'], 200)}
-        if raw['schema_version'] == 2:
+        node = {key: item[key] for key in required if key != 'title'}
+        node['title'] = Catalog._text(item['title'], 200)
+        if raw['schema_version'] >= 2:
             if type(item.get('member')) is not bool:
                 raise ValueError('Version 2 nodes require explicit membership')
             node['member'] = item['member']
         if 'source' in item:
             node['source'] = _source(item['source'])
         nodes.append(node)
-    ids = {node['topic_id'] for node in nodes}
+    ids = {node_key(node) for node in nodes}
     edges, pairs = [], set()
     children, indegree = {key: [] for key in ids}, dict.fromkeys(ids, 0)
     for item in raw['edges']:
         _fields(item, ('from', 'to', 'type'), ('reason', 'source'))
-        parent, child = Catalog._identifier(item['from']), Catalog._identifier(item['to'])
+        check = validate_node_key if raw['schema_version'] == 3 else Catalog._identifier
+        parent, child = check(item['from']), check(item['to'])
         if parent not in ids or child not in ids or parent == child:
             raise ValueError('Unknown endpoint or self dependency')
         if item['type'] != 'prerequisite' or (parent, child) in pairs:
@@ -98,7 +106,7 @@ def validate_graph(raw):
                 ready.append(child)
     if visited != len(ids):
         raise ValueError('Prerequisite cycle')
-    graph.update(nodes=sorted(nodes, key=lambda node: node['topic_id']),
+    graph.update(nodes=sorted(nodes, key=node_key),
                  edges=sorted(edges, key=lambda edge: (edge['from'], edge['to'])))
     if len(encoded(graph)) > MAX_BYTES:
         raise ValueError('Normalized graph file too large')
@@ -118,7 +126,7 @@ def revision(graph):
 
 def graph_diff(old, new):
     result = {}
-    for key, identity in (('nodes', lambda item: item['topic_id']),
+    for key, identity in (('nodes', node_key),
                           ('edges', lambda item: (item['from'], item['to']))):
         before = {identity(item): item for item in (old or {}).get(key, [])}
         after = {identity(item): item for item in new[key]}
@@ -132,11 +140,12 @@ def graph_diff(old, new):
 
 
 class GraphStore:
-    def __init__(self, settings, catalog=None, subjects=None):
+    def __init__(self, settings, catalog=None, subjects=None, training=None):
         self.settings = settings
         self.root = settings.content_dir / 'graphs'
         self.catalog = catalog or Catalog.load(settings)
         self.subjects = subjects or Subjects(settings, self.catalog)
+        self.training = training or TrainingCatalog(settings.data_dir)
 
     def path(self, course_id):
         path = self.root / (identifier(course_id) + '.json')
@@ -149,7 +158,18 @@ class GraphStore:
         course_id = graph['course_id']
         if course_id in self.catalog.courses:
             self.subjects.authorize_course(graph['subject_id'], course_id)
+        if course_id in self.training.banks and self.training.bank(course_id)['subject_id'] != graph['subject_id']:
+            raise ValueError('Graph bank belongs to a different subject')
         for node in graph['nodes']:
+            if 'group_id' in node:
+                bank = self.training.banks.get(node['bank_id'])
+                if node.get('member', True) and node['bank_id'] != course_id:
+                    raise ValueError('Graph group belongs to a different bank')
+                if bank is not None:
+                    group = next((g for g in bank['groups'] if g['id'] == node['group_id']), None)
+                    if group is not None and not group.get('questions'):
+                        raise ValueError('Only question groups belong in the knowledge graph')
+                continue
             owners = self.catalog.topic_courses.get(node['topic_id'])
             if owners is not None and node.get('member', True) and course_id not in owners:
                 raise ValueError('Graph Topic belongs to a different course: ' + node['topic_id'])
@@ -174,18 +194,27 @@ class GraphStore:
 
     def all(self):
         graphs = [self.load(path.stem) for path in sorted(self.root.glob('*.json'))]
-        self.validate_combined(graphs)
+        self.validate_effective(graphs)
         return graphs
+
+    def validate_effective(self, graphs):
+        # Legacy catalog edges remain authoritative until that course gets a graph.
+        # Include them in the same cycle check as mixed and cross-course edges.
+        graph_courses = {g['course_id'] for g in graphs}
+        edges = [{'from': parent, 'to': node['id'], 'type': 'prerequisite'}
+                 for course in self.catalog.courses.values() if course['id'] not in graph_courses
+                 for node in course['topics'] for parent in node['prerequisites']]
+        self.validate_combined([*graphs, {'schema_version': 3, 'nodes': [], 'edges': edges}])
 
     @staticmethod
     def validate_combined(graphs):
         owners = {}
         for graph in graphs:
             for node in graph['nodes']:
-                if graph['schema_version'] == 1 and node['topic_id'] in owners:
+                if graph['schema_version'] == 1 and node_key(node) in owners:
                     raise ValueError('Topic appears in multiple course graphs')
                 if graph['schema_version'] == 1:
-                    owners[node['topic_id']] = graph['course_id']
+                    owners[node_key(node)] = graph['course_id']
         dependencies = {}
         for graph in graphs:
             for edge in graph['edges']:
@@ -222,25 +251,47 @@ class GraphStore:
                         result.setdefault(node['id'], set()).update(node['prerequisites'])
         for graph in graphs:
             for node in graph['nodes']:
-                result.setdefault(node['topic_id'], set())
+                result.setdefault(node_key(node), set())
             for edge in graph['edges']:
                 result[edge['to']].add(edge['from'])
         return {tid: sorted(parents) for tid, parents in result.items()}
 
     def public(self, graph, access):
+        from urllib.parse import quote
         from .topic_runtime import is_introduction
         self.subjects.authorize_subject(access, graph['subject_id'])
         allowed = {topic['id'] for topic in access['topics']}
+        if graph['course_id'] in self.training.banks and permission_id(graph['course_id']) not in allowed:
+            return {key: graph[key] for key in ('schema_version', 'course_id', 'subject_id', 'title')} | {'nodes': [], 'edges': []}
         inherit = access['role'] == 'account' and access.get('permission_defaults', {}).get('topics', False)
         # Pending Topics are visible only to accounts that inherit future Topics.
         nodes = [{'topic_id': node['topic_id'], 'title': node['title'],
                   **({'member': node['member']} if 'member' in node else {}),
                   'content_status': 'available' if node['topic_id'] in self.catalog.topics
                     and self.catalog.topics[node['topic_id']].get('availability', {}).get('readable', True) else 'not_imported'}
-                 for node in graph['nodes'] if (inherit or node['topic_id'] in allowed)
+                 for node in graph['nodes'] if 'topic_id' in node and (inherit or node['topic_id'] in allowed)
                  and self.subjects.test_materials.graph_topic_visible(graph['course_id'], node['topic_id'], access)
                  and not (node['topic_id'] in self.catalog.topics and is_introduction(self.catalog.topic(node['topic_id'])))]
-        visible = {node['topic_id'] for node in nodes}
+        for node in graph['nodes']:
+            if 'group_id' not in node:
+                continue
+            bank = self.training.banks.get(node['bank_id'])
+            if permission_id(node['bank_id']) not in allowed or bank is None:
+                continue
+            group = next((g for g in bank['groups'] if g['id'] == node['group_id']), None)
+            nodes.append({key: node[key] for key in ('bank_id', 'group_id', 'title', 'member')} | {
+                'content_status': 'available' if group and group.get('questions') else 'not_imported'})
+        if graph['schema_version'] == 3:
+            for node in nodes:
+                node['id'] = node_key(node)
+                node['kind'] = 'group' if 'group_id' in node else 'topic'
+                subject = (self.training.bank(node['bank_id'])['subject_id'] if 'group_id' in node
+                           else self.subjects.topic_subject(node['topic_id']) if node['topic_id'] in self.catalog.topics
+                           else graph['subject_id'])
+                target = (f"banks/{quote(node['bank_id'])}/{quote(node['group_id'])}" if 'group_id' in node
+                          else f"topic/{quote(node['topic_id'])}")
+                node['href'] = f'/subjects/{quote(subject)}/{target}'
+        visible = {node_key(node) for node in nodes}
         return {'schema_version': graph['schema_version'], 'course_id': graph['course_id'], 'subject_id': graph['subject_id'],
                 'title': graph['title'], 'nodes': nodes,
                 'edges': [{key: edge[key] for key in ('from', 'to', 'type')}
@@ -255,19 +306,22 @@ def import_graph(settings, source, *, apply=False, expected_revision=None):
         prior = store.load(graph['course_id'])
         if prior and prior['subject_id'] != graph['subject_id']:
             raise ValueError('An existing graph cannot move between subjects')
-        ids = {node['topic_id'] for node in graph['nodes']}
+        ids = {node_key(node) for node in graph['nodes']}
         for other in store.all():
             if graph['schema_version'] == 1 and other['schema_version'] == 1 and other['course_id'] != graph['course_id'] and ids.intersection(node['topic_id'] for node in other['nodes']):
                 raise ValueError('Topic is already bound by another course graph')
-        store.validate_combined([g for g in store.all() if g['course_id'] != graph['course_id']] + [graph])
+        store.validate_effective([g for g in store.all() if g['course_id'] != graph['course_id']] + [graph])
         previous = revision(prior) if prior else None
         if expected_revision is not None and expected_revision != (previous or 'none'):
             raise ValueError('Graph changed since preview; preview the latest version')
         return store, prior, {'status': 'unchanged' if prior == graph else 'preview',
                              'course_id': graph['course_id'], 'previous_revision': previous,
                              'revision': revision(graph), 'diff': graph_diff(prior, graph),
-                             'pending_topics': [node['topic_id'] for node in graph['nodes']
+                             'pending_topics': [node['topic_id'] for node in graph['nodes'] if 'topic_id' in node
                                                 if node['topic_id'] not in store.catalog.topics],
+                             'pending_groups': [node_key(node) for node in graph['nodes'] if 'group_id' in node
+                                                and not any(g['id'] == node['group_id'] for g in
+                                                    store.training.banks.get(node['bank_id'], {}).get('groups', []))],
                              'topic_content_changed': False, 'learning_progress_changed': False}
     if not apply:
         return prepare()[2]
@@ -307,7 +361,8 @@ def preview_html(settings, source, destination):
     graph = read_graph(source)
     store = GraphStore(settings)
     store.validate_binding(graph)
-    public = store.public(graph, {'role': 'account', 'topics': [], 'permission_defaults': {'topics': True}})
+    public = store.public(graph, {'role': 'account', 'topics': store.training.permissions(),
+                                 'permission_defaults': {'topics': True}})
     web = Path(__file__).resolve().parents[1] / 'web'
     javascript = (web / 'course-graph.js').read_text(encoding='utf-8').replace('export function ', 'function ')
     javascript = re.sub(r'^import .*?;\n', '', javascript, count=1)

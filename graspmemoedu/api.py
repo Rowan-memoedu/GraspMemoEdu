@@ -148,7 +148,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='answer-judge')
     access_store = AccessStore(settings.data_dir, [{'id': topic['id'], 'title': topic['title']} for topic in catalog.topics.values()] + training.permissions(catalog.topics),
                                test_materials=subjects.test_materials)
-    dashboard_store = DashboardStore(catalog, access_store, subjects, atomic_clock=atomic_clock)
+    dashboard_store = DashboardStore(catalog, access_store, subjects, atomic_clock=atomic_clock, training=training)
     content_references = ContentReferenceIndex(catalog.topics)
     from .help_requests import register_help_routes
     dependency_policy = dashboard_store.dependency_policy
@@ -659,6 +659,13 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         try:
             store = GraphStore(settings, catalog, subjects)
             graph = store.load(course_id)
+            if graph is None and course_id in training.banks:
+                bank = training.bank(course_id)
+                access_store.authorize(access, 'training.' + course_id)
+                graph = {'schema_version': 3, 'subject_id': bank['subject_id'], 'course_id': bank['id'],
+                         'title': bank['title'], 'nodes': [
+                             {'bank_id': bank['id'], 'group_id': g['id'], 'title': g['title'], 'member': True}
+                             for g in bank['groups'] if g.get('questions')], 'edges': []}
             if graph is None:
                 subjects.authorize_course(subject_id, course_id)
                 course = catalog.course(course_id)
@@ -676,7 +683,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
             if course_id in catalog.courses and any(node['content_status'] == 'available' for node in result['nodes']):
                 states = {topic['id']: topic for topic in dashboard_store.dashboard(access, course_id, subject_id=subject_id)['topics']}
                 for node in result['nodes']:
-                    state = states.get(node['topic_id'], {})
+                    state = states.get(node.get('topic_id'), {})
                     node.update({key: state[key] for key in ('status', 'frontier') if key in state})
             return result
         except (ValueError, OSError) as exc:
@@ -818,7 +825,8 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     from .academy_api import register_academy_routes
     register_academy_routes(app, settings, access_store, service_for, identity, public_state, Action, dependency_policy, atomic_clock)
     register_training_routes(app, training, access_store, subjects, service_for,
-                             admission_lock, public_limits, schedule, outstanding_count, clock=atomic_clock)
+                             admission_lock, public_limits, schedule, outstanding_count, clock=atomic_clock,
+                             dependencies=dependency_policy)
     register_paper_routes(app, training, catalog, dependency_policy, access_store, subjects, service_for,
                          admission_lock, public_limits, schedule, outstanding_count, clock=atomic_clock)
     register_guide_routes(app, settings, access_store, subjects)

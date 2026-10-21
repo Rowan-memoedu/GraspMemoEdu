@@ -25,11 +25,11 @@ from .topic_runtime import is_introduction, learning_units, reread_pending
 
 
 class DashboardStore:
-    def __init__(self, catalog, access_store, subjects=None, *, atomic_clock=None):
+    def __init__(self, catalog, access_store, subjects=None, *, atomic_clock=None, training=None):
         self.atomic_clock = atomic_clock
         self.catalog, self.access_store = catalog, access_store
         self.subjects = subjects
-        self.dependency_policy = DependencyPolicy(catalog, access_store, subjects)
+        self.dependency_policy = DependencyPolicy(catalog, access_store, subjects, training)
         with closing(access_store._connect()) as con:
             con.executescript('''
                 CREATE TABLE IF NOT EXISTS learner_preferences (
@@ -373,10 +373,13 @@ class DashboardStore:
             for parent in {p for tid in snapshots for p in self.dependency_policy.required_parents(tid, dependencies)} & allowed:
                 if parent not in parent_snapshots:
                     parent_snapshots[parent] = self._snapshot(con, access['learner_id'], parent)
+            linked_parents = {parent: self.dependency_policy.describe(con, access, parent)
+                              for tid in snapshots for parent in self.dependency_policy.required_parents(tid, dependencies)}
         def details(topic_id):
-            return [{'id': parent, 'title': self.catalog.topics[parent]['title'],
-                     'progress': parent_snapshots[parent]['progress'], 'mastery': parent_snapshots[parent]['mastery']}
-                    for parent in self.dependency_policy.required_parents(topic_id, dependencies) if parent in parent_snapshots]
+            return [{**linked_parents[parent],
+                     'progress': parent_snapshots.get(parent, {}).get('progress'),
+                     'mastery': parent_snapshots.get(parent, {}).get('mastery')}
+                    for parent in self.dependency_policy.required_parents(topic_id, dependencies) if linked_parents.get(parent)]
         for task in [*review_tasks, *review_history]:
             task['prerequisites'] = [parent for parent in self.dependency_policy.required_parents(task['topic_id'], dependencies) if parent in snapshots]
             task['prerequisite_details'] = details(task['topic_id'])
