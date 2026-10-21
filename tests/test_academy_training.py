@@ -92,6 +92,32 @@ class NativeAcademyTests(unittest.TestCase):
         self.assertNotIn('introduction', state)
         self.assertEqual(state['academy']['version'], self.topic['version'])
 
+    def test_migrated_bank_graph_does_not_query_legacy_course(self):
+        from graspmemoedu.course_graph import import_graph
+        self.native()
+        settings = Settings(data_dir=self.root, public_api_origin='https://native.test')
+        app = create_app(settings, atomic_clock=lambda: self.now)
+        with TestClient(app, base_url='https://native.test') as client:
+            headers = {'origin': 'https://native.test'}
+            identity = client.post('/api/access/guest', headers=headers, json={}).json()
+            headers['x-learning-identity'] = identity['identity_token']
+            for saved in (False, True):
+                with self.subTest(saved_graph=saved):
+                    if saved:
+                        source = self.root / 'bank-graph.json'
+                        source.write_bytes(encoded({'schema_version': 3, 'subject_id': 'cs',
+                            'course_id': self.course['id'], 'title': 'Native graph',
+                            'nodes': [{'bank_id': self.course['id'], 'group_id': 'lesson',
+                                       'title': 'Lesson', 'member': True}], 'edges': []}))
+                        import_graph(settings, source, apply=True)
+                    response = client.get('/api/graphs/' + self.course['id'] + '?subject_id=cs', headers=headers)
+                    self.assertEqual(response.status_code, 200, response.text)
+                    graph = response.json()
+                    self.assertEqual(graph['schema_version'], 3)
+                    self.assertEqual([n['id'] for n in graph['nodes']], ['group:academy-native:lesson'])
+                    self.assertEqual(graph['nodes'][0]['href'], '/subjects/cs/banks/academy-native/lesson')
+                    self.assertEqual(graph['nodes'][0]['content_status'], 'available')
+
     def test_error_mapping_dedup_and_one_fsrs_state(self):
         backend = self.native(); adapter = self.open(backend); run = self.launch(adapter)
         self.send(adapter, run, 1, 'compile', 'a')

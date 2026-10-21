@@ -680,7 +680,10 @@ def create_app(settings: Settings | None = None, service: LearningService | None
             result = store.public(graph, access)
             if not result['nodes']:
                 raise DomainError('unknown_graph', '未找到可访问的课程图谱。', 404)
-            if course_id in catalog.courses and any(node['content_status'] == 'available' for node in result['nodes']):
+            # A migrated bank may retain a catalog entry only for old links.
+            # Its graph must not re-enter the retired course dashboard.
+            if course_id in catalog.courses and course_id not in training.banks and any(
+                    node['content_status'] == 'available' for node in result['nodes']):
                 states = {topic['id']: topic for topic in dashboard_store.dashboard(access, course_id, subject_id=subject_id)['topics']}
                 for node in result['nodes']:
                     state = states.get(node.get('topic_id'), {})
