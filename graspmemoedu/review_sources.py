@@ -184,10 +184,12 @@ class ReviewSources:
             state['active']['self_assessment'] = {'submission_id': request_id, 'rating': 5}
         backend._grade(con, state, {'id': request_id, 'answer': item['answer'], 'elapsed_ms': item.get('elapsed_ms')}, correct, reason)
         ratings = dict(state['active']['ratings'])
+        details = state['active'].get('assessment_result')
         stopped = bool(state['active'].get('stop_requested'))
         state.update(saved)
         backend._save(con, state)
         return {'correct': correct, 'reason': reason, 'scheduled': not stopped,
+                **({'assessment_result': details} if details else {}),
                 **({'stop_requested': True, 'stopped': True} if stopped else {}),
                 'ratings': {pid: ratings[local] for pid, local in zip(item['point_ids'], source['local_points'])},
                 'due_at': None if stopped else min(state['points'][p]['due_at'] for p in source['local_points'])}

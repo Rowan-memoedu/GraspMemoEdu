@@ -1,5 +1,11 @@
 // Static interface labels only. Course content and learner names are not translated.
 export const staticMessages = {
+  "nav.reading": ["阅读", "Reading"],
+  "assessment.title": ["知识点反馈", "Memory-point feedback"],
+  "assessment.correct": ["正确", "Correct"],
+  "assessment.again": ["需复习", "Review again"],
+  "assessment.items": ["依据小题 {items}", "Based on items {items}"],
+  "assessment.whole": ["依据整题结果", "Based on the whole answer"],
   "pwa.install": ["安装应用", "Install app"],
   "error.retry": ["操作未完成，请稍后重试。", "Something went wrong. Please try again."],
   "error.refresh": ["操作未完成，请刷新后重试。", "This action could not be completed. Please refresh and try again."],

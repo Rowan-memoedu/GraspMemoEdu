@@ -1,12 +1,14 @@
-import {t, translateMessage} from './i18n.js?v=8405fcd52d52c0b6';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=8405fcd52d52c0b6';
-import {selfAssessment, referenceAnswer, prepareAnswerContent, ratingChoices} from './self-assessment.js?v=8405fcd52d52c0b6';
-import {reportableContent} from './content-report.js?v=8405fcd52d52c0b6';
-import {createLearningCache} from './learning-cache.js?v=8405fcd52d52c0b6';
-import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=8405fcd52d52c0b6';
-import {enhanceSourceContent} from './topic-content.js?v=8405fcd52d52c0b6';
-import {memoryChunk, chunkPeek} from './memory-chunk.js?v=8405fcd52d52c0b6';
-import {topicProgress, topicHistory} from './learning-ui.js?v=8405fcd52d52c0b6';
+import {t, translateMessage} from './i18n.js?v=c9b135ee2b396ff5';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=c9b135ee2b396ff5';
+import {selfAssessment, referenceAnswer, prepareAnswerContent, ratingChoices} from './self-assessment.js?v=c9b135ee2b396ff5';
+import {reportableContent} from './content-report.js?v=c9b135ee2b396ff5';
+import {createLearningCache} from './learning-cache.js?v=c9b135ee2b396ff5';
+import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=c9b135ee2b396ff5';
+import {enhanceSourceContent} from './topic-content.js?v=c9b135ee2b396ff5';
+import {memoryChunk, chunkPeek} from './memory-chunk.js?v=c9b135ee2b396ff5';
+import {topicProgress, topicHistory} from './learning-ui.js?v=c9b135ee2b396ff5';
+import {pointAssessment} from './point-assessment.js?v=c9b135ee2b396ff5';
+import {trainingAudio} from './training-audio.js?v=c9b135ee2b396ff5';
 
 const node = (tag, cls = '', text) => {
   const el = document.createElement(tag); el.className = cls;
@@ -28,6 +30,7 @@ export function createAtomicView(bridge) {
   const root = bridge.root;
   let state = null, topic = null, learner = null, epoch = 0, timer = null, busy = false, selected = null, failure = null;
   let academyLink = null;
+  let audioControl = null;
   const active = ticket => ticket === epoch && topic && learner === bridge.getAccess()?.learner_id;
   const prefix = () => `graspmemoedu:atomic:${bridge.getApiOrigin()}:${learner}:${topic}:${state?.course_version}`;
   const draftKey = () => `${prefix()}:draft:${state.active_step_id}`;
@@ -39,7 +42,7 @@ export function createAtomicView(bridge) {
   const payload = () => ({request_id: crypto.randomUUID(), expected_revision: state.revision,
     attempt_id: state.attempt_id, step_id: state.active_step_id});
   const can = feature => (state?.access || bridge.getAccess())?.features?.includes(feature);
-  function stop() { epoch++; clearTimeout(timer); topic = null; state = null; busy = false; selected = null; failure = null; academyLink = null; }
+  function stop() { audioControl?.dispose(); audioControl = null; epoch++; clearTimeout(timer); topic = null; state = null; busy = false; selected = null; failure = null; academyLink = null; }
   function notice(message) {
     failure = message;
     const target = root.querySelector('#atomicNotice');
@@ -229,6 +232,11 @@ export function createAtomicView(bridge) {
     form.addEventListener('submit', event => { event.preventDefault(); if (!disabled) void submit(input); });
     if (!history && question.phase === 'answer') form.append(send);
     box.append(form);
+    audioControl = trainingAudio(question, {request: bridge.request, contentVersion: state.course_version, disabled,
+      ...(!disabled && (!question.interaction || question.interaction.type === 'text') ? {
+        onTranscript: text => { input.value = text; input.dispatchEvent(new Event('input', {bubbles: true})); },
+      } : {})});
+    if (audioControl) box.insertBefore(audioControl, form);
     if (!history && question.phase === 'answer') {
       const controls = selfAssessment(question, input, {disabled,
         reveal: () => mutate('reveal'), rate: rating => submit(input, rating),
@@ -243,9 +251,10 @@ export function createAtomicView(bridge) {
       box.append(node('p', 'inputHint', t(question.interaction.grading === 'exact' ? 'question.exactHint' : 'question.semanticHint')));
     }
     if (question.phase === 'feedback') {
-      const feedback = node('div', `feedback ${question.correct ? 'correct' : 'incorrect'}`);
+      const feedback = node('div', `feedback atomicFeedback ${question.correct ? 'correct' : 'incorrect'}`);
       feedback.append(node('strong', '', t(question.correct ? 'atomic.correct' : 'atomic.incorrect')));
       if (question.reason) feedback.append(node('p', '', question.reason));
+      const points = pointAssessment(question.assessment_result); if (points) feedback.append(points);
       const reference = referenceAnswer(question); if (reference) feedback.append(reference);
       feedback.append(prepareAnswerContent(marked(question.explanation_html, `explanation:${question.card_id}`, question.card_id)));
       box.append(feedback);
@@ -267,6 +276,7 @@ export function createAtomicView(bridge) {
   }
   function render() {
     if (!state) return;
+    audioControl?.dispose(); audioControl = null;
     const style = document.getElementById('atomicMathStyle') || node('style'); style.id = 'atomicMathStyle';
     style.textContent = state.math_css || ''; if (!style.isConnected) document.head.append(style);
     const page = node('div', 'atomicLayout'), sidebar = node('aside', 'atomicHistory'), main = node('main', 'atomicMain');

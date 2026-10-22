@@ -45,6 +45,7 @@ from .review_papers import PaperService
 from .content_references import ContentReferenceIndex
 from .self_assessment import enabled as self_rating_enabled, protect as protect_assessment
 from .response_content import compact_response
+from .context_library_api import register_context_library_routes, PUBLIC_PATHS as CONTEXT_PATHS
 
 
 class Action(BaseModel):
@@ -401,7 +402,9 @@ def create_app(settings: Settings | None = None, service: LearningService | None
 
     app = FastAPI(title='GraspMemoEdu', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     # The subsequently registered boundary middleware wraps this body limiter.
-    app.add_middleware(BodyLimitMiddleware, maximum=16384, path_limits={'/api/help-requests': 65536, '/api/help-images': 3 * 1024 * 1024})
+    body_limits = {'/api/help-requests': 65536, '/api/help-images': 3 * 1024 * 1024,
+                   '/api/training-audio/transcribe': 6 * 1024 * 1024}
+    app.add_middleware(BodyLimitMiddleware, maximum=16384, path_limits=body_limits)
     app.state.service = service
     app.state.settings = settings
     app.state.access_store = access_store
@@ -483,6 +486,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         public_paths.update(ACADEMY_PATHS)
         public_paths.update(PAPER_PATHS)
         public_paths.update(ADMIN_PAUSE_PATHS)
+        public_paths.update(CONTEXT_PATHS)
         student_read = admin_student_route(path)
         task_answers_path = path.startswith('/api/tasks/') and path.endswith('/answers') and path.count('/') == 4
         review_feature = review_route_feature(path, request.method)
@@ -519,7 +523,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
             if request.method == 'POST' and not request.headers.get('content-type', '').lower().startswith('application/json'):
                 return deny('json_required', '需要 JSON 请求。', 415)
             size = request.headers.get('content-length', '0')
-            if not size.isdigit() or int(size) > {'/api/help-requests': 65536, '/api/help-images': 3 * 1024 * 1024}.get(path, 16384):
+            if not size.isdigit() or int(size) > body_limits.get(path, 16384):
                 return deny('request_too_large', '请求过大。', 413)
             # Enforce permissions before parsing a mutation body; hiding controls is not authorization.
             if request.method == 'POST' and (path == '/api/pause' or path.startswith('/api/review/sessions/') and path.endswith('/pause')):
@@ -552,7 +556,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         response.headers['Cache-Control'] = 'no-store'
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['Referrer-Policy'] = 'no-referrer'
-        response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' http://127.0.0.1:* http://localhost:*; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+        response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob:; connect-src 'self' http://127.0.0.1:* http://localhost:*; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
         if remote:
             response.headers['Access-Control-Allow-Origin'] = origin
             response.headers['Vary'] = 'Origin'
@@ -862,5 +866,22 @@ def create_app(settings: Settings | None = None, service: LearningService | None
     register_guide_routes(app, settings, access_store, subjects)
     register_guest_reset_routes(app, identity, public_state, Action)
     register_review_routes(app, identity, admission_lock, public_limits, schedule, outstanding_count, dependency_policy, references_for)
+    def reading_service(access, request):
+        return service_for(access['learner_id'], requested_topic(request), request.headers.get('x-learning-identity'))
+
+    def activate_reading_points(access, topic, point_ids, context, request):
+        dependency_policy.require(access, topic['id'])
+        learner = reading_service(access, request)
+        backend = getattr(learner, 'atomic', learner)
+        if not hasattr(backend, 'request_points'):
+            raise DomainError('reading_memory_unavailable', '此材料暂未关联可学习的记忆点。', 422)
+        result = backend.request_points(point_ids)
+        return {**result, 'learning_url': f"#/subjects/{topic['subject_id']}/topic/{topic['id']}"}
+
+    from .context_dictionary import lookup_word
+    register_context_library_routes(app, catalog, access_store, subjects,
+        activate_points=activate_reading_points,
+        dictionary=lambda word: lookup_word(word, data_dir=settings.data_dir / 'context-dictionary'),
+        connect_for=lambda access, request: reading_service(access, request)._connect)
     app.mount('/', StaticFiles(directory=Path(__file__).resolve().parent.parent / 'web', html=True), name='web')
     return app

@@ -167,6 +167,10 @@ def validate_atomic(topic):
         if len(targets) == 1 and 'learn' in phases:
             singles.add(targets[0])
         validate_interaction(card.get('interaction'), card['question'])
+        from .point_assessment import validate_assessment
+        validate_assessment(card)
+        from .training_audio import validate_audio
+        validate_audio(card)
         questions[card['id']] = card
     require(singles == point_ids, 'Each memory point requires an individual flashcard for initial learning')
     if external:
@@ -179,4 +183,6 @@ def validate_atomic(topic):
         require(isinstance(binding, dict) and set(binding) == {'task_key', 'kind'}
                 and identifier(binding.get('task_key')) and binding.get('kind') in ('automated', 'manual'),
                 'Invalid Academy binding; local paths must stay on the device')
+    from .context_library import validate_reading_materials
+    validate_reading_materials(topic)
     return questions

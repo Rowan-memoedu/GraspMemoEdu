@@ -98,6 +98,9 @@ class AtomicLearningService(LearningService):
         # Prefer an available bundle; otherwise rotate least-used variants.
         # The stable author order also preserves the order of new chunks.
         card = cards[0]
+        if state['mode'] == 'learn' and state.get('requested_points'):
+            order = {point: index for index, point in enumerate(state['requested_points'])}
+            card = min(cards, key=lambda candidate: min(order.get(p, len(order)) for p in candidate['point_ids']))
         chunk_ids = list(dict.fromkeys(self.point_chunks[p] for p in card['point_ids']))
         unseen = next((c for c in chunk_ids if c not in state['seen_chunks']), None)
         if state['mode'] == 'learn' and unseen:
@@ -118,10 +121,15 @@ class AtomicLearningService(LearningService):
                   'interaction': public_interaction(card)}
         from .self_assessment import presentation
         result.update(presentation(card, active, visible=feedback))
+        if card.get('audio'):
+            from .training_audio import public_audio
+            result['audio'] = public_audio(card, self.topic_id, feedback=feedback)
         if feedback:
             result.update(answer=active.get('answer'), correct=active.get('correct'), reason=active.get('reason'),
                           answer_display=display_answer(card, active.get('answer')),
                           explanation_html=card['explanation_html'], ratings=active.get('ratings', {}))
+            if active.get('assessment_result'):
+                result['assessment_result'] = active['assessment_result']
             if active.get('stop_requested'):
                 result['stop_requested'] = True
         return result
@@ -186,6 +194,31 @@ class AtomicLearningService(LearningService):
             self._record_action(con, 'preview_card', payload, fingerprint)
         return self._public(state)
 
+    def request_points(self, point_ids):
+        """Prioritize existing points without inventing mastery or FSRS events.
+
+        The current question and Introduction remain in place. TopicPoints uses
+        the same method, with its existing Introduction scope applied at selection.
+        """
+        if (not isinstance(point_ids, list) or not 1 <= len(point_ids) <= 20
+                or any(not isinstance(p, str) or p not in self.point_chunks for p in point_ids)
+                or len(set(point_ids)) != len(point_ids)):
+            raise DomainError('invalid_memory_points', '所选记忆点不属于当前 Topic。', 422)
+        with self._transaction() as con:
+            state = self._load(con)
+            pending = [p for p in point_ids if not state['points'][p]['mastered']]
+            requested = state.get('requested_points', [])
+            additions = [p for p in pending if p not in requested]
+            if additions:
+                if state.get('pending_submission_id'):
+                    raise DomainError('submission_pending', '答案正在判定，请完成后再加入记忆。')
+                state['requested_points'] = [*requested, *additions]
+                self._save(con, state)
+        return {'status': 'pending' if pending else 'learned', 'point_ids': point_ids,
+                'pending_point_ids': pending,
+                'message': '已加入待学；完成当前步骤后优先学习，作答后按原规则安排复习。' if pending
+                           else '已关联原记忆点，保留当前复习进度。'}
+
     def choose(self, payload):
         with self._transaction() as con:
             replay, fingerprint = self._request(con, 'atomic_begin', payload)
@@ -229,6 +262,15 @@ class AtomicLearningService(LearningService):
         ratings = {}
         assessment = active.get('self_assessment') or {}
         stop = assessment.get('submission_id') == item['id'] and assessment.get('rating') == 5
+        from .point_assessment import assess_points
+        card = active.get('snapshot') or self.questions[active['card_id']]
+        point_correct, details = assess_points(card, item['answer'], correct, self_assessed=bool(assessment))
+        if details:
+            from .atomic_content import memory_points
+            labels = {p['id']: p['text'] for p in memory_points(self.course)}
+            for point in details['points']:
+                point['text'] = labels[point['id']]
+            active['assessment_result'] = details
         for point_id in active['point_ids']:
             register_point(con, 'atomic', self.topic_id, self.course['version'], point_id,
                            self.course['subject_id'], when.isoformat())
@@ -242,7 +284,8 @@ class AtomicLearningService(LearningService):
                 self._event(con, state, 'atomic_reviews_stopped', point_id=point_id, card_id=active['card_id'],
                             submission_id=item['id'])
                 continue
-            rating = (None if correct else 1) if state['mode'] == 'learn' else (state['policy']['correct_rating'] if correct else 1)
+            passed = point_correct[point_id]
+            rating = (None if passed else 1) if state['mode'] == 'learn' else (state['policy']['correct_rating'] if passed else 1)
             ratings[point_id] = rating
             if rating is not None:
                 scheduled = self.engine.schedule(memory['card_json'], rating, when, item['elapsed_ms'])
@@ -250,7 +293,7 @@ class AtomicLearningService(LearningService):
                 self._event(con, state, 'atomic_rating', point_id=point_id, card_id=active['card_id'],
                             submission_id=item['id'], rating=rating, review_log=scheduled['review_log_json'],
                             algorithm=scheduled['algorithm'], scheduler=scheduled['scheduler_json'], mode=state['mode'])
-            if state['mode'] == 'learn' and correct:
+            if state['mode'] == 'learn' and passed:
                 memory.update(mastered=True, first_passed_at=when.isoformat())
                 first_due = when + timedelta(seconds=state['policy']['first_review_seconds'])
                 memory['due_at'] = first_due.isoformat()

@@ -203,6 +203,8 @@ node scripts/inspect_page.mjs
 
 ## 打开公开页面
 
+语境阅读、题内按点评分、音频与口语输入见[语境学习](docs/context-learning.md)；本地双向生产、审核、材料复用和导入见[语境材料生产](docs/context-production.md)。这些是共享内容能力，旧课程无需增加字段。
+
 公开页面仅含 HTML、JS、CSS、图标、`.nojekyll` 和只含 `api_origin` 的 `deployment.json`。连接配置由发布时写入，网页没有配置入口。服务不可用时只显示提示和重试。游客身份在切换后端网址时会先到新后端验证，成功后迁移；连接错误不会清除旧身份或悄悄创建替代身份。
 
 前端发布仓库为 `Rowan-memoedu/GraspMemoEdu-Pages`，与私有源码仓库独立。正式服务只允许已配置网页来源及自身公开来源。`settings.json` 的 `public_api_origin` 指定精确公开 HTTPS 地址；nginx 保留公开 Host，后端据此识别公开请求。云端后端只监听 `127.0.0.1:18768`，由 nginx 提供公网 HTTPS。

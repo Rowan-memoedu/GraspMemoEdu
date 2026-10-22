@@ -169,6 +169,12 @@ mjx-container[jax="SVG"] text { font-family: "Microsoft YaHei", sans-serif; }
 .feedback { display: flex; align-items: flex-start; gap: 10px; border-radius: 3px; padding: 14px; margin-top: 23px; font-size: 13px; }
 .feedback.correct { background: #f0f7f2; color: var(--green); border: 1px solid #dcecdf; }
 .feedback.incorrect { background: #fcf8ef; color: var(--amber); border: 1px solid #f0e5cc; }
+.feedback.atomicFeedback { display: block; overflow-wrap: anywhere; }
+.atomicFeedback > strong { display: block; margin-bottom: 8px; }
+.atomicFeedback > p { margin: 8px 0; }
+.pointAssessment { margin: 16px 0; }
+.pointAssessment h3 { font-size: 14px; margin-bottom: 10px; }
+.pointAssessment li + li { margin-top: 10px; }
 .feedbackIcon { display: inline-flex; flex: 0 0 19px; justify-content: center; align-items: center; width: 19px; height: 19px; margin-top: 1px; border: 1px solid currentColor; border-radius: 50%; font-size: 12px; line-height: 1; }
 .feedbackTitle { display: block; font-size: 14px; font-weight: 700; margin-bottom: 3px; }
 .feedbackReason { line-height: 1.65; white-space: pre-wrap; }

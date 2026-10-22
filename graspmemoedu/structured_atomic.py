@@ -140,6 +140,8 @@ def normalize(source):
                 'interaction': card.get('interaction', {'version': 1, 'type': 'text', 'grading': 'semantic'}),
                 'answer_type': 'text', 'constraints': '依据题干要求和来源知识判断作答是否等价。'})
     topic['introduction'] = topic['introductions'][0]
+    if 'reading_materials' in source:
+        topic['reading_materials'] = deepcopy(source['reading_materials'])
     topic['content_version'] = fingerprint(source)
     return topic
 
@@ -149,6 +151,8 @@ def validate_projection(topic, source):
     for key in ('id', 'title', 'subject_id', 'introductions', 'content_order', 'modules', 'content_version'):
         if topic[key] != expected[key]:
             raise ValueError('Structured source mapping differs: ' + key)
+    if topic.get('reading_materials') != expected.get('reading_materials'):
+        raise ValueError('Structured reading materials changed')
     for key in ('memory_chunks', 'flashcards'):
         if len(topic[key]) != len(expected[key]):
             raise ValueError('Structured source coverage differs')
@@ -159,11 +163,16 @@ def validate_projection(topic, source):
                 if actual.get(field) != value:
                     raise ValueError('Structured source field changed: ' + field)
             if key == 'flashcards':
-                def strip_html(value):
-                    if isinstance(value, dict): return {k: strip_html(v) for k, v in value.items() if k != 'html'}
-                    if isinstance(value, list): return [strip_html(v) for v in value]
-                    return value
-                if strip_html(actual['interaction']) != wanted['interaction']:
+                # Only these display collections gain rendered HTML in the
+                # adapter. Composite sections own their HTML in the source;
+                # stripping it recursively would discard question content.
+                interaction = deepcopy(actual['interaction'])
+                for collection in ('left', 'right', 'statements', 'options'):
+                    for index, item in enumerate(interaction.get(collection, [])):
+                        originals = wanted['interaction'].get(collection, [])
+                        if index < len(originals) and 'html' not in originals[index]:
+                            item.pop('html', None)
+                if interaction != wanted['interaction']:
                     raise ValueError('Structured interaction changed')
     validate_runtime(topic)
     validate_atomic(topic)

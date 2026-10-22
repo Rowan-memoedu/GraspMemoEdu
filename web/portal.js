@@ -1,21 +1,22 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=8405fcd52d52c0b6";
-import { createReviewView } from "./review.js?v=8405fcd52d52c0b6";
-import { renderCourseGraph } from "./course-graph.js?v=8405fcd52d52c0b6";
-import {questionInput, choiceTypeField} from './question-input.js?v=8405fcd52d52c0b6';
-import {enhanceTopicContent} from './topic-content.js?v=8405fcd52d52c0b6';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=8405fcd52d52c0b6';
-import {createCatalogPicker} from './catalog-picker.js?v=8405fcd52d52c0b6';
-import {appendCatalogOutline} from './catalog-outline.js?v=8405fcd52d52c0b6';
-import {createAtomicView} from './atomic.js?v=8405fcd52d52c0b6';
-import {createTrainingView} from './training.js?v=8405fcd52d52c0b6';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=8405fcd52d52c0b6";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=c9b135ee2b396ff5";
+import { createReviewView } from "./review.js?v=c9b135ee2b396ff5";
+import { renderCourseGraph } from "./course-graph.js?v=c9b135ee2b396ff5";
+import {questionInput, choiceTypeField} from './question-input.js?v=c9b135ee2b396ff5';
+import {enhanceTopicContent} from './topic-content.js?v=c9b135ee2b396ff5';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=c9b135ee2b396ff5';
+import {createCatalogPicker} from './catalog-picker.js?v=c9b135ee2b396ff5';
+import {appendCatalogOutline} from './catalog-outline.js?v=c9b135ee2b396ff5';
+import {createAtomicView} from './atomic.js?v=c9b135ee2b396ff5';
+import {createTrainingView} from './training.js?v=c9b135ee2b396ff5';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=c9b135ee2b396ff5";
 
-import {createPaperView} from './review-papers.js?v=8405fcd52d52c0b6';
+import {createPaperView} from './review-papers.js?v=c9b135ee2b396ff5';
+import {createContextLibraryView} from './context-library.js?v=c9b135ee2b396ff5';
 
-import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=8405fcd52d52c0b6';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=8405fcd52d52c0b6';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=8405fcd52d52c0b6';
-import {createStudentDashboard} from './student-dashboard.js?v=8405fcd52d52c0b6';
+import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=c9b135ee2b396ff5';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=c9b135ee2b396ff5';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=c9b135ee2b396ff5';
+import {createStudentDashboard} from './student-dashboard.js?v=c9b135ee2b396ff5';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -35,7 +36,7 @@ const roundButton = (text, action) => control(text, "portalStart", action);
 export function initPortal(bridge) {
   let chatModule, attachChatEditor, renderChatMarkdown;
   async function loadChat() {
-    const module = await (chatModule ||= import('./vendor/chat/chat.js?v=8405fcd52d52c0b6').catch(error => { chatModule = null; throw error; }));
+    const module = await (chatModule ||= import('./vendor/chat/chat.js?v=c9b135ee2b396ff5').catch(error => { chatModule = null; throw error; }));
     ({attachChatEditor, renderChatMarkdown} = module);
     module.configureChatImages(ident => bridge.request('help-images?image_id=' + encode(ident)));
   }
@@ -140,6 +141,7 @@ export function initPortal(bridge) {
     homeLabel: () => t(currentRoute?.params?.has('bank') ? 'training.back' : 'nav.backHome'),
     reviewHref: () => subjectHref(currentRoute?.subjectId, '/reviews'), formatDate: value => apiDate(value, true),
     progressChanged: () => { dashboards.clear(); answerCache.clear(); }});
+  const contextLibrary = createContextLibraryView({...bridge, request: call, root});
   const training = createTrainingView({...bridge, request: call, root, href: localHref,
     formatDate: value => apiDate(value, true), courseSidebar, taskTree, taskVisibilityOptions, renderHistory,
     openGraph, progressChanged: () => { dashboards.clear(); answerCache.clear(); },
@@ -328,7 +330,7 @@ export function initPortal(bridge) {
     dashboards.set(id, merged); return merged;
   }
   function releaseGuideAssets() { for (const url of guideObjectUrls) URL.revokeObjectURL(url); guideObjectUrls = []; }
-  function stopPageWork() { pruneChatEditors(true); clearTimeout(refreshTimer); clearTimeout(pageTimer); releaseGuideAssets(); review.stop(); atomic.stop(); training.stop(); papers.stop(); hidePopovers(); helpFeedRefresh = null; helpReadObserver?.disconnect(); helpReadObserver = null; }
+  function stopPageWork() { pruneChatEditors(true); clearTimeout(refreshTimer); clearTimeout(pageTimer); releaseGuideAssets(); review.stop(); atomic.stop(); training.stop(); papers.stop(); contextLibrary.stop(); hidePopovers(); helpFeedRefresh = null; helpReadObserver?.disconnect(); helpReadObserver = null; }
   async function route(event) {
     // A reader can replace the hash while selecting a question without firing
     // hashchange. Its actual departure URL is the authoritative location.
@@ -353,7 +355,7 @@ export function initPortal(bridge) {
     root.classList.toggle("reviewShell", currentRoute.path.startsWith("/review/"));
     if (bridge.getIdentityProblem()) { root.hidden = true; root.replaceChildren(); return; }
     updateSubjectContext(subjects?.find(subject => subject.id === currentRoute.subjectId) || null);
-    setNavigation(currentRoute.path.startsWith('/qa') ? 'qa' : !currentRoute.subjectId ? "subjects" : bankReview(currentRoute) ? 'reviews' : currentRoute.path.startsWith('/banks') || currentRoute.params.has('bank') ? 'banks' : currentRoute.path.startsWith("/courses") ? "courses" : currentRoute.path === "/guide" ? "guide" : currentRoute.path.startsWith('/reviews') ? 'reviews' : "learn");
+    setNavigation(currentRoute.path.startsWith('/qa') ? 'qa' : !currentRoute.subjectId ? "subjects" : bankReview(currentRoute) ? 'reviews' : currentRoute.path.startsWith('/banks') || currentRoute.params.has('bank') ? 'banks' : currentRoute.path.startsWith("/courses") ? "courses" : currentRoute.path === "/guide" ? "guide" : currentRoute.path === '/reading' ? 'reading' : currentRoute.path.startsWith('/reviews') ? 'reviews' : "learn");
     // Keep the existing view visible during navigation, but disable old actions.
     root.inert = true; root.setAttribute('aria-busy', 'true');
     if (!root.childElementCount) root.replaceChildren(loading());
@@ -384,6 +386,9 @@ export function initPortal(bridge) {
         renderLearn(data, params.get("taskId"), ticket);
       } else if (path === "/courses") {
         document.title = pageTitle(t("nav.courses")); await renderCourses();
+      } else if (path === '/reading') {
+        document.title = pageTitle(t('nav.reading'));
+        await contextLibrary.show(params.get('topic'), params.get('material'));
       } else if (path === '/banks' || path.startsWith('/banks/')) {
         document.title = pageTitle(t('training.banks')); await training.open(path, params);
       } else if (path === '/reviews' || path.startsWith('/reviews/')) {

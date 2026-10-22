@@ -37,7 +37,8 @@ const topic = {id: source.id, title: source.title, training_mode: 'atomic_retrie
   flashcards: source.flashcards.map(card => ({...card, html: html(card.question), explanation_html: html(card.explanation),
     reference_answer: card.reference_answer || card.explanation, answer_type: card.answer_type || 'text',
     constraints: card.constraints || '按题干要求作答。'})),
-  ...(source.atomic_policy ? {atomic_policy: source.atomic_policy} : {})};
+  ...(source.atomic_policy ? {atomic_policy: source.atomic_policy} : {}),
+  ...(source.reading_materials ? {reading_materials: source.reading_materials} : {})};
 for (const card of topic.flashcards) {
   delete card.explanation;
   const spec = card.interaction;

@@ -21,6 +21,7 @@ $expected += @('topic-content.js','topic-content.css','topic-callouts.css')
 $expected += @('student-dashboard.js','presence.js')
 $expected += @('composite-input.js')
 $expected += @('response-cache.js')
+$expected += @('point-assessment.js','context-library.js','context-library.css','context-library-messages.js','training-audio.js')
 $expected += @('download.html','install.css','pwa.css','pwa.js','sw.js','manifest.webmanifest','icon-180.png','icon-192.png','icon-512.png','icon-maskable-512.png')
 $vendor = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'scripts/topic-presentation-assets.json') -Raw | ConvertFrom-Json -AsHashtable
 foreach ($name in $vendor.files.Keys) {

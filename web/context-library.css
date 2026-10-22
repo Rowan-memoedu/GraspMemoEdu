@@ -1,0 +1,55 @@
+/* Hallmark · component: reading and audio · genre: editorial · theme: existing subject tokens
+ * states: default · hover · focus · active · disabled · loading · error · success
+ * pre-emit critique: P4 H4 E4 S4 R5 V3 */
+.contextLibrary, .trainingAudio {
+  --reading-paper: oklch(100% 0 0);
+  --reading-error: oklch(45% .15 25);
+  --reading-space-sm: 8px;
+  --reading-space-md: 16px;
+  --reading-space-lg: 24px;
+  color: var(--ma-ink);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.contextLibrary { max-width: 1080px; margin: var(--reading-space-lg) auto; padding: 0 var(--reading-space-md) 48px; }
+.readingColumns { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: var(--reading-space-lg); align-items: start; }
+.readingArticle { font-size: 18px; line-height: 1.9; }
+.readingArticle p { white-space: pre-wrap; }
+.readingWord { font: inherit; color: var(--link-color); background: transparent; border: 0; border-bottom: 1px dashed currentColor; padding: 2px 0; line-height: inherit; min-height: 44px; }
+.readingWord:hover, .readingWord.is-hover { color: var(--link-hover); background: var(--answer-help-background); }
+.readingWord:active, .readingWord.is-active { color: var(--button-active); }
+.contextLibrary button:focus-visible, .trainingAudio button:focus-visible, .contextLibrary a:focus-visible,
+.contextLibrary textarea:focus-visible, .contextLibrary .is-focus { outline: 2px solid var(--link-color); outline-offset: 3px; }
+.readingPanel { position: sticky; top: 76px; min-width: 0; padding: var(--reading-space-md); border: 1px solid var(--ma-border); background: var(--reading-paper); color: var(--ma-ink); }
+.readingPanel h3 { margin: 0 0 var(--reading-space-md); color: var(--ma-navy); font-style: normal; }
+.readingPanel p { margin: 8px 0; }
+.readingDefinitions { padding-left: 22px; margin: 0 0 var(--reading-space-md); }
+.readingDefinitions li + li { margin-top: var(--reading-space-md); }
+.readingRelations { padding-left: 20px; font-size: 14px; }
+.readingNoteLabel { display: grid; gap: var(--reading-space-sm); font-size: 14px; }
+.readingNoteLabel textarea { width: 100%; min-width: 0; resize: vertical; min-height: 76px; }
+.readingActions, .trainingAudioActions { display: flex; flex-wrap: wrap; gap: var(--reading-space-sm); margin: var(--reading-space-md) 0; }
+.contextLibrary button:not(.readingWord), .contextLibrary a, .trainingAudio button { min-height: 44px; white-space: nowrap; max-width: 100%; }
+.contextLibrary button:disabled, .trainingAudio button:disabled { opacity: .55; cursor: default; }
+.readingPanel[data-state=loading], .trainingAudio[data-state=loading] { cursor: progress; }
+.readingStatus { font-size: 14px; line-height: 1.6; }
+.readingStatus[data-state=error], .trainingAudioStatus[data-state=error] { color: var(--reading-error); }
+.readingStatus[data-state=success], .trainingAudioStatus[data-state=success] { color: var(--green); }
+.readingSaved { border-top: 1px solid var(--ma-border); margin-top: 32px; padding-top: var(--reading-space-md); }
+.readingRecords, .readingMaterialList { list-style: none; padding: 0; }
+.readingRecords > li, .readingMaterialList > li { padding: var(--reading-space-sm) 0; border-bottom: 1px solid var(--ma-border); }
+.readingMaterialList .textButton, .readingRecords .textButton { white-space: normal; text-align: left; justify-content: flex-start; }
+.readingAttribution { font-size: 12px; }
+.trainingAudio { padding: var(--reading-space-md); border: 1px solid var(--control-border); margin: var(--reading-space-md) 0; }
+.trainingAudio audio { display: block; width: 100%; max-width: 100%; margin: var(--reading-space-sm) 0; }
+.trainingAudioStatus { margin: var(--reading-space-sm) 0; font-size: 14px; }
+.trainingAudioTranscript { white-space: pre-wrap; }
+@media (max-width: 768px) {
+  .readingColumns { grid-template-columns: minmax(0, 1fr); }
+  .readingPanel { position: static; }
+  .contextLibrary { padding-inline: 12px; }
+  .readingArticle { font-size: 17px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .contextLibrary *, .trainingAudio * { transition: none !important; animation: none !important; }
+}

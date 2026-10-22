@@ -2,7 +2,7 @@
 
 本表从当前界面词库自动生成。修改以词库为准，随后重新生成并检查本表。术语约定见 [界面语言规范](ui-language.md)。
 
-共 887 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
+共 987 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
 
 不包括作者课程正文、题目、答案、解析或用户输入。首页的学科双语副标题按约定保留。
 
@@ -10,6 +10,13 @@
 
 | English | 中文 |
 |---|---|
+| Reading | 阅读 |
+| Memory-point feedback | 知识点反馈 |
+| Correct | 正确 |
+| Review again | 需复习 |
+| Based on items {items} | 依据小题 {items} |
+| Based on the whole answer | 依据整题结果 |
+| Install app | 安装应用 |
 | Something went wrong. Please try again. | 操作未完成，请稍后重试。 |
 | This action could not be completed. Please refresh and try again. | 操作未完成，请刷新后重试。 |
 | {subject} Learning | {subject}学习 |
@@ -266,6 +273,10 @@
 
 | English | 中文 |
 |---|---|
+| Hide content with unmet prerequisites | 隐藏暂未解锁的内容 |
+| Expand all | 一键展开 |
+| Collapse all | 一键收起 |
+| Locked content is hidden. Uncheck the option to show it. | 暂未解锁的内容已隐藏，可取消勾选查看。 |
 | Today’s online activity | 今日在线情况 |
 | {date} · Beijing time | {date} · 北京时间 |
 | Today online: {minutes} min {seconds} sec | 今日在线时长：{minutes} 分 {seconds} 秒 |
@@ -514,15 +525,28 @@
 | Correct | 回答正确 |
 | Incorrect | 回答错误 |
 | Continue | 继续 |
-| Related statements in the introduction | 指导中的相关陈述 |
+| Introduction · Source | Introduction · 指导原文 |
+| Whole Topic progress | 整个 Topic 的学习进度 |
+| Memory points | 记忆点 |
 | Start flashcards | 开始原子卡训练 |
-| The introduction unlocks after you complete this topic. | 完成整个 Topic 后可再次查看指导。 |
+| Make sure you understand this content before starting flashcards. | 请确保已理解该内容，再开始原子卡训练。 |
+| View memory chunk | 查看记忆组块 |
+| Memory chunk | 记忆组块 |
+| Key content | 核心内容 |
+| Memory aid | 助记信息 |
+| Underlined passages belong to this memory chunk | 划线部分对应当前记忆组块 |
+| Back to answer | 返回作答 |
+| Again | 做错 |
+| Hard | 困难 |
+| Good | 正常 |
+| Easy | 轻松 |
+| Retire | 不再练 |
 | Flashcard {number} | 原子卡 {number} |
 | Mastered | 已掌握 |
 | Not mastered | 未掌握 |
 | {done} / {total} memory points mastered | 已掌握 {done} / {total} 个记忆点 |
 | Return to current training | 返回当前训练 |
-| Please confirm you understand the explanation. Once training starts, you cannot freely return to it. | 请确认已理解讲解内容，开始训练后不得随意返回查看 |
+| Please confirm you understand the explanation before starting. | 请确认已理解讲解内容，再开始训练。 |
 | Understood, start training | 已理解，开始训练 |
 | Initial learning is complete. Due flashcards will appear on the review page. | 本 Topic 的初次学习已完成。到期的原子卡将出现在复习页面。 |
 | No flashcard is available yet. Cards from the same chunk are spaced at least 3 minutes apart. | 暂时没有可推送的卡片。同一组块的卡片至少间隔 3 分钟。 |
@@ -692,9 +716,9 @@
 | Changes apply immediately to interface text only. Course content stays unchanged. | 切换后立即生效，仅改变界面文字，不改变课程内容。 |
 | No graph nodes. | 暂无图谱节点。 |
 | A dependency cycle prevents rendering. | 前置关系存在循环，无法绘图。 |
-| Search Topic title or ID | 搜索 主题 名称或 ID |
-| Select Topic | 选择 主题 |
-| Topic prerequisites, bottom to top | 由下向上的 主题 前置关系图 |
+| Search node title or ID | 搜索节点名称或 ID |
+| Select node | 选择节点 |
+| Learning prerequisites, bottom to top | 由下向上的前置关系图 |
 | Content not imported | 教学内容未导入 |
 | Completed | 已完成 |
 | In progress | 学习中 |
@@ -703,11 +727,11 @@
 | Select a node to inspect prerequisites and highlight its upstream paths. | 点击节点，查看前置与后续，并高亮全部上游路径。 |
 | Direct prerequisites | 直接前置 |
 | Progress {progress} · Mastery {mastery} | 完成进度 {progress} · 熟练度 {mastery} |
-| Complete the prerequisite topics first | 请先完成前置知识的学习 |
+| Complete the prerequisites first | 请先完成前置知识的学习 |
 | Direct successors | 直接后续 |
 | None | 无 |
-| Open Topic | 打开 主题 |
-| Choose Topic… | 选择 主题… |
+| Open content | 打开内容 |
+| Choose node… | 选择节点… |
 | Fit width | 适应宽度 |
 | My learning progress | 个人学习情况 |
 | View your course progress, question banks, notebook, answer history and review schedule. | 查看自己的课程进度、题库、错题本、作答记录与复习排程。 |
@@ -731,6 +755,7 @@
 
 | English | 中文 |
 |---|---|
+| Finish learning | 完成学习 |
 | Question banks | 题库 |
 | Train | 训练 |
 | Start training | 开始训练 |
@@ -834,6 +859,86 @@
 | {correct} / {count} correct | 正确 {correct} / {count} 题 |
 | Checking answers. Results will appear when complete… | 正在判题，完成后显示结果… |
 | Refresh | 刷新 |
+
+## 语境阅读与音频
+
+| English | 中文 |
+|---|---|
+| Earlier version: original text and notes are preserved without locating them in the current text. | 旧版语境：保留原文与笔记，不定位到当前正文。 |
+| View saved original text | 查看保留的原文 |
+| Dictionary source | 词典来源 |
+| Data license | 数据许可 |
+| Underlying data license | 基础数据许可 |
+| Export contexts | 导出本篇语境 |
+| The export contains only your records for this material. Dictionary senses are not automatically selected. | 导出仅包含本人的当前材料记录。字典义项尚未自动选定。 |
+| Linked to your existing memory. Its review schedule is unchanged. | 已关联现有记忆，原有复习时间保持不变。 |
+| Added to initial learning. Complete the exercises before scheduled review. | 已加入初学队列；完成对应练习后进入复习。 |
+| Saved with its context for review. It is not scheduled for practice yet. | 已保存为待审核候选，保留原文语境；尚未进入复习。 |
+| Question marked. | 已标记疑惑。 |
+| Question mark removed. | 已取消疑惑标记。 |
+| Looking up meanings… | 正在查找释义… |
+| The local dictionary is temporarily unavailable. You can still save the context. | 本地词典暂不可用，仍可保留语境。 |
+| No meaning is available in this material or the local dictionary. Save the context for later clarification. | 当前材料和本地词库没有这个词义。可以记录疑惑，保留原文等待补充。 |
+| My question or context note | 我的疑惑或语境笔记 |
+| Unmark question | 取消疑惑标记 |
+| Mark question | 标记疑惑 |
+| Save context note | 保存语境笔记 |
+| Add to memory | 加入记忆 |
+| Save candidate | 保存候选 |
+| View lesson | 查看学习内容 |
+| Start learning | 开始对应学习 |
+| A candidate needs a linked or new knowledge point and exercises before it enters learning and review. | 候选需先关联或补充知识点与练习，再进入原有学习和复习流程。 |
+| Saved contexts | 保留的语境 |
+| No marks yet. Select an underlined word or highlight text to look it up. | 还没有标记。点击带下划线的词，或选中一段文字查词。 |
+|  · Question |  · 疑惑 |
+| Reading library | 返回阅读材料 |
+| Select an underlined word for its meaning, or highlight text to look it up and save a question. | 点击带下划线的词查看释义；也可以选中文字后查词并保留疑惑。 |
+| Temporary admin preview: marks are not saved to learner records. | 管理员临时预览：阅读标记不写入正式学习记录。 |
+| Look up: {word} | 查词：{word} |
+| Look up selection | 查所选文字 |
+| Meaning and context | 词义与语境 |
+| Select a word to see meanings and save its context. | 选择词语后，释义和记录操作会显示在这里。 |
+| Loading reading materials… | 正在读取阅读材料… |
+| Reading library | 阅读材料 |
+| This course has no reading materials yet. Open a lesson from the Learning page. | 当前课程还没有阅读材料。可以先从学习页进入课程。 |
+| Reload | 重新读取 |
+| Listening and speaking | 听说练习 |
+| Load audio | 加载题目音频 |
+| Loading audio… | 正在读取音频… |
+| The audio format is invalid. | 音频格式不正确。 |
+| Audio is ready. | 音频已就绪。 |
+| Audio could not be loaded. Try again. | 音频读取失败，请重试。 |
+| Audio could not play. Reload it. | 音频无法播放，请重新加载。 |
+| Record | 开始录音 |
+| This browser cannot record. Type your answer instead. | 当前浏览器无法录音。请直接填写文字答案。 |
+| Allow this browser to use your microphone. | 请允许浏览器使用麦克风。 |
+| Recording: {seconds} / 120 seconds | 正在录音：{seconds} / 120 秒 |
+| Recording. Select Stop when finished. | 正在录音，完成后点击停止。 |
+| The microphone is unavailable. Check browser permissions or type your answer. | 无法访问麦克风。请检查浏览器权限，或直接填写文字答案。 |
+| Transcribe | 转写到答案 |
+| Transcribing. You can correct the text in your answer. | 正在转写；完成后可在答案框修正。 |
+| No transcript was returned. Record again or type your answer. | 未获得有效转写，可重新录音或直接填写答案。 |
+| The transcript is in your answer. Check it before submitting. | 转写已放入答案框，请核对后提交。 |
+| Transcription failed. You can replay the recording or type your answer. | 转写失败；录音仍可回听，也可直接填写文字。 |
+| Stop | 停止录音 |
+| Record again | 重新录音 |
+| The recording is empty. Try again. | 录音为空，请再试一次。 |
+| Recording ready on this page. Replay it or transcribe and edit your answer. | 录音已保留在当前页面。可回听，或转写到答案后修正。 |
+| You can replay the recording. Transcription is unavailable; type your answer. | 录音可回听；转写暂不可用，请直接填写答案。 |
+| Recording provides a transcript. Check the text before submitting; feedback evaluates the content of your answer. | 录音只用于转写。请核对答案框中的文字后提交，结果评价表达内容。 |
+| Transcription is unavailable. You can type your answer. | 转写暂不可用，可直接填写文字答案。 |
+| Audio transcript | 音频原文 |
+| Transcription is unavailable. You can type your answer. | 语音转写暂不可用，可直接填写文字答案。 |
+| Transcription is not configured. You can type your answer. | 语音转写尚未配置；可直接填写文字答案。 |
+| The selected text no longer matches. Select it again. | 所选文字与正文不一致，请重新选择。 |
+| The material has changed. Refresh and select the text again. | 正文版本已变化，请刷新后重新选择。 |
+| The memory link is unavailable. You can save the question and context. | 记忆入口暂不可用；可先标记疑惑并保留原文。 |
+| The audio resource is unavailable. | 音频资源暂不可用。 |
+| The audio resource could not be verified. | 音频资源校验未通过。 |
+| Use a mono PCM WAV recording no longer than 120 seconds. | 请使用不超过 120 秒的单声道 PCM WAV 录音。 |
+| Transcription did not finish. Retry or type your answer. No answer was graded. | 转写未完成，请重试或直接填写答案；本次未计入作答。 |
+| Transcription is busy. Try again shortly. | 语音转写正在处理其他录音，请稍后重试。 |
+| Sign in to use transcription, or type your answer. | 请登录账号后使用语音转写；也可直接填写文字答案。 |
 
 ## 操作与服务提示
 

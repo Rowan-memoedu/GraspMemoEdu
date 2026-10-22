@@ -342,6 +342,9 @@ class PaperService:
                 topic = self.catalog.topic(source['container'])
                 if topic['version'] == source['version']:
                     items[-1]['memory_chunks'] = card_chunks(topic, {'point_ids': source['local_points']})
+                    if question.get('audio'):
+                        from .training_audio import public_audio
+                        items[-1]['audio'] = public_audio(question, topic['id'], feedback=shown)
         return {'id': paper['id'], 'title': paper['title'], 'subject': paper['subject'], 'mode': self._mode(paper),
                 'phase': paper['phase'], 'revision': paper['revision'], 'items': items,
                 'kind': paper['metadata'].get('kind'), 'paper_number': paper['metadata'].get('paper_number'),

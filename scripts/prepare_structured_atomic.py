@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT))
 from graspmemoedu.structured_atomic import FORMAT, fingerprint, validate_projection
 from graspmemoedu.site_backup import _validate_review
 from graspmemoedu.topic_install import encoded
+from graspmemoedu.training_audio import audio_bytes
 
 
 class Images(HTMLParser):
@@ -25,6 +26,17 @@ class Images(HTMLParser):
         super().__init__(); self.urls = []; self.feed(html)
     def handle_starttag(self, tag, attrs):
         if tag == 'img': self.urls.append(dict(attrs)['src'])
+
+
+def copy_audio_asset(source_path, destination_root, card):
+    """Use the same path, hash, MIME and size contract as the serving endpoint."""
+    data = audio_bytes(source_path, card)
+    destination = destination_root / card['audio']['asset']
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists() and destination.read_bytes() != data:
+        raise ValueError('Conflicting audio asset')
+    if not destination.exists(): destination.write_bytes(data)
+    return destination
 
 
 def prepare(args):
@@ -69,6 +81,12 @@ def prepare(args):
         if completed.returncode:
             raise ValueError(completed.stderr[-4000:])
         topic = json.loads(topic_path.read_bytes()); validate_projection(topic, source)
+        for card in topic['flashcards']:
+            if card.get('audio_source'):
+                raise ValueError('Unbound audio source cannot enter an installable package')
+            audio = card.get('audio')
+            if audio:
+                copy_audio_asset(args.input, topics, card)
         answers = {'source_sha256': topic['source_sha256'], 'answers': {card['id']: {
             key: card[key] for key in ('reference_answer', 'answer_type', 'constraints')} for card in topic['flashcards']}}
         answer_bytes = encoded(answers)
@@ -96,9 +114,12 @@ def prepare(args):
     (args.output / 'report.json').write_bytes(encoded({'topics': report, 'structured_source_sha256': hashlib.sha256(raw).hexdigest()}))
     files = {p.relative_to(args.output).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
              for p in sorted(args.output.rglob('*')) if p.is_file()}
-    (args.output / 'manifest.json').write_bytes(encoded({'schema': 1, 'adapter': 'structured-atomic',
+    manifest = {'schema': 1, 'adapter': 'structured-atomic',
         'subject_id': args.subject, 'reset_reading_progress': getattr(args, 'reset_reading_progress', False),
-        'replace_atomic_and_reset_progress': getattr(args, 'replace_atomic_and_reset_progress', False), 'files': files}))
+        'replace_atomic_and_reset_progress': getattr(args, 'replace_atomic_and_reset_progress', False), 'files': files}
+    if getattr(args, 'test_material', False):
+        manifest['test_materials'] = {'courses': [args.course_id]}
+    (args.output / 'manifest.json').write_bytes(encoded(manifest))
     return report
 
 
@@ -111,6 +132,7 @@ def main():
     p.add_argument('--node', default='node')
     p.add_argument('--reset-reading-progress', action='store_true', help='Explicitly allow same-ID reading-only upgrades')
     p.add_argument('--replace-atomic-and-reset-progress', action='store_true', help='Explicitly replace atomic Topics and reset their progress')
+    p.add_argument('--test-material', action='store_true', help='Mark this course as test material before content activation')
     prepare(p.parse_args())
 
 

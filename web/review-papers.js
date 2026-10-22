@@ -1,21 +1,24 @@
-import {t, translateMessage} from './i18n.js?v=8405fcd52d52c0b6';
-import {answerEditor, readerFrame, renderReviewReader} from './learning-ui.js?v=8405fcd52d52c0b6';
-import {answerReady, questionInput, choiceTypeField} from './question-input.js?v=8405fcd52d52c0b6';
-import {createLearningCache} from './learning-cache.js?v=8405fcd52d52c0b6';
-import {helpableContent, reportableContent} from './content-report.js?v=8405fcd52d52c0b6';
+import {t, translateMessage} from './i18n.js?v=c9b135ee2b396ff5';
+import {answerEditor, readerFrame, renderReviewReader} from './learning-ui.js?v=c9b135ee2b396ff5';
+import {answerReady, questionInput, choiceTypeField} from './question-input.js?v=c9b135ee2b396ff5';
+import {createLearningCache} from './learning-cache.js?v=c9b135ee2b396ff5';
+import {helpableContent, reportableContent} from './content-report.js?v=c9b135ee2b396ff5';
 
 const node = (tag, cls = '', text) => { const x = document.createElement(tag); x.className = cls; if (text !== undefined) x.textContent = text; return x; };
 const button = (label, cls, action) => { const x = node('button', cls, label); x.type = 'button'; x.addEventListener('click', action); return x; };
 const html = content => { const x = node('div', 'courseContent'); x.innerHTML = content || ''; return x; };
-import {createContentTimer} from './content-timer.js?v=8405fcd52d52c0b6';
-import {renderReviewDirectory, paperNumber} from './review-directory.js?v=8405fcd52d52c0b6';
-import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=8405fcd52d52c0b6';
-import {chunkPeek} from './memory-chunk.js?v=8405fcd52d52c0b6';
+import {createContentTimer} from './content-timer.js?v=c9b135ee2b396ff5';
+import {renderReviewDirectory, paperNumber} from './review-directory.js?v=c9b135ee2b396ff5';
+import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=c9b135ee2b396ff5';
+import {chunkPeek} from './memory-chunk.js?v=c9b135ee2b396ff5';
+import {pointAssessment} from './point-assessment.js?v=c9b135ee2b396ff5';
+import {trainingAudio} from './training-audio.js?v=c9b135ee2b396ff5';
 
 export function createPaperView({root, request, href, getAccess, formatDate, progressChanged, courseSidebar, taskTree}) {
   const template = document.getElementById('appLayout').cloneNode(true);
   let epoch = 0, reader = null, state = null, selected = 0, pollTimer, saveTimer, input = null, since = null;
   let access, cache, dirty = new Map(), chain = Promise.resolve(), busy = false;
+  let audioControl = null;
   let contentTimer = null, timeoutSync = false, timeoutRetry = null, timerElement = null;
   let activityTimer = null, activitySession = null, activityChain = Promise.resolve();
   function activity(active, keepalive = false) {
@@ -73,6 +76,7 @@ export function createPaperView({root, request, href, getAccess, formatDate, pro
     else if (state?.timing) void activity(true).then(heartbeat).catch(error);
   }
   function stop() {
+    audioControl?.dispose(); audioControl = null;
     void activity(false, true).catch(() => {}); clearTimeout(activityTimer); activitySession = null;
     remember(); clock(); ++epoch; clearTimeout(pollTimer); clearTimeout(saveTimer);
     contentTimer?.destroy(); contentTimer = null; timerElement = null; clearTimeout(timeoutRetry); timeoutSync = false;
@@ -254,6 +258,7 @@ export function createPaperView({root, request, href, getAccess, formatDate, pro
   }
   function render() {
     if (!reader || !state) return;
+    audioControl?.dispose(); audioControl = null;
     clock(); input = null;
     contentTimer?.update(state.timing);
     const item = state.items[selected], refs = reader.refs, main = refs.stepCard;
@@ -284,7 +289,15 @@ export function createPaperView({root, request, href, getAccess, formatDate, pro
       const answer = node('textarea', 'answerInput'); answer.value = item.answer; answer.disabled = true;
       answer.rows = 3; answer.setAttribute('aria-label', t('你的答案')); main.append(answer);
     }
+    const audioTarget = input;
+    audioControl = trainingAudio(item, {request, contentVersion: item.content_version,
+      disabled: !audioTarget || !state.can_submit || item.revealed || busy,
+      ...(audioTarget && (!item.interaction || item.interaction.type === 'text') ? {
+        onTranscript: text => { audioTarget.value = text; audioTarget.dispatchEvent(new Event('input', {bubbles: true})); },
+      } : {})});
+    if (audioControl) main.insertBefore(audioControl, stem.nextSibling);
     if (item.result) {
+      const points = pointAssessment(item.result.assessment_result); if (points) main.append(points);
       const reference = referenceAnswer(item); if (reference) main.append(reference);
       main.append(node('p', item.result.correct ? 'correctResult' : 'fieldError', t(item.result.correct ? 'training.correct' : 'training.incorrect')), node('p', '', item.result.reason === '限时已到，本题未完成作答。' ? t('paper.unansweredTimeout') : item.result.reason), prepareAnswerContent(content(item, 'explanation', item.explanation_html)));
       if (item.result.due_at) main.append(node('p', 'inputHint', t('atomic.availableAt', {time: formatDate(item.result.due_at)})));

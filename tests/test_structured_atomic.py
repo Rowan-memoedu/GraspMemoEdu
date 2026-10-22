@@ -12,7 +12,7 @@ import unittest
 
 from graspmemoedu.atomic_content import validate_atomic
 from graspmemoedu.review_cards import eligible_presentations
-from graspmemoedu.structured_atomic import normalize, SourceHTML
+from graspmemoedu.structured_atomic import normalize, SourceHTML, validate_projection
 from tests.atomic_fixtures import atomic_topic
 from scripts.prepare_structured_atomic import prepare
 from graspmemoedu.academy_import import install
@@ -84,7 +84,13 @@ class StructuredAtomicTests(unittest.TestCase):
             (data / 'subjects.json').write_text(json.dumps({'subjects':[{'id':'cs','course_ids':['course']}]}), encoding='utf-8')
             backend = create_learning_service(original, data, learner_id='isolated', clock=lambda: datetime(2026, 10, 20, tzinfo=timezone.utc))
             before = backend.state()
-            source = root / 'source.json'; source.write_text(json.dumps(self.source()), encoding='utf-8')
+            document = self.source()
+            document['topics'][0]['sections'][0]['flashcards'][1]['interaction'] = {
+                'version': 2, 'type': 'composite', 'grading': 'exact',
+                'controls': [{'id': 'answer', 'type': 'text', 'label': 'Label', 'answers': ['A label.']}],
+                'sections': [{'id': 'part', 'html': '<p>Read this source <em>carefully</em>.</p>',
+                              'control_ids': ['answer'], 'complete': True}]}
+            source = root / 'source.json'; source.write_text(json.dumps(document), encoding='utf-8')
             package = root / 'package'
             prepare(Namespace(input=source, output=package, subject='cs', topic_prefix='atomic-', title_suffix='',
                               course_id='course', course_title='Course', unit_id='unit', unit_title='Unit', unit_parent=None, node='node'))
@@ -95,6 +101,13 @@ class StructuredAtomicTests(unittest.TestCase):
             topic = Catalog.load(Settings.load(data)).topic('atomic-new')
             self.assertEqual(len(topic['flashcards']), 2)
             self.assertEqual(topic['flashcards'][1]['learning_phases'], ['review'])
+            structured = json.loads((package / 'atomic-sources/atomic-new.json').read_bytes())
+            self.assertEqual(topic['flashcards'][1]['interaction']['sections'][0]['html'],
+                             '<p>Read this source <em>carefully</em>.</p>')
+            changed = deepcopy(topic)
+            changed['flashcards'][1]['interaction']['sections'][0]['html'] = '<p>Changed source.</p>'
+            with self.assertRaisesRegex(ValueError, 'Structured interaction changed'):
+                validate_projection(changed, structured)
             archive = root / 'site.zip'; backup_site(Settings.load(data), archive)
             restored = root / 'restored'; restore_site(archive, restored)
             self.assertEqual(Catalog.load(Settings.load(restored)).topic('atomic-new'), topic)

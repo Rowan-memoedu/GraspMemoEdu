@@ -197,6 +197,8 @@ def _validate_payload(manifest, blobs):
             expected_files.add(expected)
     if not topics or set(versions) != set(topics) or set(sources) != set(topics) or default_id not in topics:
         raise ValueError('Topic manifest membership differs from catalog')
+    from .training_audio import validate_audio_archive
+    expected_files.update(validate_audio_archive(blobs, topics))
     _retired_versions(manifest, topics)
     _introduction_versions(manifest, topics)
     from .question_bank import validate_archive
@@ -383,6 +385,8 @@ def backup_site(settings, destination=None):
     portable = {'courses': [{**course, 'topics': [{**topic, 'path': f"courses/{topic['id']}.json"}
                                                 for topic in course['topics']]} for course in catalog.courses.values()]}
     blobs['catalog.json'] = _json(portable)
+    from .training_audio import audio_backup_blobs
+    blobs.update(audio_backup_blobs(catalog))
     from .course_graph import graph_backup_blobs
     blobs.update(graph_backup_blobs(settings))
     for source in (settings.content_dir / 'mathacademy-sources').rglob('*.json'):
