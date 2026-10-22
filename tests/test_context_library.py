@@ -166,6 +166,39 @@ class ContextLibraryApiTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/context-library/material' + self.query, headers=other).json()['records'], [])
         self.assertEqual(len(self.client.get('/api/context-library/material' + self.query, headers=self.headers).json()['records']), 1)
 
+    def test_legacy_topics_use_course_subject_ownership_without_rewriting_content(self):
+        # Older paradigm topics have no embedded subject_id. Their assignment
+        # is owned by the shared course/subject metadata, including non-readers.
+        legacy = {'id': 'legacy-physics', 'title': 'Old physics text', 'version': 'physics-v1',
+                  'reading_materials': [{'id': 'legacy-reader', 'title': 'Physics reading',
+                      'paragraphs': [{'id': 'p1', 'text': 'An existing physics paragraph.'}], 'annotations': []}]}
+        ordinary = {'id': 'legacy-math', 'title': 'Old mathematics', 'version': 'math-v1'}
+        original = deepcopy([legacy, ordinary])
+        for value, subject in ((legacy, 'physics'), (ordinary, 'math')):
+            course = 'course-' + value['id']
+            self.catalog.topics[value['id']] = value
+            self.catalog.courses[course] = {'id': course, 'title': value['title'], 'topics': [{'id': value['id']}]}
+            self.catalog.topic_courses[value['id']] = frozenset({course})
+            self.subjects.course_subjects[course] = subject
+            self.access.topics[value['id']] = {'id': value['id'], 'title': value['title']}
+            self.access.guest_topic_ids.add(value['id'])
+        guest = self.access.create_guest()
+        headers = {'X-Learning-Identity': guest['identity_token']}
+        for subject in ('english', 'math'):
+            response = self.client.get('/api/context-library?subject_id=' + subject, headers=headers)
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.json()['items'], [])
+        physics = self.client.get('/api/context-library?subject_id=physics', headers=headers)
+        self.assertEqual(physics.status_code, 200, physics.text)
+        self.assertEqual([(i['topic_id'], i['subject_id']) for i in physics.json()['items']], [('legacy-physics', 'physics')])
+        all_visible = self.client.get('/api/context-library', headers=headers)
+        self.assertEqual(all_visible.json()['items'], physics.json()['items'])
+        english = self.client.get('/api/context-library?subject_id=english', headers=self.headers)
+        self.assertEqual([(i['topic_id'], i['subject_id']) for i in english.json()['items']], [(self.topic['id'], 'english')])
+        wrong = self.client.get('/api/context-library?subject_id=english&topic_id=legacy-physics', headers=headers)
+        self.assertEqual(wrong.status_code, 403)
+        self.assertEqual([legacy, ordinary], original)
+
     def test_admin_marks_stay_in_memory_and_separate_sessions(self):
         admin, headers = self.account(purpose='test', is_admin=True)
         body = {**selection(self.topic), 'action': 'mark'}

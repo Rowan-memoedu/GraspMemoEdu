@@ -116,11 +116,12 @@ def register_context_library_routes(app, catalog, access_store, subjects, *, act
             identity(request)
         allowed = {t['id'] for t in access['topics']}
         return {'items': [{'topic_id': topic['id'], 'topic_title': topic['title'], 'content_version': topic['version'],
-                           'subject_id': topic['subject_id'], 'id': material['id'], 'title': material['title']}
+                           'subject_id': actual_subject, 'id': material['id'], 'title': material['title']}
                           for topic in catalog.topics.values() if topic['id'] in allowed
                           and (not topic_id or topic_id == topic['id'])
-                          and (not subject_id or subject_id == topic['subject_id'])
-                          for material in topic.get('reading_materials', [])]}
+                          for material in topic.get('reading_materials', [])
+                          for actual_subject in sorted({subjects.course_subjects[c] for c in catalog.topic_courses[topic['id']]})
+                          if not subject_id or subject_id == actual_subject]}
 
     @app.get('/api/context-library/material')
     def material(request: Request):
