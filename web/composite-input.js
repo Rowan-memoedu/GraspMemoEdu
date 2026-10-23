@@ -6,7 +6,7 @@ const node = (tag, cls, text) => {
   return el;
 };
 
-export function compositeInput(spec, {id, value = '', disabled = false} = {}) {
+export function compositeInput(spec, {id, value = '', disabled = false, formId} = {}) {
   const root = node('div', 'questionInteraction compositeInteraction');
   const input = node('textarea', 'structuredAnswer'); input.id = id; input.name = 'answer';
   input.hidden = true; input.disabled = disabled; root.append(input);
@@ -22,6 +22,11 @@ export function compositeInput(spec, {id, value = '', disabled = false} = {}) {
     input.value = JSON.stringify({section, values});
     if (emit) { emitting = true; input.dispatchEvent(new Event('input', {bubbles: true})); emitting = false; }
   };
+  root.addEventListener('keydown', event => {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && !event.isComposing) {
+      event.preventDefault(); document.getElementById(formId)?.requestSubmit();
+    }
+  });
   function render() {
     root.querySelector('.compositeBody')?.remove();
     const body = node('div', 'compositeBody');
@@ -31,31 +36,48 @@ export function compositeInput(spec, {id, value = '', disabled = false} = {}) {
       if (spec.sections.length > 1) panel.append(node('p', 'stepCounter', `${index + 1} / ${spec.sections.length}`));
       const text = node('div', 'courseContent'); text.innerHTML = part.html; panel.append(text);
       for (const control of spec.controls.filter(c => part.control_ids.includes(c.id))) {
-        const wrap = node('label', 'compositeControl'), label = node('span', 'compositeLabel', control.label || control.id);
-        const field = node(control.type === 'select' ? 'select' : 'input', 'compositeField');
-        field.id = `${id}-${control.id}`; field.disabled = disabled; field.dataset.controlId = control.id;
-        field.setAttribute('aria-label', control.label || control.id);
-        if (control.type === 'select') {
-          field.append(new Option('请选择', ''));
-          for (const option of control.options) field.append(new Option(option.text, option.id));
-        } else { field.type = 'text'; field.autocomplete = 'off'; if (control.input_type === 'number') field.inputMode = 'decimal'; }
-        field.value = values[control.id]; wrap.append(label, field);
-        field.addEventListener('input', () => {
-          values[control.id] = field.value; save();
-          const next = body.querySelector('.compositeNext'); if (next) next.disabled = !completeSection(section);
-        });
         const marker = [...text.querySelectorAll('[data-control]')].find(el => el.dataset.control === control.id);
-        if (marker) marker.replaceWith(wrap); else panel.append(wrap);
-        if (control.type === 'select' && control.options.some(o => o.html)) {
-          const options = node('details', 'compositeOptions');
-          options.append(node('summary', '', `${control.label || control.id} · 选项`));
-          const list = node('ol', 'courseContent');
-          for (const option of control.options) {
-            const item = node('li', ''); item.innerHTML = option.html || '';
-            if (!option.html) item.textContent = option.text;
-            list.append(item);
+        const changed = value => {
+          if (disabled) return;
+          values[control.id] = value; save();
+          const next = body.querySelector('.compositeNext'); if (next) next.disabled = !completeSection(section);
+        };
+        if (control.type === 'select') {
+          const group = node('fieldset', 'compositeControl compositeChoiceControl');
+          group.id = `${id}-${control.id}`; group.dataset.controlId = control.id; group.disabled = disabled;
+          const label = node('legend', 'compositeLabel', control.label || control.id); label.id = `${group.id}-label`;
+          const list = node('div', 'choiceList'); list.setAttribute('role', 'radiogroup'); list.setAttribute('aria-labelledby', label.id);
+          control.options.forEach((option, optionIndex) => {
+            const choice = node('label', 'choiceOption'), radio = node('input', '');
+            radio.type = 'radio'; radio.name = group.id; radio.value = option.id;
+            radio.disabled = disabled; radio.checked = values[control.id] === option.id;
+            if (formId) radio.setAttribute('form', formId);
+            const content = node('span', 'choiceBody');
+            // Rich option HTML uses the same compiled, sanitized source as the question.
+            if (option.html) content.innerHTML = option.html; else content.textContent = option.text;
+            radio.addEventListener('change', () => { if (radio.checked) changed(option.id); });
+            choice.append(radio, node('span', 'choiceLetter', String.fromCharCode(65 + optionIndex)), content); list.append(choice);
+          });
+          group.append(label, list); panel.append(group);
+          if (marker) {
+            // Keep the article intact; a full list of sentence options belongs after it.
+            const anchor = node('button', 'compositeAnchor', `[${spec.controls.indexOf(control) + 1}]`); anchor.type = 'button';
+            anchor.setAttribute('aria-label', control.label || control.id); anchor.setAttribute('aria-controls', group.id);
+            anchor.addEventListener('click', () => {
+              group.scrollIntoView({block: 'center'});
+              (group.querySelector('input:checked') || group.querySelector('input'))?.focus({preventScroll: true});
+            });
+            marker.replaceWith(anchor);
           }
-          options.append(list); panel.append(options);
+        } else {
+          const wrap = node('label', `compositeControl${marker ? '' : ' compositeTextControl'}`);
+          const label = node('span', 'compositeLabel', control.label || control.id), field = node('input', 'compositeField');
+          field.id = `${id}-${control.id}`; field.disabled = disabled; field.dataset.controlId = control.id;
+          field.setAttribute('aria-label', control.label || control.id); if (formId) field.setAttribute('form', formId);
+          field.type = 'text'; field.autocomplete = 'off'; if (control.input_type === 'number') field.inputMode = 'decimal';
+          field.value = values[control.id]; wrap.append(label, field);
+          field.addEventListener('input', () => changed(field.value));
+          if (marker) marker.replaceWith(wrap); else panel.append(wrap);
         }
       }
       if (!part.complete) panel.append(node('p', 'featureNotice', '原材料缺少本段题面，无法继续作答。'));
@@ -75,7 +97,7 @@ export function compositeInput(spec, {id, value = '', disabled = false} = {}) {
     focus: () => root.querySelector('select,input')?.focus(),
     setDisabled: value => {
       disabled = value; input.disabled = value;
-      for (const field of root.querySelectorAll('select,input')) field.disabled = value;
+      for (const field of root.querySelectorAll('fieldset,input')) field.disabled = value;
       const next = root.querySelector('.compositeNext'); if (next) next.disabled = value || !completeSection(section);
     }};
   input.addEventListener('input', () => {

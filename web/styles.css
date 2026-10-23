@@ -324,6 +324,25 @@ mjx-container[jax="SVG"] text { font-family: "Microsoft YaHei", sans-serif; }
 .compositeInteraction, .compositeSection, .sourceReadingBlock { min-width: 0; max-width: 100%; }
 .compositeControl { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; margin: 4px 2px; vertical-align: middle; }
 .compositeLabel { color: var(--muted); font-size: 13px; }
+.compositeChoiceControl { display: block; width: 100%; min-width: 0; padding: 0; margin: 20px 0; border: 0; }
+.compositeChoiceControl > .compositeLabel { display: block; width: 100%; padding: 0; margin-bottom: 8px; color: var(--ma-ink); font-size: 1em; line-height: 1.6; overflow-wrap: anywhere; }
+.compositeChoiceControl .choiceList { grid-template-columns: minmax(0, 1fr); margin: 0; }
+.compositeChoiceControl .choiceOption { align-items: flex-start; min-height: 44px; }
+.compositeChoiceControl .choiceOption input { margin-top: .35em; }
+.compositeChoiceControl .choiceLetter { flex: 0 0 auto; }
+.compositeChoiceControl .choiceBody { overflow-wrap: anywhere; }
+.compositeChoiceControl .choiceOption:active { background: var(--soft-blue); }
+.compositeChoiceControl .choiceOption:has(input:disabled) { opacity: .65; cursor: not-allowed; }
+.compositeChoiceControl[aria-invalid="true"] .choiceOption { border-color: var(--amber); }
+.correct .compositeChoiceControl .choiceOption:has(input:checked) { border-color: var(--green); }
+[aria-busy="true"] .compositeChoiceControl .choiceOption { cursor: progress; }
+.compositeTextControl { display: flex; flex-direction: column; align-items: flex-start; margin: 16px 0; }
+.compositeAnchor { min-width: 44px; min-height: 44px; padding: 4px; border: 0; background: transparent; color: var(--link-color); font: inherit; text-decoration: underline; cursor: pointer; }
+.compositeAnchor:focus-visible { outline: 2px solid var(--link-color); outline-offset: 2px; }
+.compositeAnchor:active { color: var(--button-active); }
+@media (hover: hover) {
+  .compositeChoiceControl .choiceOption:hover:not(:has(input:disabled)), .compositeAnchor:hover { background: var(--soft-blue); }
+}
 .compositeField { min-width: 3em; max-width: min(100%, 32em); min-height: 44px; padding: 8px; border: 1px solid var(--control-border); border-radius: 3px; background: var(--answer-background); color: var(--ma-ink); font: inherit; }
 .compositeField:hover { border-color: var(--control-hover-border); }
 .compositeField:focus-visible { outline: 2px solid var(--link-color); outline-offset: 2px; }

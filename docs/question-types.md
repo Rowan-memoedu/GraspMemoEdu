@@ -2,6 +2,8 @@
 
 来源适配支持 `interaction.version=2`：`choice` 可保留答案未确定状态；`composite` 由稳定 ID 的 controls 和有序 sections 组成。每个 section 保存 html、control_ids、complete，每个 control 为 select 或 text；select 保留原选项顺序。私有 answers 不进入公共投影。grading 为 exact、semantic 或 unavailable；整题按既有判题规则一次提交，最多 64 段、128 个控件、16384 字符。缺后续题面或答案时仅阅读，不把源抓取完成标记用作学员进度。
 
+复合题的 select 控件显示为可换行的单选选项，题号与选项组分行，长句在手机上也能完整阅读。句内选择占位保留为题号锚点，选项组放在该段完整题面之后；短文本填空仍在原位。控件 ID、选项顺序以及 `{section, values}` 提交格式保持一致，已有草稿和只读历史可直接恢复。
+
 Example 与 Practice 共用可选 `interaction`（version 1）。不填时保留原问答题，继续交给已有 LLM 判题。`answer_type` 仍是原答案描述字段，不作为前端控件类型。
 
 全站课程、复习、原子题、独立题库及历史页共用 `questionInput` 选择控件与 `choiceTypeField`，在习题编号或标题下显示“单选”或“多选”。鼠标、触摸、Tab 和空格操作保持，方向键不切换选项；Ctrl + Enter 提交。后端选项排序统一由 `present_choice` 处理，按作答标识保持稳定，`shuffle:false` 保持原顺序；选择题继续共用解析、隐藏答案与判分规则。
