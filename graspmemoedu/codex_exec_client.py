@@ -3,7 +3,9 @@
 Each request is a new ephemeral, tool-disabled execution. This module owns no
 production state, retry policy, API credentials, content validation or scheduler.
 The configured model and reasoning effort are inherited, never guessed from an
-old API client's arguments. All task files belong to the caller's run_root.
+old API client's arguments. Evidence belongs to the caller's run_root. On
+Windows the credential-free debug home uses a short, per-call cache directory
+so bundled skills can be materialized before their metadata is disabled.
 """
 from __future__ import annotations
 
@@ -25,6 +27,7 @@ import uuid
 
 BACKEND = 'codex-exec'
 TRANSPORT_VERSION = 1
+WINDOWS_PROBE_ROOT = Path('D:/Caches/GraspMemoEdu/codex-probes')
 ENVELOPE_SCHEMA = {
     'type': 'object', 'properties': {'result_json': {'type': 'string'}},
     'required': ['result_json'], 'additionalProperties': False,
@@ -163,6 +166,27 @@ def _disabled_skills(roots):
                 paths.update(str((child / 'SKILL.md').resolve()) for child in folder.iterdir()
                              if (child / 'SKILL.md').is_file())
     return [{'path': path, 'enabled': False} for path in sorted(paths)]
+
+
+def _new_probe_home(directory):
+    """Use the official CODEX_HOME override without copying login state.
+
+The CLI's bundled skill extraction can hit Windows path limits before the
+call directory itself does. Keep only this disposable debug home short; retain
+bidirectional pointers instead of moving caller evidence or real CLI state.
+"""
+    if os.name == 'nt':
+        WINDOWS_PROBE_ROOT.mkdir(parents=True, exist_ok=True)
+        home = WINDOWS_PROBE_ROOT / uuid.uuid4().hex
+    else:
+        home = directory / 'probe-home'
+    home.mkdir(mode=0o700)
+    pointer = {'schema': 1, 'backend': BACKEND, 'call_dir': str(directory.resolve()),
+               'probe_home': str(home.resolve()), 'purpose': 'local_debug_only',
+               'credentials_copied': False, 'model_execution_count': 0}
+    _save(directory / 'probe-home.json', pointer)
+    _save(home / 'probe-owner.json', pointer)
+    return home
 
 
 def _kill_own_process(proc):
@@ -323,9 +347,8 @@ class CodexExecClient:
 
     def _prepare(self, directory, config):
         """Inspect client metadata/prompt locally; this does not execute a model."""
-        probe_home = directory / 'probe-home'
-        probe_home.mkdir()
-        env = _environment(probe_home, directory)
+        probe_home = _new_probe_home(directory)
+        env = _environment(probe_home, probe_home)
         version_run = _execute([self.executable, '--version'], stdin='', env=env,
             directory=directory, prefix='cli-version', timeout=min(30, self.timeout))
         if version_run['timed_out'] or version_run['exit_code']:
@@ -373,6 +396,8 @@ class CodexExecClient:
                   'passed': not leaks, 'restricted_catalog_sha256': _sha(restricted_path),
                   'cli_version': version,
                   'scope': 'Fresh empty debug home; actual exec ignores user config and disables automatic context.',
+                  'probe_home': str(probe_home.resolve()),
+                  'probe_home_pointer_sha256': _sha(directory / 'probe-home.json'),
                   'model_execution_count': 0}
         _save(directory / 'isolation.json', report)
         if leaks:

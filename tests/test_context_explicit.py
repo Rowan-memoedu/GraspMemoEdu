@@ -14,10 +14,11 @@ from scripts import produce_explicit_context as cli
 from scripts import produce_context as forward
 
 
-def fixture():
+def fixture(requirements=None):
     known = {'subject_id':'physics','points':[{'id':'known-ruler','target':'Measure length with a ruler.'}]}
     raw = {'schema':1,'articles':[{'id':'insulation','title':'Two jars',
         'paragraphs':[{'id':'p1','text':'Two jars contained equally hot water. A thick wool cover slowed heat loss from one jar. The uncovered jar cooled faster.'}]}]}
+    if requirements is not None: raw['articles'][0]['requirements']=requirements
     document = ce.prepare_input(raw,known)
     source = ce.effective_source(document,document['tasks'][0],[])
     analysis = {'matches':[],'suggestions':[{'target':'Insulation slows heat transfer.',
@@ -67,7 +68,7 @@ class FakeExec:
                 owner.calls.append({'path':str(path),'messages':deepcopy(messages)})
                 value=owner.responses.pop(0)
                 if isinstance(value,Exception): raise value
-                directory=Path(path)/('fixture-call-'+str(len(owner.calls)))
+                directory=Path(path)/('fixture-call-'+str(len(owner.calls))+'-'+cp.digest(str(path))[:10])
                 directory.mkdir(parents=True)
                 cp.save(directory/'messages.json',messages); cp.save(directory/'result.json',value)
                 raw=json.dumps({'result_json':json.dumps(value,ensure_ascii=False)},ensure_ascii=False)
@@ -86,6 +87,21 @@ class FakeExec:
 
 
 class ContextExplicitTests(unittest.TestCase):
+    def _rejected_analysis_fixture(self, root):
+        requirements='Produce a complete teaching MVP with Introductions, memory chunks and initial flashcards for new targets.'
+        document,source,analysis,plan,candidate,ar,review=fixture(requirements)
+        rejection=deepcopy(ar)
+        rejection.update(approved=False)
+        rejection['checks'][0].update(approved=False,
+            issues=['The candidate lacks the complete Introduction, memory chunk and initial cards required by the workflow.'],
+            rationale='The exact quote supports a genuinely new target, but the teaching fields have not been supplied.')
+        fake=FakeExec([analysis,rejection])
+        stage=ce._stage(root/'old'/source['task']['id']/'analysis',ce.ANALYZE,cp.REVIEW,source,
+            lambda c:cp.validate_candidate(c,source),lambda r,c:cp.validate_review(r,c,'article'),
+            lambda c:{'source':source,'candidate':c},fake,1)
+        self.assertEqual(stage['status'],'rejected')
+        return document,source,analysis,plan,candidate,ar,review
+
     def _legacy_standalone_record(self, root, generation_prompt=None):
         """The immediately preceding quality policy, with immutable old prompts."""
         document,source,analysis,plan,candidate,ar,review=fixture()
@@ -375,6 +391,78 @@ class ContextExplicitTests(unittest.TestCase):
             self.assertEqual(record['evidence'],{'backend':ce.BACKEND,'author_call_required':False,
                 'quality_policy':cp.QUALITY_POLICY,'author_policy':ce.AUTHOR_POLICY})
             ce.require_quality(record); self.assertIsNone(ce.record_topic(record))
+
+    def test_analysis_stage_rechecks_rejected_generation_without_repeating_downstream_requirements(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp); document,source,analysis,_,candidate,ar,review=self._rejected_analysis_fixture(root)
+            previous=root/'old'/source['task']['id']/'analysis'
+            old_result=(previous/'attempt-01/result.json').read_bytes()
+            old_generation=cp.read(previous/'attempt-01/generation/proof.json')
+            # A later interrupted generation is retained as uncertain, never used.
+            cp.save(previous/'attempt-02/generation/started.json',{'backend':ce.BACKEND,'unknown':True})
+            fake=FakeExec([ar,candidate,learner_review(),review])
+            cp.save(root/'tasks.json',document)
+            args=Namespace(input=root/'tasks.json',run_root=root/'resumed',library=root/'library',
+                attempts=1,reuse_analysis_runs=[root/'old'])
+            self.assertEqual(cli.run(args,fake),0)
+            self.assertEqual(len(fake.calls),4)
+            self.assertIn('/analysis/attempt-01/review/',fake.calls[0]['path'].replace('\\','/'))
+            self.assertEqual(fake.calls[0]['messages'][0]['content'],ce.ANALYSIS_REVIEW)
+            payload=json.loads(fake.calls[0]['messages'][1]['content'])
+            self.assertEqual(payload,{'source':source,'candidate':analysis})
+            self.assertIn('later author stage',ce.ANALYSIS_REVIEW)
+            self.assertIn('EVERY known target',ce.ANALYSIS_REVIEW)
+            self.assertIn('every exact quotation',ce.ANALYSIS_REVIEW)
+            record=cp.read(root/'resumed'/source['task']['id']/'result.json')
+            self.assertEqual(record['analysis_record']['evidence']['generation'],old_generation)
+            self.assertEqual(record['analysis_record']['candidate'],analysis)
+            self.assertEqual(record['analysis_record']['evidence']['analysis_review_prompt_sha256'],cp.digest(ce.ANALYSIS_REVIEW))
+            ce.require_quality(record)
+            self.assertFalse((root/'resumed'/source['task']['id']/'analysis/attempt-01/generation').exists())
+            self.assertTrue((root/'resumed'/source['task']['id']/'analysis/reused-generation.json').exists())
+            self.assertEqual((previous/'attempt-01/result.json').read_bytes(),old_result)
+
+    def test_analysis_reuse_rejects_changed_known_catalog_and_retained_exec_bytes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp); _,source,analysis,_,_,_,_=self._rejected_analysis_fixture(root)
+            retained=ce.retained_analysis_generation(source,[root/'old'])
+            self.assertEqual(retained['candidate'],analysis)
+            changed=deepcopy(source); changed['points'][0]['target']='A changed known target.'
+            self.assertIsNone(ce.retained_analysis_generation(changed,[root/'old']))
+            changed=deepcopy(source); changed['task']['article']['paragraphs'][0]['text']+=' An extra observation.'
+            self.assertIsNone(ce.retained_analysis_generation(changed,[root/'old']))
+            events=Path(retained['generation_evidence']['receipt']['call_dir'])/'events.jsonl'
+            with events.open('a',encoding='utf-8') as file: file.write('\nchanged')
+            with self.assertRaisesRegex(ValueError,'raw artifact hash'):
+                ce.retained_analysis_generation(source,[root/'old'])
+
+    def test_analysis_reuse_does_not_bypass_exact_quote_validation(self):
+        _,source,analysis,_,_,_,_=fixture()
+        analysis['suggestions'][0]['quote']='An invented source sentence.'
+        fake=FakeExec([analysis])
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp); stage=root/'old'/source['task']['id']/'analysis'
+            ce._stage(stage,ce.ANALYZE,cp.REVIEW,source,
+                lambda c:cp.validate_candidate(c,source),lambda r,c:cp.validate_review(r,c,'article'),
+                lambda c:{'source':source,'candidate':c},fake,1)
+            with self.assertRaises(ValueError): ce.retained_analysis_generation(source,[root/'old'])
+            self.assertEqual(len(fake.calls),1)
+
+    def test_previously_approved_analysis_is_reusable_without_a_new_review(self):
+        _,source,analysis,_,_,ar,_=fixture()
+        fake=FakeExec([analysis,ar])
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            stage=ce._stage(root/'old-analysis',ce.ANALYZE,cp.REVIEW,source,
+                lambda c:cp.validate_candidate(c,source),lambda r,c:cp.validate_review(r,c,'article'),
+                lambda c:{'source':source,'candidate':c},fake,1)
+            evidence={**stage['evidence'],'analysis_prompt_sha256':cp.digest(ce.ANALYZE)}
+            record=cp.accepted_record(source,analysis,ar,evidence)
+            cp.save(root/'library/analysis'/(record['record_sha256']+'.json'),record)
+            with patch.object(ce,'exec_call',side_effect=AssertionError('Approved analysis must remain reusable')):
+                reused=ce._analysis_record(source,root/'new',root/'library',None,1)
+            self.assertEqual(reused,record)
+            self.assertFalse((root/'new').exists())
 
     def test_invalid_learner_output_retries_only_learner_then_source(self):
         _,source,analysis,_,candidate,ar,review=fixture()

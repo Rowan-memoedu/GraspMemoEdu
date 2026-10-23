@@ -85,6 +85,9 @@ class ClientTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory(dir=parent)
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
+        self.probe_cache = patch.object(transport, 'WINDOWS_PROBE_ROOT', self.root / 'probe-cache')
+        self.probe_cache.start()
+        self.addCleanup(self.probe_cache.stop)
         self.preferences = patch.object(transport, '_preferences', return_value={
             'model': 'configured-model', 'model_reasoning_effort': 'max'})
         self.preferences.start()
@@ -136,6 +139,7 @@ class ClientTests(unittest.TestCase):
         self.assertNotIn('model_reasoning_effort="low"', command)
         self.assertEqual(command[-1], '-')
         self.assertNotIn('Return a JSON object.', ' '.join(command))
+        self.assertEqual(run.call_args.kwargs['env']['CODEX_HOME'], str(self.client._home))
         self.assertEqual(json.loads((self.client.last_call_dir / 'result.json').read_text()), value)
 
     def test_complete_alias_and_explicit_model(self):
@@ -244,6 +248,88 @@ class ClientTests(unittest.TestCase):
         self.assertTrue(all('exec' not in call.args[0] for call in run.call_args_list))
         isolation = json.loads((self.client.last_call_dir / 'isolation.json').read_text())
         self.assertEqual(isolation['context_markers_detected'], ['## Memory'])
+
+    def test_probe_homes_are_unique_and_retain_bidirectional_ownership(self):
+        def once(index):
+            directory = self.root / 'deep' / ('segment-' * 4) / ('nested-' * 4) / str(index)
+            directory.mkdir(parents=True)
+            home = transport._new_probe_home(directory)
+            pointer = json.loads((directory / 'probe-home.json').read_text())
+            self.assertEqual(pointer, json.loads((home / 'probe-owner.json').read_text()))
+            self.assertEqual(pointer['call_dir'], str(directory.resolve()))
+            self.assertEqual(pointer['probe_home'], str(home.resolve()))
+            self.assertEqual(pointer['model_execution_count'], 0)
+            self.assertFalse(pointer['credentials_copied'])
+            self.assertFalse((home / 'auth.json').exists())
+            self.assertFalse((home / 'config.toml').exists())
+            if os.name == 'nt':
+                self.assertEqual(home.parent, self.root / 'probe-cache')
+                self.assertLess(len(str(home)), len(str(directory / 'probe-home')))
+            return home
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            homes = list(pool.map(once, range(4)))
+        self.assertEqual(len(set(homes)), 4)
+
+    def test_debug_materializes_and_disables_skills_in_short_home_without_a_model(self):
+        self.prepare.stop()
+        directory = self.root / 'deep' / ('segment-' * 4) / ('nested-' * 4)
+        (directory / 'work').mkdir(parents=True)
+        observed = []
+
+        def probe(argv, *, directory, prefix, env, **_):
+            self.assertNotIn('exec', argv)
+            home = Path(env['CODEX_HOME'])
+            self.assertNotEqual(home, self.client._home)
+            self.assertEqual(Path(env['TEMP']), home / 'tmp')
+            observed.append(home)
+            skill = home / 'skills' / '.system' / 'bundled-test' / 'SKILL.md'
+            if prefix == 'cli-version':
+                value = 'codex-cli test'
+            elif prefix == 'model-catalog':
+                value = json.dumps({'models': [{'slug': 'configured-model', 'tool_mode': 'tools'}]})
+            elif prefix == 'prompt-warmup':
+                skill.parent.mkdir(parents=True)
+                skill.write_text('Do not read this skill body.', encoding='utf-8')
+                value = json.dumps([{'role': 'developer', 'content': '<skills_instructions>'}])
+            else:
+                self.assertTrue(any(json.dumps(str(skill.resolve())) in part for part in argv))
+                value = json.dumps([{'role': 'user', 'content': 'Return the provided JSON only.'}])
+            (directory / (prefix + '.jsonl')).write_text(value, encoding='utf-8')
+            (directory / (prefix + '.stderr.txt')).write_text('', encoding='utf-8')
+            return {'exit_code': 0, 'timed_out': False, 'elapsed_seconds': 0.001}
+
+        with patch.object(transport, '_execute', side_effect=probe) as run:
+            report = self.client._prepare(directory, self.client._configuration(directory))
+        self.assertEqual(run.call_count, 4)
+        self.assertEqual(len(set(observed)), 1)
+        self.assertTrue(report['passed'])
+        self.assertEqual(report['model_execution_count'], 0)
+        self.assertEqual(report['probe_home_pointer_sha256'], transport._sha(directory / 'probe-home.json'))
+
+    def test_missing_skill_files_never_relax_the_context_marker_gate(self):
+        self.prepare.stop()
+
+        def probe(argv, *, directory, prefix, **_):
+            self.assertNotIn('exec', argv)
+            if prefix == 'cli-version':
+                value = 'codex-cli test'
+            elif prefix == 'model-catalog':
+                value = json.dumps({'models': [{'slug': 'configured-model', 'tool_mode': 'tools'}]})
+            else:
+                value = json.dumps([{'role': 'developer', 'content': '<skills_instructions>\n### Available skills'}])
+            (directory / (prefix + '.jsonl')).write_text(value, encoding='utf-8')
+            (directory / (prefix + '.stderr.txt')).write_text('', encoding='utf-8')
+            return {'exit_code': 0, 'timed_out': False, 'elapsed_seconds': 0.001}
+
+        with patch.object(transport, '_execute', side_effect=probe) as run:
+            with self.assertRaisesRegex(transport.CodexExecError, 'automatic_context_detected'):
+                self.call()
+        self.assertEqual(run.call_count, 4)
+        self.assertEqual(self.client.last_receipt['model_execution_count'], 0)
+        pointer = json.loads((self.client.last_call_dir / 'probe-home.json').read_text())
+        self.assertEqual(transport._disabled_skills([Path(pointer['probe_home']) / 'skills']), [])
+        isolation = json.loads((self.client.last_call_dir / 'isolation.json').read_text())
+        self.assertEqual(isolation['context_markers_detected'], ['### Available skills', '<skills_instructions>'])
 
 
 if __name__ == '__main__':

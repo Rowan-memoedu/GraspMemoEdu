@@ -37,14 +37,15 @@ def run(args, factory=None):
     document = cp.read(args.input); ce.validate_input(document)
     cp.save(args.run_root/'input-snapshot.json',document)
     cp.save(args.run_root/'prompts.json',{'backend':ce.BACKEND,'analysis':ce.ANALYZE,
-        'analysis_review':cp.REVIEW,'author':ce.AUTHOR,'author_review':ce.AUTHOR_REVIEW,
+        'analysis_review':ce.ANALYSIS_REVIEW,'author':ce.AUTHOR,'author_review':ce.AUTHOR_REVIEW,
         'quality_policy':cp.QUALITY_POLICY,'author_policy':ce.AUTHOR_POLICY,
         'learner_review':cp.LEARNER_REVIEW})
     factory = factory or make_factory(args)
     additions, rows = [], []
     for task in document['tasks']:
         source = ce.effective_source(document,task,additions)
-        record,origin = ce.run_source(source,args.run_root/task['id'],args.library,factory,args.attempts)
+        record,origin = ce.run_source(source,args.run_root/task['id'],args.library,factory,args.attempts,
+                                     getattr(args,'reuse_analysis_runs',()))
         if 'record_sha256' not in record:
             rows.append({'id':task['id'],'status':record['status'],'origin':origin,'details':record})
             # Later sources must see every preceding accepted target. Stop at
@@ -131,6 +132,8 @@ def main():
     p.add_argument('--input',type=Path,required=True)
     p.add_argument('--library',type=Path,required=True)
     p.add_argument('--run-root',type=Path,required=True)
+    p.add_argument('--reuse-analysis-runs',type=Path,nargs='+',default=[],
+                   help='Reuse a completed matching raw analysis generation; review it anew in this run')
     p.add_argument('--attempts',type=int,choices=range(1,7),default=3)
     p.add_argument('--executable')
     p.add_argument('--model',help='Omit to inherit the configured Codex model')
