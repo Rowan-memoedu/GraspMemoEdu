@@ -1,13 +1,41 @@
-import {t} from './i18n.js?v=c9b135ee2b396ff5';
-import {enhanceSourceContent} from './topic-content.js?v=c9b135ee2b396ff5';
-import {prepareAnswerContent} from './self-assessment.js?v=c9b135ee2b396ff5';
-import {helpableContent} from './content-report.js?v=c9b135ee2b396ff5';
+import {t} from './i18n.js?v=44688b09fce31a75';
+import {enhanceSourceContent} from './topic-content.js?v=44688b09fce31a75';
+import {prepareAnswerContent} from './self-assessment.js?v=44688b09fce31a75';
+import {helpableContent} from './content-report.js?v=44688b09fce31a75';
 
 const node = (tag, cls = '', text) => {
   const el = document.createElement(tag); el.className = cls;
   if (text !== undefined) el.textContent = text;
   return el;
 };
+
+// Authored attribution is separate from teaching text and never parsed as HTML.
+export function sourceAttributions(entries) {
+  const rows = Array.isArray(entries) ? entries.filter(item => item && typeof item.text === 'string' && item.text.trim()) : [];
+  if (!rows.length) return null;
+  const details = node('details', 'sourceAttributions');
+  details.append(node('summary', '', t('reader.sources')));
+  const list = node('ul');
+  const safeLink = (value, label) => {
+    if (typeof value !== 'string' || /[\s\\\u0000-\u001f]/.test(value)) return null;
+    try {
+      const url = new URL(value);
+      if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.username || url.password) return null;
+      const link = node('a', '', label); link.href = url.href; link.target = '_blank'; link.rel = 'noopener noreferrer'; return link;
+    } catch { return null; }
+  };
+  for (const item of rows) {
+    const row = node('li'); row.append(node('p', '', item.text));
+    const source = safeLink(item.url, t('reader.viewSource'));
+    if (source) row.append(source);
+    const license = safeLink(item.license_url, typeof item.license === 'string' ? item.license : t('reader.sourceLicense'));
+    if (license) row.append(license);
+    else if (typeof item.license === 'string' && item.license.trim()) row.append(node('span', '', item.license));
+    if (typeof item.changes === 'string' && item.changes.trim()) row.append(node('p', '', item.changes));
+    list.append(row);
+  }
+  details.append(list); return details;
+}
 
 // Author offsets count Unicode code points; DOM text ranges count UTF-16 units.
 // Split text nodes only, so emphasis, code, images and the original structure survive.
@@ -85,8 +113,12 @@ function centerSource(viewport) {
     if (!rects.length) return;
     const bounds = viewport.getBoundingClientRect();
     const x = (Math.min(...rects.map(r => r.left)) + Math.max(...rects.map(r => r.right))) / 2;
-    const y = (Math.min(...rects.map(r => r.top)) + Math.max(...rects.map(r => r.bottom))) / 2;
-    viewport.scrollLeft += x - bounds.left - viewport.clientWidth / 2;
+    const top = Math.min(...rects.map(r => r.top)), bottom = Math.max(...rects.map(r => r.bottom));
+    // A long marked passage must start at its beginning, rather than placing
+    // its middle in view and hiding the opening sentence above the viewport.
+    const y = bottom - top > viewport.clientHeight - 36 ? top + viewport.clientHeight / 2 - 18 : (top + bottom) / 2;
+    if (viewport.closest('.atomicSourceProse')) viewport.scrollLeft = 0;
+    else viewport.scrollLeft += x - bounds.left - viewport.clientWidth / 2;
     viewport.scrollTop += y - bounds.top - viewport.clientHeight / 2;
   };
   requestAnimationFrame(center);
@@ -111,6 +143,9 @@ export function memoryChunk(chunk, {topicId, version} = {}) {
   if (chunk.introduction?.html) underlineAnchors(document, chunk.anchors);
   else for (const anchor of chunk.anchors || []) document.append(node('p', 'atomicSourceMark', anchor.quote));
   enhance(document);
+  // Prose reflows at the reader's width; diagrams, tables and formula canvases
+  // retain the existing two-axis source inspection behavior.
+  source.classList.toggle('atomicSourceProse', !document.querySelector('img, svg, math, mjx-container, table, pre'));
   if (topicId) helpableContent(document, {topic_id: topicId}, 'introduction', version);
   viewport.append(document); source.append(sourceHeader, viewport);
   centerSource(viewport);
@@ -126,6 +161,8 @@ export function memoryChunk(chunk, {topicId, version} = {}) {
   }
   if (topicId) helpableContent(note, {topic_id: topicId}, `chunk:${chunk.id}`, version);
   annotation.append(source, arrow, note); box.append(heading, annotation);
+  const attributions = sourceAttributions(chunk.source_attributions || chunk.introduction?.source_attributions);
+  if (attributions) box.append(attributions);
   return box;
 }
 

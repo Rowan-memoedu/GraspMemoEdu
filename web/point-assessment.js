@@ -1,5 +1,5 @@
 // Shared feedback for optional item-to-point assessment. Content labels stay authored.
-import {t} from './i18n.js?v=c9b135ee2b396ff5';
+import {t} from './i18n.js?v=44688b09fce31a75';
 
 export function pointAssessment(result) {
   const points = result?.points;

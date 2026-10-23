@@ -43,6 +43,14 @@ def prepare(args):
     raw = args.input.read_bytes(); document = json.loads(raw)
     if document.get('schema') != 2:
         raise ValueError('Structured Topic schema 2 is required')
+    pins_path = getattr(args, 'preserve_atomic_progress', None)
+    pins = json.loads(Path(pins_path).read_bytes()) if pins_path else None
+    if pins is not None:
+        if (getattr(args, 'reset_reading_progress', False) or getattr(args, 'replace_atomic_and_reset_progress', False)
+                or not isinstance(pins, dict) or not pins
+                or any(not isinstance(key, str) or not isinstance(value, str) or not value for key, value in pins.items())
+                or not set(pins) <= {args.topic_prefix + str(topic['id']) for topic in document['topics']}):
+            raise ValueError('Content revision requires matching previous-version pins and no reset option')
     urls = sorted({url for t in document['topics'] for s in t['sections'] for url in Images(s['introduction']['html']).urls})
     args.output.mkdir(parents=True, exist_ok=False)
     def download(url):
@@ -119,6 +127,8 @@ def prepare(args):
         'replace_atomic_and_reset_progress': getattr(args, 'replace_atomic_and_reset_progress', False), 'files': files}
     if getattr(args, 'test_material', False):
         manifest['test_materials'] = {'courses': [args.course_id]}
+    if pins is not None:
+        manifest.update(preserve_atomic_progress=True, atomic_previous_versions=pins)
     (args.output / 'manifest.json').write_bytes(encoded(manifest))
     return report
 
@@ -132,6 +142,8 @@ def main():
     p.add_argument('--node', default='node')
     p.add_argument('--reset-reading-progress', action='store_true', help='Explicitly allow same-ID reading-only upgrades')
     p.add_argument('--replace-atomic-and-reset-progress', action='store_true', help='Explicitly replace atomic Topics and reset their progress')
+    p.add_argument('--preserve-atomic-progress', type=Path, metavar='PREVIOUS_VERSIONS_JSON',
+                   help='Revise same-identity atomic content with pinned old versions, preserving learning records')
     p.add_argument('--test-material', action='store_true', help='Mark this course as test material before content activation')
     prepare(p.parse_args())
 

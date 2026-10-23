@@ -513,14 +513,15 @@ class DashboardStore:
                 for chunk in point_groups(topic):
                     points = {p['id'] for p in chunk['points']}
                     records = [r for r in state['history'] if r['mode'] == 'learn' and set(r['point_ids']) <= points]
-                    answers = [{'id': r['id'], 'question_id': r['card_id'], 'html': questions[r['card_id']]['html'],
-                                'interaction': public_interaction(questions[r['card_id']]), 'content_version': topic['version'],
-                                'explanation_html': questions[r['card_id']]['explanation_html'], 'answer': r['answer'],
-                                **reference_fields(questions[r['card_id']], True),
-                                'answer_display': display_answer(questions[r['card_id']], r['answer']),
+                    answers = [{'id': r['id'], 'question_id': r['card_id'], 'html': q['html'],
+                                'interaction': public_interaction(q), 'content_version': r.get('snapshot_version', topic['version']),
+                                'explanation_html': q['explanation_html'], 'answer': r['answer'],
+                                **reference_fields(q, True),
+                                'answer_display': display_answer(q, r['answer']),
                                 'correct': r['correct'], 'reason': r['reason'],
                                 'result': 'correct' if r['correct'] else 'incorrect', 'answered_at': r['answered_at'],
-                                'elapsed_seconds': None, 'difficulty': None} for r in records]
+                                'elapsed_seconds': None, 'difficulty': None} for r in records
+                               for q in [r.get('snapshot') or questions[r['card_id']]]]
                     groups.append({'id': chunk['id'], 'title': chunk['title'], 'answers': answers})
                 return {'task': self._task(course, topic_id, snapshot, self._allowed_topics(access)),
                         'groups': groups, 'math_css': topic.get('math_css', '')}
@@ -568,14 +569,15 @@ class DashboardStore:
                     records = [record for record in point_history if record['mode'] == 'learn'
                                and set(record['point_ids']) <= local
                                and all(points[p]['mastered'] for p in record['point_ids'])]
-                    answers = [{'id': r['id'], 'question_id': r['card_id'], 'html': questions[r['card_id']]['html'],
-                                'interaction': public_interaction(questions[r['card_id']]), 'content_version': topic['version'],
-                                'explanation_html': questions[r['card_id']]['explanation_html'], 'answer': r['answer'],
-                                **reference_fields(questions[r['card_id']], True),
-                                'answer_display': display_answer(questions[r['card_id']], r['answer']),
+                    answers = [{'id': r['id'], 'question_id': r['card_id'], 'html': q['html'],
+                                'interaction': public_interaction(q), 'content_version': r.get('snapshot_version', topic['version']),
+                                'explanation_html': q['explanation_html'], 'answer': r['answer'],
+                                **reference_fields(q, True),
+                                'answer_display': display_answer(q, r['answer']),
                                 'correct': r['correct'], 'reason': r['reason'],
                                 'result': 'correct' if r['correct'] else 'incorrect', 'answered_at': r['answered_at'],
-                                'elapsed_seconds': None, 'difficulty': None} for r in records]
+                                'elapsed_seconds': None, 'difficulty': None} for r in records
+                               for q in [r.get('snapshot') or questions[r['card_id']]]]
                     if answers:
                         combined.append({'id': chunk['id'], 'title': chunk['title'], 'answers': answers})
                 combined.extend(group for group in groups if group['id'] in {m['id'] for m in section['modules']})

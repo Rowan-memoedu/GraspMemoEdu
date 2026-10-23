@@ -85,6 +85,8 @@ class StructuredAtomicTests(unittest.TestCase):
             backend = create_learning_service(original, data, learner_id='isolated', clock=lambda: datetime(2026, 10, 20, tzinfo=timezone.utc))
             before = backend.state()
             document = self.source()
+            document['topics'][0]['sections'][0]['source_attributions'] = [
+                {'text': 'Example source.', 'url': 'https://example.org/source', 'license': 'CC BY 4.0'}]
             document['topics'][0]['sections'][0]['flashcards'][1]['interaction'] = {
                 'version': 2, 'type': 'composite', 'grading': 'exact',
                 'controls': [{'id': 'answer', 'type': 'text', 'label': 'Label', 'answers': ['A label.']}],
@@ -100,6 +102,8 @@ class StructuredAtomicTests(unittest.TestCase):
             self.assertEqual(install(package, data, extend_course=True)['status'], 'unchanged')
             topic = Catalog.load(Settings.load(data)).topic('atomic-new')
             self.assertEqual(len(topic['flashcards']), 2)
+            self.assertEqual(topic['introductions'][0]['source_attributions'],
+                             document['topics'][0]['sections'][0]['source_attributions'])
             self.assertEqual(topic['flashcards'][1]['learning_phases'], ['review'])
             structured = json.loads((package / 'atomic-sources/atomic-new.json').read_bytes())
             self.assertEqual(topic['flashcards'][1]['interaction']['sections'][0]['html'],

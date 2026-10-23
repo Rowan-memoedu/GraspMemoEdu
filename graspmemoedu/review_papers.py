@@ -342,7 +342,12 @@ class PaperService:
                 topic = self.catalog.topic(source['container'])
                 if topic['version'] == source['version']:
                     items[-1]['memory_chunks'] = card_chunks(topic, {'point_ids': source['local_points']})
-                    if question.get('audio'):
+                if question.get('audio') and (topic['version'] == source['version'] or paper['phase'] == 'done'):
+                    current = next((card for card in topic.get('flashcards',[])
+                                    if card['id'] == source['local_card'] == question['id']),None)
+                    # The media endpoint uses the active Topic. Only an exact
+                    # match can safely replay an older completed snapshot.
+                    if current and current.get('audio') == question['audio']:
                         from .training_audio import public_audio
                         items[-1]['audio'] = public_audio(question, topic['id'], feedback=shown)
         return {'id': paper['id'], 'title': paper['title'], 'subject': paper['subject'], 'mode': self._mode(paper),

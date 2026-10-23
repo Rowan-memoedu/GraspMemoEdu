@@ -251,7 +251,7 @@ export const portalMessages = {
   'atomic.correct': ['回答正确', 'Correct'],
   'atomic.incorrect': ['回答错误', 'Incorrect'],
   'atomic.continue': ['继续', 'Continue'],
-  'atomic.fromIntroduction': ['Introduction · 指导原文', 'Introduction · Source'],
+  'atomic.fromIntroduction': ['指导原文', 'Introduction source'],
   'atomic.topicProgress': ['整个 Topic 的学习进度', 'Whole Topic progress'],
   'atomic.points': ['记忆点', 'Memory points'],
   'atomic.startCards': ['开始原子卡训练', 'Start flashcards'],

@@ -320,7 +320,7 @@ class UnifiedLearningService(OrderedLearningService):
             section_id = next(s['id'] for s in self.sections if record['point_ids'][0] in s['point_ids'])
             result.append({**record, 'kind': 'atomic_card', 'question_id': record['card_id'],
                            'introduction_id': section_id, 'module_id': None, 'attempt_id': None,
-                           'content_version': self.course['version'], 'visited': True, 'unlocked': True,
+                           'content_version': record.get('content_version', self.course['version']), 'visited': True, 'unlocked': True,
                            'active': False, 'current': record['id'] == state['current_step_id'],
                            'visible': True, 'actions': [], 'feedback': {
                                'correct': record['correct'], 'reason': record['reason']}})
@@ -354,7 +354,8 @@ class UnifiedLearningService(OrderedLearningService):
         if state['display'] == 'atomic':
             atomic['introduction'] = section['introduction'] if self._intro_open(state, section['id']) else None
             atomic['unified_history'] = [
-                {key: step.get(key) for key in ('id', 'introduction_id', 'title', 'html', 'explanation_html')}
+                {**{key: step.get(key) for key in ('id', 'introduction_id', 'title', 'html', 'explanation_html')},
+                 **({'source_attributions': step['source_attributions']} if step.get('source_attributions') else {})}
                 for step in result['steps'] if step['kind'] == 'introduction' and step['unlocked']
                 and step['introduction_id'] != section['id']]
             result = atomic

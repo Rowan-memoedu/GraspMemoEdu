@@ -7,6 +7,7 @@ import sqlite3
 
 from .question_types import public_interaction
 from .service import DomainError
+from .atomic_content import public_source_attributions
 
 
 def trainable(topic):
@@ -60,6 +61,10 @@ def reading_blocks(topic):
             else:
                 result.append({'id': item['id'], 'title': '', 'html': fragment, 'kind': 'introduction',
                                'introduction_ids': [item['id']], 'actions': []})
+            attributions = public_source_attributions(item.get('source_attributions'))
+            if attributions:
+                saved = result[-1].setdefault('source_attributions', [])
+                saved.extend(entry for entry in attributions if entry not in saved)
         else:
             module = modules[section['id']]
             question(module['example'])

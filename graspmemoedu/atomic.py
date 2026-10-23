@@ -119,6 +119,8 @@ class AtomicLearningService(LearningService):
         result = {'id': active['id'], 'card_id': card['id'], 'title': card['title'], 'html': card['html'],
                   'point_ids': card['point_ids'], 'phase': active['phase'], 'shown_at': active['shown_at'],
                   'interaction': public_interaction(card)}
+        if active.get('snapshot_version'):
+            result['content_version'] = active['snapshot_version']
         from .self_assessment import presentation
         result.update(presentation(card, active, visible=feedback))
         if card.get('audio'):

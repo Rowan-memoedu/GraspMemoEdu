@@ -1,22 +1,23 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=c9b135ee2b396ff5";
-import { createReviewView } from "./review.js?v=c9b135ee2b396ff5";
-import { renderCourseGraph } from "./course-graph.js?v=c9b135ee2b396ff5";
-import {questionInput, choiceTypeField} from './question-input.js?v=c9b135ee2b396ff5';
-import {enhanceTopicContent} from './topic-content.js?v=c9b135ee2b396ff5';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=c9b135ee2b396ff5';
-import {createCatalogPicker} from './catalog-picker.js?v=c9b135ee2b396ff5';
-import {appendCatalogOutline} from './catalog-outline.js?v=c9b135ee2b396ff5';
-import {createAtomicView} from './atomic.js?v=c9b135ee2b396ff5';
-import {createTrainingView} from './training.js?v=c9b135ee2b396ff5';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=c9b135ee2b396ff5";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=44688b09fce31a75";
+import { createReviewView } from "./review.js?v=44688b09fce31a75";
+import { renderCourseGraph } from "./course-graph.js?v=44688b09fce31a75";
+import {questionInput, choiceTypeField} from './question-input.js?v=44688b09fce31a75';
+import {enhanceTopicContent} from './topic-content.js?v=44688b09fce31a75';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=44688b09fce31a75';
+import {createCatalogPicker} from './catalog-picker.js?v=44688b09fce31a75';
+import {appendCatalogOutline} from './catalog-outline.js?v=44688b09fce31a75';
+import {createAtomicView} from './atomic.js?v=44688b09fce31a75';
+import {sourceAttributions} from './memory-chunk.js?v=44688b09fce31a75';
+import {createTrainingView} from './training.js?v=44688b09fce31a75';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=44688b09fce31a75";
 
-import {createPaperView} from './review-papers.js?v=c9b135ee2b396ff5';
-import {createContextLibraryView} from './context-library.js?v=c9b135ee2b396ff5';
+import {createPaperView} from './review-papers.js?v=44688b09fce31a75';
+import {createContextLibraryView} from './context-library.js?v=44688b09fce31a75';
 
-import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=c9b135ee2b396ff5';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=c9b135ee2b396ff5';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=c9b135ee2b396ff5';
-import {createStudentDashboard} from './student-dashboard.js?v=c9b135ee2b396ff5';
+import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=44688b09fce31a75';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=44688b09fce31a75';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=44688b09fce31a75';
+import {createStudentDashboard} from './student-dashboard.js?v=44688b09fce31a75';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -36,7 +37,7 @@ const roundButton = (text, action) => control(text, "portalStart", action);
 export function initPortal(bridge) {
   let chatModule, attachChatEditor, renderChatMarkdown;
   async function loadChat() {
-    const module = await (chatModule ||= import('./vendor/chat/chat.js?v=c9b135ee2b396ff5').catch(error => { chatModule = null; throw error; }));
+    const module = await (chatModule ||= import('./vendor/chat/chat.js?v=44688b09fce31a75').catch(error => { chatModule = null; throw error; }));
     ({attachChatEditor, renderChatMarkdown} = module);
     module.configureChatImages(ident => bridge.request('help-images?image_id=' + encode(ident)));
   }
@@ -1430,6 +1431,7 @@ export function initPortal(bridge) {
       const block = node('article', 'courseChoice materialBlock'); block.dataset.contentBlock = item.id; block.tabIndex = -1;
       const label = `${item.title || data.title} · ${t('help.block.' + item.kind)}`;
       const stem = trustedContent(item.html); block.append(node('h2', '', label), stem);
+      const attributions = sourceAttributions(item.source_attributions); if (attributions) block.append(attributions);
       if (item.kind === 'explanation') {
         const reference = referenceAnswer(item); if (reference) stem.before(reference);
         prepareAnswerContent(stem);

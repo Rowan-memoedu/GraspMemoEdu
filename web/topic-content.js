@@ -1,6 +1,6 @@
-import {mountMermaid} from './vendor/mermaid/index.js?v=c9b135ee2b396ff5';
-import {renderBacklinks} from './vendor/document-backlinks.mjs?v=c9b135ee2b396ff5';
-import {t} from './i18n.js?v=c9b135ee2b396ff5';
+import {mountMermaid} from './vendor/mermaid/index.js?v=44688b09fce31a75';
+import {renderBacklinks} from './vendor/document-backlinks.mjs?v=44688b09fce31a75';
+import {t} from './i18n.js?v=44688b09fce31a75';
 
 export function referenceHref(target) {
   const base = `#/subjects/${encodeURIComponent(target.subject_id)}/topic/${encodeURIComponent(target.topic_id)}`;
@@ -103,7 +103,7 @@ export function enhanceSourceContent(root) {
 export function mountTopicBacklinks(root, references) {
   root.querySelector(':scope > .topicBacklinks')?.remove();
   root.classList.toggle('reading-outline', Boolean(references));
-  if (!references) {
+  if (!references?.backlinks?.length) {
     delete root.dataset.documentTitleSource;
     return;
   }
@@ -125,7 +125,6 @@ export function mountTopicBacklinks(root, references) {
     defaultView: {location: {hash: ''}},
   }, {documents});
   sidebar.querySelector('h3').textContent = t('reader.backlinks');
-  if (!references.backlinks?.length) sidebar.querySelector('li').textContent = t('reader.noBacklinks');
 }
 
 export function focusContentNode(root, nodeId) {

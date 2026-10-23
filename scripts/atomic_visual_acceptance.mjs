@@ -52,25 +52,29 @@ try {
     return {source: source.width, note: note.width, historyX: history.x, noteRight: note.right,
       centerError: Math.abs((mark.top + mark.bottom) / 2 - source.top - document.querySelector('.atomicSourceViewport').clientHeight / 2),
       horizontalError: Math.abs((mark.left + mark.right) / 2 - source.left - document.querySelector('.atomicSourceViewport').clientWidth / 2),
+      prose: Boolean(document.querySelector('.atomicSourceProse')),
+      scrollLeft: document.querySelector('.atomicSourceViewport').scrollLeft,
+      scrollWidth: document.querySelector('.atomicSourceViewport').scrollWidth,
       font: parseFloat(getComputedStyle(document.querySelector('.atomicSourceDocument')).fontSize)};
   });
   assert.ok(layout.source > layout.note && layout.historyX > layout.noteRight && layout.font < 15);
   assert.ok(layout.centerError < 3);
-  assert.ok(layout.horizontalError < 3);
+  if (layout.prose) { assert.equal(layout.scrollLeft, 0); assert.ok(layout.scrollWidth <= layout.source + 1); }
+  else assert.ok(layout.horizontalError < 3);
   const scrolling = await page.locator('.atomicSourceViewport').evaluate(el => {
     const originalX = el.scrollLeft, originalY = el.scrollTop;
     el.scrollLeft = 140; el.scrollTop = 200;
     const result = {x: el.scrollLeft, y: el.scrollTop, width: el.clientWidth};
     el.scrollLeft = originalX; el.scrollTop = originalY; return result;
   });
-  assert.ok(scrolling.x > 0 && scrolling.y > 0 && scrolling.width > 400);
+  assert.ok((layout.prose ? scrolling.x === 0 : scrolling.x > 0) && scrolling.y > 0 && scrolling.width > 400);
   await screenshot('chunk-desktop');
   for (const width of [320, 375, 414, 768]) {
     await page.setViewportSize({width, height: 900});
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
     if (width === 375) await screenshot('chunk-mobile');
   }
-  pass('Whole Topic counters, wider source, centered highlight, right history, two-axis scroll and separate mnemonic; four responsive widths');
+  pass('Whole Topic counters, wider source, vertical highlight centering, prose reflow or canvas scroll, right history and separate mnemonic; four responsive widths');
   await page.setViewportSize({width: 1440, height: 1050});
   await start(); await page.locator('#atomicAnswer').fill('尚未提交的答案草稿');
   const before = await state(), writes = mutations;

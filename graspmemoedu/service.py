@@ -329,6 +329,10 @@ class LearningService:
                 intro = (next(i for i in self.course['introductions'] if i['id'] == saved['introduction_id'])
                          if saved.get('introduction_id') else self.course['introduction'])
                 step.update(title=intro.get('title', 'Introduction'), html=intro['html'], explanation_html=None)
+                from .atomic_content import public_source_attributions
+                attributions = public_source_attributions(intro.get('source_attributions'))
+                if attributions:
+                    step['source_attributions'] = attributions
             else:
                 step.update(title='Topic 完成', html='<p>本 Topic 的所有模块已完成。</p>', explanation_html=None)
             is_active = saved['id'] == state['active_step_id']

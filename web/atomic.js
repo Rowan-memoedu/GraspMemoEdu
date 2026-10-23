@@ -1,14 +1,14 @@
-import {t, translateMessage} from './i18n.js?v=c9b135ee2b396ff5';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=c9b135ee2b396ff5';
-import {selfAssessment, referenceAnswer, prepareAnswerContent, ratingChoices} from './self-assessment.js?v=c9b135ee2b396ff5';
-import {reportableContent} from './content-report.js?v=c9b135ee2b396ff5';
-import {createLearningCache} from './learning-cache.js?v=c9b135ee2b396ff5';
-import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=c9b135ee2b396ff5';
-import {enhanceSourceContent} from './topic-content.js?v=c9b135ee2b396ff5';
-import {memoryChunk, chunkPeek} from './memory-chunk.js?v=c9b135ee2b396ff5';
-import {topicProgress, topicHistory} from './learning-ui.js?v=c9b135ee2b396ff5';
-import {pointAssessment} from './point-assessment.js?v=c9b135ee2b396ff5';
-import {trainingAudio} from './training-audio.js?v=c9b135ee2b396ff5';
+import {t, translateMessage} from './i18n.js?v=44688b09fce31a75';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=44688b09fce31a75';
+import {selfAssessment, referenceAnswer, prepareAnswerContent, ratingChoices} from './self-assessment.js?v=44688b09fce31a75';
+import {reportableContent} from './content-report.js?v=44688b09fce31a75';
+import {createLearningCache} from './learning-cache.js?v=44688b09fce31a75';
+import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=44688b09fce31a75';
+import {enhanceSourceContent} from './topic-content.js?v=44688b09fce31a75';
+import {memoryChunk, chunkPeek, sourceAttributions} from './memory-chunk.js?v=44688b09fce31a75';
+import {topicProgress, topicHistory} from './learning-ui.js?v=44688b09fce31a75';
+import {pointAssessment} from './point-assessment.js?v=44688b09fce31a75';
+import {trainingAudio} from './training-audio.js?v=44688b09fce31a75';
 
 const node = (tag, cls = '', text) => {
   const el = document.createElement(tag); el.className = cls;
@@ -119,6 +119,10 @@ export function createAtomicView(bridge) {
   }
   function marked(html, block, cardId) {
     return reportableContent(content(html), {topic_id: topic, ...(cardId ? {question_id: cardId} : {})}, block, state.course_version);
+  }
+  function introductionContent(intro, report = true) {
+    const attributions = sourceAttributions(intro.source_attributions);
+    return [report ? marked(intro.html, 'introduction') : content(intro.html), ...(attributions ? [attributions] : [])];
   }
   async function launchAcademy() {
     if (busy) return;
@@ -314,9 +318,9 @@ export function createAtomicView(bridge) {
     if (selected) {
       const previous = selected === 'introduction' ? null : state.history.find(r => r.id === selected && r.viewable);
       const section = state.unified_history?.find(item => item.id === selected);
-      if (selected === 'introduction' && state.introduction) main.append(marked(state.introduction.html, 'introduction'));
+      if (selected === 'introduction' && state.introduction) main.append(...introductionContent(state.introduction));
       else if (previous) main.append(renderQuestion(previous, true));
-      else if (section) main.append(node('h2', '', section.title), content(section.html));
+      else if (section) main.append(node('h2', '', section.title), ...introductionContent(section, false));
       else selected = null;
       if (selected) {
         const back = button(t('atomic.backCurrent'), () => { selected = null; render(); });
@@ -325,7 +329,7 @@ export function createAtomicView(bridge) {
     }
     if (!selected) {
       if (state.phase === 'introduction') {
-        main.append(marked(state.introduction.html, 'introduction'), node('p', 'atomicIntroPrompt', t('atomic.introPrompt')),
+        main.append(...introductionContent(state.introduction), node('p', 'atomicIntroPrompt', t('atomic.introPrompt')),
           button(t('atomic.understood'), () => mutate('choose', {choice: 'learn'}), 'primaryButton'));
       } else if (state.chunk) main.append(renderChunk(state.chunk));
       else if (state.current) main.append(renderQuestion(state.current));

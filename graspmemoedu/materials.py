@@ -12,14 +12,17 @@ from .question_types import public_interaction
 from .question_bank import QuestionBank
 from .reference_answers import reference_fields
 from .topic_structure import has_atomic, sectioned_training, sections
+from .atomic_content import public_source_attributions
 
 
 def topic_blocks(topic):
     """All authored blocks, independent of queues, mastery or spare-practice gates."""
     blocks = []
     def add(kind, item, ident=None, field='html'):
+        attributions = public_source_attributions(item.get('source_attributions'))
         blocks.append({'id': ident or kind + ':' + item['id'], 'kind': kind,
                        'title': item.get('title', item.get('id', '')), 'html': item.get(field, ''),
+                       **({'source_attributions': attributions} if attributions else {}),
                        **({'interaction': public_interaction(item)} if kind == 'question' else {})})
     def question(item):
         add('question', item)

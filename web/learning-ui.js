@@ -1,7 +1,8 @@
-import {t, learningTitle} from './i18n.js?v=c9b135ee2b396ff5';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=c9b135ee2b396ff5';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=c9b135ee2b396ff5';
-import {enhanceTopicContent} from './topic-content.js?v=c9b135ee2b396ff5';
+import {t, learningTitle} from './i18n.js?v=44688b09fce31a75';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=44688b09fce31a75';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=44688b09fce31a75';
+import {enhanceTopicContent} from './topic-content.js?v=44688b09fce31a75';
+import {sourceAttributions} from './memory-chunk.js?v=44688b09fce31a75';
 
 const node = (tag, cls = '', text) => {
   const item = document.createElement(tag); item.className = cls;
@@ -85,6 +86,7 @@ export function renderReaderStep(target, step, {titleId = 'stepTitle', title = r
   if (counter) heading.append(node('span', 'stepCounter', counter));
   const stem = decorate(readerContent(step.html, references), 'question');
   target.setAttribute('aria-labelledby', titleId); target.replaceChildren(heading, stem);
+  const attributions = sourceAttributions(step.source_attributions); if (attributions) target.append(attributions);
   const typeField = choiceTypeField(step.interaction); if (typeField) heading.after(typeField);
   if (notice) heading.after(node('p', 'introductionUpdateNotice', notice));
   if (showSubmittedInteraction && step.interaction && step.interaction.type !== 'text')
@@ -271,14 +273,16 @@ export function readerFrame(template, prefix) {
     }
   }
   frame.hidden = false;
-  const narrow = matchMedia('(max-width: 1000px)'); let opened = true;
+  const narrow = matchMedia('(max-width: 1000px)'); let opened = !narrow.matches;
   function toggle(value, focus = false) {
     opened = value; readerDrawerState(frame, refs, opened, {narrow: narrow.matches, focus});
   }
   refs.historyButton.addEventListener('click', () => toggle(!opened, true));
   refs.historyDrawerToggle.addEventListener('click', () => toggle(true, true));
   refs.historyScrim.addEventListener('click', () => toggle(false, true));
-  const resize = () => toggle(opened), escape = event => { if (event.key === 'Escape' && narrow.matches && !document.querySelector('dialog[open]')) toggle(false, true); };
+  // Change the default only when crossing the breakpoint; ordinary resizing
+  // must not override a learner who has manually opened the mobile drawer.
+  const resize = () => toggle(!narrow.matches), escape = event => { if (event.key === 'Escape' && narrow.matches && !document.querySelector('dialog[open]')) toggle(false, true); };
   const skipLink = document.getElementById('skipContent');
   const skip = event => { event.preventDefault(); event.stopImmediatePropagation(); refs.lessonContent.focus(); };
   skipLink?.addEventListener('click', skip, true);

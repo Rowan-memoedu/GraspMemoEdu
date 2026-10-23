@@ -1,4 +1,5 @@
-import {ct, contextError} from './context-library-messages.js?v=c9b135ee2b396ff5';
+import {ct, contextError} from './context-library-messages.js?v=44688b09fce31a75';
+import {sourceAttributions} from './memory-chunk.js?v=44688b09fce31a75';
 /* Shared reading component. Content is rendered as text, including dictionary output. */
 const node = (tag, cls = '', text) => {
   const el = document.createElement(tag); el.className = cls;
@@ -212,7 +213,8 @@ export function createContextLibraryView(bridge) {
     panel = node('aside', 'readingPanel'); panel.setAttribute('aria-label', ct('词义与语境'));
     panel.append(node('p', 'inputHint', ct('选择词语后，释义和记录操作会显示在这里。')));
     const main = node('div'); main.append(article, lookup); columns.append(main, panel); view.append(columns);
-    if (data.material.source) view.append(node('p', 'inputHint', data.material.source));
+    const sources = sourceAttributions(data.material.source ? [{text: data.material.source}] : []);
+    if (sources) view.append(sources);
     records = node('section', 'readingSaved'); view.append(records); root.append(view); renderRecords();
   }
   async function show(topicId = null, materialId = null) {

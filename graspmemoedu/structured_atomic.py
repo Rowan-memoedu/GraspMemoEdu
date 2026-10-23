@@ -9,7 +9,7 @@ import re
 import sys
 import xml.etree.ElementTree as ET
 
-from .atomic_content import plain_text, validate_atomic
+from .atomic_content import plain_text, validate_atomic, validate_source_attributions
 from .topic_runtime import validate_runtime
 
 FORMAT = 'structured-atomic-v1'
@@ -118,7 +118,12 @@ def normalize(source):
         rendered = ''.join(SourceHTML(intro['html'], images).parts)
         if plain_text(rendered) != intro['plain_text']:
             raise ValueError('Introduction text changed while binding source HTML')
-        topic['introductions'].append({'id': section['id'], 'title': section['section_title'], 'html': rendered})
+        metadata = {}
+        if 'source_attributions' in section:
+            validate_source_attributions(section['source_attributions'])
+            if section['source_attributions']:
+                metadata['source_attributions'] = deepcopy(section['source_attributions'])
+        topic['introductions'].append({'id': section['id'], 'title': section['section_title'], 'html': rendered, **metadata})
         topic['content_order'].append({'kind': 'introduction', 'id': section['id']})
         assets = {a['id']: a for a in section.get('source_assets', [])}
         chunks = {c['id'] for c in section['memory_chunks']}
@@ -128,7 +133,7 @@ def normalize(source):
             mnemonic = chunk.get('mnemonic', {})
             snippets = [assets[a]['markdown'] for a in mnemonic.get('asset_ids', []) if assets[a]['kind'] != 'image']
             snippets.extend(mnemonic.get('source_quotes', []))
-            topic['memory_chunks'].append({**deepcopy(chunk), 'title': chunk.get('title', '记忆组块 ' + chunk.get('local_id', chunk['id'])),
+            topic['memory_chunks'].append({**deepcopy(chunk), **deepcopy(metadata), 'title': chunk.get('title', '记忆组块 ' + chunk.get('local_id', chunk['id'])),
                 'introduction_id': section['id'], 'mnemonic_markdown': '\n\n'.join(snippets),
                 'mnemonic_html': ''.join(''.join(SourceHTML(assets[a]['html'], images).parts)
                                         for a in mnemonic.get('asset_ids', []) if assets[a]['kind'] == 'image'),

@@ -1,17 +1,17 @@
-import {t, translateMessage} from './i18n.js?v=c9b135ee2b396ff5';
-import {answerReady, answerEmpty} from './question-input.js?v=c9b135ee2b396ff5';
-import {createLearningCache} from './learning-cache.js?v=c9b135ee2b396ff5';
-import {appendCatalogOutline} from './catalog-outline.js?v=c9b135ee2b396ff5';
-import {helpableContent} from './content-report.js?v=c9b135ee2b396ff5';
-import {ratingChoices} from './self-assessment.js?v=c9b135ee2b396ff5';
-import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=c9b135ee2b396ff5';
+import {t, translateMessage} from './i18n.js?v=44688b09fce31a75';
+import {answerReady, answerEmpty} from './question-input.js?v=44688b09fce31a75';
+import {createLearningCache} from './learning-cache.js?v=44688b09fce31a75';
+import {appendCatalogOutline} from './catalog-outline.js?v=44688b09fce31a75';
+import {helpableContent} from './content-report.js?v=44688b09fce31a75';
+import {ratingChoices} from './self-assessment.js?v=44688b09fce31a75';
+import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=44688b09fce31a75';
 
 const node = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const button = (text, cls, action) => { const n = node('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
 const encode = encodeURIComponent;
 const query = fields => new URLSearchParams(fields).toString();
 const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy', 'training.retire'];
-import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, renderReviewReader} from './learning-ui.js?v=c9b135ee2b396ff5';
+import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, renderReviewReader} from './learning-ui.js?v=44688b09fce31a75';
 
 export function createTrainingView(bridge) {
   const {root, request, href, formatDate, getAccess} = bridge;

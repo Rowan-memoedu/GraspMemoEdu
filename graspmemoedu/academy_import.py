@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import uuid
 
 from .catalog import Catalog
 from .config import Settings
@@ -72,6 +73,11 @@ def _install(package, data_dir, *, extend_course=False, migration=None):
             raise ValueError('Topic identity collision')
         generation = hashlib.sha256(encoded(manifest) + (pointer or b'') + b''.join(baseline.values())).hexdigest()
         batch = data_dir / 'content-batches' / generation
+        if batch.exists():
+            # A previous activation may have failed after preparing immutable
+            # files. Retain that evidence and give the retry its own batch.
+            generation = hashlib.sha256((generation + uuid.uuid4().hex).encode()).hexdigest()
+            batch = data_dir / 'content-batches' / generation
         batch.mkdir(parents=True, exist_ok=False)
         courses = deepcopy(list(old.courses.values()))
         for course in courses:
@@ -161,8 +167,12 @@ def _install(package, data_dir, *, extend_course=False, migration=None):
 def install(package, data_dir, *, extend_course=False):
     manifest = json.loads((Path(package) / 'manifest.json').read_bytes())
     migration = None
-    if manifest.get('replace_atomic_and_reset_progress') and manifest.get('reset_reading_progress'):
-        raise ValueError('Choose either atomic replacement or reading-only upgrade')
+    if sum(manifest.get(key) is True for key in
+           ('replace_atomic_and_reset_progress', 'reset_reading_progress', 'preserve_atomic_progress')) > 1:
+        raise ValueError('Choose one explicit atomic update strategy')
+    if manifest['adapter'] == 'structured-atomic' and manifest.get('preserve_atomic_progress') is True:
+        from .atomic_content_revision import AtomicContentRevision
+        migration = AtomicContentRevision(package, data_dir)
     if manifest['adapter'] == 'structured-atomic' and manifest.get('replace_atomic_and_reset_progress') is True:
         from .atomic_topic_replacement import AtomicTopicReplacement
         migration = AtomicTopicReplacement(package, data_dir)

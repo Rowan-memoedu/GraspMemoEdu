@@ -22,11 +22,15 @@ def main():
     migration = release.get('hyperskill_migration', False)
     atomic_reading = release.get('atomic_reading_upgrade', False)
     atomic_replacement = release.get('atomic_topic_replacement', False)
+    atomic_revision = release.get('atomic_content_revision', False)
     atomic_reading = atomic_reading or atomic_replacement
+    database_transition = migration or atomic_reading or atomic_revision
     if not release.get('question_bank_id'):
         package_manifest = json.loads((stage / 'package' / 'manifest.json').read_bytes())
         if (package_manifest.get('replace_atomic_and_reset_progress') is True) != atomic_replacement:
             raise ValueError('Atomic replacement requires matching package and guarded release flags')
+        if (package_manifest.get('preserve_atomic_progress') is True) != atomic_revision:
+            raise ValueError('Atomic content revision requires matching package and guarded release flags')
     def digest(path): return hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
     for name, spec in release['files'].items():
         if not (app / name).resolve().is_relative_to(app) or not (stage / 'source' / name).resolve().is_relative_to(stage / 'source'):
@@ -56,7 +60,7 @@ def main():
                 raise ValueError('Bank must not be a symbolic link')
             bank_before[target] = target.read_bytes() if target.exists() else None
     timer = subprocess.run(['systemctl', 'is-active', '--quiet', 'graspmemoedu-healthcheck.timer']).returncode == 0
-    variant_worker = atomic_reading and subprocess.run(['systemctl', 'is-active', '--quiet', 'graspmemoedu-variants.service']).returncode == 0
+    variant_worker = (atomic_reading or atomic_revision) and subprocess.run(['systemctl', 'is-active', '--quiet', 'graspmemoedu-variants.service']).returncode == 0
     if timer: subprocess.run(['systemctl', 'stop', 'graspmemoedu-healthcheck.timer'], check=True)
     if variant_worker: subprocess.run(['systemctl', 'stop', 'graspmemoedu-variants.service'], check=True)
     subprocess.run(['systemctl', 'stop', 'graspmemoedu'], check=True)
@@ -76,9 +80,16 @@ def main():
         raise RuntimeError('Production health check failed')
     try:
         before_state = snapshot()
-        if migration or atomic_reading:
+        if database_transition:
             with sqlite3.connect(data / 'learning.sqlite3') as source, sqlite3.connect(database_backup) as destination:
                 source.backup(destination)
+        if atomic_revision:
+            sys.path.insert(0, str(app))
+            from graspmemoedu.catalog import Catalog
+            from graspmemoedu.config import Settings
+            previous_catalog = Catalog.load(Settings.load(data))
+            previous_topics = {tid: previous_catalog.topic(tid)
+                               for tid in package_manifest['atomic_previous_versions']}
         for name, spec in release['files'].items():
             if digest(app / name) != spec['before']:
                 raise ValueError('Source changed during release preparation: ' + name)
@@ -108,6 +119,15 @@ def main():
             bank = json.loads((bank_root / 'hyperskill-practice.json').read_bytes())
             ids = {t['id'] for c in package_catalog['courses'] for t in c['topics']}
             transition = verify_database_transition(database_backup, data / 'learning.sqlite3', ids, bank)
+        elif atomic_revision:
+            sys.path.insert(0, str(app))
+            from graspmemoedu.atomic_content_revision import verify_transition
+            from graspmemoedu.catalog import Catalog
+            from graspmemoedu.config import Settings
+            current_catalog = Catalog.load(Settings.load(data))
+            incoming_topics = {tid: current_catalog.topic(tid) for tid in previous_topics}
+            changed_topics = {tid: topic for tid, topic in previous_topics.items() if topic != incoming_topics[tid]}
+            transition = verify_transition(database_backup, data / 'learning.sqlite3', changed_topics, incoming_topics)
         elif atomic_reading:
             sys.path.insert(0, str(app))
             if atomic_replacement:
@@ -120,7 +140,7 @@ def main():
             raise RuntimeError('Content installation unexpectedly changed existing database rows')
         subprocess.run(['systemctl', 'start', 'graspmemoedu'], check=True); healthy()
         receipt = {'target': 'production', 'health': 'passed', 'source_commit': release['commit'],
-                   'existing_database_rows_unchanged_at_install': not (migration or atomic_reading), **transition, **installed}
+                   'existing_database_rows_unchanged_at_install': not database_transition, **transition, **installed}
         (data / 'content-activation-history' / (installed.get('generation', 'academy') + '.production.json')).write_text(json.dumps(receipt, indent=2))
         print(json.dumps(receipt), flush=True)
     except BaseException:
@@ -137,7 +157,7 @@ def main():
                 target.unlink(missing_ok=True)
             else:
                 target.write_bytes(previous)
-        if (migration or atomic_reading) and database_backup.exists():
+        if database_transition and database_backup.exists():
             with sqlite3.connect(database_backup) as source, sqlite3.connect(data / 'learning.sqlite3') as destination:
                 source.backup(destination)
         subprocess.run(['systemctl', 'start', 'graspmemoedu'], check=True); healthy()

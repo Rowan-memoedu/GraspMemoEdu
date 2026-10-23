@@ -1,6 +1,7 @@
 """Author contract for point/card content, optionally alongside Example modules."""
 from html.parser import HTMLParser
 import re
+from urllib.parse import urlsplit
 
 from .question_types import validate_interaction
 
@@ -23,6 +24,40 @@ class PlainText(HTMLParser):
 
 def plain_text(html):
     return ''.join(PlainText(html).parts)
+
+
+def public_source_attributions(value):
+    """Only explicit, human-readable source fields can reach learning views."""
+    if not isinstance(value, list):
+        return []
+    result = []
+    fields = {'text', 'url', 'license', 'license_url', 'changes'}
+    for item in value[:30]:
+        if not isinstance(item, dict) or not isinstance(item.get('text'), str) or not item['text'].strip():
+            continue
+        clean = {}
+        for key in fields:
+            text = item.get(key)
+            if not isinstance(text, str) or not text.strip() or len(text) > 4000 or '\x00' in text:
+                continue
+            if key in ('url', 'license_url'):
+                try:
+                    url = urlsplit(text)
+                    valid = (url.scheme in ('http', 'https') and url.hostname and not url.username and not url.password
+                             and not any(c.isspace() or ord(c) < 32 for c in text) and '\\' not in text)
+                except ValueError:
+                    valid = False
+                if not valid:
+                    continue
+            clean[key] = text
+        if 'text' in clean:
+            result.append(clean)
+    return result
+
+
+def validate_source_attributions(value):
+    if not isinstance(value, list) or value != public_source_attributions(value):
+        raise ValueError('Invalid public source attribution')
 
 
 def is_atomic(topic):
@@ -53,6 +88,10 @@ def chunk_presentation(topic, chunk):
     result = {key: chunk[key] for key in ('id', 'title', 'html', 'anchors')}
     result['introduction'] = {key: section['introduction'][key]
                               for key in ('id', 'title', 'html') if key in section['introduction']}
+    attributions = public_source_attributions(chunk.get('source_attributions', section['introduction'].get('source_attributions')))
+    if attributions:
+        result['source_attributions'] = attributions
+        result['introduction']['source_attributions'] = attributions
     for key in ('content_html', 'mnemonic_html'):
         if key in chunk:
             result[key] = chunk[key]
@@ -117,6 +156,9 @@ def validate_atomic(topic):
     require(identifier(topic.get('id')) and text(topic.get('title')) and text(topic.get('version')), 'Missing topic identity')
     groups = sections(topic)
     require(all(text(s['introduction'].get('html')) for s in groups), 'Missing Introduction')
+    for section in groups:
+        if 'source_attributions' in section['introduction']:
+            validate_source_attributions(section['introduction']['source_attributions'])
     chunk_sources = {c['id']: plain_text(s['introduction']['html']) for s in groups for c in s['chunks']}
     policy_for(topic)
     chunks = topic.get('memory_chunks')
@@ -124,6 +166,8 @@ def validate_atomic(topic):
     require(isinstance(chunks, list) and (0 if external else 1) <= len(chunks) <= 200, 'Missing memory chunks')
     chunk_ids, point_ids = set(), set()
     for chunk in chunks:
+        if 'source_attributions' in chunk:
+            validate_source_attributions(chunk['source_attributions'])
         require(identifier(chunk.get('id')) and chunk['id'] not in chunk_ids, 'Duplicate memory chunk')
         chunk_ids.add(chunk['id'])
         require(text(chunk.get('title')) and text(chunk.get('html')), 'Missing memory chunk content')
