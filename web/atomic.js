@@ -1,14 +1,14 @@
-import {t, translateMessage} from './i18n.js?v=51cbb8a971af910e';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=51cbb8a971af910e';
-import {selfAssessment, referenceAnswer, prepareAnswerContent, ratingChoices} from './self-assessment.js?v=51cbb8a971af910e';
-import {reportableContent} from './content-report.js?v=51cbb8a971af910e';
-import {createLearningCache} from './learning-cache.js?v=51cbb8a971af910e';
-import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=51cbb8a971af910e';
-import {enhanceSourceContent} from './topic-content.js?v=51cbb8a971af910e';
-import {memoryChunk, chunkPeek, sourceAttributions} from './memory-chunk.js?v=51cbb8a971af910e';
-import {topicProgress, topicHistory} from './learning-ui.js?v=51cbb8a971af910e';
-import {pointAssessment} from './point-assessment.js?v=51cbb8a971af910e';
-import {trainingAudio} from './training-audio.js?v=51cbb8a971af910e';
+import {t, translateMessage} from './i18n.js?v=2de30673708f2e1a';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=2de30673708f2e1a';
+import {selfAssessment, referenceAnswer, prepareAnswerContent, ratingChoices} from './self-assessment.js?v=2de30673708f2e1a';
+import {reportableContent} from './content-report.js?v=2de30673708f2e1a';
+import {createLearningCache} from './learning-cache.js?v=2de30673708f2e1a';
+import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=2de30673708f2e1a';
+import {enhanceSourceContent} from './topic-content.js?v=2de30673708f2e1a';
+import {memoryChunk, chunkPeek, sourceAttributions} from './memory-chunk.js?v=2de30673708f2e1a';
+import {topicProgress, topicHistory} from './learning-ui.js?v=2de30673708f2e1a';
+import {pointAssessment} from './point-assessment.js?v=2de30673708f2e1a';
+import {trainingAudio} from './training-audio.js?v=2de30673708f2e1a';
 
 const node = (tag, cls = '', text) => {
   const el = document.createElement(tag); el.className = cls;

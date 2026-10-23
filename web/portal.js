@@ -1,23 +1,23 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=51cbb8a971af910e";
-import { createReviewView } from "./review.js?v=51cbb8a971af910e";
-import { renderCourseGraph } from "./course-graph.js?v=51cbb8a971af910e";
-import {questionInput, choiceTypeField} from './question-input.js?v=51cbb8a971af910e';
-import {enhanceTopicContent} from './topic-content.js?v=51cbb8a971af910e';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=51cbb8a971af910e';
-import {createCatalogPicker} from './catalog-picker.js?v=51cbb8a971af910e';
-import {appendCatalogOutline} from './catalog-outline.js?v=51cbb8a971af910e';
-import {createAtomicView} from './atomic.js?v=51cbb8a971af910e';
-import {sourceAttributions} from './memory-chunk.js?v=51cbb8a971af910e';
-import {createTrainingView} from './training.js?v=51cbb8a971af910e';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=51cbb8a971af910e";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=2de30673708f2e1a";
+import { createReviewView } from "./review.js?v=2de30673708f2e1a";
+import { renderCourseGraph } from "./course-graph.js?v=2de30673708f2e1a";
+import {questionInput, choiceTypeField} from './question-input.js?v=2de30673708f2e1a';
+import {enhanceTopicContent} from './topic-content.js?v=2de30673708f2e1a';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=2de30673708f2e1a';
+import {createCatalogPicker} from './catalog-picker.js?v=2de30673708f2e1a';
+import {appendCatalogOutline} from './catalog-outline.js?v=2de30673708f2e1a';
+import {createAtomicView} from './atomic.js?v=2de30673708f2e1a';
+import {sourceAttributions} from './memory-chunk.js?v=2de30673708f2e1a';
+import {createTrainingView} from './training.js?v=2de30673708f2e1a';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=2de30673708f2e1a";
 
-import {createPaperView} from './review-papers.js?v=51cbb8a971af910e';
-import {createContextLibraryView} from './context-library.js?v=51cbb8a971af910e';
+import {createPaperView} from './review-papers.js?v=2de30673708f2e1a';
+import {createContextLibraryView} from './context-library.js?v=2de30673708f2e1a';
 
-import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=51cbb8a971af910e';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=51cbb8a971af910e';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=51cbb8a971af910e';
-import {createStudentDashboard} from './student-dashboard.js?v=51cbb8a971af910e';
+import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=2de30673708f2e1a';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=2de30673708f2e1a';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=2de30673708f2e1a';
+import {createStudentDashboard} from './student-dashboard.js?v=2de30673708f2e1a';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -37,7 +37,7 @@ const roundButton = (text, action) => control(text, "portalStart", action);
 export function initPortal(bridge) {
   let chatModule, attachChatEditor, renderChatMarkdown;
   async function loadChat() {
-    const module = await (chatModule ||= import('./vendor/chat/chat.js?v=51cbb8a971af910e').catch(error => { chatModule = null; throw error; }));
+    const module = await (chatModule ||= import('./vendor/chat/chat.js?v=2de30673708f2e1a').catch(error => { chatModule = null; throw error; }));
     ({attachChatEditor, renderChatMarkdown} = module);
     module.configureChatImages(ident => bridge.request('help-images?image_id=' + encode(ident)));
   }

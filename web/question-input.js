@@ -1,7 +1,7 @@
-import {t} from './i18n.js?v=51cbb8a971af910e';
-import {prepareLiteralMath} from './math-presentation.js?v=51cbb8a971af910e';
-import {compositeInput} from './composite-input.js?v=51cbb8a971af910e';
-import {enhanceSourceContent} from './topic-content.js?v=51cbb8a971af910e';
+import {t} from './i18n.js?v=2de30673708f2e1a';
+import {prepareLiteralMath} from './math-presentation.js?v=2de30673708f2e1a';
+import {compositeInput, mountPassageBlanks, passageSelect, answerShortcut} from './composite-input.js?v=2de30673708f2e1a';
+import {enhanceSourceContent} from './topic-content.js?v=2de30673708f2e1a';
 
 const node = (tag, cls, text) => {
   const element = document.createElement(tag); element.className = cls;
@@ -22,7 +22,7 @@ export function choiceTypeField(spec) {
 // The serialized answer uses the existing draft, retry and idempotency path.
 // This component receives presentation metadata only, never answer keys.
 export function questionInput(spec, {id, value = '', stem, disabled = false, formId} = {}) {
-  if (spec.type === 'composite') return compositeInput(spec, {id, value, disabled, formId});
+  if (spec.type === 'composite') return compositeInput(spec, {id, value, stem, disabled, formId});
   const root = node('div', 'questionInteraction');
   root.dataset.questionType = spec.type;
   const input = node('textarea', 'structuredAnswer'); input.id = id;
@@ -31,11 +31,16 @@ export function questionInput(spec, {id, value = '', stem, disabled = false, for
   root.addEventListener('keydown', event => {
     if (spec.type === 'choice' && event.target.matches('input[type="radio"], input[type="checkbox"]')
       && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) event.preventDefault();
-    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && !event.isComposing) {
-      event.preventDefault(); document.getElementById(formId)?.requestSubmit();
-    }
+    answerShortcut(event, formId, disabled);
   });
-  let values = parse(value), emitting = false, selected = null;
+  let values = parse(value), emitting = false, selected = null, passageFields = [];
+  const syncPassage = () => {
+    for (const {id: key, field} of passageFields) {
+      if (spec.type === 'matching') continue;
+      field.value = spec.type === 'choice' ? values.selected || '' : values[key] || '';
+      field.disabled = disabled;
+    }
+  };
   const options = side => new Map(spec[side].map(item => [item.id, item.text]));
   const optionContent = (element, item) => {
     if (item?.html) element.innerHTML = item.html; // Compiled with the existing safe Markdown/MathJax importer.
@@ -176,15 +181,16 @@ export function questionInput(spec, {id, value = '', stem, disabled = false, for
       if (formId) radio.setAttribute('form', formId);
       const body = node('span', 'choiceBody'); optionContent(body, option);
       radio.addEventListener('change', () => {
+        if (disabled) return;
         values.selected = spec.multiple
           ? spec.options.filter(item => item.id === option.id ? radio.checked : values.selected.includes(item.id)).map(item => item.id)
           : option.id;
-        emit();
+        emit(); syncPassage();
       });
       label.append(radio, node('span', 'choiceLetter', String.fromCharCode(65 + index)), body);
       list.append(label);
     });
-    root.append(list);
+    root.append(list); syncPassage();
   }
   function renderBooleans() {
     root.querySelector('.judgmentList')?.remove();
@@ -207,53 +213,66 @@ export function questionInput(spec, {id, value = '', stem, disabled = false, for
     root.append(list);
   }
   function mountBlanks() {
-    const textNodes = [], walker = document.createTreeWalker(stem, NodeFilter.SHOW_TEXT);
-    while (walker.nextNode()) if (/\{\{blank:[A-Za-z][A-Za-z0-9_-]*\}\}/.test(walker.currentNode.textContent)) textNodes.push(walker.currentNode);
-    for (const original of textNodes) {
-      const parts = original.textContent.split(/(\{\{blank:[A-Za-z][A-Za-z0-9_-]*\}\})/g), fragment = document.createDocumentFragment();
-      for (const part of parts) {
-        const key = part.match(/^\{\{blank:([^}]+)\}\}$/)?.[1], index = spec.blanks.findIndex(item => item.id === key);
-        if (index < 0) { fragment.append(document.createTextNode(part)); continue; }
-        const field = node('input', 'inlineBlank'); field.type = 'text'; field.dataset.blankId = key;
-        field.maxLength = 2000; field.autocomplete = 'off'; field.spellcheck = false; field.disabled = disabled;
-        field.setAttribute('aria-label', spec.blanks[index].label || t('question.blank', {number: index + 1}));
-        if (formId) field.setAttribute('form', formId);
-        field.value = values[key];
-        field.addEventListener('input', () => { values[key] = field.value; emit(); });
-        field.addEventListener('keydown', event => {
-          if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && !event.isComposing) {
-            event.preventDefault(); document.getElementById(formId)?.requestSubmit();
-          }
-        });
-        fragment.append(field);
-      }
-      original.replaceWith(fragment);
-    }
+    passageFields = mountPassageBlanks(stem, spec.blanks, (blank, number) => {
+      const field = node('input', 'inlineBlank passageBlankField passageBlankText'); field.type = 'text';
+      field.dataset.blankId = blank.id; field.dataset.controlId = blank.id;
+      field.maxLength = 2000; field.autocomplete = 'off'; field.spellcheck = false;
+      field.setAttribute('aria-label', blank.label || t('question.blank', {number}));
+      if (formId) field.setAttribute('form', formId);
+      field.addEventListener('input', () => { if (!disabled) { values[blank.id] = field.value; syncPassage(); emit(); } });
+      field.addEventListener('keydown', event => answerShortcut(event, formId, disabled));
+      return field;
+    });
+    syncPassage();
+  }
+  function mountChoiceBlank() {
+    if (spec.multiple) return;
+    passageFields = mountPassageBlanks(stem, [{id: 'selected', options: spec.options}], (control, number) => {
+      const field = passageSelect(control, number, {formId});
+      field.addEventListener('change', () => {
+        if (disabled) return;
+        values.selected = spec.options.some(option => option.id === field.value) ? field.value : null;
+        emit(); renderChoices();
+      });
+      field.addEventListener('keydown', event => answerShortcut(event, formId, disabled));
+      return field;
+    }, {numbered: false, bare: true});
+    syncPassage();
+  }
+  function mountMatchingBlanks() {
+    if (!['left', 'right'].includes(spec.fixed_side)) return;
+    passageFields = mountPassageBlanks(stem, spec[spec.fixed_side].map(item => ({id: item.id, label: item.text})), (_control, number) => {
+      const blank = node('span', 'passageBlankValue', '—'); blank.setAttribute('aria-label', t('question.blank', {number}));
+      return blank;
+    });
+    for (const item of passageFields) item.wrapper.classList.add('passageBlankStatic');
   }
   normalize();
   input.questionControl = {
     complete,
     empty: () => spec.type === 'fill_blank' && Object.values(values).every(value => !value.trim()),
-    focus: () => (stem?.querySelector('.inlineBlank') || root.querySelector('input,button'))?.focus(),
+    focus: () => (passageFields.find(item => !item.field.disabled && item.field.matches('input,select'))?.field || root.querySelector('input,button'))?.focus(),
     setDisabled: value => {
       if (disabled === value) return;
       disabled = value; input.disabled = value;
       if (spec.type === 'matching') renderMatching();
       if (['true_false', 'choice'].includes(spec.type)) for (const field of root.querySelectorAll('input')) field.disabled = value;
-      if (spec.type === 'fill_blank') for (const field of stem.querySelectorAll('[data-blank-id]')) field.disabled = value;
+      syncPassage();
     },
   };
   if (spec.type === 'true_false') renderBooleans();
   if (spec.type === 'choice') renderChoices();
   if (spec.type === 'matching') renderMatching();
   if (spec.type === 'fill_blank') mountBlanks();
+  if (spec.type === 'choice') mountChoiceBlank();
+  if (spec.type === 'matching') mountMatchingBlanks();
   input.addEventListener('input', () => {
     if (emitting) return;
     values = parse(input.value); normalize();
     if (spec.type === 'matching') renderMatching();
     if (spec.type === 'true_false') renderBooleans();
     if (spec.type === 'choice') renderChoices();
-    if (spec.type === 'fill_blank') for (const field of stem.querySelectorAll('[data-blank-id]')) field.value = values[field.dataset.blankId] || '';
+    syncPassage();
   });
   return {element:root, input};
 }

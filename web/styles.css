@@ -303,7 +303,7 @@ mjx-container[jax="SVG"] text { font-family: "Microsoft YaHei", sans-serif; }
 .matchingMove { border: 0; border-radius: 4px; padding: 4px 7px; background: transparent; cursor: pointer; }
 .matchingMove:hover { background: #ededed; }
 .matchingMove:disabled { opacity: .3; cursor: default; }
-.matchingArrow { align-self: center; }
+.matchingArrow { align-self: center; justify-self: center; width: 24px; pointer-events: none; }
 .matchingArrow { font-size: 26px; text-align: center; color: var(--link-color, #0577C7); }
 .matchingSlot { flex: 1; min-width: 0; min-height: 64px; border: 1px dashed #aab5bd; border-radius: 4px; padding: 8px 16px; background: #fff; color: #52616b; font: inherit; line-height: 1.5; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
 .matchingSlot.occupied { border-color: transparent; color: #15202b; }
@@ -373,3 +373,42 @@ mjx-container[jax="SVG"] text { font-family: "Microsoft YaHei", sans-serif; }
 .compositeOptions { margin: 8px 0; }
 .compositeOptions summary { cursor: pointer; font-size: 13px; }
 .compositeOptions li { padding: 6px 0; overflow-x: auto; }
+/* Hallmark · component: passage-gap · existing learning tokens and typography.
+ * States: default, hover, focus, active, disabled, loading, error, success. */
+.passageBlank {
+  display: inline-flex; align-items: center; gap: .35em; vertical-align: baseline;
+  min-height: 44px; min-width: 0; max-width: calc(100% - .5em); margin: .15em .25em;
+  padding: 0 .4em; border: 1px solid var(--control-border); border-bottom: 2px solid var(--link-color);
+  border-radius: 4px 4px 0 0; background: var(--answer-background); color: var(--ma-ink);
+  line-height: 1.25; white-space: nowrap;
+}
+.passageBlankNumber {
+  flex: 0 0 auto; min-width: 1.5em; text-align: center; color: var(--ma-ink);
+  font-size: .8em; font-weight: 600; line-height: 1;
+}
+.passageBlank .passageBlankField {
+  flex: 1 1 auto; width: 8.5em; min-width: 0; max-width: 100%; min-height: 44px;
+  margin: 0; padding: .35em .2em; border: 0; border-radius: 2px;
+  outline: 2px solid transparent; outline-offset: 1px;
+  background: transparent; color: inherit; font: inherit; line-height: 1.25;
+}
+.passageBlank .passageBlankSelect { width: 11em; cursor: pointer; }
+.passageBlankField::placeholder { color: var(--ma-ink); opacity: 1; }
+.passageBlankField:focus-visible, .passageBlank.is-focus .passageBlankField {
+  outline-color: var(--link-color);
+}
+.passageBlank:focus-within, .passageBlank.is-focus { background: var(--soft-blue); }
+.passageBlank:has(.passageBlankField:active), .passageBlank.is-active { border-color: var(--button-active); }
+.passageBlankField:disabled, .passageBlank.is-disabled .passageBlankField { opacity: .65; cursor: not-allowed; }
+.passageBlank:has(.passageBlankField:disabled), .passageBlank.is-disabled { border-bottom-color: var(--control-border); }
+.passageBlank[aria-busy="true"], [aria-busy="true"] .passageBlank, .passageBlank.is-loading { border-bottom-style: dotted; }
+.passageBlank[aria-busy="true"] .passageBlankField, [aria-busy="true"] .passageBlankField, .passageBlank.is-loading .passageBlankField { cursor: progress; }
+.passageBlank:has([aria-invalid="true"]), .passageBlank.is-error { border-color: var(--amber); }
+.correct .passageBlank, .passageBlank.is-success { border-color: var(--green); }
+.passageBlankStatic { min-width: 8em; border-top-style: dashed; border-inline-style: dashed; cursor: default; }
+.passageBlankValue { flex: 1 1 auto; padding: .35em .5em; text-align: center; font-weight: 600; }
+@media (hover: hover) {
+  .passageBlank:has(.passageBlankField:not(:disabled)):hover, .passageBlank.is-hover {
+    background: var(--soft-blue); border-color: var(--control-hover-border); border-bottom-color: var(--link-color);
+  }
+}

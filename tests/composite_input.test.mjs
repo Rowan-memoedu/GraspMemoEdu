@@ -130,17 +130,20 @@ test('submitted read-only answers show all sections and their stored values', ()
   assert.equal(widget.element.querySelector('.compositeNext'), null); assert(!widget.complete());
 });
 
-test('inline choice markers remain small anchors while text blanks stay inside the passage', () => {
+test('explicit passage choices retain lower radios and synchronize with the inline select', () => {
   const inline = {...spec, sections: [{id: 'inline', complete: true, control_ids: ['reading', 'number'],
     html: '<p>Start <span data-control="reading"></span> middle <span data-control="number"></span> end.</p>'}]};
   const widget = compositeInput(inline, {id: 'inline'}), text = widget.element.querySelector('.courseContent');
   assert.equal(text.querySelector('fieldset'), null);
-  assert.equal(text.querySelector('.compositeAnchor').textContent, '[1]');
+  const dropdown = text.querySelector('.passageBlankSelect');
+  assert.equal(dropdown.dataset.controlId, 'reading');
+  assert.equal(text.querySelector('.passageBlankNumber').textContent, '1');
   assert.equal(text.querySelector('.compositeField').dataset.controlId, 'number');
   assert.equal(widget.element.querySelector('fieldset').parentElement.className, 'compositeSection');
-  text.querySelector('.compositeAnchor').dispatchEvent(event('click'));
-  assert(widget.element.querySelector('fieldset').scrolled);
-  assert.equal(document.activeElement.type, 'radio');
+  dropdown.value = 'b'; dropdown.dispatchEvent(event('change'));
+  assert.equal(widget.element.querySelector('input:checked').value, 'b');
+  assert.equal(state(widget).values.reading, 'b');
+  choose(widget, 'a'); assert.equal(dropdown.value, 'a');
 });
 
 test('compiled rich options are rendered in the selectable option rather than a hidden duplicate', () => {
