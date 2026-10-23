@@ -1,13 +1,13 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=0d7891b1a8fc5db8";
-import {answerReady} from './question-input.js?v=0d7891b1a8fc5db8';
-import {reportableContent} from './content-report.js?v=0d7891b1a8fc5db8';
-import {createLearningCache} from './learning-cache.js?v=0d7891b1a8fc5db8';
-import {createReadCache, createContentCache, createValidationCache, readLifetime, contentPath, contentKey} from './response-cache.js?v=0d7891b1a8fc5db8';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=51cbb8a971af910e";
+import {answerReady} from './question-input.js?v=51cbb8a971af910e';
+import {reportableContent} from './content-report.js?v=51cbb8a971af910e';
+import {createLearningCache} from './learning-cache.js?v=51cbb8a971af910e';
+import {createReadCache, createContentCache, createValidationCache, readLifetime, contentPath, contentKey} from './response-cache.js?v=51cbb8a971af910e';
 
-import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, readerHistorySteps, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState, topicProgress, topicHistory} from './learning-ui.js?v=0d7891b1a8fc5db8';
-import {selfAssessment} from './self-assessment.js?v=0d7891b1a8fc5db8';
-import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=0d7891b1a8fc5db8';
-import {renderSourceReader} from './learning-ui.js?v=0d7891b1a8fc5db8';
+import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, readerHistorySteps, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState, topicProgress, topicHistory} from './learning-ui.js?v=51cbb8a971af910e';
+import {selfAssessment} from './self-assessment.js?v=51cbb8a971af910e';
+import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=51cbb8a971af910e';
+import {renderSourceReader} from './learning-ui.js?v=51cbb8a971af910e';
 
 applyStaticTranslations();
 
@@ -1561,9 +1561,9 @@ async function openTopic(id, subjectId, initial = null) {
   }
 }
 
-const { initPortal } = await import("./portal.js?v=0d7891b1a8fc5db8");
-const {startPresence} = await import('./presence.js?v=0d7891b1a8fc5db8');
-const {visibleContentTopics} = await import('./content-report.js?v=0d7891b1a8fc5db8');
+const { initPortal } = await import("./portal.js?v=51cbb8a971af910e");
+const {startPresence} = await import('./presence.js?v=51cbb8a971af910e');
+const {visibleContentTopics} = await import('./content-report.js?v=51cbb8a971af910e');
 startPresence({getAccess: () => identityProblem ? null : access, request, getTopics: visibleContentTopics});
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {

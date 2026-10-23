@@ -1,14 +1,14 @@
-import {t, translateMessage} from './i18n.js?v=0d7891b1a8fc5db8';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=0d7891b1a8fc5db8';
-import {selfAssessment, referenceAnswer, prepareAnswerContent, ratingChoices} from './self-assessment.js?v=0d7891b1a8fc5db8';
-import {reportableContent} from './content-report.js?v=0d7891b1a8fc5db8';
-import {createLearningCache} from './learning-cache.js?v=0d7891b1a8fc5db8';
-import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=0d7891b1a8fc5db8';
-import {enhanceSourceContent} from './topic-content.js?v=0d7891b1a8fc5db8';
-import {memoryChunk, chunkPeek, sourceAttributions} from './memory-chunk.js?v=0d7891b1a8fc5db8';
-import {topicProgress, topicHistory} from './learning-ui.js?v=0d7891b1a8fc5db8';
-import {pointAssessment} from './point-assessment.js?v=0d7891b1a8fc5db8';
-import {trainingAudio} from './training-audio.js?v=0d7891b1a8fc5db8';
+import {t, translateMessage} from './i18n.js?v=51cbb8a971af910e';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=51cbb8a971af910e';
+import {selfAssessment, referenceAnswer, prepareAnswerContent, ratingChoices} from './self-assessment.js?v=51cbb8a971af910e';
+import {reportableContent} from './content-report.js?v=51cbb8a971af910e';
+import {createLearningCache} from './learning-cache.js?v=51cbb8a971af910e';
+import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=51cbb8a971af910e';
+import {enhanceSourceContent} from './topic-content.js?v=51cbb8a971af910e';
+import {memoryChunk, chunkPeek, sourceAttributions} from './memory-chunk.js?v=51cbb8a971af910e';
+import {topicProgress, topicHistory} from './learning-ui.js?v=51cbb8a971af910e';
+import {pointAssessment} from './point-assessment.js?v=51cbb8a971af910e';
+import {trainingAudio} from './training-audio.js?v=51cbb8a971af910e';
 
 const node = (tag, cls = '', text) => {
   const el = document.createElement(tag); el.className = cls;
@@ -112,7 +112,11 @@ export function createAtomicView(bridge) {
       if (active(ticket)) { busy = false; accept(result.state, true); bridge.progressChanged(); }
     } catch (error) {
       if (active(ticket)) {
-        if (error.status && error.status < 500 && ![408, 429].includes(error.status)) write(submissionKey(), null);
+        // These admission errors are raised before the server creates a
+        // submission. Keep the answer draft and message, but do not poll an ID
+        // that was never accepted. Unknown/uncertain failures retain recovery.
+        const notAccepted = error.status === 429 && ['rate_limited', 'judge_capacity', 'daily_judge_quota'].includes(error.code);
+        if (notAccepted || error.status && error.status < 500 && ![408, 429].includes(error.status)) write(submissionKey(), null);
         busy = false; render(); notice(translateMessage(error.message));
       }
     } finally { if (active(ticket)) { busy = false; schedule(); } }
@@ -312,8 +316,10 @@ export function createAtomicView(bridge) {
       }
     }));
     const back = node('a', 'subjectBack', bridge.homeLabel?.() || t('nav.backHome')); back.href = bridge.homeHref(); main.append(back);
-    main.append(node('p', 'eyebrow', t(state.mode === 'review' ? 'atomic.reviewTitle' : 'atomic.title')),
-      node('h1', 'lessonTitle', state.title), topicProgress(state.topic_progress));
+    const trainingTitle = t(state.mode === 'review' ? 'atomic.reviewTitle' : 'atomic.title');
+    const answering = state.current?.phase === 'answer';
+    if (!answering) main.append(node('p', 'eyebrow', trainingTitle));
+    main.append(node('h1', 'lessonTitle', answering ? trainingTitle : state.title), topicProgress(state.topic_progress));
     const status = node('p', 'fieldError', failure || ''); status.id = 'atomicNotice'; status.hidden = !failure; status.setAttribute('role', 'status'); main.append(status);
     if (selected) {
       const previous = selected === 'introduction' ? null : state.history.find(r => r.id === selected && r.viewable);
