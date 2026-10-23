@@ -1,4 +1,4 @@
-import { portalMessages } from './portal-messages.js?v=44688b09fce31a75';
+import { portalMessages } from './portal-messages.js?v=031263bdf36bd1a1';
 // One dependency-free renderer for the website and self-contained local previews.
 export function renderCourseGraph(target, graph, {language = 'zh', onOpenTopic, onOpenNode} = {}) {
   const t = key => portalMessages[key][language === 'en' ? 1 : 0];

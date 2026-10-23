@@ -175,6 +175,11 @@ mjx-container[jax="SVG"] text { font-family: "Microsoft YaHei", sans-serif; }
 .pointAssessment { margin: 16px 0; }
 .pointAssessment h3 { font-size: 14px; margin-bottom: 10px; }
 .pointAssessment li + li { margin-top: 10px; }
+.pointAssessment .itemAssessmentList { display: flex; flex-wrap: wrap; gap: 8px 20px; list-style: none; margin: 0 0 16px; padding: 0; }
+.pointAssessment .itemAssessmentList > li { display: flex; align-items: baseline; gap: 8px; max-width: 100%; margin: 0; }
+.assessmentItemLabel { min-width: 0; overflow-wrap: anywhere; }
+.itemAssessmentList strong { flex-shrink: 0; white-space: nowrap; margin: 0; font-size: inherit; }
+.pointAssessment .correctResult { color: var(--green); }
 .feedbackIcon { display: inline-flex; flex: 0 0 19px; justify-content: center; align-items: center; width: 19px; height: 19px; margin-top: 1px; border: 1px solid currentColor; border-radius: 50%; font-size: 12px; line-height: 1; }
 .feedbackTitle { display: block; font-size: 14px; font-weight: 700; margin-bottom: 3px; }
 .feedbackReason { line-height: 1.65; white-space: pre-wrap; }

@@ -1,18 +1,18 @@
-import {t, translateMessage} from './i18n.js?v=44688b09fce31a75';
-import {answerEditor, readerFrame, renderReviewReader} from './learning-ui.js?v=44688b09fce31a75';
-import {answerReady, questionInput, choiceTypeField} from './question-input.js?v=44688b09fce31a75';
-import {createLearningCache} from './learning-cache.js?v=44688b09fce31a75';
-import {helpableContent, reportableContent} from './content-report.js?v=44688b09fce31a75';
+import {t, translateMessage} from './i18n.js?v=031263bdf36bd1a1';
+import {answerEditor, readerFrame, renderReviewReader} from './learning-ui.js?v=031263bdf36bd1a1';
+import {answerReady, questionInput, choiceTypeField} from './question-input.js?v=031263bdf36bd1a1';
+import {createLearningCache} from './learning-cache.js?v=031263bdf36bd1a1';
+import {helpableContent, reportableContent} from './content-report.js?v=031263bdf36bd1a1';
 
 const node = (tag, cls = '', text) => { const x = document.createElement(tag); x.className = cls; if (text !== undefined) x.textContent = text; return x; };
 const button = (label, cls, action) => { const x = node('button', cls, label); x.type = 'button'; x.addEventListener('click', action); return x; };
 const html = content => { const x = node('div', 'courseContent'); x.innerHTML = content || ''; return x; };
-import {createContentTimer} from './content-timer.js?v=44688b09fce31a75';
-import {renderReviewDirectory, paperNumber} from './review-directory.js?v=44688b09fce31a75';
-import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=44688b09fce31a75';
-import {chunkPeek} from './memory-chunk.js?v=44688b09fce31a75';
-import {pointAssessment} from './point-assessment.js?v=44688b09fce31a75';
-import {trainingAudio} from './training-audio.js?v=44688b09fce31a75';
+import {createContentTimer} from './content-timer.js?v=031263bdf36bd1a1';
+import {renderReviewDirectory, paperNumber} from './review-directory.js?v=031263bdf36bd1a1';
+import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=031263bdf36bd1a1';
+import {chunkPeek} from './memory-chunk.js?v=031263bdf36bd1a1';
+import {pointAssessment} from './point-assessment.js?v=031263bdf36bd1a1';
+import {trainingAudio} from './training-audio.js?v=031263bdf36bd1a1';
 
 export function createPaperView({root, request, href, getAccess, formatDate, progressChanged, courseSidebar, taskTree}) {
   const template = document.getElementById('appLayout').cloneNode(true);
@@ -297,7 +297,7 @@ export function createPaperView({root, request, href, getAccess, formatDate, pro
       } : {})});
     if (audioControl) main.insertBefore(audioControl, stem.nextSibling);
     if (item.result) {
-      const points = pointAssessment(item.result.assessment_result); if (points) main.append(points);
+      const points = pointAssessment(item.result.assessment_result, item.interaction); if (points) main.append(points);
       const reference = referenceAnswer(item); if (reference) main.append(reference);
       main.append(node('p', item.result.correct ? 'correctResult' : 'fieldError', t(item.result.correct ? 'training.correct' : 'training.incorrect')), node('p', '', item.result.reason === '限时已到，本题未完成作答。' ? t('paper.unansweredTimeout') : item.result.reason), prepareAnswerContent(content(item, 'explanation', item.explanation_html)));
       if (item.result.due_at) main.append(node('p', 'inputHint', t('atomic.availableAt', {time: formatDate(item.result.due_at)})));

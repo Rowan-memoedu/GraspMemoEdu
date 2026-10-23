@@ -1,14 +1,14 @@
-import {t, translateMessage} from './i18n.js?v=44688b09fce31a75';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=44688b09fce31a75';
-import {selfAssessment, referenceAnswer, prepareAnswerContent, ratingChoices} from './self-assessment.js?v=44688b09fce31a75';
-import {reportableContent} from './content-report.js?v=44688b09fce31a75';
-import {createLearningCache} from './learning-cache.js?v=44688b09fce31a75';
-import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=44688b09fce31a75';
-import {enhanceSourceContent} from './topic-content.js?v=44688b09fce31a75';
-import {memoryChunk, chunkPeek, sourceAttributions} from './memory-chunk.js?v=44688b09fce31a75';
-import {topicProgress, topicHistory} from './learning-ui.js?v=44688b09fce31a75';
-import {pointAssessment} from './point-assessment.js?v=44688b09fce31a75';
-import {trainingAudio} from './training-audio.js?v=44688b09fce31a75';
+import {t, translateMessage} from './i18n.js?v=031263bdf36bd1a1';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=031263bdf36bd1a1';
+import {selfAssessment, referenceAnswer, prepareAnswerContent, ratingChoices} from './self-assessment.js?v=031263bdf36bd1a1';
+import {reportableContent} from './content-report.js?v=031263bdf36bd1a1';
+import {createLearningCache} from './learning-cache.js?v=031263bdf36bd1a1';
+import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=031263bdf36bd1a1';
+import {enhanceSourceContent} from './topic-content.js?v=031263bdf36bd1a1';
+import {memoryChunk, chunkPeek, sourceAttributions} from './memory-chunk.js?v=031263bdf36bd1a1';
+import {topicProgress, topicHistory} from './learning-ui.js?v=031263bdf36bd1a1';
+import {pointAssessment} from './point-assessment.js?v=031263bdf36bd1a1';
+import {trainingAudio} from './training-audio.js?v=031263bdf36bd1a1';
 
 const node = (tag, cls = '', text) => {
   const el = document.createElement(tag); el.className = cls;
@@ -258,7 +258,7 @@ export function createAtomicView(bridge) {
       const feedback = node('div', `feedback atomicFeedback ${question.correct ? 'correct' : 'incorrect'}`);
       feedback.append(node('strong', '', t(question.correct ? 'atomic.correct' : 'atomic.incorrect')));
       if (question.reason) feedback.append(node('p', '', question.reason));
-      const points = pointAssessment(question.assessment_result); if (points) feedback.append(points);
+      const points = pointAssessment(question.assessment_result, question.interaction); if (points) feedback.append(points);
       const reference = referenceAnswer(question); if (reference) feedback.append(reference);
       feedback.append(prepareAnswerContent(marked(question.explanation_html, `explanation:${question.card_id}`, question.card_id)));
       box.append(feedback);
