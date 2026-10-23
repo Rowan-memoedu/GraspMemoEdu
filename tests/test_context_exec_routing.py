@@ -69,7 +69,7 @@ class FakeClient:
         self.calls.append(deepcopy(messages))
         value = deepcopy(self.responses.pop(0))
         if isinstance(value,Exception): raise value
-        directory = self.root / ('fixture-call-' + str(len(self.calls)))
+        directory = self.root / ('fixture-call-' + str(len(self.calls)) + '-' + cp.digest(str(self.root))[:10])
         directory.mkdir(parents=True)
         cp.save(directory / 'messages.json', messages)
         cp.save(directory / 'result.json', value)

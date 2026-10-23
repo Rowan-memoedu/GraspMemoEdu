@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
+import hashlib
 from pathlib import Path
 import sys
 from datetime import datetime, timezone
@@ -114,11 +115,195 @@ def make_client(config, work, backend, codex_options):
     return CodexExecClient(work / 'codex-exec', **(codex_options or {}))
 
 
-def run_task(source, root, library, config, attempts, candidate_runs=(), backend='api', codex_options=None):
+def file_sha(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def failed_source_evidence(work, messages, successful_proofs):
+    """Authenticate a terminal empty failure, never infer failure from elapsed time."""
+    from graspmemoedu.codex_exec_client import assess_events
+    successful = {p['receipt']['call_id']: Path(p['receipt']['call_dir']).resolve()
+                  for p in successful_proofs}
+    extras = []
+    for directory in sorted((work / 'codex-exec').glob('*')):
+        if not directory.is_dir():
+            continue
+        receipt = cp.read(directory / 'receipt.json')
+        if receipt.get('call_id') in successful:
+            if directory.resolve() != successful[receipt['call_id']]:
+                raise ValueError('Successful call identity points to a different directory')
+        else:
+            extras.append((directory.resolve(), receipt))
+    if len(extras) != 1:
+        raise ValueError('Source-only recovery requires exactly one retained failed source call')
+    directory, receipt = extras[0]
+    if (receipt.get('schema') != 1 or receipt.get('backend') != 'codex-exec'
+            or receipt.get('status') != 'failed' or type(receipt.get('exit_code')) is not int
+            or receipt['exit_code'] == 0 or receipt.get('model_execution_count') != 1
+            or receipt.get('automatic_retries') != 0 or receipt.get('timed_out') is not False
+            or receipt.get('error_code') != 'nonzero_exit'
+            or receipt.get('isolation', {}).get('passed') is not True
+            or receipt.get('call_id') != directory.name
+            or Path(receipt.get('call_dir', '')).resolve() != directory
+            or not receipt.get('finished_at') or not receipt.get('model')
+            or not receipt.get('reasoning_effort')
+            or receipt.get('usage') is not None or receipt.get('usage_events') != []):
+        raise ValueError('Source call is not a confirmed terminal empty execution failure')
+    if ((directory / 'result.json').exists() or not (directory / 'final.txt').is_file()
+            or (directory / 'final.txt').read_bytes() != b''):
+        raise ValueError('Source-only recovery refuses partial or ambiguous output')
+    request = cp.read(work / 'review.request.json')
+    if (request.get('backend') != 'codex-exec' or request.get('messages') != messages
+            or request.get('model') != receipt['model']
+            or request.get('reasoning_effort') != receipt['reasoning_effort']
+            or cp.read(directory / 'messages.json') != messages
+            or file_sha(directory / 'prompt.txt') != receipt.get('input_sha256')
+            or not (directory / 'prompt.txt').read_text(encoding='utf-8').endswith(
+                transport.json.dumps(messages, ensure_ascii=False, allow_nan=False))):
+        raise ValueError('Failed source call has different policy, input or executed prompt')
+    raw = (directory / 'events.jsonl').read_text(encoding='utf-8')
+    rows = [transport.json.loads(line) for line in raw.splitlines() if line.strip()]
+    assessed = assess_events(raw)
+    final_message = assessed.pop('final_message')
+    if ([row.get('type') for row in rows] != ['thread.started', 'turn.started', 'error', 'turn.failed']
+            or not isinstance(rows[2].get('message'), str) or not rows[2]['message'].strip()
+            or rows[3].get('error', {}).get('message') != rows[2]['message']
+            or final_message is not None or assessed != receipt.get('event_check')
+            or assessed['usage'] is not None or assessed['usage_events'] != []
+            or assessed['unexpected_items'] != []):
+        raise ValueError('Source failure is not an explicit empty failed turn')
+    return {'call_dir': str(directory), 'call_id': receipt['call_id'],
+            'model': receipt['model'], 'reasoning_effort': receipt['reasoning_effort'],
+            'files': {name: file_sha(directory / name) for name in
+                      ('receipt.json', 'messages.json', 'prompt.txt', 'events.jsonl', 'final.txt')}}
+
+
+def retained_learner(source, roots):
+    """Explicitly reuse two proven stages after one confirmed empty source failure."""
+    if source['task']['kind'] != 'cards' or 'provided_cards' in source['task']:
+        raise ValueError('Source-only recovery requires generated cards and their generation proof')
+    matches = []
+    for root in roots:
+        root = Path(root).resolve()
+        snapshot = cp.read(root / 'input-snapshot.json')
+        tasks = [t for t in snapshot['tasks'] if t['id'] == source['task']['id']]
+        if not tasks:
+            continue
+        cp.validate_document(snapshot)
+        metadata, prompts = cp.read(root / 'run.json'), cp.read(root / 'prompts.json')
+        if (cp.task_source(snapshot, tasks[0]) != source
+                or metadata.get('input_sha256') != cp.digest(snapshot)
+                or metadata.get('backend') != 'codex-exec'
+                or metadata.get('quality_policy') != cp.QUALITY_POLICY
+                or metadata.get('generation_prompt_sha256') != cp.digest(cp.GENERATION)
+                or metadata.get('review_prompt_sha256') != cp.digest(cp.REVIEW)
+                or prompts.get('generation') != cp.GENERATION or prompts.get('review') != cp.REVIEW
+                or prompts.get('quality_policy') != cp.QUALITY_POLICY
+                or not cp.is_learner_review_prompt(prompts.get('learner_review'))
+                or metadata.get('learner_prompt_sha256') != cp.digest(prompts['learner_review'])):
+            raise ValueError('Retained run has different source, backend or policy')
+        folder = root / source['task']['id']
+        result = cp.read(folder / 'result.json')
+        ordinal = result.get('attempt')
+        if (result.get('id') != source['task']['id'] or result.get('source') != source
+                or result.get('source_sha256') != cp.digest(source)
+                or result.get('backend') != 'codex-exec' or result.get('status') != 'outcome_unknown'
+                or type(ordinal) is not int or ordinal < 1):
+            raise ValueError('Source-only recovery requires an unfinished task with a retained terminal failure')
+        work = folder / f'attempt-{ordinal:02d}'
+        if any(p.name > work.name for p in folder.glob('attempt-*')):
+            raise ValueError('A later attempt exists; do not replay an earlier failure')
+        attempt = cp.read(work / 'result.json')
+        if (attempt.get('attempt') != ordinal or attempt.get('status') != 'outcome_unknown'
+                or 'review' in attempt or 'exec_evidence' in attempt
+                or any((work / name).exists() for name in ('review.response.json', 'review.exec-proof.json'))
+                or not (work / 'review.started.json').is_file()
+                or not {'candidate', 'generation_evidence', 'learner_evidence'} <= set(attempt)):
+            raise ValueError('Source-only recovery refuses completed, rejected or partially recorded reviews')
+        candidate = attempt['candidate']
+        cp.validate_candidate(candidate, source); cp.validate_learning_text(candidate)
+        generation, learner = attempt['generation_evidence'], attempt['learner_evidence']
+        generated = cp.validate_exec_proof(generation, candidate)
+        payload = transport.json.loads(generated[1]['content'])
+        if not isinstance(payload, dict):
+            raise ValueError('Retained generation input is not an object')
+        payload.pop('retry_feedback', None)
+        if generated[0]['content'] != cp.GENERATION or payload != source:
+            raise ValueError('Generation proof belongs to different input or prompt')
+        view = cp.learner_view(candidate['cards'])
+        cp.validate_learner_review(learner['result'], view)
+        blinded = cp.validate_exec_proof(learner['proof'], learner['result'])
+        if (not learner['result']['approved'] or not cp.is_learner_review_prompt(blinded[0]['content'])
+                or transport.json.loads(blinded[1]['content']) != cp.learner_payload(view)
+                or generation['receipt']['call_id'] == learner['proof']['receipt']['call_id']):
+            raise ValueError('Learner proof is unapproved, not independent or has a different public view')
+        files = {}
+        for role, response, proof, messages in (
+                ('generation', candidate, generation, generated),
+                ('learner', learner['result'], learner['proof'], blinded)):
+            for suffix, value in (('response', response), ('exec-proof', proof)):
+                path = work / f'{role}.{suffix}.json'
+                if path.exists() and cp.read(path) != value:
+                    raise ValueError('Retained role artifact differs from its actual proof')
+                files[path.name] = (path.read_bytes() if path.exists() else
+                    (transport.json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False)+'\n').encode('utf-8'))
+            request_path = work / f'{role}.request.json'
+            if request_path.exists():
+                if cp.read(request_path).get('messages') != messages:
+                    raise ValueError('Retained role request differs from its executed messages')
+                files[request_path.name] = request_path.read_bytes()
+        review_payload = cp.quality_review_payload({'source': source, 'candidate': candidate}, view, learner['result'])
+        messages = [{'role': 'system', 'content': cp.REVIEW}, {'role': 'user',
+                    'content': transport.json.dumps(review_payload, ensure_ascii=False)}]
+        failure = failed_source_evidence(work, messages, [generation, learner['proof']])
+        manifest = {'run': str(root), 'attempt': str(work), 'source_sha256': cp.digest(source),
+                    'candidate_sha256': cp.digest(candidate), 'learner_view_sha256': cp.digest(view),
+                    'successful_call_ids': [generation['receipt']['call_id'], learner['proof']['receipt']['call_id']],
+                    'failed_source': failure,
+                    'files': {name: hashlib.sha256(data).hexdigest() for name, data in files.items()},
+                    'bindings': {str(path): file_sha(path) for path in
+                                 (root/'run.json', root/'input-snapshot.json', root/'prompts.json',
+                                  folder/'result.json', work/'result.json', work/'review.request.json',
+                                  work/'review.started.json')}}
+        matches.append({'candidate': candidate, 'generation_evidence': generation,
+                        'learner_evidence': learner, 'manifest': manifest, 'files': files})
+    if len(matches) != 1:
+        raise ValueError('Select exactly one eligible retained source failure for each requested task')
+    return matches[0]
+
+
+def copy_retained_learner(record, work):
+    """Keep original role bytes and failure evidence; do not fabricate new calls."""
+    cp.save(work / 'reused-learner.json', record['manifest'])
+    files = dict(record['files'])
+    failure = record['manifest']['failed_source']
+    for name, sha in failure['files'].items():
+        data = (Path(failure['call_dir']) / name).read_bytes()
+        if hashlib.sha256(data).hexdigest() != sha:
+            raise ValueError('Failed source evidence changed after authentication')
+        files['reused-source-failure/' + name] = data
+    for name, data in files.items():
+        path = work / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists():
+            if path.read_bytes() != data:
+                raise ValueError('Retained role bytes changed in the new run')
+        else:
+            with path.open('xb') as stream:
+                stream.write(data)
+
+
+def run_task(source, root, library, config, attempts, candidate_runs=(), backend='api', codex_options=None,
+             reuse_learner_runs=()):
     task = source['task']
     policy = quality_policy(source,backend)
     folder = root / task['id']
     final = folder / 'result.json'
+    retained = None
+    if reuse_learner_runs:
+        if backend != 'codex-exec' or candidate_runs or Path(root).resolve() in map(lambda p: Path(p).resolve(), reuse_learner_runs):
+            raise ValueError('Source-only recovery requires Codex Exec, a new run root and no candidate-runs')
+        retained = retained_learner(source, reuse_learner_runs)
     if final.exists():
         result = cp.read(final)
         if result['source_sha256'] != cp.digest(source):
@@ -142,7 +327,7 @@ def run_task(source, root, library, config, attempts, candidate_runs=(), backend
         cp.save(final, result)
         print(task['id'] + ' reused', flush=True)
         return result
-    feedback, retry_retained = None, None
+    feedback, retry_retained = None, retained
     for ordinal in range(1, attempts + 1):
         work = folder / f'attempt-{ordinal:02d}'
         receipt = work / 'result.json'
@@ -151,6 +336,9 @@ def run_task(source, root, library, config, attempts, candidate_runs=(), backend
         else:
             attempt = {'attempt': ordinal, 'status': 'error'}
             phase = 'generation'
+            if ordinal == 1 and retained:
+                copy_retained_learner(retained, work)
+                attempt['learner_reuse'] = retained['manifest']
             try:
                 generation_proof = None
                 client = make_client(config, work, backend, codex_options)
@@ -205,6 +393,12 @@ def run_task(source, root, library, config, attempts, candidate_runs=(), backend
                         evidence = {'backend':'codex-exec','review':cp.read(work/'review.exec-proof.json')}
                         if generation_proof: evidence['generation'] = generation_proof
                         if policy: evidence.update(quality_policy=policy,learner=learner)
+                        if attempt.get('learner_reuse'):
+                            if evidence['review']['receipt']['call_id'] in (
+                                    attempt['learner_reuse']['successful_call_ids'] +
+                                    [attempt['learner_reuse']['failed_source']['call_id']]):
+                                raise ValueError('Source-only recovery requires a fresh independent source call')
+                            evidence['learner_reuse'] = attempt['learner_reuse']
                         attempt['exec_evidence'] = evidence
                         cp.validate_exec_evidence(source,candidate,review,evidence)
                     attempt['status'] = 'accepted' if review['approved'] else 'rejected'
@@ -256,6 +450,14 @@ def run(args):
     if selected - {t['id'] for t in document['tasks']}:
         raise ValueError('Unknown selected task')
     backend = getattr(args, 'backend', 'api')
+    reuse_learner_runs = getattr(args, 'reuse_learner_runs', ())
+    tasks = [cp.task_source(document, t) for t in document['tasks'] if t['id'] in selected]
+    if reuse_learner_runs:
+        if (backend != 'codex-exec' or args.candidate_runs
+                or args.run_root.resolve() in {Path(p).resolve() for p in reuse_learner_runs}):
+            raise ValueError('Source-only recovery requires Codex Exec, a new run root and no candidate-runs')
+        for source in tasks:
+            retained_learner(source, reuse_learner_runs)  # Validate every task before any model invocation.
     codex_options = {'model': getattr(args, 'codex_model', None),
                      'executable': getattr(args, 'codex_executable', None),
                      'timeout': getattr(args, 'codex_timeout', 900)}
@@ -265,18 +467,19 @@ def run(args):
     if backend != 'api':
         metadata.update(backend=backend,codex_options=codex_options,quality_policy=cp.QUALITY_POLICY,
                         learner_prompt_sha256=cp.digest(cp.LEARNER_REVIEW))
+    if reuse_learner_runs:
+        metadata['reuse_learner_runs'] = [str(Path(p).resolve()) for p in reuse_learner_runs]
     cp.save(args.run_root / 'run.json', metadata)
     cp.save(args.run_root / 'input-snapshot.json', document)
     prompts = {'generation':cp.GENERATION,'review':cp.REVIEW}
     if backend == 'codex-exec': prompts.update(learner_review=cp.LEARNER_REVIEW,quality_policy=cp.QUALITY_POLICY)
     cp.save(args.run_root / 'prompts.json', prompts)
-    tasks = [cp.task_source(document, t) for t in document['tasks'] if t['id'] in selected]
     needs_api = backend == 'api' and any(not (args.run_root / s['task']['id'] / 'result.json').exists()
                     and not cp.find_material(args.library, s, backend) for s in tasks)
     config = transport.configuration() if needs_api else None
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = [pool.submit(run_task, s, args.run_root, args.library, config, args.attempts,
-                               args.candidate_runs, backend, codex_options) for s in tasks]
+                               args.candidate_runs, backend, codex_options, reuse_learner_runs) for s in tasks]
         for future in as_completed(futures):
             future.result()
     results = [cp.read(p) for t in document['tasks']
@@ -472,6 +675,8 @@ def main():
             p.add_argument('--attempts', type=int, choices=range(1, 7), default=3)
             p.add_argument('--only', nargs='+')
             p.add_argument('--candidate-runs', type=Path, nargs='*', default=[])
+            p.add_argument('--reuse-learner-runs', type=Path, nargs='+', default=[],
+                           help='Explicitly reuse proven generation/blind review after a terminal empty source-call failure')
             p.add_argument('--codex-model', help='Optional explicit override; default uses the current Codex model')
             p.add_argument('--codex-executable')
             p.add_argument('--codex-timeout', type=int, default=900)
