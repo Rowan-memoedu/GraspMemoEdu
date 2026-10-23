@@ -634,8 +634,10 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                   limit: int = Query(default=25, ge=1, le=50)):
         access = access_store.resolve(request.headers.get('x-learning-identity'))
         recover_cooldowns(access)
+        group_runtime = (service_for(access['learner_id'], session_scope=request.headers.get('x-learning-identity')).runtime
+                         if access.get('is_admin') else None)
         return dashboard_store.dashboard(access, course_id, cursor, limit, request.query_params.get('subject_id'),
-                                         request.query_params.get('root_id'))
+                                         request.query_params.get('root_id'), group_runtime=group_runtime)
 
     @app.get('/api/graphs')
     def graph_catalog(request: Request, subject_id: str = 'math'):

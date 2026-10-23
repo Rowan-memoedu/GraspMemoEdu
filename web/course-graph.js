@@ -1,4 +1,4 @@
-import { portalMessages } from './portal-messages.js?v=2de30673708f2e1a';
+import { portalMessages } from './portal-messages.js?v=7c6cc30f772c71d9';
 // One dependency-free renderer for the website and self-contained local previews.
 export function renderCourseGraph(target, graph, {language = 'zh', onOpenTopic, onOpenNode} = {}) {
   const t = key => portalMessages[key][language === 'en' ? 1 : 0];
@@ -79,6 +79,8 @@ export function renderCourseGraph(target, graph, {language = 'zh', onOpenTopic, 
     if (!id) { details.append(el('p', '', t('graph.hint'))); return; }
     const current = byId.get(id);
     details.append(el('strong', '', current.title), el('p', '', status(current)));
+    if (current.point_prerequisite_count) details.append(el('p', '',
+      t('training.graphPointPrerequisites', {count: current.point_prerequisite_count})));
     for (const [label, list] of [[t('graph.parents'), parents.get(id)], [t('graph.children'), children.get(id)]]) {
       const row = el('p', '', label + ': ');
       if (!list.length) row.append(document.createTextNode(t('graph.none')));

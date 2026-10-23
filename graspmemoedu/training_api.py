@@ -51,7 +51,8 @@ def register_training_routes(app, training, access_store, subjects, service_for,
     def backend_for(access, scope_digest=None):
         runtime = service_for(access['learner_id'], scope_digest=scope_digest).runtime if access.get('is_admin') else None
         return TrainingService(training, settings.data_dir, access['learner_id'], app.state.service.judge,
-                               runtime=runtime, clock=clock, dependencies=dependencies, access=access)
+                               runtime=runtime, clock=clock, dependencies=dependencies, access=access,
+                               atomic_for=lambda tid: service_for(access['learner_id'], tid, scope_digest=scope_digest))
 
     def context(request, feature=None):
         access = access_store.resolve(request.headers.get('x-learning-identity'))
@@ -60,7 +61,9 @@ def register_training_routes(app, training, access_store, subjects, service_for,
             raise DomainError('feature_forbidden', '当前账号没有使用此功能的权限。', 403)
         runtime = service_for(access['learner_id'], session_scope=request.headers.get('x-learning-identity')).runtime if access.get('is_admin') else None
         backend = TrainingService(training, settings.data_dir, access['learner_id'], app.state.service.judge,
-                                  runtime=runtime, clock=clock, dependencies=dependencies, access=access)
+                                  runtime=runtime, clock=clock, dependencies=dependencies, access=access,
+                                  atomic_for=lambda tid: service_for(access['learner_id'], tid,
+                                      session_scope=request.headers.get('x-learning-identity')))
         return access, backend
 
     def authorize_bank(request, access, bank_id, feature=None):
@@ -141,6 +144,9 @@ def register_training_routes(app, training, access_store, subjects, service_for,
             value['dependency_ready'] = ready
             value['can_submit'] = 'submit_answer' in access['features'] and ready
             value['can_learn'] = 'learn' in access['features'] and ready
+            if not ready and value.get('preview'):
+                value['question'] = {**value['question'], 'html': '<p>请先完成前置知识的学习。</p>', 'interaction': None}
+                value['can_self_rate'] = False
         return result
 
     @app.post('/api/training/open')

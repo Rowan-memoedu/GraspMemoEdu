@@ -79,7 +79,15 @@ def revised_state(body, previous, incoming):
     questions = {card['id']: card for card in previous['flashcards']}
     for record in [*memory.get('history', []), *([memory['active']] if memory.get('active') else [])]:
         if record['card_id'] not in questions:
-            raise ValueError('Saved question identity is outside the pinned content')
+            snapshot = record.get('snapshot') or {}
+            origin = snapshot.get('training_source') or {}
+            if (not origin or snapshot.get('id') != record['card_id']
+                    or record['card_id'] != f"bank:{origin.get('bank_id')}:{origin.get('question_id')}"
+                    or not record.get('point_ids') or not set(record['point_ids']) <= set(memory['points'])
+                    or snapshot.get('point_ids') != record['point_ids']):
+                raise ValueError('Saved question identity is outside the pinned content')
+            record.setdefault('snapshot_version', previous['version'])
+            continue
         if record.get('phase') == 'feedback' or 'answer' in record:
             if 'snapshot' not in record:
                 record['snapshot'] = deepcopy(questions[record['card_id']])

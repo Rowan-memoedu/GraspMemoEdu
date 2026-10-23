@@ -2,7 +2,7 @@
 
 本表从当前界面词库自动生成。修改以词库为准，随后重新生成并检查本表。术语约定见 [界面语言规范](ui-language.md)。
 
-共 987 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
+共 1005 条界面文案映射（包括不同位置重复使用的文案）。花括号表示运行时填入的名称、数量或时间，不是页面上的固定文字。
 
 不包括作者课程正文、题目、答案、解析或用户输入。首页的学科双语副标题按约定保留。
 
@@ -12,9 +12,14 @@
 |---|---|
 | Reading | 阅读 |
 | Memory-point feedback | 知识点反馈 |
+| Item results | 逐题结果 |
+| Question {number} | 第 {number} 题 |
+| Memory point {number} | 知识点 {number} |
 | Correct | 正确 |
+| Incorrect | 错误 |
 | Review again | 需复习 |
-| Based on items {items} | 依据小题 {items} |
+| Based on: {items} | 依据：{items} |
+| Based on item results | 依据小题结果 |
 | Based on the whole answer | 依据整题结果 |
 | Install app | 安装应用 |
 | Something went wrong. Please try again. | 操作未完成，请稍后重试。 |
@@ -96,6 +101,9 @@
 
 | English | 中文 |
 |---|---|
+| Sources | 来源 |
+| View source | 查看来源 |
+| License | 许可 |
 | Finish learning and return home | 完成学习，返回主页 |
 | This feature is available only to students | 该功能仅对学员开放 |
 | Skipped; awaiting catch-up learning | 已跳过，等待补学 |
@@ -525,7 +533,7 @@
 | Correct | 回答正确 |
 | Incorrect | 回答错误 |
 | Continue | 继续 |
-| Introduction · Source | Introduction · 指导原文 |
+| Introduction source | 指导原文 |
 | Whole Topic progress | 整个 Topic 的学习进度 |
 | Memory points | 记忆点 |
 | Start flashcards | 开始原子卡训练 |
@@ -728,6 +736,16 @@
 | Direct prerequisites | 直接前置 |
 | Progress {progress} · Mastery {mastery} | 完成进度 {progress} · 熟练度 {mastery} |
 | Complete the prerequisites first | 请先完成前置知识的学习 |
+| Memory prerequisites | 记忆点解锁条件 |
+| Unlocks when the relevant memory points in prerequisite Topics are ready ({count}) | 前置 Topic 中的相关记忆点达标后解锁（{count} 个） |
+| Memory point unavailable | 无权访问此记忆点 |
+| Ready | 已达标 |
+| Not learned or paused | 尚未学会或已暂停 |
+| Successful spaced review needed | 需要成功的间隔复习 |
+| Review needed | 需要重新掌握 |
+| Stability below threshold | 掌握尚不稳定 |
+| Retrievability below threshold | 记忆保留度已下降 |
+| Currently locked · Previous answers remain available | 当前未解锁 · 可查看已有作答 |
 | Direct successors | 直接后续 |
 | None | 无 |
 | Open content | 打开内容 |

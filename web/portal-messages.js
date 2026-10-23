@@ -961,6 +961,16 @@ export const portalMessages = {
     "请先完成前置知识的学习",
     "Complete the prerequisites first"
   ],
+  "training.unlockPoints": ["记忆点解锁条件", "Memory prerequisites"],
+  "training.graphPointPrerequisites": ["前置 Topic 中的相关记忆点达标后解锁（{count} 个）", "Unlocks when the relevant memory points in prerequisite Topics are ready ({count})"],
+  "training.pointUnavailable": ["无权访问此记忆点", "Memory point unavailable"],
+  "training.point.ready": ["已达标", "Ready"],
+  "training.point.not_learned": ["尚未学会或已暂停", "Not learned or paused"],
+  "training.point.needs_spaced_review": ["需要成功的间隔复习", "Successful spaced review needed"],
+  "training.point.last_review_failed": ["需要重新掌握", "Review needed"],
+  "training.point.stability_low": ["掌握尚不稳定", "Stability below threshold"],
+  "training.point.retrievability_low": ["记忆保留度已下降", "Retrievability below threshold"],
+  "training.relocked": ["当前未解锁 · 可查看已有作答", "Currently locked · Previous answers remain available"],
   "graph.children": [
     "直接后续",
     "Direct successors"

@@ -39,11 +39,38 @@ class ReviewSources:
                 JOIN training_submissions s ON s.attempt=a.id WHERE a.learner=? AND a.bank=?
                 AND s.status IN ('pending','running')''', (self.learner, bank_id))}
             for group in bank['groups']:
-                if not self.dependencies.ready(con, self.access, group_key(bank_id, group['id'])):
+                if not self.dependencies.ready(con, self.access, group_key(bank_id, group['id']), current_time=now.isoformat()):
                     continue
                 for question in group.get('questions', []):
                     if question.get('academy') or question.get('hyperskill'):
                         # The shared bank owns its schedule; its answer provider is the IDE.
+                        continue
+                    if question.get('point_ids'):
+                        from .linked_points import snapshot, pinned
+                        rows = snapshot(con, self.catalog, self.learner, question['point_ids'], self.access)
+                        if any(not r['learned'] or not r['available'] or r['point_id'] in reserved
+                               or r['state'].get('active') or r['state'].get('pending_submission_id')
+                               or not r['memory'].get('due_at') for r in rows) or question['id'] in pending:
+                            continue
+                        due = max(utc_time(r['memory']['due_at']) for r in rows)
+                        for r in rows:
+                            backend = self.atoms.get(r['topic_id'])
+                            if backend is None:
+                                break
+                            last = r['state']['chunk_last_seen'].get(backend.point_chunks[r['local_id']])
+                            if last:
+                                due = max(due, utc_time(last) + timedelta(seconds=GAP_SECONDS))
+                        else:
+                            if due > now:
+                                next_dates.append(due.isoformat())
+                                continue
+                            cid = f'training:{bank_id}:{bank["version"]}:{question["id"]}'
+                            cards.append({'id': cid, 'point_ids': [r['point_id'] for r in rows], 'question': question,
+                                'source': {'kind': 'training', 'container': bank_id, 'version': bank['version'],
+                                    'local_points': question['point_ids'], 'local_card': question['id'],
+                                    'group_id': group['id'], 'linked_points': pinned(rows)},
+                                'due_at': due.isoformat(), 'source_title': bank['title'] + ' · ' + group['title'],
+                                'math_css': bank.get('math_css', ''), 'uses': uses.get(cid, 0)})
                         continue
                     memory = memories.get(question['id'])
                     if not memory:
@@ -111,8 +138,15 @@ class ReviewSources:
         touched = {}
         for index, item in enumerate(items):
             source = item['source']
-            for local in source['local_points']:
-                register_point(con, source['kind'], source['container'], source['version'], local, subject, now)
+            if source.get('linked_points'):
+                for row in source['linked_points']:
+                    register_point(con, 'atomic', row['topic_id'], row['version'], row['local_id'], subject, now)
+                    backend = self.atoms[row['topic_id']]
+                    state = touched.setdefault(backend.topic_id, backend._load(con))
+                    state['chunk_last_seen'][backend.point_chunks[row['local_id']]] = now
+            else:
+                for local in source['local_points']:
+                    register_point(con, source['kind'], source['container'], source['version'], local, subject, now)
             item['question'] = present_choice(item['question'], f'{paper_id}:{index}')
             con.execute('''INSERT INTO review_card_uses VALUES (?,?,1)
                 ON CONFLICT(learner,card) DO UPDATE SET count=count+1''', (self.learner, item['id']))
@@ -133,10 +167,19 @@ class ReviewSources:
             target = permission_id(source['container']) if source['kind'] == 'training' else source['container']
             if target not in allowed:
                 return False
+            if source.get('linked_points') and any(r['topic_id'] not in allowed for r in source['linked_points']):
+                return False
         return True
 
     def unchanged(self, con, item):
         source = item['source']
+        if source.get('linked_points'):
+            from .linked_points import snapshot, unchanged
+            bank = self.training.catalog.banks.get(source['container'])
+            return bool(bank and bank['version'] == source['version']
+                and self.dependencies.ready(con, self.access, group_key(source['container'], source['group_id']),
+                                            current_time=utc_time(self.training.clock()).isoformat())
+                and unchanged(snapshot(con, self.catalog, self.learner, source['local_points'], self.access), source['linked_points']))
         if source['kind'] == 'training':
             if self.training.catalog.bank(source['container'])['version'] != source['version']:
                 return False
@@ -160,36 +203,31 @@ class ReviewSources:
         correct, reason = verdict
         if source['kind'] == 'training':
             local = source['local_points'][0]
+            if source.get('linked_points'):
+                local = source['local_card']
+                item['question'] = {**item['question'], '_linked_points': source['linked_points'], '_review_paper': paper['id']}
+                self.training.atoms.update(self.atoms)
             memory = self.training._memory(con, source['container'], local, source['version'])
             con.execute('''INSERT INTO training_attempts
                 (id,learner,bank,group_id,question,version,snapshot,mode,memory_revision,phase,created_at,submission_id)
                 VALUES (?,?,?,?,?,?,?,?,?,'answer',?,?)''',
                 (request_id, self.learner, source['container'], source['group_id'], local, source['version'],
-                 json.dumps(item['question']), 'review' if memory['mastered'] or memory['card_json'] is None else 'initial', memory['revision'],
+                 json.dumps(item['question']), 'review' if source.get('linked_points') or memory['mastered'] or memory['card_json'] is None else 'initial', memory['revision'] if memory else 0,
                  paper['created_at'], request_id))
             con.execute('INSERT INTO training_submissions VALUES (?,?,?,?,?,?,?,?)',
                         (request_id, self.learner, request_id, fingerprint(item['answer']), item['answer'],
                          item.get('elapsed_ms'), 'judged', reason))
             row = con.execute('SELECT * FROM training_attempts WHERE id=?', (request_id,)).fetchone()
-            self.training._complete(con, row, correct=correct, reason=reason, elapsed_ms=item.get('elapsed_ms'))
+            self.training._complete(con, row, correct=correct, reason=reason, elapsed_ms=item.get('elapsed_ms'),
+                                    rating=item.get('self_rating') if source.get('linked_points') else None,
+                                    stop=bool(source.get('linked_points') and item.get('self_rating') == 5))
             result = json.loads(con.execute('SELECT result FROM training_attempts WHERE id=?', (request_id,)).fetchone()[0])
+            if source.get('linked_points'):
+                return {**result, 'ratings': {p: result['ratings'].get(ref) for p, ref in zip(item['point_ids'], source['local_points'])}}
             return {**result, 'ratings': {item['point_ids'][0]: result['rating']}}
         backend = self.atoms[source['container']]
-        state = backend._load(con)
-        saved = {key: state[key] for key in ('active', 'mode', 'phase')}
-        state['mode'] = 'review'
-        state['active'] = {'id': request_id, 'card_id': source['local_card'], 'point_ids': source['local_points'],
-                           'mode': 'review', 'shown_at': paper['created_at'], 'phase': 'answer', 'snapshot': item['question']}
-        if item.get('self_rating') == 5:
-            state['active']['self_assessment'] = {'submission_id': request_id, 'rating': 5}
-        backend._grade(con, state, {'id': request_id, 'answer': item['answer'], 'elapsed_ms': item.get('elapsed_ms')}, correct, reason)
-        ratings = dict(state['active']['ratings'])
-        details = state['active'].get('assessment_result')
-        stopped = bool(state['active'].get('stop_requested'))
-        state.update(saved)
-        backend._save(con, state)
-        return {'correct': correct, 'reason': reason, 'scheduled': not stopped,
-                **({'assessment_result': details} if details else {}),
-                **({'stop_requested': True, 'stopped': True} if stopped else {}),
-                'ratings': {pid: ratings[local] for pid, local in zip(item['point_ids'], source['local_points'])},
-                'due_at': None if stopped else min(state['points'][p]['due_at'] for p in source['local_points'])}
+        from .atomic_review import apply_review
+        result = apply_review(con, backend, item['question'], source['local_points'], request_id,
+            item['answer'], correct, reason, paper['created_at'], item.get('elapsed_ms'), item.get('self_rating'))
+        result['ratings'] = {pid: result['ratings'][local] for pid, local in zip(item['point_ids'], source['local_points'])}
+        return result

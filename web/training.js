@@ -1,17 +1,18 @@
-import {t, translateMessage} from './i18n.js?v=2de30673708f2e1a';
-import {answerReady, answerEmpty} from './question-input.js?v=2de30673708f2e1a';
-import {createLearningCache} from './learning-cache.js?v=2de30673708f2e1a';
-import {appendCatalogOutline} from './catalog-outline.js?v=2de30673708f2e1a';
-import {helpableContent} from './content-report.js?v=2de30673708f2e1a';
-import {ratingChoices} from './self-assessment.js?v=2de30673708f2e1a';
-import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=2de30673708f2e1a';
+import {t, translateMessage} from './i18n.js?v=7c6cc30f772c71d9';
+import {answerReady, answerEmpty} from './question-input.js?v=7c6cc30f772c71d9';
+import {createLearningCache} from './learning-cache.js?v=7c6cc30f772c71d9';
+import {appendCatalogOutline} from './catalog-outline.js?v=7c6cc30f772c71d9';
+import {helpableContent} from './content-report.js?v=7c6cc30f772c71d9';
+import {ratingChoices} from './self-assessment.js?v=7c6cc30f772c71d9';
+import {pointAssessment} from './point-assessment.js?v=7c6cc30f772c71d9';
+import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=7c6cc30f772c71d9';
 
 const node = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const button = (text, cls, action) => { const n = node('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
 const encode = encodeURIComponent;
 const query = fields => new URLSearchParams(fields).toString();
 const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy', 'training.retire'];
-import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, renderReviewReader} from './learning-ui.js?v=2de30673708f2e1a';
+import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, renderReviewReader} from './learning-ui.js?v=7c6cc30f772c71d9';
 
 export function createTrainingView(bridge) {
   const {root, request, href, formatDate, getAccess} = bridge;
@@ -136,6 +137,7 @@ export function createTrainingView(bridge) {
       if (!data.banks.length) grid.append(node('p', 'portalEmpty', t('training.empty')));
     } else if (parts.length === 2) {
       const bank = await request('training/bank?' + query({bank_id: parts[1], ...(selectedRoot ? {root_id: selectedRoot} : {})})); if (e !== epoch) return;
+      const renderBank = bank => {
       const count = bank.groups.reduce((n, g) => n + g.question_count, 0);
       const completed = bank.groups.reduce((n, g) => n + (g.completed_count || 0), 0);
       const containers = bank.groups.filter(g => g.id !== selectedRoot && !(g.id === bank.id && !g.parent_id)
@@ -145,6 +147,7 @@ export function createTrainingView(bridge) {
           status: g.completed ? 'completed' : g.completed_count ? 'in_progress' : 'not_started', completed_at: g.completed_at,
           result: g.completed ? 'completed' : null,
           dependency_ready: g.dependency_ready, prerequisites: g.prerequisites, prerequisite_details: g.prerequisite_details,
+          point_prerequisites: g.point_prerequisites,
           question_count: g.question_count, progress: g.progress ?? (g.question_count ? g.completed_count / g.question_count * 100 : 0)}));
       const data = {course: {id: bank.id, title: bank.title, root_id: selectedRoot, progress: count ? completed / count * 100 : 0},
         tasks: groupTasks.filter(g => g.status !== 'completed'),
@@ -165,6 +168,26 @@ export function createTrainingView(bridge) {
       bridge.taskTree(pending, data, view);
       bridge.renderHistory(data, historyList, view);
       if (!data.tasks.length) pending.append(node('p', 'portalEmpty', t(data.history.length ? 'portal.all.current.tasks.in.this.course.are.complete.65' : 'training.empty')));
+      };
+      renderBank(bank);
+      const signature = value => JSON.stringify(value.groups.map(g => [g.id, g.completed_count, g.completed_at,
+        g.dependency_ready, g.point_prerequisites?.map(p => [p.id, p.ready, p.reason])]));
+      let lastSignature = signature(bank);
+      const validateBank = async () => {
+        try {
+          if (e !== epoch || document.hidden || writes || root.inert) return;
+          const next = await request('training/bank?' + query({bank_id: parts[1], ...(selectedRoot ? {root_id: selectedRoot} : {})}), {fresh: true});
+          if (e !== epoch || signature(next) === lastSignature) return;
+          const expanded = [...root.querySelectorAll('.portalTask')].filter(c => c.querySelector('.taskToggle[aria-expanded="true"]')).map(c => c.dataset.taskId);
+          lastSignature = signature(next); renderBank(next);
+          for (const card of root.querySelectorAll('.portalTask')) if (expanded.includes(card.dataset.taskId)) {
+            card.querySelector('.taskToggle')?.setAttribute('aria-expanded', 'true');
+            const details = card.querySelector('.taskDetails'); if (details) details.hidden = false;
+          }
+        } catch (failure) { if (e === epoch) error(root, failure); }
+        finally { if (e === epoch) validationTimer = setTimeout(validateBank, 5000); }
+      };
+      validationTimer = setTimeout(validateBank, 5000);
     } else if (parts.length === 3) {
       const nextGroup = await request('training/group?' + query({bank_id: parts[1], group_id: parts[2], reader: 1}));
       if (e !== epoch) return;
@@ -318,7 +341,7 @@ export function createTrainingView(bridge) {
       showAnswer: Boolean(state.answer_display && state.phase === 'done'), feedback, feedbackClass: 'trainingVerdict',
       referenceSource: state, decorate: (body, kind) => {
         helpableContent(body, reportContext, `${kind}:${state.question_id}`, state.version);
-        if (kind === 'question' && state.can_learn) {
+        if (kind === 'question' && state.can_learn && !state.linked_points) {
           const actions = node('div', 'trainingNotebookActions'); actions.dataset.helpAction = 'notebook';
           const add = button('', 'textButton trainingNotebookButton', async () => {
             add.disabled = true;
@@ -345,6 +368,10 @@ export function createTrainingView(bridge) {
         }
         return body;
       }});
+    if (result?.assessment_result) {
+      const assessed = pointAssessment(result.assessment_result, state.question.interaction);
+      if (assessed) main.append(assessed);
+    }
     reader.refs.footerPosition.textContent = t('reader.modulePosition', {current: index + 1, total: group.questions.length});
     reader.refs.saveStatus.textContent = state.preview ? '' : t(state.submission_status === 'pending' || state.submission_status === 'running' ? '答案已提交，正在判题' : '学习进度已保存');
     let primary; const extra = [];
@@ -663,7 +690,13 @@ export function createTrainingView(bridge) {
           renderSidebar();
         }
       } catch (failure) {
-        if (e === epoch && main) error(main, failure);
+        if (e === epoch && main) {
+          if (failure.code === 'prerequisites_not_ready' && current) {
+            current = {...current, dependency_ready: false, can_submit: false, can_learn: false};
+            renderQuestion();
+          }
+          error(main, failure);
+        }
       } finally { if (e === epoch) scheduleValidation(); }
     }, 5000);
   }

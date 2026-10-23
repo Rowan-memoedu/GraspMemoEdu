@@ -53,6 +53,9 @@ def validate(bank):
                 'Duplicate or invalid group')
         ids.add(group['id'])
         require(text(group.get('title'), 200), 'Missing group title')
+        if 'unlock_policy' in group:
+            from .linked_points import validate_unlock
+            validate_unlock(group['unlock_policy'])
         intros = group.get('introductions', [])
         require(isinstance(intros, list) and len(intros) <= 200, 'Invalid group Introductions')
         for intro in intros:
@@ -77,6 +80,17 @@ def validate(bank):
                     'Missing or oversized rendered question or explanation')
             require(text(q.get('title', q['id']), 200), 'Invalid question title')
             validate_interaction(q.get('interaction'), q['question'])
+            if 'point_ids' in q:
+                from .linked_points import validate_references
+                from .point_assessment import validate_assessment
+                validate_references(q['point_ids'])
+                validate_assessment(q)
+                require(not (external or 'academy' in q), 'External graders cannot bind atomic points')
+                if 'unlock_policy' in group:
+                    require(set(q['point_ids']) <= set(group['unlock_policy']['point_ids']),
+                            'Assessed points must be included in the unlock prerequisites')
+            elif 'assessment' in q:
+                raise ValueError('Assessment requires linked points')
             if 'academy' in q:
                 a = q['academy']
                 require(isinstance(a, dict) and set(a) == {'task_key', 'kind', 'version'}
@@ -143,7 +157,16 @@ class TrainingCatalog:
         return result
 
     def validate_ownership(self, catalog, subjects):
-        """A bank is a native bank, never a second UI over course Topics."""
+        """A bank owns its questions and may reference existing atomic points."""
+        from .linked_points import resolve
+        for bank in self.banks.values():
+            for group in bank['groups']:
+                refs = set(group.get('unlock_policy', {}).get('point_ids', []))
+                refs.update(p for q in group.get('questions', []) for p in q.get('point_ids', []))
+                for ref in refs:
+                    topic, _ = resolve(catalog, ref)
+                    if topic.get('subject_id') != bank['subject_id']:
+                        raise ValueError('Linked point and bank subjects differ')
         for tid, target in self.topic_redirects.items():
             course = catalog.courses.get(target['bank_id'])
             if (not course or course.get('placement') != 'question_bank'
@@ -215,6 +238,19 @@ def validate_saved(con, catalog):
 
 def install(compiled, data_dir):
     bank = validate(json.loads(Path(compiled).read_text(encoding='utf-8-sig')))
+    if any(g.get('unlock_policy') or any(q.get('point_ids') for q in g.get('questions', [])) for g in bank['groups']):
+        from .config import Settings
+        from .subjects import Subjects
+        from .course_graph import GraphStore
+        settings = Settings.load(data_dir)
+        catalog = Catalog.load(settings)
+        subjects = Subjects(settings, catalog)
+        proposed = TrainingCatalog(data_dir)
+        if bank['id'] in proposed.banks:
+            raise ValueError('Training bank identity already exists')
+        proposed.banks[bank['id']] = bank
+        proposed.validate_ownership(catalog, subjects)
+        GraphStore(settings, catalog, subjects, proposed).all()
     root = Path(data_dir) / DIRECTORY
     root.mkdir(parents=True, exist_ok=True)
     if root.is_symlink():

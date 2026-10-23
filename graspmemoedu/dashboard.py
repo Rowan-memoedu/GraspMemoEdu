@@ -351,7 +351,42 @@ class DashboardStore:
         except (ValueError, TypeError, UnicodeDecodeError):
             raise DomainError('invalid_cursor', '历史分页位置无效，请重新加载。', 422)
 
-    def dashboard(self, access, course_id=None, cursor=None, limit=25, subject_id=None, root_id=None):
+    def _course_groups(self, con, access, course_id):
+        """Course membership references the bank owner; it never copies questions."""
+        if not self.subjects:
+            return []
+        from .course_graph import GraphStore
+        from .dependency_nodes import group_key
+        from .training_content import permission_id
+        training = self.dependency_policy.training
+        graph = GraphStore(self.subjects.settings, self.catalog, self.subjects, training).load(course_id)
+        allowed = {t['id'] for t in access['topics']}
+        tables = self.dependency_policy.tables(con)
+        result = []
+        current = self.atomic_clock().isoformat() if self.atomic_clock else now()
+        for node in (graph or {}).get('nodes', []):
+            if 'group_id' not in node or not node.get('member', True) or permission_id(node['bank_id']) not in allowed:
+                continue
+            bank, group = self.dependency_policy.group_content(group_key(node['bank_id'], node['group_id']))
+            if not group or not group.get('questions'):
+                continue
+            first = {r['question']: r['completed_at'] for r in con.execute('''SELECT question,MIN(completed_at) completed_at
+                FROM training_attempts WHERE learner=? AND bank=? AND version=? AND group_id=? AND phase='done'
+                GROUP BY question''', (access['learner_id'], bank['id'], bank['version'], group['id']))} if 'training_attempts' in tables else {}
+            dates = [first[q['id']] for q in group['questions'] if q['id'] in first]
+            complete = len(dates) == len(group['questions'])
+            key = group_key(bank['id'], group['id'])
+            result.append({'id': key, 'topic_id': key, 'type': 'Lesson', 'course_id': course_id,
+                'bank_id': bank['id'], 'group_id': group['id'], 'title': group['title'],
+                'href': f"/subjects/{quote(bank['subject_id'])}/banks/{quote(bank['id'])}/{quote(group['id'])}",
+                'question_count': len(group['questions']), 'progress': 100 * len(dates) / len(group['questions']),
+                'status': 'completed' if complete else 'in_progress' if dates else 'not_started',
+                'completed_at': max(dates) if complete else None, 'result': 'completed' if complete else None,
+                **self.dependency_policy.group_status(con, access, bank['id'], group['id'], current)})
+        return result
+
+    def dashboard(self, access, course_id=None, cursor=None, limit=25, subject_id=None, root_id=None,
+                  *, group_runtime=None):
         if subject_id is not None and self.subjects:
             self.subjects.authorize_subject(access, subject_id)
         course_id = course_id or self._selection(access, subject_id)
@@ -379,6 +414,11 @@ class DashboardStore:
                     parent_snapshots[parent] = self._snapshot(con, access['learner_id'], parent)
             linked_parents = {parent: self.dependency_policy.describe(con, access, parent)
                               for tid in snapshots for parent in self.dependency_policy.required_parents(tid, dependencies)}
+            group_tasks = self._course_groups(con, access, course_id) if not root_id else []
+        if group_runtime is not None and not root_id:
+            with closing(group_runtime.connect()) as con:
+                con.execute('BEGIN')
+                group_tasks = self._course_groups(con, access, course_id)
         def details(topic_id):
             return [{**linked_parents[parent],
                      'progress': parent_snapshots.get(parent, {}).get('progress'),
@@ -404,7 +444,9 @@ class DashboardStore:
                     'root_id': root_id,
                     'progress': progress, 'start_date': min(started) if started else None,
                     'end_date': max(finished) if all_complete else None, 'estimated_completion': None}
-        tasks, history, topics, units = review_tasks, review_history, [], []
+        tasks = [*review_tasks, *[t for t in group_tasks if t['status'] != 'completed']]
+        history = [*review_history, *[t for t in group_tasks if t['status'] == 'completed']]
+        topics, units = [], []
         for unit in course['units']:
             members = [topic_id for topic_id in unit['topic_ids'] if topic_id in snapshots]
             if not members:

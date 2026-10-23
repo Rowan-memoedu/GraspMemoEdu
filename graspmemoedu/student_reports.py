@@ -138,6 +138,10 @@ class StudentReport:
             for record in atomic_state(state).get('history', []):
                 if record.get('correct') is None:
                     continue
+                if (record.get('snapshot') or {}).get('training_source'):
+                    # Cross-Topic point updates belong to one bank attempt.
+                    # The canonical bank row below owns counts and elapsed time.
+                    continue
                 atomic_steps.add((tid, record['id']))
                 submission = by_step.get((tid, record['id']))
                 paper = self.paper_items.get(record['id'], {})

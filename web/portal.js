@@ -1,23 +1,23 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=2de30673708f2e1a";
-import { createReviewView } from "./review.js?v=2de30673708f2e1a";
-import { renderCourseGraph } from "./course-graph.js?v=2de30673708f2e1a";
-import {questionInput, choiceTypeField} from './question-input.js?v=2de30673708f2e1a';
-import {enhanceTopicContent} from './topic-content.js?v=2de30673708f2e1a';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=2de30673708f2e1a';
-import {createCatalogPicker} from './catalog-picker.js?v=2de30673708f2e1a';
-import {appendCatalogOutline} from './catalog-outline.js?v=2de30673708f2e1a';
-import {createAtomicView} from './atomic.js?v=2de30673708f2e1a';
-import {sourceAttributions} from './memory-chunk.js?v=2de30673708f2e1a';
-import {createTrainingView} from './training.js?v=2de30673708f2e1a';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=2de30673708f2e1a";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=7c6cc30f772c71d9";
+import { createReviewView } from "./review.js?v=7c6cc30f772c71d9";
+import { renderCourseGraph } from "./course-graph.js?v=7c6cc30f772c71d9";
+import {questionInput, choiceTypeField} from './question-input.js?v=7c6cc30f772c71d9';
+import {enhanceTopicContent} from './topic-content.js?v=7c6cc30f772c71d9';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=7c6cc30f772c71d9';
+import {createCatalogPicker} from './catalog-picker.js?v=7c6cc30f772c71d9';
+import {appendCatalogOutline} from './catalog-outline.js?v=7c6cc30f772c71d9';
+import {createAtomicView} from './atomic.js?v=7c6cc30f772c71d9';
+import {sourceAttributions} from './memory-chunk.js?v=7c6cc30f772c71d9';
+import {createTrainingView} from './training.js?v=7c6cc30f772c71d9';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=7c6cc30f772c71d9";
 
-import {createPaperView} from './review-papers.js?v=2de30673708f2e1a';
-import {createContextLibraryView} from './context-library.js?v=2de30673708f2e1a';
+import {createPaperView} from './review-papers.js?v=7c6cc30f772c71d9';
+import {createContextLibraryView} from './context-library.js?v=7c6cc30f772c71d9';
 
-import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=2de30673708f2e1a';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=2de30673708f2e1a';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=2de30673708f2e1a';
-import {createStudentDashboard} from './student-dashboard.js?v=2de30673708f2e1a';
+import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=7c6cc30f772c71d9';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=7c6cc30f772c71d9';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=7c6cc30f772c71d9';
+import {createStudentDashboard} from './student-dashboard.js?v=7c6cc30f772c71d9';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -37,7 +37,7 @@ const roundButton = (text, action) => control(text, "portalStart", action);
 export function initPortal(bridge) {
   let chatModule, attachChatEditor, renderChatMarkdown;
   async function loadChat() {
-    const module = await (chatModule ||= import('./vendor/chat/chat.js?v=2de30673708f2e1a').catch(error => { chatModule = null; throw error; }));
+    const module = await (chatModule ||= import('./vendor/chat/chat.js?v=7c6cc30f772c71d9').catch(error => { chatModule = null; throw error; }));
     ({attachChatEditor, renderChatMarkdown} = module);
     module.configureChatImages(ident => bridge.request('help-images?image_id=' + encode(ident)));
   }
@@ -661,6 +661,8 @@ export function initPortal(bridge) {
     for (const item of root.querySelectorAll(".taskToggle")) item.setAttribute("aria-expanded", "false");
   }
   function incompleteTask(task, data, view = {}) {
+    if (task.bank_id) view = {...view, training: true, label: t('training.groups'),
+      startLabel: t('training.start'), target: item => item.href};
     const card = node("article", task.dependency_ready === false || task.locked || task.status === 'paused' ? "portalTask taskLocked" : "portalTask taskUnlocked"); card.dataset.taskId = task.id;
     card.dataset.dependencyReady = String(task.dependency_ready !== false);
     const toggle = control("", "taskToggle", () => { const was = expandedTask === task.id; collapseTasks(); if (!was) { expandedTask = task.id; details.hidden = false; toggle.setAttribute("aria-expanded", "true"); } });
@@ -690,6 +692,19 @@ export function initPortal(bridge) {
       }
       details.append(requirements);
     }
+    if (task.point_prerequisites?.length) {
+      const points = node('div', 'taskPrerequisites');
+      points.append(node('h3', '', t('training.unlockPoints')));
+      for (const point of task.point_prerequisites) {
+        const row = node('div', 'prerequisiteRow');
+        row.append(node('span', point.ready ? 'prerequisiteCheck complete' : 'prerequisiteCheck', point.ready ? '✓' : '·'));
+        if (point.text) row.append(link(point.text, `/topic/${encode(point.topic_id)}`));
+        else row.append(node('span', '', t('training.pointUnavailable')));
+        row.append(node('span', 'prerequisiteMetrics', t(`training.point.${point.reason || 'ready'}`)));
+        points.append(row);
+      }
+      details.append(points);
+    }
     if (!task.maintenance) {
       const actions = node("div", "taskStartRow");
       const explicit = task.start_href || task.start_url;
@@ -718,9 +733,15 @@ export function initPortal(bridge) {
     card.append(toggle, details); return card;
   }
   function historyCard(task, view = {}) {
+    if (task.bank_id) view = {...view, training: true, label: t('training.groups'),
+      startLabel: t('training.start'), target: item => item.href};
     const card = node("article", "portalTask taskCompleted"); card.dataset.taskId = task.id;
     const href = view.target ? view.target(task) : task.topic_kind === 'introduction' ? `/topic/${encode(task.topic_id)}` : `/learn?taskId=${encode(task.id)}`;
     const summary = control("", "taskToggle", () => navigate(href)); summary.append(taskSummary(task, true, view)); card.append(summary);
+    if (task.point_prerequisites?.length && task.dependency_ready === false) {
+      card.classList.add('taskLocked');
+      summary.append(node('span', 'taskStatusNote', t('training.relocked')));
+    }
     if (bridge.getAccess()?.role === "guest") {
       const actions = node("div", "taskStartRow completedTaskActions");
       actions.append(roundButton(t("portal.review.54"), () => navigate(href)));

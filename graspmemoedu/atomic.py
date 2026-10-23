@@ -140,6 +140,11 @@ class AtomicLearningService(LearningService):
         learned = bool(state['completed_at'])
         history = []
         for record in state['history']:
+            # The bank owns this presentation and applies its own visibility rules.
+            # Keep the internal event for FSRS evidence, without copying bank content
+            # into a Topic that may have different permissions.
+            if (record.get('snapshot') or {}).get('training_source'):
+                continue
             mastered = (all(state['points'][p]['mastered'] for p in record['point_ids'])
                         if record['mode'] == 'learn' else record['correct'])
             item = {'id': record['id'], 'point_ids': record['point_ids'], 'mode': record['mode'],

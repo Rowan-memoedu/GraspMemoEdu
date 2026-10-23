@@ -29,12 +29,15 @@ const html = (value, context) => {
 const bank = {schema: 1, id: source.id, subject_id: source.subject_id, title: source.title,
   description: source.description || '', source_sha256: crypto.createHash('sha256').update(raw).digest('hex'),
   groups: source.groups.map(g => ({id: g.id, title: g.title, parent_id: g.parent_id || null,
+    ...(g.unlock_policy ? {unlock_policy: structuredClone(g.unlock_policy)} : {}),
     ...(g.introductions ? {introductions: g.introductions.map(i => ({...i, html: html(i.text, `${g.id}/${i.id}/introduction`)})),
       content_order: structuredClone(g.content_order)} : {}),
     questions: (g.questions || []).map(q => {
       const compiled = {id: q.id, title: q.title || q.id, question: q.question, html: html(q.question, `${g.id}/${q.id}/question`),
         explanation_html: html(q.explanation, `${g.id}/${q.id}/explanation`), reference_answer: q.reference_answer || q.explanation,
         answer_type: q.answer_type || 'text', constraints: q.constraints || '按题意作答。'};
+      for (const key of ['point_ids', 'assessment'])
+        if (q[key] !== undefined) compiled[key] = structuredClone(q[key]);
       if (q.interaction) {
         compiled.interaction = structuredClone(q.interaction);
         for (const key of ['options', 'statements', 'left', 'right'])

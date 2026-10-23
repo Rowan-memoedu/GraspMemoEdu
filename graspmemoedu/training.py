@@ -1,5 +1,6 @@
 """Free-order single-question training over the shared judge and FSRS adapter."""
 from contextlib import closing, contextmanager
+from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -24,10 +25,11 @@ def packed(value):
 class TrainingService:
     submission_table = 'training_submissions'
 
-    def __init__(self, catalog, data_dir, learner_id, judge=None, *, runtime=None, clock=None, dependencies=None, access=None):
+    def __init__(self, catalog, data_dir, learner_id, judge=None, *, runtime=None, clock=None, dependencies=None, access=None, atomic_for=None):
         self.catalog, self.learner_id, self.judge = catalog, learner_id, judge
         self.db_path, self.runtime = Path(data_dir) / 'learning.sqlite3', runtime
         self.dependencies, self.access = dependencies, access
+        self.atomic_for, self.atoms = atomic_for, {}
         if runtime is None and administrator(data_dir, learner_id):
             raise DomainError('administrator_memory_required', '管理员学习必须使用临时会话。', 409)
         self.clock = clock or (lambda: datetime.now(timezone.utc))
@@ -112,7 +114,9 @@ class TrainingService:
             (self.learner_id, bank, question, version)).fetchone() is not None
 
     def open(self, bank_id, group_id, question_id, request_id):
-        bank, _, question = self.catalog.question(bank_id, group_id, question_id)
+        bank, group, question = self.catalog.question(bank_id, group_id, question_id)
+        self.require_group(bank_id, group_id)
+        self._bind_points(question)
         with self.transaction() as con:
             previous = con.execute('SELECT * FROM training_attempts WHERE id=?', (request_id,)).fetchone()
             if previous:
@@ -129,6 +133,15 @@ class TrainingService:
                     'review' if enrolled else
                     'initial' if not memory or not memory['mastered'] else
                     'review' if utc_time(memory['due_at']) <= now else 'practice')
+            if question.get('point_ids'):
+                from .linked_points import require_available, pinned
+                rows = self._point_rows(con, question)
+                require_available(con, rows, self.learner_id, now.isoformat())
+                prior = con.execute("SELECT 1 FROM training_attempts WHERE learner=? AND bank=? AND question=? AND version=? AND phase='done'",
+                                    (self.learner_id, bank_id, question_id, bank['version'])).fetchone()
+                due = all(r['memory'].get('due_at') and utc_time(r['memory']['due_at']) <= now for r in rows)
+                mode = 'review' if due or group.get('unlock_policy') and not prior else 'practice'
+                question['_linked_points'] = pinned(rows)
             question = present_choice(question, request_id)
             con.execute('''INSERT INTO training_attempts
                 (id,learner,bank,group_id,question,version,snapshot,mode,memory_revision,phase,created_at)
@@ -137,10 +150,80 @@ class TrainingService:
                  mode, memory['revision'] if memory else 0, now.isoformat()))
         return request_id
 
+    def _point_rows(self, con, question):
+        from .linked_points import snapshot
+        if self.dependencies is None:
+            raise DomainError('linked_points_unavailable', '关联知识目录不可用。', 409)
+        return snapshot(con, self.dependencies.catalog, self.learner_id, question['point_ids'], self.access)
+
+    def _bind_points(self, question):
+        """Initialize service adapters before entering the grading transaction."""
+        from .linked_points import split_reference
+        from .topic_structure import atomic_backend
+        for ref in question.get('point_ids', []):
+            tid, _ = split_reference(ref)
+            if self.access is not None and tid not in {t['id'] for t in self.access['topics']}:
+                raise DomainError('feature_forbidden', '当前账号无权访问关联知识。', 403)
+            if tid not in self.atoms:
+                if self.atomic_for is None:
+                    raise DomainError('linked_points_unavailable', '关联知识服务不可用。', 409)
+                self.atoms[tid] = atomic_backend(self.atomic_for(tid))
+
+    def _complete_linked(self, con, row, question, correct, reason, elapsed_ms, stop=False, self_rating=None):
+        from .linked_points import unchanged, require_available, split_reference
+        from .atomic_review import apply_review
+        from .point_assessment import assess_points
+        current = utc_time(self.clock()).isoformat()
+        rows = self._point_rows(con, question)
+        valid = unchanged(rows, question['_linked_points'])
+        eligible = valid and (row['mode'] != 'practice' or stop)
+        submission = con.execute('SELECT answer FROM training_submissions WHERE id=?', (row['submission_id'],)).fetchone()
+        answer = submission['answer'] if submission else ''
+        ratings, dates = {}, []
+        if eligible:
+            require_available(con, rows, self.learner_id, current, question.get('_review_paper'))
+            for tid in dict.fromkeys(r['topic_id'] for r in rows):
+                own = [r for r in rows if r['topic_id'] == tid]
+                projected = deepcopy(question)
+                projected['id'] = f"bank:{row['bank']}:{question['id']}"
+                projected['training_source'] = {'bank_id': row['bank'], 'group_id': row['group_id'],
+                    'question_id': row['question'], 'version': row['version']}
+                projected['point_ids'] = [r['local_id'] for r in own]
+                if 'assessment' in projected:
+                    mapping = {key: [split_reference(p)[1] for p in values if split_reference(p)[0] == tid]
+                               for key, values in question['assessment']['item_points'].items()}
+                    mapping = {key: values for key, values in mapping.items() if values}
+                    if mapping:
+                        projected['assessment']['item_points'] = mapping
+                    else:
+                        projected.pop('assessment')
+                result = apply_review(con, self.atoms[tid], projected, projected['point_ids'], row['id'],
+                    answer, correct, reason, row['created_at'], elapsed_ms, 5 if stop else self_rating)
+                ratings.update({tid + '/' + p: rating for p, rating in result['ratings'].items()})
+                if result['due_at']:
+                    dates.append(result['due_at'])
+        _, details = assess_points(question, answer, correct, self_assessed=stop or self_rating is not None)
+        if details:
+            labels = {r['reference']: r['text'] for r in rows}
+            for point in details['points']:
+                point['text'] = labels[point['id']]
+        result = {'correct': correct, 'reason': reason, 'rating': None, 'ratings': ratings, 'self_rating': self_rating,
+            'scheduled': eligible and not stop, 'practice_only': not eligible,
+            'due_at': min(dates, default=None), 'stopped': eligible and stop,
+            'stop_requested': stop, 'assessment_result': details,
+            'state_changed': not valid}
+        con.execute('INSERT INTO training_ratings VALUES (?,?,?,?,?,?,?,?)',
+            (row['id'], self.learner_id, row['bank'], row['question'], row['version'], None, current, None))
+        con.execute("UPDATE training_attempts SET phase='done',completed_at=?,result=? WHERE id=?",
+                    (current, packed(result), row['id']))
+        return result
+
     def add_to_notebook(self, attempt_id):
         """Enroll a seen question as due, without inventing an answer or FSRS card."""
         with self.transaction() as con:
             row = self._attempt(con, attempt_id)
+            if json.loads(row['snapshot']).get('point_ids'):
+                raise DomainError('linked_points_scheduled', '此题按关联记忆点安排复习。', 409)
             if self._stopped(con, row['bank'], row['question'], row['version']):
                 raise DomainError('training_reviews_stopped', '此题已停止后续推送。', 409)
             if self._memory(con, row['bank'], row['question'], row['version']) is None:
@@ -177,6 +260,9 @@ class TrainingService:
             result = json.loads(row['result']) if row['result'] else None
             memory = self._memory(con, row['bank'], row['question'], row['version'])
             stopped = self._stopped(con, row['bank'], row['question'], row['version'])
+            linked = self._point_rows(con, question) if question.get('point_ids') else []
+            if linked:
+                stopped = all(r['memory'].get('stopped_at') for r in linked)
             external = con.execute('SELECT body FROM training_external_rounds WHERE attempt=?', (attempt_id,)).fetchone()
             run = json.loads(external['body']) if external else None
         revealed = row['phase'] in ('shown', 'done')
@@ -196,10 +282,12 @@ class TrainingService:
                 'answer': submission['answer'] if submission else '',
                 'answer_display': display_answer(question, submission['answer']) if submission else '',
                 'error': submission['reason'] if submission and submission['status'] == 'error' else None,
-                'result': result, 'stopped': stopped, 'can_review_early': memory is not None or stopped,
+                'result': result, 'stopped': stopped, 'linked_points': bool(question.get('point_ids')),
+                'can_review_early': memory is not None or stopped or bool(linked and all(r['learned'] for r in linked)),
                 'in_error_notebook': memory is not None and not stopped,
                 'awaiting_first_learning': bool(memory and memory['card_json'] is None and not stopped),
-                'due_at': memory['due_at'] if memory and not stopped else None}
+                'due_at': (min((r['memory']['due_at'] for r in linked if r['memory'].get('due_at')), default=None)
+                           if linked and not stopped else memory['due_at'] if memory and not stopped else None)}
 
     def _hyperskill_state(self, question, run):
         if not question.get('hyperskill'):
@@ -217,6 +305,10 @@ class TrainingService:
             if row['phase'] != 'done':
                 require_unreserved(con, self.learner_id, 'training', row['bank'], row['version'], row['question'], now=utc_time(self.clock()).isoformat())
             question = json.loads(row['snapshot'])
+            if question.get('point_ids') and row['phase'] != 'done':
+                self.require_group(row['bank'], row['group_id'], con=con)
+                from .linked_points import require_available
+                require_available(con, self._point_rows(con, question), self.learner_id, utc_time(self.clock()).isoformat())
             if question.get('hyperskill'):
                 raise DomainError('hyperskill_check_required', '请连接 Hyperskill 后提交此题。', 409)
             if question.get('academy'):
@@ -253,6 +345,10 @@ class TrainingService:
 
     def _complete(self, con, row, *, correct=None, reason='', rating=None, elapsed_ms=None, stop=False,
                   self_rating=True, completed_at=None, enroll=False, first_try_correct=False):
+        question = json.loads(row['snapshot'])
+        if question.get('point_ids'):
+            return self._complete_linked(con, row, question, correct if rating is None else rating > 1,
+                                         reason, elapsed_ms, stop, rating)
         memory = self._memory(con, row['bank'], row['question'], row['version'])
         revision = memory['revision'] if memory else 0
         now = utc_time(completed_at or self.clock())
@@ -313,6 +409,13 @@ class TrainingService:
             return bool(row and instant_question(json.loads(self._attempt(con, row['attempt'])['snapshot'])))
 
     def process_submission(self, submission_id):
+        with closing(self._connect()) as con:
+            pending = con.execute("SELECT attempt FROM training_submissions WHERE id=? AND learner=? AND status='pending'",
+                                  (submission_id, self.learner_id)).fetchone()
+            if not pending:
+                return
+            question = json.loads(self._attempt(con, pending['attempt'])['snapshot'])
+        self._bind_points(question)
         with self.transaction() as con:
             submission = con.execute("SELECT * FROM training_submissions WHERE id=? AND learner=? AND status='pending'",
                                      (submission_id, self.learner_id)).fetchone()
@@ -353,6 +456,8 @@ class TrainingService:
                 con.execute("UPDATE training_attempts SET phase='shown' WHERE id=?", (attempt_id,))
 
     def rate(self, attempt_id, rating, elapsed_ms=None):
+        with closing(self._connect()) as con:
+            self._bind_points(json.loads(self._attempt(con, attempt_id)['snapshot']))
         with self.transaction() as con:
             row = self._attempt(con, attempt_id)
             if row['phase'] == 'done':
@@ -365,6 +470,8 @@ class TrainingService:
             self._complete(con, row, rating=rating, elapsed_ms=elapsed_ms)
 
     def stop_reviews(self, attempt_id):
+        with closing(self._connect()) as con:
+            self._bind_points(json.loads(self._attempt(con, attempt_id)['snapshot']))
         with self.transaction() as con:
             row = self._attempt(con, attempt_id)
             if row['phase'] == 'done':
@@ -470,6 +577,7 @@ class TrainingService:
                     from .training_presentation import present_book_question
                     question = present_book_question(question, media)
                 value = {'attempt_id': ident, 'preview': True, 'bank_id': bank_id, 'group_id': group_id,
+                         'linked_points': bool(question.get('point_ids')),
                          'question_id': qid, 'version': bank['version'], 'phase': 'answer',
                          'question': {'id': qid, 'title': question.get('title', qid), 'html': question['html'],
                                       'interaction': public_interaction(question)},

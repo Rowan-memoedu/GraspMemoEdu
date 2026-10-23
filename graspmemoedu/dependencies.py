@@ -51,8 +51,9 @@ class DependencyPolicy:
     def missing_count(self, con, access, topic_id, dependencies=None, current_time=None):
         if topic_id in self.catalog.topics and is_introduction(self.catalog.topic(topic_id)):
             return 0
+        point_gate = self.group_point_status(con, access, topic_id, current_time)
         if access.get('is_admin'):
-            return 0
+            return point_gate['missing_point_count']
         dependencies = dependencies if dependencies is not None else self.dependencies()
         # Scope belongs to the requested root. Filtering the cached graph would
         # also grant this exception to ordinary downstream Topics.
@@ -71,7 +72,8 @@ class DependencyPolicy:
                 if node in visiting:
                     return False
                 visiting.add(node)
-                valid = self.group_completed(con, access, node, current, tables)
+                valid = (self.group_completed(con, access, node, current, tables)
+                         and self.group_point_status(con, access, node, current.isoformat())['unlocked'])
                 valid = valid and all(healthy(parent) for parent in dependencies.get(node, []))
                 visiting.remove(node)
                 checked[node] = bool(valid)
@@ -108,7 +110,18 @@ class DependencyPolicy:
             checked[node] = bool(valid)
             return bool(valid)
 
-        return sum(not healthy(parent) for parent in set(dependencies.get(topic_id, [])))
+        return point_gate['missing_point_count'] + sum(not healthy(parent) for parent in set(dependencies.get(topic_id, [])))
+
+    def group_point_status(self, con, access, node_id, current_time=None):
+        from .linked_points import snapshot, eligibility
+        bank, group = self.group_content(node_id)
+        if not group:
+            return {'unlocked': True, 'points': [], 'missing_point_count': 0}
+        policy = group.get('unlock_policy')
+        refs = policy['point_ids'] if policy else list(dict.fromkeys(
+            p for q in group.get('questions', []) for p in q.get('point_ids', [])))
+        rows = snapshot(con, self.catalog, access['learner_id'], refs, access)
+        return eligibility(rows, current_time or now(), policy)
 
     def group_content(self, node_id):
         parts = group_parts(node_id)
@@ -166,7 +179,10 @@ class DependencyPolicy:
         missing = self.missing_count(con, access, node_id, dependencies, current_time)
         details = [item for parent in dependencies.get(node_id, [])
                    if (item := self.describe(con, access, parent)) is not None]
+        point_status = self.group_point_status(con, access, node_id, current_time)
         return {'dependency_ready': missing == 0, 'missing_prerequisite_count': missing,
+                'unlocked': missing == 0, 'point_prerequisites': point_status['points'],
+                'missing_point_count': point_status['missing_point_count'],
                 'prerequisites': details, 'prerequisite_details': details}
 
     def is_ready(self, access, topic_id):

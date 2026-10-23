@@ -2,6 +2,8 @@
 
 ## Topic 与题组共用依赖图
 
+课程图谱可以将同学科题库的题组列为成员，学习页直接引用该题组。题组的记忆点前置也投影为来源 Topic 到题组的关系，并参与跨图环路检查；具体解锁仍按点判断，不要求整个来源 Topic 完成。详见 [目标隐性练习](goal-exercises.md)。
+
 协议 3 在同一图谱中支持两种节点：Topic 沿用 `topic_id`；题组使用 `bank_id` 和 `group_id`，边端点写为 `group:<bank_id>:<group_id>`。两者都需要 `title` 和布尔 `member`。题组使用题库原始稳定 ID，不复制成 Topic，也没有另一套依赖存储。
 
 例如，CS Topic 学完后才开放对应题组：

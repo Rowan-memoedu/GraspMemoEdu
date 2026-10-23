@@ -163,9 +163,11 @@ class GraphStore:
         for node in graph['nodes']:
             if 'group_id' in node:
                 bank = self.training.banks.get(node['bank_id'])
-                if node.get('member', True) and node['bank_id'] != course_id:
+                if node.get('member', True) and node['bank_id'] != course_id and course_id not in self.catalog.courses:
                     raise ValueError('Graph group belongs to a different bank')
                 if bank is not None:
+                    if bank['subject_id'] != graph['subject_id']:
+                        raise ValueError('Graph group belongs to a different subject')
                     group = next((g for g in bank['groups'] if g['id'] == node['group_id']), None)
                     if group is not None and not group.get('questions'):
                         raise ValueError('Only question groups belong in the knowledge graph')
@@ -204,6 +206,16 @@ class GraphStore:
         edges = [{'from': parent, 'to': node['id'], 'type': 'prerequisite'}
                  for course in self.catalog.courses.values() if course['id'] not in graph_courses
                  for node in course['topics'] for parent in node['prerequisites']]
+        # Point prerequisites participate in cycle detection without imposing a
+        # whole-Topic completion gate on the group's finer-grained unlock policy.
+        from .linked_points import split_reference
+        from .dependency_nodes import group_key
+        for bank in self.training.banks.values():
+            for group in bank['groups']:
+                refs = set(group.get('unlock_policy', {}).get('point_ids', []))
+                refs.update(p for q in group.get('questions', []) for p in q.get('point_ids', []))
+                edges.extend({'from': tid, 'to': group_key(bank['id'], group['id']), 'type': 'prerequisite'}
+                             for tid in {split_reference(p)[0] for p in refs})
         self.validate_combined([*graphs, {'schema_version': 3, 'nodes': [], 'edges': edges}])
 
     @staticmethod
@@ -264,6 +276,7 @@ class GraphStore:
         if graph['course_id'] in self.training.banks and permission_id(graph['course_id']) not in allowed:
             return {key: graph[key] for key in ('schema_version', 'course_id', 'subject_id', 'title')} | {'nodes': [], 'edges': []}
         inherit = access['role'] == 'account' and access.get('permission_defaults', {}).get('topics', False)
+        projected_edges = list(graph['edges'])
         # Pending Topics are visible only to accounts that inherit future Topics.
         nodes = [{'topic_id': node['topic_id'], 'title': node['title'],
                   **({'member': node['member']} if 'member' in node else {}),
@@ -281,6 +294,21 @@ class GraphStore:
             group = next((g for g in bank['groups'] if g['id'] == node['group_id']), None)
             nodes.append({key: node[key] for key in ('bank_id', 'group_id', 'title', 'member')} | {
                 'content_status': 'available' if group and group.get('questions') else 'not_imported'})
+            if group and graph['schema_version'] == 3:
+                from .linked_points import split_reference
+                refs = set(group.get('unlock_policy', {}).get('point_ids', []))
+                refs.update(p for q in group.get('questions', []) for p in q.get('point_ids', []))
+                nodes[-1]['point_prerequisite_count'] = len(refs)
+                for tid in sorted({split_reference(p)[0] for p in refs}):
+                    if tid not in allowed or tid not in self.catalog.topics:
+                        continue
+                    if not self.subjects.test_materials.topic_visible(tid, access):
+                        continue
+                    if not any(n.get('topic_id') == tid for n in nodes):
+                        nodes.append({'topic_id': tid, 'title': self.catalog.topic(tid)['title'],
+                                      'member': False, 'content_status': 'available'})
+                    projected_edges.append({'from': tid, 'to': node_key(node), 'type': 'prerequisite',
+                                            'scope': 'memory_points'})
         if graph['schema_version'] == 3:
             for node in nodes:
                 node['id'] = node_key(node)
@@ -292,10 +320,14 @@ class GraphStore:
                           else f"topic/{quote(node['topic_id'])}")
                 node['href'] = f'/subjects/{quote(subject)}/{target}'
         visible = {node_key(node) for node in nodes}
+        edges = {}
+        for edge in projected_edges:
+            if edge['from'] in visible and edge['to'] in visible:
+                edges.setdefault((edge['from'], edge['to']),
+                    {key: edge[key] for key in ('from', 'to', 'type', 'scope') if key in edge})
         return {'schema_version': graph['schema_version'], 'course_id': graph['course_id'], 'subject_id': graph['subject_id'],
                 'title': graph['title'], 'nodes': nodes,
-                'edges': [{key: edge[key] for key in ('from', 'to', 'type')}
-                          for edge in graph['edges'] if edge['from'] in visible and edge['to'] in visible]}
+                'edges': list(edges.values())}
 
 
 def import_graph(settings, source, *, apply=False, expected_revision=None):
