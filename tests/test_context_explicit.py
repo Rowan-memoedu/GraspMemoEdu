@@ -464,6 +464,19 @@ class ContextExplicitTests(unittest.TestCase):
             self.assertEqual(reused,record)
             self.assertFalse((root/'new').exists())
 
+    def test_current_author_with_legacy_blind_prompt_remains_readable_and_reusable(self):
+        _,source,analysis,_,candidate,ar,review=fixture()
+        fake=FakeExec([analysis,ar,candidate,learner_review(),review])
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            with patch.object(cp,'LEARNER_REVIEW',cp.LEGACY_LEARNER_REVIEW):
+                record,_=ce.run_source(source,root/'old',root/'library',fake,1)
+            ce.require_quality(record)
+            self.assertEqual(fake.calls[3]['messages'][0]['content'],cp.LEGACY_LEARNER_REVIEW)
+            with patch.object(ce,'exec_call',side_effect=AssertionError('Approved author evidence must remain reusable')):
+                repeated,origin=ce.run_source(source,root/'new',root/'library',None,1)
+            self.assertEqual(origin,'library'); self.assertEqual(repeated,record)
+
     def test_invalid_learner_output_retries_only_learner_then_source(self):
         _,source,analysis,_,candidate,ar,review=fixture()
         fake=FakeExec([analysis,ar,candidate,{'approved':True,'checks':[]},learner_review(),review])
