@@ -1,18 +1,18 @@
-import {t, translateMessage} from './i18n.js?v=1367b68ad3341618';
-import {answerReady, answerEmpty} from './question-input.js?v=1367b68ad3341618';
-import {createLearningCache} from './learning-cache.js?v=1367b68ad3341618';
-import {appendCatalogOutline} from './catalog-outline.js?v=1367b68ad3341618';
-import {helpableContent} from './content-report.js?v=1367b68ad3341618';
-import {ratingChoices} from './self-assessment.js?v=1367b68ad3341618';
-import {pointAssessment} from './point-assessment.js?v=1367b68ad3341618';
-import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=1367b68ad3341618';
+import {t, translateMessage} from './i18n.js?v=e513b88ac6e15f43';
+import {answerReady, answerEmpty} from './question-input.js?v=e513b88ac6e15f43';
+import {createLearningCache} from './learning-cache.js?v=e513b88ac6e15f43';
+import {appendCatalogOutline} from './catalog-outline.js?v=e513b88ac6e15f43';
+import {helpableContent} from './content-report.js?v=e513b88ac6e15f43';
+import {ratingChoices} from './self-assessment.js?v=e513b88ac6e15f43';
+import {pointAssessment} from './point-assessment.js?v=e513b88ac6e15f43';
+import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=e513b88ac6e15f43';
 
 const node = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const button = (text, cls, action) => { const n = node('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
 const encode = encodeURIComponent;
 const query = fields => new URLSearchParams(fields).toString();
 const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy', 'training.retire'];
-import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, renderReviewReader} from './learning-ui.js?v=1367b68ad3341618';
+import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, renderReviewReader} from './learning-ui.js?v=e513b88ac6e15f43';
 
 export function createTrainingView(bridge) {
   const {root, request, href, formatDate, getAccess} = bridge;
@@ -731,7 +731,13 @@ export function createTrainingView(bridge) {
         } else if (old) {
           const updated = old.preview ? next.reader_states[old.question_id] : attempts.get(old.attempt_id);
           if (updated && JSON.stringify(updated) !== JSON.stringify(old)) {
-            current = updated; renderSidebar(); renderQuestion();
+            // Preparing a bridge round changes its connection metadata, not the
+            // displayed problem. Keep the live controls and selection intact.
+            const connectionOnly = old.phase === 'answer' && old.hyperskill?.prepared && updated.hyperskill &&
+              JSON.stringify({...updated, hyperskill: {...updated.hyperskill,
+                round_id: old.hyperskill.round_id, opened: old.hyperskill.opened}}) === JSON.stringify(old);
+            current = updated; renderSidebar();
+            if (connectionOnly) paintHyperskillConnection(); else renderQuestion();
           } else if (sidebarChanged) renderSidebar();
         } else if (sidebarChanged) {
           renderSidebar();
