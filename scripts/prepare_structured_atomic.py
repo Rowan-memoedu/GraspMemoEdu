@@ -15,7 +15,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from graspmemoedu.structured_atomic import FORMAT, fingerprint, validate_projection
+from graspmemoedu.structured_atomic import FORMAT, fingerprint, validate_projection, validate_source
 from graspmemoedu.site_backup import _validate_review
 from graspmemoedu.topic_install import encoded
 from graspmemoedu.training_audio import audio_bytes
@@ -26,6 +26,20 @@ class Images(HTMLParser):
         super().__init__(); self.urls = []; self.feed(html)
     def handle_starttag(self, tag, attrs):
         if tag == 'img': self.urls.append(dict(attrs)['src'])
+
+
+def frozen_source_images(document):
+    """Prefer exact archived source pixels over a new download of a mutable URL."""
+    images = {}
+    for topic in document['topics']:
+        for section in topic['sections']:
+            supplied = section.get('embedded_images', {})
+            validate_source({'source_format': FORMAT, 'embedded_images': supplied})
+            for url, record in supplied.items():
+                if url in images and images[url] != record:
+                    raise ValueError('Conflicting immutable source image bytes')
+                images[url] = deepcopy(record)
+    return images
 
 
 def copy_audio_asset(source_path, destination_root, card):
@@ -52,8 +66,11 @@ def prepare(args):
                 or not set(pins) <= {args.topic_prefix + str(topic['id']) for topic in document['topics']}):
             raise ValueError('Content revision requires matching previous-version pins and no reset option')
     urls = sorted({url for t in document['topics'] for s in t['sections'] for url in Images(s['introduction']['html']).urls})
+    frozen_images = frozen_source_images(document)
     args.output.mkdir(parents=True, exist_ok=False)
     def download(url):
+        if url in frozen_images:
+            return url, frozen_images[url]
         import httpx
         if not url.startswith('https://'):
             raise ValueError('Only explicit HTTPS source images can be archived')

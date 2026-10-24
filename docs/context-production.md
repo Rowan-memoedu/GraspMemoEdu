@@ -1,5 +1,7 @@
 # 本地语境材料生产
 
+已有显性材料应先走[通用原子工作流](material-atomic-workflow.md)，然后用 `export_atomic_context_points.py` 将原点 ID 和指导语境投影到这里的已知点接口。下文从文章发现显性目标的作者路径保留用于隐性语境衔接，不替代原材料 → Introduction → 组块 → 原子点的既有工作流。
+
 本地工作流有两个方向：从原文自动生成完整显性 Topic，从选定记忆点生成可用于复习的隐性语境题。前者包含已有点匹配、新点发现、语境义项决策、Introduction、记忆组块、记忆点和初学卡；后者生成新语境中的练习。生成、独立审核、材料复用、音频制作和机械导入分开留存；不连接线上常驻生产，也不写学习者进度。
 
 `graspmemoedu/context_production.py` 使用学科注册表、既有题型和题内映射合同，不按学科名称分派业务。`scripts/produce_context.py` 保留既有 API 传输，也支持 `--backend codex-exec`；后者不读取旧 API 凭据，生成与审核分别调用官方 Codex CLI。新生成的语境卡仍是普通 Flashcard，统一标为 `learning_phases: ["review"]`；每个点的初学卡由显性来源提供。
