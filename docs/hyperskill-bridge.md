@@ -32,6 +32,6 @@ Practice 独立进入原生 `TrainingCatalog` 题库。课程 ID 保持 `hypersk
 
 本机启动使用 `Start-HyperskillBridge.ps1 -ConfigPath <private config>`，启动完成须通过健康检查并核对进程路径、开始时间和实例 ID。`Register-HyperskillBridge.ps1` 注册当前用户的 Windows 任务计划 `GraspMemoEdu-HyperskillBridge`：登录后自动启动，每分钟检查并恢复已退出的服务，服务正常时不重复启动。任务复用 DeveloperGovernance 的隐藏启动器，启动成功后保留服务子进程；不弹控制台、不需要保存 Windows 密码，电池模式同样运行。退出登录期间不运行，下一次登录恢复。
 
-网页连接状态只短暂缓存，每 10 秒重试，回到页面、网络恢复及提交前重新探测；后台准备失败同样可以恢复，不清除作答草稿、不自动重发答案。连接异常时提供“重新连接”按钮。配置包括固定 backend、origins、port、directory、cookieModule、cookieWorkflowRoot、cookieDataRoot、expectedUserId，可选 ideaExecutable 和 ideaProperties，不含复制出来的 Cookie。服务只监听本机地址；浏览器可能要求用户允许网站访问本地网络。
+网页进入题组时检查并预热一次，连接正常后停止连接轮询，切回页面或网络事件不会重复探测已正常的服务。提交和打开 IDEA 前按需检查；实际请求发现本机服务不可达后，按 2、4、8、16、30 秒间隔重试，恢复后立即停止，隐藏页面暂停，回到页面或网络恢复时立即尝试。健康检查成功不代表上游准备成功：准备接口错误保留反馈并允许显式重试，不因此启动健康轮询。恢复过程中保留作答草稿和原提交标识，不自动重发答案；有在途判题或 IDEA Check 时继续查询结果，本机断连时暂停查询，恢复原轮次后继续。连接异常时提供“重新连接”按钮。配置包括固定 backend、origins、port、directory、cookieModule、cookieWorkflowRoot、cookieDataRoot、expectedUserId，可选 ideaExecutable 和 ideaProperties，不含复制出来的 Cookie。服务只监听本机地址；浏览器可能要求用户允许网站访问本地网络。
 
 验证入口：`tests/test_hyperskill_training.py`、`tests/test_hyperskill_answers.py`、`tests/test_hyperskill.py`、`scripts/test_hyperskill_bridge.mjs`、`scripts/test_hyperskill_ide.mjs`、`scripts/test_hyperskill_presentation.mjs`、`scripts/test_hyperskill_sections.mjs`、`scripts/validate_hyperskill_branch.py`、`scripts/hyperskill_bank_acceptance.mjs`、`scripts/test_hyperskill_render.mjs`。经用户授权的真实提交验收使用测试学员，保留上游提交 ID、独立卡片的复习日期和去重结果；合成契约测试不作为真实提交通过的证据。

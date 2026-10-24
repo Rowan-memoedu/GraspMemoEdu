@@ -1,18 +1,18 @@
-import {t, translateMessage} from './i18n.js?v=e513b88ac6e15f43';
-import {answerReady, answerEmpty} from './question-input.js?v=e513b88ac6e15f43';
-import {createLearningCache} from './learning-cache.js?v=e513b88ac6e15f43';
-import {appendCatalogOutline} from './catalog-outline.js?v=e513b88ac6e15f43';
-import {helpableContent} from './content-report.js?v=e513b88ac6e15f43';
-import {ratingChoices} from './self-assessment.js?v=e513b88ac6e15f43';
-import {pointAssessment} from './point-assessment.js?v=e513b88ac6e15f43';
-import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=e513b88ac6e15f43';
+import {t, translateMessage} from './i18n.js?v=9e9c460f546bac53';
+import {answerReady, answerEmpty} from './question-input.js?v=9e9c460f546bac53';
+import {createLearningCache} from './learning-cache.js?v=9e9c460f546bac53';
+import {appendCatalogOutline} from './catalog-outline.js?v=9e9c460f546bac53';
+import {helpableContent} from './content-report.js?v=9e9c460f546bac53';
+import {ratingChoices} from './self-assessment.js?v=9e9c460f546bac53';
+import {pointAssessment} from './point-assessment.js?v=9e9c460f546bac53';
+import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=9e9c460f546bac53';
 
 const node = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const button = (text, cls, action) => { const n = node('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
 const encode = encodeURIComponent;
 const query = fields => new URLSearchParams(fields).toString();
 const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy', 'training.retire'];
-import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, renderReviewReader} from './learning-ui.js?v=e513b88ac6e15f43';
+import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, renderReviewReader} from './learning-ui.js?v=9e9c460f546bac53';
 
 export function createTrainingView(bridge) {
   const {root, request, href, formatDate, getAccess} = bridge;
@@ -27,8 +27,8 @@ export function createTrainingView(bridge) {
   let reviewCard = false, reviewQuestion = null;
   let selectedIntroduction = null;
   let hyperskillBusy = false;
-  let hyperskillAvailability = null, hyperskillProbe = null, hyperskillCheckedAt = 0;
-  let hyperskillTimer = null, onlineHandler = null;
+  let hyperskillAvailability = null, hyperskillProbe = null, hyperskillRecovery = null;
+  let hyperskillTimer = null, hyperskillRetry = 0, onlineHandler = null;
   const hyperskillWarm = new Map();
   const attempts = new Map(), histories = new Map(), opening = new Map();
   let validationTimer = null;
@@ -98,10 +98,10 @@ export function createTrainingView(bridge) {
     flushClock(); clockKey = null; ++epoch; ++selection; clearTimeout(timer);
     if (visibilityHandler) document.removeEventListener('visibilitychange', visibilityHandler);
     if (onlineHandler) window.removeEventListener('online', onlineHandler);
-    onlineHandler = null; clearTimeout(hyperskillTimer);
+    onlineHandler = null; clearTimeout(hyperskillTimer); hyperskillTimer = null; hyperskillRetry = 0;
     visibilityHandler = null; group = current = selectedIntroduction = null; cache.clear();
     clearTimeout(validationTimer); attempts.clear(); histories.clear(); opening.clear();
-    hyperskillAvailability = hyperskillProbe = null; hyperskillCheckedAt = 0; hyperskillWarm.clear();
+    hyperskillAvailability = hyperskillProbe = hyperskillRecovery = null; hyperskillWarm.clear();
     reader?.destroy(); reader = null;
     reviewCard = false; reviewQuestion = null;
     document.getElementById('trainingMathStyle')?.remove();
@@ -199,7 +199,7 @@ export function createTrainingView(bridge) {
       for (const [id, value] of Object.entries(nextGroup.reader_histories || {})) histories.set(id + ':0', value);
       if(group.external_providers?.includes('hyperskill')) {
         void refreshHyperskill(e);
-        onlineHandler = () => { void refreshHyperskill(e); };
+        onlineHandler = () => resumeHyperskill(e);
         window.addEventListener('online', onlineHandler);
       }
       const style = node('style'); style.id = 'trainingMathStyle'; style.textContent = group.math_css; document.head.append(style);
@@ -218,7 +218,7 @@ export function createTrainingView(bridge) {
       visibilityHandler = () => {
         flushClock();
         if (!document.hidden && current?.phase === 'answer' && !current.submission_id) activeSince = performance.now();
-        if (!document.hidden && group.external_providers?.includes('hyperskill')) void refreshHyperskill(e);
+        if (group.external_providers?.includes('hyperskill')) resumeHyperskill(e);
       };
       document.addEventListener('visibilitychange', visibilityHandler);
       const selected = group.questions.find(q => q.id === params.get('question')) || group.questions[0];
@@ -469,32 +469,63 @@ export function createTrainingView(bridge) {
   }
   function probeHyperskill(e,force=false) {
     if(hyperskillProbe)return hyperskillProbe;
-    if(!force&&hyperskillAvailability!==null&&Date.now()-hyperskillCheckedAt<5000)
+    if(!force&&hyperskillAvailability!==null)
       return Promise.resolve(hyperskillAvailability);
     const pending=localHyperskill('health',{}, {timeout:3000})
       .then(value=>value.ready===true).catch(()=>false).then(ready=>{
         if(e===epoch) {
-          if(!ready)hyperskillWarm.clear();
-          hyperskillAvailability=ready;hyperskillCheckedAt=Date.now();paintHyperskillConnection();
+          if(ready) {
+            const firstConnection=hyperskillAvailability!==true;
+            hyperskillAvailability=true;hyperskillRetry=0;
+            clearTimeout(hyperskillTimer);hyperskillTimer=null;
+            paintHyperskillConnection();
+            if(firstConnection)void requestHyperskill('warmup',{}).catch(()=>{});
+          } else disconnectHyperskill(e);
         }
-        if(ready&&e===epoch)void localHyperskill('warmup',{}).catch(()=>{});
         return ready;
       }).finally(()=>{if(hyperskillProbe===pending)hyperskillProbe=null;});
     hyperskillProbe=pending;return pending;
   }
-  async function refreshHyperskill(e) {
-    clearTimeout(hyperskillTimer);
-    try {
-      if(e!==epoch||document.hidden||hyperskillBusy)return;
+  function scheduleHyperskillRecovery(e) {
+    if(e!==epoch||hyperskillAvailability!==false||document.hidden||hyperskillBusy||
+        hyperskillRecovery||hyperskillTimer!==null)return;
+    const delay=Math.min(30000,2000*2**Math.min(hyperskillRetry++,4));
+    hyperskillTimer=setTimeout(()=>{
+      hyperskillTimer=null;return refreshHyperskill(e);
+    },delay);
+  }
+  function disconnectHyperskill(e) {
+    if(e!==epoch)return;
+    if(hyperskillAvailability!==false)hyperskillRetry=0;
+    hyperskillAvailability=false;hyperskillWarm.clear();
+    paintHyperskillConnection();scheduleHyperskillRecovery(e);
+  }
+  async function requestHyperskill(action,body,options) {
+    const e=epoch;
+    try {return await localHyperskill(action,body,options);}
+    catch(failure) {
+      if(failure.code==='hyperskill_unavailable')disconnectHyperskill(e);
+      throw failure;
+    }
+  }
+  function resumeHyperskill(e) {
+    if(e!==epoch)return;
+    clearTimeout(hyperskillTimer);hyperskillTimer=null;
+    if(e===epoch&&!document.hidden&&hyperskillAvailability!==true)void refreshHyperskill(e);
+  }
+  function refreshHyperskill(e) {
+    if(e!==epoch||document.hidden||hyperskillBusy)return Promise.resolve();
+    if(hyperskillRecovery)return hyperskillRecovery;
+    clearTimeout(hyperskillTimer);hyperskillTimer=null;
+    const recovery=(async()=>{
       if(await probeHyperskill(e,true) && e===epoch && current?.hyperskill &&
           !current.preview && current.phase==='answer' && current.can_submit)
         await warmHyperskill(current,e);
-    } finally {
-      if(e===epoch) {
-        clearTimeout(hyperskillTimer);
-        hyperskillTimer=setTimeout(()=>{void refreshHyperskill(e);},10000);
-      }
-    }
+    })().finally(()=>{
+      if(hyperskillRecovery===recovery)hyperskillRecovery=null;
+      scheduleHyperskillRecovery(e);
+    });
+    hyperskillRecovery=recovery;return recovery;
   }
   function connectionText(state) {
     if(hyperskillAvailability===null)return '正在后台检查连接，可以先作答。';
@@ -527,11 +558,14 @@ export function createTrainingView(bridge) {
         await ensureAttempt(state.attempt_id);
         const grant=await request('academy/training/launch',{method:'POST',body:{attempt_id:state.attempt_id}});
         if(e!==epoch)return null;
-        const result=await localHyperskill('open',{ticket:grant.ticket});
+        const result=await requestHyperskill('open',{ticket:grant.ticket});
         if(e!==epoch)return null;
+        let prior;try{prior=JSON.parse(read('hyperskill',state.attempt_id));}catch{}
+        if(prior?.request_id)result.request_id=prior.request_id;
+        if(prior?.local_pending)Object.assign(result,{local:true,pending:true,local_pending:prior.local_pending});
         save('hyperskill',state.attempt_id,JSON.stringify(result));entry.ready=true;
         if(current?.attempt_id===state.attempt_id) {
-          if((!state.hyperskill.prepared||result.ide?.watching)&&!hyperskillBusy)renderQuestion();
+          if((!state.hyperskill.prepared||result.ide?.watching||result.pending||result.last)&&!hyperskillBusy)renderQuestion();
           else paintHyperskillConnection();
         }
         return result;
@@ -565,6 +599,8 @@ export function createTrainingView(bridge) {
           await request('academy/training/finish', {method:'POST',body:{attempt_id:state.attempt_id}});
         } else {
           const ready=await probeHyperskill(e,['submit','ide'].includes(name));
+          if(!alive(e,s))return;
+          if(name==='status'&&!ready&&!data?.local_pending)return;
           if((name==='status'||name==='submit')&&data?.local_pending) {
             const next=await post('hyperskill-submit',data.local_pending);
             result={interaction:state.hyperskill.interaction,local:true,last:next.hyperskill.local_last};
@@ -588,7 +624,7 @@ export function createTrainingView(bridge) {
           if (name === 'submit') {
             data.request_id = requestId; save('hyperskill',state.attempt_id,JSON.stringify(data));
           }
-          result = await localHyperskill(name,{session:data.session,attempt_id:data.attempt_id,
+          result = await requestHyperskill(name,{session:data.session,attempt_id:data.attempt_id,
             ...(name==='submit'?{answer,request_id:requestId}:{})});
           }
         }
@@ -601,9 +637,7 @@ export function createTrainingView(bridge) {
         if (next.phase==='done') { flushClock(); await refreshGroup(e,s); }
       } catch (failure) {
         if (alive(e,s)) {
-          if(failure.code==='hyperskill_unavailable') {
-            hyperskillAvailability=false;hyperskillCheckedAt=0;hyperskillWarm.clear();
-          }
+          if(failure.code==='hyperskill_unavailable')disconnectHyperskill(e);
           if (name==='submit' && data && !data.local && data.request_id) save('hyperskill',state.attempt_id,JSON.stringify({
             ...data,pending:true,message:'提交状态尚未确认，请先刷新结果。'}));
           if(data?.local_pending) {
@@ -614,10 +648,12 @@ export function createTrainingView(bridge) {
           }
           hyperskillBusy=false; renderQuestion(); error(main,failure);
           if(failure.code==='hyperskill_unavailable')main.querySelector('.trainingError')?.setAttribute('data-hyperskill-connection','');
-          if(name==='status')timer=setTimeout(()=>{if(alive(e,s))void action('status');},5000);
+          if(name==='status'&&(data?.local_pending||hyperskillAvailability!==false)) {
+            clearTimeout(timer);timer=setTimeout(()=>{if(alive(e,s))void action('status');},5000);
+          }
           return;
         }
-      } finally { hyperskillBusy=false; }
+      } finally { hyperskillBusy=false; scheduleHyperskillRecovery(e); }
       if (alive(e,s)) renderQuestion();
     };
     const box=node('div','hyperskillTraining');
@@ -625,7 +661,8 @@ export function createTrainingView(bridge) {
       disabled:hyperskillBusy||!state.can_submit,data,draft:read('draft',state.attempt_id)||'',
       onDraft:value=>save('draft',state.attempt_id,value),action,finish:()=>action('finish')});
     main.append(box);
-    if ((data?.pending||data?.ide?.watching) && !hyperskillBusy) timer=setTimeout(()=>{if(alive(e,s))void action('status');},2500);
+    if ((data?.pending||data?.ide?.watching) && !hyperskillBusy && (data?.local_pending||hyperskillAvailability!==false))
+      timer=setTimeout(()=>{if(alive(e,s))void action('status');},2500);
     else if (data?.last?.status==='correct' && !hyperskillBusy) timer=setTimeout(()=>pollAcademy(e,s,state),1500);
   }
   function academyAnswer(state, e, s) {

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {randomUUID} from 'node:crypto';
 import vm from 'node:vm';
 import test from 'node:test';
 import {createLearningCache} from '../web/learning-cache.js';
@@ -8,57 +9,71 @@ import {createLearningCache} from '../web/learning-cache.js';
 const source=readFileSync(new URL('../web/training.js',import.meta.url),'utf8')
   .replace(/^import .*;\r?\n/gm,'').replace('export function createTrainingView','function createTrainingView')
   .replace('function renderSidebar() {','function renderSidebar() { observed.sidebar++; return;')
-  .replace('function renderQuestion() {','function renderQuestion() { observed.question++; return;')
-  .replace('function error(container, failure, retry) {','function error(container, failure, retry) { throw failure;')
+  .replace('function renderQuestion() {','function renderQuestion() { clearTimeout(timer); observed.question++; if(observed.renderAnswer)hyperskillAnswer(current,epoch,selection); return;')
+  .replace('function error(container, failure, retry) {','function error(container, failure, retry) { observed.errors.push(failure); return;')
   .replace('return {open, stop, renderReviews};',`return {stop,
     probe: force=>probeHyperskill(epoch,force),refresh:()=>refreshHyperskill(epoch),
-    warm:()=>warmHyperskill(current,epoch),status:()=>({available:hyperskillAvailability,
+    warm: force=>warmHyperskill(current,epoch,force),resume:()=>resumeHyperskill(epoch),
+    invoke:action=>requestHyperskill(action,{}),answer:()=>hyperskillAnswer(current,epoch,selection),
+    status:()=>({available:hyperskillAvailability,
       ready:hyperskillWarm.get(current?.attempt_id)?.ready,error:hyperskillWarm.get(current?.attempt_id)?.error?.message}),
     validate:()=>scheduleValidation(),current:()=>current,
     configure(state,element){current=state;main=element;group={bank_id:'bank',id:'group',version:'v1',questions:[]};attempts.set(state.attempt_id,state);}};`);
 
 function fixture() {
   let now=10000, healthy=false, cloudFailure=null, healthWait=null, sequence=0;
+  let localFailure=null,localState={session:'local-round',interaction:null,ide:null};
   let nextGroup=null;
-  const observed={sidebar:0,question:0};
+  const observed={sidebar:0,question:0,errors:[]};
   const calls=[],timers=new Map(),values=new Map(),status={textContent:''},reconnect={hidden:true};
   const access={learner_id:'connection-test'};
   const localHyperskill=async(action,body)=>{
     calls.push({target:'local',action,body});
     if(action==='health') {if(healthWait)await healthWait;return {ready:healthy};}
-    if(action==='open')return {session:'local-round',interaction:null,ide:null};
     if(action==='warmup')return {ready:true};
+    if(localFailure)throw localFailure;
+    if(['open','status'].includes(action))return {...localState};
     throw Error('Unexpected action: '+action);
   };
   const request=async(route,options)=>{
     calls.push({target:'cloud',route,body:options?.body});
     if(cloudFailure)throw cloudFailure;
     if(route.startsWith('training/group?'))return nextGroup;
+    if(route.startsWith('training/state?'))return context.driver.current();
     assert.equal(route,'academy/training/launch');return {ticket:'synthetic-capability'};
   };
-  const element={querySelector:selector=>selector==='.hyperskillConnection'?status:
+  const element={append(){},querySelector:selector=>selector==='.hyperskillConnection'?status:
     selector==='.hyperskillReconnect'?reconnect:null};
   const storage={getItem:key=>values.get(key)??null,setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)};
-  const context=vm.createContext({createLearningCache,localHyperskill,observed,URLSearchParams,
+  const context=vm.createContext({createLearningCache,localHyperskill,observed,URLSearchParams,crypto:{randomUUID},
     bridge:{root:{},request,getAccess:()=>access},
-    localStorage:storage,document:{hidden:false,getElementById:()=>({cloneNode:()=>({}),remove(){}}),removeEventListener(){}},
+    hyperskillQuestion:(box,options)=>{observed.action=options.action;},
+    localStorage:storage,document:{hidden:false,createElement:()=>({}),getElementById:()=>({cloneNode:()=>({}),remove(){}}),removeEventListener(){}},
     window:{removeEventListener(){}},performance:{now:()=>now},Date:class extends Date {static now(){return now;}},
-    setTimeout:(fn,delay)=>{const id=++sequence;timers.set(id,{fn,delay});return id;},clearTimeout:id=>timers.delete(id)});
+    setTimeout:(fn,delay)=>{const id=++sequence;timers.set(id,{fn,delay,at:now+delay});return id;},clearTimeout:id=>timers.delete(id)});
   vm.runInContext(source+'\nglobalThis.driver=createTrainingView(bridge);',context);
   context.driver.configure({attempt_id:'attempt',hyperskill:{prepared:true,local_ready:false,type:'choice'},
     phase:'answer',can_submit:true,preview:false},element);
   return {driver:context.driver,calls,timers,values,status,reconnect,observed,
     async validate(next){nextGroup={bank_id:'bank',id:'group',version:'v1',questions:[],reader_states:{question:next}};
       context.driver.validate();await [...timers.values()].find(t=>t.delay===5000).fn();},
-    advance(ms){now+=ms;},healthy(value){healthy=value;},cloudFailure(value){cloudFailure=value;},waitForHealth(value){healthWait=value;}};
+    async tick(ms){const end=now+ms;let count=0;
+      for(;;){const next=[...timers.entries()].filter(([,t])=>t.at<=end).sort((a,b)=>a[1].at-b[1].at)[0];
+        if(!next)break;assert(++count<100,'Timer loop did not settle');
+        now=next[1].at;timers.delete(next[0]);await next[1].fn();
+        for(let i=0;i<20;i++)await Promise.resolve();}
+      now=end;},
+    hidden(value){context.document.hidden=value;context.driver.resume();},
+    advance(ms){now+=ms;},healthy(value){healthy=value;},cloudFailure(value){cloudFailure=value;},
+    localFailure(value){localFailure=value;},localState(value){localState=value;},waitForHealth(value){healthWait=value;}};
 }
 
-test('a failed probe expires and an explicit action bypasses the cached failure',async()=>{
+test('connection knowledge stays cached until an explicit check or scheduled recovery',async()=>{
   const f=fixture();assert.equal(await f.driver.probe(),false);
-  f.healthy(true);assert.equal(await f.driver.probe(),false);
+  f.healthy(true);f.advance(60000);assert.equal(await f.driver.probe(),false);
   assert.equal(await f.driver.probe(true),true);
   f.healthy(false);assert.equal(await f.driver.probe(true),false);
-  f.healthy(true);f.advance(5001);assert.equal(await f.driver.probe(),true);
+  f.healthy(true);assert.equal(await f.driver.probe(true),true);
 });
 
 test('simultaneous connection probes share one request and release it after failure',async()=>{
@@ -78,13 +93,42 @@ test('background recovery prepares the same question while preserving its answer
   assert.equal(f.values.get(draft),'unfinished learner answer');
   assert.equal(f.calls.filter(c=>c.route==='academy/training/launch').length,1);
   assert.equal(f.calls.filter(c=>['submit','ide'].includes(c.action)||c.route?.includes('submit')).length,0);
-  assert.equal(f.timers.size,1);assert.equal([...f.timers.values()][0].delay,10000);
+  assert.equal(f.timers.size,0,'A recovered connection must have no recovery timer');
 });
 
-test('a transient round preparation failure is retried instead of being cached forever',async()=>{
+test('healthy connections stay silent through idle time, return-to-page and online events',async()=>{
+  const f=fixture();f.healthy(true);await f.driver.refresh();
+  const calls=f.calls.length;assert.equal(f.timers.size,0);
+  await f.tick(120000);f.hidden(true);f.hidden(false);f.driver.resume();
+  assert.equal(await f.driver.probe(),true);
+  assert.equal(f.calls.length,calls);assert.equal(f.timers.size,0);
+  await f.driver.probe(true);await f.driver.probe(true);
+  assert.equal(f.calls.filter(c=>c.action==='warmup').length,1,'Explicit checks do not repeat prewarming');
+});
+
+test('only a failed connection retries with capped backoff, then becomes silent',async()=>{
+  const f=fixture();await f.driver.refresh();
+  for(const delay of [2000,4000,8000,16000,30000,30000]) {
+    assert.equal(f.timers.size,1);assert.equal([...f.timers.values()][0].delay,delay);
+    const before=f.calls.length;await f.tick(delay-1);assert.equal(f.calls.length,before);
+    await f.tick(1);
+  }
+  f.healthy(true);await f.tick(30000);assert.equal(f.driver.status().available,true);
+  assert.equal(f.timers.size,0);const count=f.calls.length;await f.tick(120000);assert.equal(f.calls.length,count);
+});
+
+test('hiding a disconnected page pauses recovery and returning resumes immediately',async()=>{
+  const f=fixture();await f.driver.refresh();f.hidden(true);
+  assert.equal(f.timers.size,0);const calls=f.calls.length;await f.tick(60000);assert.equal(f.calls.length,calls);
+  f.healthy(true);f.hidden(false);await f.driver.refresh();assert.equal(f.driver.status().ready,true);
+  assert.equal(f.timers.size,0);
+});
+
+test('an upstream preparation error allows explicit retry without starting healthy connection polling',async()=>{
   const f=fixture();f.healthy(true);f.cloudFailure(Error('Temporary upstream failure'));
   assert.equal(await f.driver.warm(),null);assert.equal(f.driver.status().error,'Temporary upstream failure');
-  f.cloudFailure(null);f.advance(5001);await f.driver.refresh();
+  assert.equal(f.timers.size,0);
+  f.cloudFailure(null);await f.driver.warm(true);
   assert.equal(f.driver.status().ready,true);assert.equal(f.driver.status().error,undefined);
   assert.equal(f.calls.filter(c=>c.route==='academy/training/launch').length,2);
 });
@@ -100,9 +144,54 @@ test('a lost connection clears prepared readiness but keeps pending request iden
   const f=fixture();f.healthy(true);await f.driver.refresh();assert.equal(f.driver.status().ready,true);
   const key='graspmemoedu:training:connection-test:hyperskill:attempt';
   const pending=JSON.stringify({session:'local-round',pending:true,request_id:'original-request'});
-  f.values.set(key,pending);f.healthy(false);await f.driver.refresh();
+  f.values.set(key,pending);f.localFailure(Object.assign(Error('Service exited'),{code:'hyperskill_unavailable'}));
+  await assert.rejects(f.driver.invoke('status'),/Service exited/);
   assert.equal(f.driver.status().ready,undefined);assert.equal(f.values.get(key),pending);
+  assert.equal([...f.timers.values()][0].delay,2000);
+  f.localFailure(null);await f.tick(2000);
+  assert.equal(JSON.parse(f.values.get(key)).request_id,'original-request');
+  assert.equal(f.timers.size,0);
   assert.equal(f.calls.filter(c=>c.action==='submit').length,0);
+});
+
+test('a transport failure during preparation starts recovery after a successful health response',async()=>{
+  const f=fixture();f.healthy(true);f.localFailure(Object.assign(Error('Connection closed'),{code:'hyperskill_unavailable'}));
+  await f.driver.refresh();assert.equal(f.driver.status().available,false);
+  assert.equal(f.timers.size,1);f.localFailure(null);await f.tick(2000);
+  assert.equal(f.driver.status().ready,true);assert.equal(f.timers.size,0);
+});
+
+test('IDEA result queries continue without health polling and pause only during disconnection',async()=>{
+  const f=fixture();f.healthy(true);f.localState({session:'local-round',ide:{watching:true}});
+  f.observed.renderAnswer=true;await f.driver.refresh();
+  assert.equal(f.driver.status().error,undefined);
+  assert.equal(f.timers.size,1,JSON.stringify({calls:f.calls,observed:f.observed}));
+  const healthCalls=f.calls.filter(c=>c.action==='health').length;
+  await f.tick(10000);
+  assert.equal(f.calls.filter(c=>c.action==='status').length,4,JSON.stringify({calls:f.calls,observed:f.observed,timers:[...f.timers.values()]}));
+  assert.equal(f.calls.filter(c=>c.action==='health').length,healthCalls);
+  f.localFailure(Object.assign(Error('Service exited'),{code:'hyperskill_unavailable'}));
+  await f.tick(2500);assert.equal(f.driver.status().available,false);
+  assert.equal(f.timers.size,1);assert.equal([...f.timers.values()][0].delay,2000);
+  f.localFailure(null);await f.tick(2000);
+  const before=f.calls.filter(c=>c.action==='status').length;await f.tick(2500);
+  assert.equal(f.calls.filter(c=>c.action==='status').length,before+1);
+  assert.equal(f.calls.filter(c=>['submit','ide','retry'].includes(c.action)).length,0);
+});
+
+test('a pending server-only verdict keeps confirming the original request without a local bridge',async()=>{
+  const f=fixture();await f.driver.refresh();f.hidden(true);
+  const payload={attempt_id:'attempt',request_id:'original-local-request',answer:'saved answer'};
+  f.values.set('graspmemoedu:training:connection-test:hyperskill:attempt',JSON.stringify({local:true,pending:true,local_pending:payload}));
+  f.cloudFailure(Error('Cloud acknowledgement temporarily unavailable'));f.observed.renderAnswer=true;f.driver.answer();
+  await f.tick(2500);
+  const sent=f.calls.filter(c=>c.route==='training/hyperskill-submit');
+  assert.equal(sent.length,1);assert.deepEqual(JSON.parse(JSON.stringify(sent[0].body)),payload);
+  assert.equal(f.timers.size,1);assert.equal([...f.timers.values()][0].delay,5000);
+  const localCalls=f.calls.filter(c=>c.target==='local').length;await f.tick(5000);
+  assert.equal(f.calls.filter(c=>c.route==='training/hyperskill-submit').length,2);
+  assert.equal(f.calls.filter(c=>c.target==='local').length,localCalls);
+  assert.equal(f.calls.filter(c=>['submit','ide','retry'].includes(c.action)).length,0);
 });
 
 test('background round creation and opening preserve controls, while verdict and permission changes redraw',async()=>{
