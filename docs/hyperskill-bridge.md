@@ -30,6 +30,8 @@ Practice 独立进入原生 `TrainingCatalog` 题库。课程 ID 保持 `hypersk
 
 此接口集成使用网站内部协议，协议变化时应停止提交并修复适配器。判题状态不等于完整标准答案：界面展示服务实际返回的判定和反馈，不承诺每道题都会返回完整解答。
 
-本机启动使用 `Start-HyperskillBridge.ps1 -ConfigPath <private config>`。配置包括固定 backend、origins、port、directory、cookieModule、cookieWorkflowRoot、cookieDataRoot、expectedUserId，可选 ideaExecutable 和 ideaProperties，不含复制出来的 Cookie。服务只监听本机地址；浏览器可能要求用户允许本地网络访问。此次不设置开机自启。
+本机启动使用 `Start-HyperskillBridge.ps1 -ConfigPath <private config>`，启动完成须通过健康检查并核对进程路径、开始时间和实例 ID。`Register-HyperskillBridge.ps1` 注册当前用户的 Windows 任务计划 `GraspMemoEdu-HyperskillBridge`：登录后自动启动，每分钟检查并恢复已退出的服务，服务正常时不重复启动。任务复用 DeveloperGovernance 的隐藏启动器，启动成功后保留服务子进程；不弹控制台、不需要保存 Windows 密码，电池模式同样运行。退出登录期间不运行，下一次登录恢复。
+
+网页连接状态只短暂缓存，每 10 秒重试，回到页面、网络恢复及提交前重新探测；后台准备失败同样可以恢复，不清除作答草稿、不自动重发答案。连接异常时提供“重新连接”按钮。配置包括固定 backend、origins、port、directory、cookieModule、cookieWorkflowRoot、cookieDataRoot、expectedUserId，可选 ideaExecutable 和 ideaProperties，不含复制出来的 Cookie。服务只监听本机地址；浏览器可能要求用户允许网站访问本地网络。
 
 验证入口：`tests/test_hyperskill_training.py`、`tests/test_hyperskill_answers.py`、`tests/test_hyperskill.py`、`scripts/test_hyperskill_bridge.mjs`、`scripts/test_hyperskill_ide.mjs`、`scripts/test_hyperskill_presentation.mjs`、`scripts/test_hyperskill_sections.mjs`、`scripts/validate_hyperskill_branch.py`、`scripts/hyperskill_bank_acceptance.mjs`、`scripts/test_hyperskill_render.mjs`。经用户授权的真实提交验收使用测试学员，保留上游提交 ID、独立卡片的复习日期和去重结果；合成契约测试不作为真实提交通过的证据。

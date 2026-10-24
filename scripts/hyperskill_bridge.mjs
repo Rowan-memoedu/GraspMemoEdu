@@ -281,6 +281,7 @@ async function main() {
     cloud:(route,ticket,body)=>json(new URL('/api/academy/'+route,backend),{
       method:'POST',headers:{Authorization:'Bearer '+ticket,'Content-Type':'application/json',Origin:backend.origin},
       body:JSON.stringify(body)})});
+  const health={ready:true,provider:'hyperskill',pid:process.pid,instance_id:randomBytes(16).toString('hex')};
   const server=http.createServer(async(req,res)=>{
     const origin=req.headers.origin;
     const allowed=config.origins.includes(origin);
@@ -300,7 +301,7 @@ async function main() {
         !req.headers['content-type']?.startsWith('application/json')) throw Error('请求格式不受支持。');
       let raw='';for await(const part of req){raw+=part;if(raw.length>40000)throw Error('请求过长。');}
       const body=JSON.parse(raw),url=req.url;
-      if(url==='/health') {res.end(JSON.stringify({ready:true,provider:'hyperskill'}));return;}
+      if(url==='/health') {res.end(JSON.stringify(health));return;}
       if(url==='/warmup') {res.end(JSON.stringify(await warmConnection()));return;}
       const result=await bridge.serial(async()=>{
         if(url==='/open')return bridge.open(body.ticket);

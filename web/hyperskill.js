@@ -1,5 +1,5 @@
-import {questionInput,answerReady,choiceTypeField} from './question-input.js?v=7c6cc30f772c71d9';
-import {enhanceSourceContent} from './topic-content.js?v=7c6cc30f772c71d9';
+import {questionInput,answerReady,choiceTypeField} from './question-input.js?v=1367b68ad3341618';
+import {enhanceSourceContent} from './topic-content.js?v=1367b68ad3341618';
 
 export async function localHyperskill(action,body,{timeout=120000}={}) {
   let response;
@@ -8,10 +8,11 @@ export async function localHyperskill(action,body,{timeout=120000}={}) {
       headers:{'Content-Type':'application/json','X-Grasp-Local':'1'},
       body:JSON.stringify(body),signal:AbortSignal.timeout(timeout)});
   } catch {
-    throw Error('尚未连接本机 Hyperskill 服务。请确认服务已启动，并允许网站访问本地网络。');
+    throw Object.assign(Error('尚未连接本机 Hyperskill 服务。请确认服务已启动，并允许网站访问本地网络。'),
+      {code:'hyperskill_unavailable'});
   }
   const value=await response.json();
-  if(!response.ok)throw Error(value.error||'Hyperskill 连接失败。');
+  if(!response.ok)throw Object.assign(Error(value.error||'Hyperskill 连接失败。'),{status:response.status});
   return value;
 }
 const node=(tag,cls,text)=>{const e=document.createElement(tag);e.className=cls;if(text!==undefined)e.textContent=text;return e;};
@@ -149,6 +150,9 @@ export function hyperskillQuestion(box,{question,history,disabled,data,draft,onD
   if(data.connection) {
     const status=node('p','inputHint hyperskillConnection',data.connection);
     status.setAttribute('role','status');box.append(status);
+    const reconnect=button('重新连接',()=>action('open'));
+    reconnect.classList.add('hyperskillReconnect');reconnect.hidden=!data.disconnected;
+    box.append(reconnect);
   }
   if(data.pending) {
     const status=node('p','inputHint',data.message);status.setAttribute('role','status');box.append(status);
