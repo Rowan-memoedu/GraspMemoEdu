@@ -169,6 +169,14 @@ def create_app(settings: Settings | None = None, service: LearningService | None
 
     preview_stores = {}
 
+    def preview_runtime(learner_id, scope):
+        # Callers hold services_lock. This session store also serves banks and
+        # must not depend on the default Topic supporting a learning runtime.
+        key = (learner_id, scope)
+        if key not in preview_stores:
+            preview_stores[key] = MemoryLearningStore()
+        return preview_stores[key]
+
     def forget_preview(token):
         scope = credential_digest('preview', token or '')
         with closing(access_store._connect()) as con:
@@ -189,10 +197,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
             if key not in learning_services:
                 runtime = None
                 if admin:
-                    store_key = (learner_id, scope)
-                    if store_key not in preview_stores:
-                        preview_stores[store_key] = MemoryLearningStore()
-                    runtime = preview_stores[store_key]
+                    runtime = preview_runtime(learner_id, scope)
                 learning_services[key] = create_learning_service(
                     catalog.topic(topic_id), settings.data_dir, service.judge, learner_id=learner_id,
                     **({'runtime': runtime} if runtime else {}),
@@ -634,8 +639,11 @@ def create_app(settings: Settings | None = None, service: LearningService | None
                   limit: int = Query(default=25, ge=1, le=50)):
         access = access_store.resolve(request.headers.get('x-learning-identity'))
         recover_cooldowns(access)
-        group_runtime = (service_for(access['learner_id'], session_scope=request.headers.get('x-learning-identity')).runtime
-                         if access.get('is_admin') else None)
+        group_runtime = None
+        if access.get('is_admin'):
+            scope = credential_digest('preview', request.headers.get('x-learning-identity') or '')
+            with services_lock:
+                group_runtime = preview_runtime(access['learner_id'], scope)
         return dashboard_store.dashboard(access, course_id, cursor, limit, request.query_params.get('subject_id'),
                                          request.query_params.get('root_id'), group_runtime=group_runtime)
 
