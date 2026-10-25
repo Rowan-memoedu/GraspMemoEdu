@@ -16,6 +16,7 @@ from .learning_storage import administrator
 from .review_cards import register_point, require_unreserved
 from .reference_answers import reference_fields
 from .dependency_nodes import group_key
+from .linked_points import bypass_mastery
 
 
 def packed(value):
@@ -136,11 +137,13 @@ class TrainingService:
             if question.get('point_ids'):
                 from .linked_points import require_available, pinned
                 rows = self._point_rows(con, question)
-                require_available(con, rows, self.learner_id, now.isoformat())
+                require_available(con, rows, self.learner_id, now.isoformat(),
+                                  allow_unlearned=bypass_mastery(self.access))
                 prior = con.execute("SELECT 1 FROM training_attempts WHERE learner=? AND bank=? AND question=? AND version=? AND phase='done'",
                                     (self.learner_id, bank_id, question_id, bank['version'])).fetchone()
                 due = all(r['memory'].get('due_at') and utc_time(r['memory']['due_at']) <= now for r in rows)
-                mode = 'review' if due or group.get('unlock_policy') and not prior else 'practice'
+                mode = ('initial' if any(not r['learned'] and not r['memory'].get('stopped_at') for r in rows)
+                        else 'review' if due or group.get('unlock_policy') and not prior else 'practice')
                 question['_linked_points'] = pinned(rows)
             question = present_choice(question, request_id)
             con.execute('''INSERT INTO training_attempts
@@ -175,22 +178,29 @@ class TrainingService:
         from .point_assessment import assess_points
         current = utc_time(self.clock()).isoformat()
         rows = self._point_rows(con, question)
-        valid = unchanged(rows, question['_linked_points'])
+        allow_unlearned = bypass_mastery(self.access)
+        valid = unchanged(rows, question['_linked_points'], allow_unlearned=allow_unlearned)
         eligible = valid and (row['mode'] != 'practice' or stop)
         submission = con.execute('SELECT answer FROM training_submissions WHERE id=?', (row['submission_id'],)).fetchone()
         answer = submission['answer'] if submission else ''
         ratings, dates = {}, []
         if eligible:
-            require_available(con, rows, self.learner_id, current, question.get('_review_paper'))
+            require_available(con, rows, self.learner_id, current, question.get('_review_paper'),
+                              allow_unlearned=allow_unlearned)
             for tid in dict.fromkeys(r['topic_id'] for r in rows):
                 own = [r for r in rows if r['topic_id'] == tid]
+                if row['mode'] == 'initial' and not stop:
+                    own = [r for r in own if not r['learned'] or r['memory'].get('due_at')
+                           and utc_time(r['memory']['due_at']) <= utc_time(current)]
+                if not own:
+                    continue
                 projected = deepcopy(question)
                 projected['id'] = f"bank:{row['bank']}:{question['id']}"
                 projected['training_source'] = {'bank_id': row['bank'], 'group_id': row['group_id'],
                     'question_id': row['question'], 'version': row['version']}
                 projected['point_ids'] = [r['local_id'] for r in own]
                 if 'assessment' in projected:
-                    mapping = {key: [split_reference(p)[1] for p in values if split_reference(p)[0] == tid]
+                    mapping = {key: [split_reference(p)[1] for p in values if p in {r['reference'] for r in own}]
                                for key, values in question['assessment']['item_points'].items()}
                     mapping = {key: values for key, values in mapping.items() if values}
                     if mapping:
@@ -198,7 +208,8 @@ class TrainingService:
                     else:
                         projected.pop('assessment')
                 result = apply_review(con, self.atoms[tid], projected, projected['point_ids'], row['id'],
-                    answer, correct, reason, row['created_at'], elapsed_ms, 5 if stop else self_rating)
+                    answer, correct, reason, row['created_at'], elapsed_ms, 5 if stop else self_rating,
+                    learning_points=[r['local_id'] for r in own if not r['learned']])
                 ratings.update({tid + '/' + p: rating for p, rating in result['ratings'].items()})
                 if result['due_at']:
                     dates.append(result['due_at'])
@@ -308,7 +319,8 @@ class TrainingService:
             if question.get('point_ids') and row['phase'] != 'done':
                 self.require_group(row['bank'], row['group_id'], con=con)
                 from .linked_points import require_available
-                require_available(con, self._point_rows(con, question), self.learner_id, utc_time(self.clock()).isoformat())
+                require_available(con, self._point_rows(con, question), self.learner_id, utc_time(self.clock()).isoformat(),
+                                  allow_unlearned=bypass_mastery(self.access))
             if question.get('hyperskill'):
                 raise DomainError('hyperskill_check_required', '请连接 Hyperskill 后提交此题。', 409)
             if question.get('academy'):

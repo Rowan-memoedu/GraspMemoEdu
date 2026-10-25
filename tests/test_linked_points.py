@@ -87,6 +87,72 @@ class LinkedPointsTests(unittest.TestCase):
         self.assertFalse(status['unlocked'])
         self.assertTrue(all(p['reason'] == 'retrievability_low' for p in status['point_prerequisites']))
 
+    def test_advanced_can_learn_linked_points_directly_without_seeding_mastery(self):
+        self.access['is_advanced_learner'] = True
+        self.assertTrue(self.status()['unlocked'])
+        with closing(self.training._connect()) as con:
+            before = snapshot(con, self.catalog, 'student', self.refs)
+        self.assertTrue(all(not row['learned'] for row in before))
+        result = self.answer()['result']
+        self.assertEqual(result['ratings'], {'first/a': None, 'second/b': None})
+        with closing(self.training._connect()) as con:
+            after = snapshot(con, self.catalog, 'student', [*self.refs, 'first/c'])
+            self.assertEqual(con.execute('SELECT COUNT(*) FROM training_memory').fetchone()[0], 0)
+        self.assertTrue(all(row['learned'] for row in after[:2]))
+        self.assertTrue(all(row['memory']['card_json'] is None for row in after[:2]))
+        self.assertEqual(after[0]['memory']['due_at'], (self.when + timedelta(hours=6)).isoformat())
+        self.assertFalse(after[2]['learned'])
+
+    def test_advanced_first_failure_does_not_mark_point_learned(self):
+        self.access['is_advanced_learner'] = True
+        result = self.answer(values={'a': 'wrong', 'b': '蓝色'})['result']
+        self.assertEqual(result['ratings'], {'first/a': 1, 'second/b': None})
+        with closing(self.training._connect()) as con:
+            rows = snapshot(con, self.catalog, 'student', self.refs)
+        self.assertFalse(rows[0]['learned'])
+        self.assertIsNotNone(rows[0]['memory']['card_json'])
+        self.assertTrue(rows[1]['learned'])
+        # Re-answering the mixed card may teach a, but must not reschedule b early.
+        before = deepcopy(rows[1]['memory'])
+        result = self.answer()['result']
+        self.assertEqual(result['ratings'], {'first/a': None})
+        with closing(self.training._connect()) as con:
+            after = snapshot(con, self.catalog, 'student', self.refs)
+        self.assertEqual(after[1]['memory'], before)
+
+    def test_advanced_bypasses_mastery_threshold_but_not_content_permissions(self):
+        self.access['is_advanced_learner'] = True
+        self.seed(stability=1)
+        self.assertTrue(self.status()['unlocked'])
+        self.access['topics'] = [t for t in self.access['topics'] if t['id'] != 'second']
+        self.assertFalse(self.status()['unlocked'])
+        with self.assertRaises(DomainError):
+            self.training.open('linked-bank', 'goal-group', 'goal', 'forbidden')
+
+    def test_advanced_does_not_bypass_pause_or_in_flight_topic_work(self):
+        self.access['is_advanced_learner'] = True
+        with self.atoms['first']._transaction() as con:
+            state = self.atoms['first']._load(con)
+            state['pause'] = {'reason': 'test'}
+            self.atoms['first']._save(con, state)
+        self.assertFalse(self.status()['unlocked'])
+        with self.atoms['first']._transaction() as con:
+            state = self.atoms['first']._load(con)
+            state.update(pause=None, active={'id': 'busy'})
+            self.atoms['first']._save(con, state)
+        with self.assertRaises(DomainError):
+            self.training.open('linked-bank', 'goal-group', 'goal', 'busy')
+
+    def test_qualification_revoked_before_submit_preserves_unlearned_points(self):
+        self.access['is_advanced_learner'] = True
+        attempt = self.training.open('linked-bank', 'goal-group', 'goal', 'before-revocation')
+        self.access['is_advanced_learner'] = False
+        with self.assertRaises(DomainError):
+            self.training.submit({'request_id': 'after-revocation', 'attempt_id': attempt,
+                                  'answer': json.dumps({'a': '红色', 'b': '蓝色'})})
+        with closing(self.training._connect()) as con:
+            self.assertTrue(all(not row['learned'] for row in snapshot(con, self.catalog, 'student', self.refs)))
+
     def test_first_learning_or_low_stability_does_not_unlock(self):
         self.seed(stability=6.99)
         self.assertFalse(self.status()['unlocked'])

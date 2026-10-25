@@ -17,6 +17,11 @@ REFERENCE = re.compile(r'([A-Za-z0-9][A-Za-z0-9_.-]{0,127})/([A-Za-z0-9][A-Za-z0
 DEFAULT_UNLOCK = {'min_successful_reviews': 1, 'min_stability_days': 7, 'min_retrievability': .90}
 
 
+def bypass_mastery(access):
+    """Qualification bypasses prior mastery, never content access or active work."""
+    return bool(access and access.get('is_advanced_learner'))
+
+
 def split_reference(value):
     match = REFERENCE.fullmatch(value) if isinstance(value, str) else None
     if not match:
@@ -85,16 +90,16 @@ def snapshot(con, catalog, learner, references, access=None):
     return rows
 
 
-def eligibility(rows, current, policy=None):
+def eligibility(rows, current, policy=None, *, allow_unlearned=False):
     current = utc_time(current)
     thresholds = {**DEFAULT_UNLOCK, **(policy or {})}
     scheduler = Scheduler()
     result = []
     for row in rows:
         memory, state = row['memory'], row['state']
-        reason = None if row['learned'] and row['available'] else 'not_learned'
+        reason = None if row['available'] and (row['learned'] or allow_unlearned) else 'not_learned'
         stability, retrievability, successful = None, None, 0
-        if policy is not None and reason is None:
+        if policy is not None and reason is None and not allow_unlearned:
             if memory.get('card_json'):
                 card = Card.from_json(memory['card_json'])
                 stability = card.stability
@@ -117,9 +122,9 @@ def eligibility(rows, current, policy=None):
             'missing_point_count': sum(not r['ready'] for r in result)}
 
 
-def require_available(con, rows, learner, current, reservation_owner=None):
+def require_available(con, rows, learner, current, reservation_owner=None, *, allow_unlearned=False):
     for row in rows:
-        if not row['learned'] or not row['available']:
+        if not row['available'] or not (row['learned'] or allow_unlearned):
             raise DomainError('prerequisites_not_ready', '请先学习题目关联的记忆点。', 409)
         state = row['state']
         if state.get('pending_submission_id') or state.get('active'):
@@ -134,6 +139,6 @@ def pinned(rows):
     return [{k: r[k] for k in ('reference', 'topic_id', 'local_id', 'version', 'point_id', 'fingerprint')} for r in rows]
 
 
-def unchanged(rows, pin):
-    return pinned(rows) == pin and all(r['available'] and r['learned'] and not r['state'].get('active')
+def unchanged(rows, pin, *, allow_unlearned=False):
+    return pinned(rows) == pin and all(r['available'] and (r['learned'] or allow_unlearned) and not r['state'].get('active')
         and not r['state'].get('pending_submission_id') for r in rows)

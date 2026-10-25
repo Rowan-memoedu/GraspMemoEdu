@@ -292,15 +292,16 @@ class AtomicLearningService(LearningService):
                             submission_id=item['id'])
                 continue
             passed = point_correct[point_id]
-            rating = (None if passed else 1) if state['mode'] == 'learn' else (state['policy']['correct_rating'] if passed else 1)
+            learning = state['mode'] == 'learn' or point_id in active.get('learning_point_ids', [])
+            rating = (None if passed else 1) if learning else (state['policy']['correct_rating'] if passed else 1)
             ratings[point_id] = rating
             if rating is not None:
                 scheduled = self.engine.schedule(memory['card_json'], rating, when, item['elapsed_ms'])
                 memory.update(card_json=scheduled['card_json'], due_at=scheduled['due_at'], last_rating=rating)
                 self._event(con, state, 'atomic_rating', point_id=point_id, card_id=active['card_id'],
                             submission_id=item['id'], rating=rating, review_log=scheduled['review_log_json'],
-                            algorithm=scheduled['algorithm'], scheduler=scheduled['scheduler_json'], mode=state['mode'])
-            if state['mode'] == 'learn' and passed:
+                            algorithm=scheduled['algorithm'], scheduler=scheduled['scheduler_json'], mode='learn' if learning else 'review')
+            if learning and passed:
                 memory.update(mastered=True, first_passed_at=when.isoformat())
                 first_due = when + timedelta(seconds=state['policy']['first_review_seconds'])
                 memory['due_at'] = first_due.isoformat()

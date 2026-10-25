@@ -113,7 +113,7 @@ class DependencyPolicy:
         return point_gate['missing_point_count'] + sum(not healthy(parent) for parent in set(dependencies.get(topic_id, [])))
 
     def group_point_status(self, con, access, node_id, current_time=None):
-        from .linked_points import snapshot, eligibility
+        from .linked_points import snapshot, eligibility, bypass_mastery
         bank, group = self.group_content(node_id)
         if not group:
             return {'unlocked': True, 'points': [], 'missing_point_count': 0}
@@ -121,7 +121,7 @@ class DependencyPolicy:
         refs = policy['point_ids'] if policy else list(dict.fromkeys(
             p for q in group.get('questions', []) for p in q.get('point_ids', [])))
         rows = snapshot(con, self.catalog, access['learner_id'], refs, access)
-        return eligibility(rows, current_time or now(), policy)
+        return eligibility(rows, current_time or now(), policy, allow_unlearned=bypass_mastery(access))
 
     def group_content(self, node_id):
         parts = group_parts(node_id)
