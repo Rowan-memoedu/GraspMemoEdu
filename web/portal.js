@@ -1,23 +1,23 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=de2930d43f5ffcf2";
-import { createReviewView } from "./review.js?v=de2930d43f5ffcf2";
-import { renderCourseGraph } from "./course-graph.js?v=de2930d43f5ffcf2";
-import {questionInput, choiceTypeField} from './question-input.js?v=de2930d43f5ffcf2';
-import {enhanceTopicContent} from './topic-content.js?v=de2930d43f5ffcf2';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=de2930d43f5ffcf2';
-import {createCatalogPicker} from './catalog-picker.js?v=de2930d43f5ffcf2';
-import {catalogPath, courseWorkspaceId, createWorkspaceLocations, catalogView, workspaceLayout} from './catalog-workspace.js?v=de2930d43f5ffcf2';
-import {createAtomicView} from './atomic.js?v=de2930d43f5ffcf2';
-import {sourceAttributions} from './memory-chunk.js?v=de2930d43f5ffcf2';
-import {createTrainingView} from './training.js?v=de2930d43f5ffcf2';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=de2930d43f5ffcf2";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=8f6629f316cc79a6";
+import { createReviewView } from "./review.js?v=8f6629f316cc79a6";
+import { renderCourseGraph } from "./course-graph.js?v=8f6629f316cc79a6";
+import {questionInput, choiceTypeField} from './question-input.js?v=8f6629f316cc79a6';
+import {enhanceTopicContent} from './topic-content.js?v=8f6629f316cc79a6';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=8f6629f316cc79a6';
+import {createCatalogPicker} from './catalog-picker.js?v=8f6629f316cc79a6';
+import {catalogPath, courseWorkspaceId, createWorkspaceLocations, catalogView, workspaceLayout} from './catalog-workspace.js?v=8f6629f316cc79a6';
+import {createAtomicView} from './atomic.js?v=8f6629f316cc79a6';
+import {sourceAttributions} from './memory-chunk.js?v=8f6629f316cc79a6';
+import {createTrainingView} from './training.js?v=8f6629f316cc79a6';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=8f6629f316cc79a6";
 
-import {createPaperView} from './review-papers.js?v=de2930d43f5ffcf2';
-import {createContextLibraryView} from './context-library.js?v=de2930d43f5ffcf2';
+import {createPaperView} from './review-papers.js?v=8f6629f316cc79a6';
+import {createContextLibraryView} from './context-library.js?v=8f6629f316cc79a6';
 
-import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=de2930d43f5ffcf2';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=de2930d43f5ffcf2';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=de2930d43f5ffcf2';
-import {createStudentDashboard} from './student-dashboard.js?v=de2930d43f5ffcf2';
+import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=8f6629f316cc79a6';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=8f6629f316cc79a6';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=8f6629f316cc79a6';
+import {createStudentDashboard} from './student-dashboard.js?v=8f6629f316cc79a6';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -37,7 +37,7 @@ const roundButton = (text, action) => control(text, "portalStart", action);
 export function initPortal(bridge) {
   let chatModule, attachChatEditor, renderChatMarkdown;
   async function loadChat() {
-    const module = await (chatModule ||= import('./vendor/chat/chat.js?v=de2930d43f5ffcf2').catch(error => { chatModule = null; throw error; }));
+    const module = await (chatModule ||= import('./vendor/chat/chat.js?v=8f6629f316cc79a6').catch(error => { chatModule = null; throw error; }));
     ({attachChatEditor, renderChatMarkdown} = module);
     module.configureChatImages(ident => bridge.request('help-images?image_id=' + encode(ident)));
   }
@@ -484,7 +484,7 @@ export function initPortal(bridge) {
 
   async function renderCourses() {
     const ticket = sequence;
-    if (!catalog.courses.length) { root.replaceChildren(renderSubjectEmpty(activeSubject)); await renderGraphLibrary(ticket); return; }
+    if (!catalog.courses.length) { root.replaceChildren(renderSubjectEmpty(activeSubject)); void renderGraphLibrary(ticket); return; }
     function courseCard(course, rootId = null) {
       const card = node("article", "courseChoice"); card.dataset.courseId = course.id;
       card.append(node("h2", "", course.title), node("p", "courseDescription", course.description || ""));
@@ -535,7 +535,9 @@ export function initPortal(bridge) {
       renderEntry: courseCard, expanded: expandedUnits, keyPrefix: `select:course:${currentRoute.subjectId}`});
     root.replaceChildren(heading, grid);
     if (bridge.getAccess()?.role === 'account' && !catalog.courses.some(course => course.available)) root.insertBefore(emptyBox(t('portal.no.courses.are.enabled.for.your.account.please.contact.your.admin.29')), grid);
-    await renderGraphLibrary(ticket);
+    // Graph-only courses are supplementary; their request must not keep the
+    // already rendered course choices inert or delay navigation into a lesson.
+    void renderGraphLibrary(ticket);
   }
 
   async function renderGraphLibrary(ticket) {

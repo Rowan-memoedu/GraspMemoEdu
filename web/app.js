@@ -1,13 +1,13 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=de2930d43f5ffcf2";
-import {answerReady} from './question-input.js?v=de2930d43f5ffcf2';
-import {reportableContent} from './content-report.js?v=de2930d43f5ffcf2';
-import {createLearningCache} from './learning-cache.js?v=de2930d43f5ffcf2';
-import {createReadCache, createContentCache, createValidationCache, readLifetime, contentPath, contentKey} from './response-cache.js?v=de2930d43f5ffcf2';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=8f6629f316cc79a6";
+import {answerReady} from './question-input.js?v=8f6629f316cc79a6';
+import {reportableContent} from './content-report.js?v=8f6629f316cc79a6';
+import {createLearningCache} from './learning-cache.js?v=8f6629f316cc79a6';
+import {createReadCache, createContentCache, createValidationCache, readLifetime, contentPath, contentKey} from './response-cache.js?v=8f6629f316cc79a6';
 
-import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, readerHistorySteps, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState, topicProgress, topicHistory} from './learning-ui.js?v=de2930d43f5ffcf2';
-import {selfAssessment} from './self-assessment.js?v=de2930d43f5ffcf2';
-import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=de2930d43f5ffcf2';
-import {renderSourceReader} from './learning-ui.js?v=de2930d43f5ffcf2';
+import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, readerHistorySteps, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState, topicProgress, topicHistory} from './learning-ui.js?v=8f6629f316cc79a6';
+import {selfAssessment} from './self-assessment.js?v=8f6629f316cc79a6';
+import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=8f6629f316cc79a6';
+import {renderSourceReader} from './learning-ui.js?v=8f6629f316cc79a6';
 
 applyStaticTranslations();
 
@@ -231,21 +231,26 @@ function retireLegacyConnection() {
 
 async function request(path, options = {}) {
   const method = options.method || 'GET';
-  const mutation = method !== 'GET' && path.split('?')[0] !== 'presence';
-  if (mutation) responseCache.clear();
+    const endpoint = path.split('?')[0];
+    const mutation = method !== 'GET' && endpoint !== 'presence';
+    // Selecting a course only updates preferences. Keep the other workspace's
+    // cached reads; learning writes and identity changes still invalidate all.
+    const invalidateReads = () => endpoint === 'catalog/select'
+      ? responseCache.clear('catalog', 'profile', 'dashboard') : responseCache.clear();
+    if (mutation) invalidateReads();
   try {
     const ttl = readLifetime(path);
     if (method === 'GET' && ttl && access && !options.fresh && !options.bootstrap
         && !options.identityOverride && !options.suppressIdentity && !options.identityOperation) {
       const generation = identityGeneration, connection = connectionGeneration;
       const result = await responseCache.get(JSON.stringify([cacheScope(), generation, path]), ttl,
-        () => requestNetwork(path, options), connection);
+          () => requestNetwork(path, options), connection, endpoint);
       if (generation !== identityGeneration || connection !== connectionGeneration)
         throw new ApiError(t("身份或学习页面已更新，请重试。"), 0, "connection_changed");
       return result;
     }
     return await requestNetwork(path, options);
-  } finally { if (mutation) responseCache.clear(); }
+    } finally { if (mutation) invalidateReads(); }
 }
 
 async function requestNetwork(path, { method = "GET", body, bootstrap = false, timeout = REQUEST_TIMEOUT, reauthenticated = false, skipIdentity = false, suppressIdentity = false, identityOverride, identityOperation = false, deploymentRetried = false, keepalive = false, contentRetried = false, stateRetried = false } = {}) {
@@ -1561,9 +1566,9 @@ async function openTopic(id, subjectId, initial = null) {
   }
 }
 
-const { initPortal } = await import("./portal.js?v=de2930d43f5ffcf2");
-const {startPresence} = await import('./presence.js?v=de2930d43f5ffcf2');
-const {visibleContentTopics} = await import('./content-report.js?v=de2930d43f5ffcf2');
+const { initPortal } = await import("./portal.js?v=8f6629f316cc79a6");
+const {startPresence} = await import('./presence.js?v=8f6629f316cc79a6');
+const {visibleContentTopics} = await import('./content-report.js?v=8f6629f316cc79a6');
 startPresence({getAccess: () => identityProblem ? null : access, request, getTopics: visibleContentTopics});
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {

@@ -653,7 +653,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         access = access_store.resolve(request.headers.get('x-learning-identity'))
         subjects.authorize_subject(access, subject_id)
         try:
-            store = GraphStore(settings, catalog, subjects)
+            store = GraphStore(settings, catalog, subjects, training)
             rows = []
             for graph in store.all():
                 if graph['subject_id'] != subject_id:
@@ -672,7 +672,7 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         access = access_store.resolve(request.headers.get('x-learning-identity'))
         subjects.authorize_subject(access, subject_id)
         try:
-            store = GraphStore(settings, catalog, subjects)
+            store = GraphStore(settings, catalog, subjects, training)
             graph = store.load(course_id)
             if graph is None and course_id in training.banks:
                 bank = training.bank(course_id)

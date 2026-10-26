@@ -34,6 +34,10 @@ Topic 和题组的未完成树、完成图标、按日期排列的完成记录�
 
 `scripts/course_workspace_acceptance.mjs` 使用 `scripts/bank_navigation_fixture.py` 的隔离数据逐学科检查选课、模块返回、旧链接、刷新、前进后退、选择失败重试及中英文窄屏布局；`scripts/bank_navigation_acceptance.mjs` 保留题库草稿、滚动位置和单卡复习回归。正式学习记录不用于验收。
 
+课程目录先恢复可操作状态，补充图谱列表在后台加载，旧页面的响应由路由序号拦截。图谱接口复用应用启动时已校验的 `TrainingCatalog`，不随每次请求重读整套题库；图谱文件仍按请求读取，保留实时更新与权限投影。选课只使目录、偏好和课程任务缓存失效，保留题库目录、题组及图谱的有效缓存；作答、其他写入和身份变化仍清空读缓存。缓存时限不因选课延长，学习状态与权限不写入磁盘。
+
+`scripts/workspace_performance_acceptance.mjs` 配合 `scripts/performance_fixture.py` 验证慢图谱不会阻塞选课、过期响应不覆盖新页面、跨课程与题库切换不重复读取已缓存内容，以及作答后进度重新验证。`tests/test_course_graph.py` 检查图谱请求不重建题库，同时保留图谱实时更新与权限验证。
+
 `scripts/shared_architecture_fixture.py` 与 `scripts/shared_architecture_acceptance.mjs` 使用隔离合成数据检查每学科的 15 个页面，连续跨学科切换并对照可见 DOM 结构。检查等待实际内容加载完成，忽略编辑器运行时生成的样式编号；个人报告因累积记录不同只检查可正常呈现。阅读容器在内容切换后清理旧的反向链接样式状态，页面不能依赖此前访问过哪个学科。
 
 测试材料通过独立标记保留，仅高阶学员测试账号（同时具备高阶和学员资格）及管理员测试账号可见，正式账号均不可见。课程、题库、复习、管理报告、答疑历史和指南共用同一策略；配置与恢复边界见 [测试材料机制](test-materials.md)。

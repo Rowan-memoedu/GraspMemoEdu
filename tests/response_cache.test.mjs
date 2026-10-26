@@ -39,6 +39,25 @@ test('reads coalesce, callers cannot mutate shared data, writes invalidate pendi
   assert.deepEqual(await cache.get('a', 10, async () => ({items: ['fresh']})), {items: ['fresh']});
 });
 
+test('preference invalidation fences its in-flight reads and retains other workspaces', async () => {
+  const cache = createReadCache();
+  let finishOld, finishBank;
+  const old = cache.get('catalog/math', 1000, () => new Promise(resolve => { finishOld = resolve; }), '', 'catalog');
+  const bank = cache.get('bank/math', 1000, () => new Promise(resolve => { finishBank = resolve; }), '', 'training/bank');
+  await cache.get('graphs/math', 1000, async () => ({title: 'graph'}), '', 'graphs');
+  await Promise.resolve();
+  cache.clear('catalog', 'profile', 'dashboard');
+  const selected = await cache.get('catalog/math', 1000, async () => ({selected: 'new'}), '', 'catalog');
+  finishOld({selected: 'old'}); finishBank({progress: 30});
+  await Promise.all([old, bank]);
+  const unexpected = () => { throw Error('unnecessary network request'); };
+  assert.deepEqual(await cache.get('catalog/math', 1000, unexpected), selected);
+  assert.deepEqual(await cache.get('bank/math', 1000, unexpected), {progress: 30});
+  assert.deepEqual(await cache.get('graphs/math', 1000, unexpected), {title: 'graph'});
+  cache.clear();
+  assert.deepEqual(await cache.get('bank/math', 1000, async () => ({progress: 40})), {progress: 40});
+});
+
 function storage() {
   const records = new Map();
   return {records, read: async key => records.get(key), write: async row => records.set(row.key, structuredClone(row)),

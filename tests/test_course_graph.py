@@ -142,6 +142,31 @@ class CourseGraphTests(unittest.TestCase):
             self.assertEqual(client.get('/api/graphs?subject_id=physics', headers=headers).json()['graphs'], [])
             self.assertEqual(client.get(url, headers=headers).status_code, 404)
 
+    def test_graph_reads_reuse_loaded_training_catalog_and_keep_live_graph_updates(self):
+        self.graph.update(subject_id='math', course_id='course-a',
+                          nodes=[{'topic_id': 'topic-a', 'title': 'Available'}], edges=[])
+        self.write(self.source, self.graph)
+        installed = import_graph(self.settings, self.source, apply=True)
+        app = create_app(self.settings, LearningService(self.topic, self.data, DeterministicJudge()))
+        origin = 'http://127.0.0.1:8767'
+        with TestClient(app, base_url=origin) as client:
+            transport = client.get('/api/session', headers={'Origin': origin}).json()['session_token']
+            headers = {'Origin': origin, 'X-Learning-Session': transport}
+            guest = client.post('/api/access/guest', json={}, headers=headers).json()
+            headers['X-Learning-Identity'] = guest['identity_token']
+            with patch('graspmemoedu.course_graph.TrainingCatalog',
+                       side_effect=AssertionError('A request must not reread and revalidate every bank')):
+                for title in ('Graph only', 'Updated graph'):
+                    self.graph['title'] = title
+                    self.write(Path(installed['path']), self.graph)
+                    listing = client.get('/api/graphs?subject_id=math', headers=headers)
+                    self.assertEqual(listing.status_code, 200, listing.text)
+                    self.assertEqual(listing.json()['graphs'][0]['title'], title)
+                    graph = client.get('/api/graphs/course-a?subject_id=math', headers=headers)
+                    self.assertEqual(graph.status_code, 200, graph.text)
+                    self.assertEqual(graph.json()['title'], title)
+                    self.assertEqual(graph.json()['nodes'][0]['topic_id'], 'topic-a')
+
     def test_backup_roundtrip_includes_graph_history(self):
         LearningService(self.topic, self.data, DeterministicJudge())
         first = import_graph(self.settings, self.source, apply=True)

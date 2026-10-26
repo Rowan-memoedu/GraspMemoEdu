@@ -86,27 +86,32 @@ export function createReadCache({now = Date.now} = {}) {
   const values = new Map(), pending = new Map();
   let epoch = 0;
   return {
-    clear() { epoch++; values.clear(); pending.clear(); },
-    async get(key, ttl, load, pendingTag = '') {
+    clear(...tags) {
+      if (!tags.length) { epoch++; values.clear(); pending.clear(); return; }
+      for (const [key, value] of values) if (tags.includes(value.tag)) values.delete(key);
+      for (const [key, value] of pending) if (tags.includes(value.tag)) pending.delete(key);
+    },
+    async get(key, ttl, load, pendingTag = '', tag = '') {
       const saved = values.get(key);
       if (saved && now() - saved.at < ttl) return clone(saved.value);
       const flight = JSON.stringify([key, pendingTag]);
-      if (pending.has(flight)) return clone(await pending.get(flight));
+      if (pending.has(flight)) return clone(await pending.get(flight).task);
       const generation = epoch;
       const task = Promise.resolve().then(load);
-      pending.set(flight, task);
+      const entry = {task, tag};
+      pending.set(flight, entry);
       try {
         const value = await task;
-        if (generation === epoch) {
+        if (generation === epoch && pending.get(flight) === entry) {
           if (ttl > 0) {
             values.delete(key);
-            values.set(key, {at: now(), value: clone(value)});
+            values.set(key, {at: now(), value: clone(value), tag});
             if (values.size > MAX_ENTRIES) values.delete(values.keys().next().value);
           }
         }
         return clone(value);
       } finally {
-        if (pending.get(flight) === task) pending.delete(flight);
+        if (pending.get(flight) === entry) pending.delete(flight);
       }
     },
   };
