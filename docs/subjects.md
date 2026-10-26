@@ -1,6 +1,6 @@
 # GraspMemoEdu 学科配置与扩展
 
-CS 分区使用固定标识 `cs`，显示为「计算机科学 / Computer Science」，沿用共用模板、青色主题与 CS 徽标。总首页及 `#/subjects/cs/learn`、`courses`、`banks`、`reviews`、`guide` 接入现有模块；账号、权限、学习和复习规则共用。实际内容由服务器配置决定，空学科显示标准空状态。后端学科名单只定义于 `subject_registry.py`，所有内容与功能校验读取同一注册信息；整体边界见[共用平台](shared-platform.md)。
+CS 分区使用固定标识 `cs`，显示为「计算机科学 / Computer Science」，沿用共用模板、青色主题与 CS 徽标。总首页及 `#/subjects/cs/courses`、`banks`、`reviews`、`guide` 接入现有模块；学习位于课程入口内，账号、权限、学习和复习规则共用。实际内容由服务器配置决定，空学科显示标准空状态。后端学科名单只定义于 `subject_registry.py`，所有内容与功能校验读取同一注册信息；整体边界见[共用平台](shared-platform.md)。
 
 课程图谱可以独立于教学内容导入，见[独立课程图谱](course-graph.md)。尚无教学课程的学科也可显示其已导入图谱；这不改变 `course_ids`、课程数量、账号权限或学习进度。
 
@@ -57,9 +57,9 @@ CS 分区使用固定标识 `cs`，显示为「计算机科学 / Computer Scienc
 
 ## 路由、身份与兼容
 
-学科内页面为 `#/subjects/<id>/learn`、`courses`、`guide`、`topic/<topic-id>`、`review/<topic-id>/<module-id>`。顶栏 GraspMemoEdu 返回总首页；独立学科标识返回该学科学习页。全局设置和帮助保留 `#/settings`、`#/help`。每张课程卡片可直接进入学习进度或打开知识图谱，复用已有页面与组件，不会改变当前选课；未获课程访问权限时相应入口禁用。
+学科内页面为 `#/subjects/<id>/courses`、`courses/<course-id>`、`banks`、`banks/<bank-id>`、`guide`、`topic/<topic-id>`、`review/<topic-id>/<module-id>`。学科默认入口和独立学科标识进入课程目录；顶部课程与题库标签各自恢复本次访问中的最后位置。全局设置和帮助保留 `#/settings`、`#/help`。每张课程卡片可直接进入学习进度或打开知识图谱，复用已有页面与组件，不会改变当前选课；未获课程访问权限时相应入口禁用。
 
-旧 `#/learn`、`#/courses`、`#/guide`、`#/topic/...` 和 `#/review/...` 会转入数学并原样保留查询参数。Topic ID、课程版本、学习记录、复习卡片和浏览器身份键不变。新增 `learner_subject_preferences` 保存每科选课；数学未产生新选择时读取旧选课记录，不改写旧行。
+旧 `#/learn`、`#/courses`、`#/guide`、`#/topic/...` 和 `#/review/...` 会转入数学并保留查询参数；`learn` 随后按原选课或历史任务归属转入 `courses/<course-id>`，没有选课则进入课程目录。Topic ID、课程版本、学习记录、复习卡片和浏览器身份键不变。`learner_subject_preferences` 保存每科选课；数学未产生新选择时读取旧选课记录，不改写旧行。
 
 同一账号在全部学科通用，课程权限仍由 Topic 与功能决定。默认权限账号继承新增 Topic，明确列表权限保持原授权；单独调整学科归属不会修改账号权限。游客可进入全部六科，访问已发布的课程、Topic、指南和资源；既有游客身份自动获得这些访问权限，无需重新注册或迁移记录。游客不能主动暂停 Topic，体验浏览偏好保持原行为。开放学科不恢复已下线的测试内容。
 

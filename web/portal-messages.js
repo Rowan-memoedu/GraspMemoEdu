@@ -1,4 +1,5 @@
 export const portalMessages = {
+  'portal.reselectTopic': ['重新选择主题', 'Choose another topic'],
   'portal.hideLocked': ['隐藏暂未解锁的内容', 'Hide content with unmet prerequisites'],
   'portal.expandAll': ['一键展开', 'Expand all'],
   'portal.collapseAll': ['一键收起', 'Collapse all'],

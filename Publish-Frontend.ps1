@@ -14,6 +14,7 @@ $expected += @('training.js','training.css','training-messages.js','learning-ui.
 $expected += @('math-presentation.js')
 $expected += @('review-papers.js','review-paper-messages.js')
 $expected += @('review-directory.js','task-tree.js','catalog-outline.js','content-timer.js','self-assessment.js')
+$expected += @('catalog-workspace.js')
 $expected += @('memory-chunk.js')
 $expected += @('academy-messages.js')
 $expected += @('hyperskill.js')

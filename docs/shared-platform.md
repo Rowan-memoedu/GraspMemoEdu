@@ -6,7 +6,7 @@
 
 学科配置进入共用目录和路由，内容类型选择共用业务服务，作答能力连接相应的输入与判题适配器。改变 `subject_id` 不得改变同种内容的流程、评分、FSRS、权限或状态保存方式。
 
-- 页面入口：学习、课程、题库、复习、答疑、指南、设置与学习报告由同一个前端和对应 API 提供。没有学科专用页面实现。
+- 页面入口：课程、题库、复习、答疑、指南、设置与学习报告由同一个前端和对应 API 提供。学习收在课程入口内，没有独立学习页或学科专用页面实现。
 - 前置依赖：Topic 与题组共用 `GraphStore` 和 `DependencyPolicy`，支持跨课程、跨题库的混合图谱；权限、完成状态、到期复习和暂停统一参与解锁。列表隐藏只消费同一份 `dependency_ready`，不另算前置条件。格式见 `docs/course-graph.md` 协议 3。
 - 内容模型：课程 Topic、独立题库、纯阅读内容各有明确归属。范式、原子与混合 Topic 的差异由内容结构决定，对每个学科都适用。
 - 作答适配：网页作答、IDEA Check、Hyperskill 回传是输入与判题能力，不定义一套学科架构。IDEA 和 Hyperskill 绑定不以 CS 作为能力开关，记忆点记录实际内容所属学科。
@@ -28,6 +28,12 @@
 
 Topic 和题组的未完成树、完成图标、按日期排列的完成记录及展开／收起控件共用渲染器；原生题库仅负责将自己的首次作答记录投影为任务。完成后的复习独立于首次学习列表，不把题组重新加入层级。共同树渲染器只保留尚有任务的祖先容器。
 
+课程和题库共用 `web/catalog-workspace.js` 的目录、任务页布局、作用域链接及按学科隔离的页面位置记录。`catalog-outline.js` 负责目录树，`task-tree.js` 负责任务树；`portal.js` 与 `training.js` 分别适配课程和原生题库的数据，共用概览栏、任务控件和完成记录。两者的概览栏都在百分比右侧提供“重新选择主题”，明确返回各自目录。该操作不清空选课偏好、草稿或学习状态。
+
+课程任务页的地址包含课程 ID，可选 `root` 指定模块；进入 Topic 或范式复习时携带 `course` 和 `root`，返回位置不依赖之后的选课偏好。`learn` 仅在 `portal.js` 的兼容分支解析为新课程地址，不再渲染另一份页面。顶部课程、题库入口恢复当前访问中各自的最后位置；身份或权限变化清空位置记录，单卡复习不覆盖题库位置。
+
+`scripts/course_workspace_acceptance.mjs` 使用 `scripts/bank_navigation_fixture.py` 的隔离数据逐学科检查选课、模块返回、旧链接、刷新、前进后退、选择失败重试及中英文窄屏布局；`scripts/bank_navigation_acceptance.mjs` 保留题库草稿、滚动位置和单卡复习回归。正式学习记录不用于验收。
+
 `scripts/shared_architecture_fixture.py` 与 `scripts/shared_architecture_acceptance.mjs` 使用隔离合成数据检查每学科的 15 个页面，连续跨学科切换并对照可见 DOM 结构。检查等待实际内容加载完成，忽略编辑器运行时生成的样式编号；个人报告因累积记录不同只检查可正常呈现。阅读容器在内容切换后清理旧的反向链接样式状态，页面不能依赖此前访问过哪个学科。
 
 测试材料通过独立标记保留，仅高阶学员测试账号（同时具备高阶和学员资格）及管理员测试账号可见，正式账号均不可见。课程、题库、复习、管理报告、答疑历史和指南共用同一策略；配置与恢复边界见 [测试材料机制](test-materials.md)。
@@ -35,6 +41,7 @@ Topic 和题组的未完成树、完成图标、按日期排列的完成记录�
 | 层 | 入口 | 职责 |
 | --- | --- | --- |
 | 学科外观与路由 | `web/subjects.js`、`graspmemoedu/subjects.py`、`subject_registry.py` | 全部注册学科的主题、路由、课程归属；旧数学路径继续兼容 |
+| 课程与题库工作区 | `web/catalog-workspace.js`、`web/catalog-outline.js`、`web/task-tree.js` | 共用目录、模块内任务布局、主题重选与页面位置；内容服务分别适配 |
 | 课程与内容 | `catalog.py`、`author_import.py`、`scripts/import_course.mjs` | 作者 Markdown 机械导入、离线公式、来源校验、稳定 Topic ID |
 | Lesson | `service.py`、`module_flow.py`、`web/app.js` | 掌握选择、指导、练习、模块跳过、自动暂停与冷却、幂等提交、历史与草稿 |
 | 复习 | `review.py`、`review_api.py`、`web/review.js` | FSRS、到期任务、持久练习队列；沿用原评分政策 |

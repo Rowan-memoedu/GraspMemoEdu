@@ -1,18 +1,18 @@
-import {t, translateMessage} from './i18n.js?v=9e9c460f546bac53';
-import {answerReady, answerEmpty} from './question-input.js?v=9e9c460f546bac53';
-import {createLearningCache} from './learning-cache.js?v=9e9c460f546bac53';
-import {appendCatalogOutline} from './catalog-outline.js?v=9e9c460f546bac53';
-import {helpableContent} from './content-report.js?v=9e9c460f546bac53';
-import {ratingChoices} from './self-assessment.js?v=9e9c460f546bac53';
-import {pointAssessment} from './point-assessment.js?v=9e9c460f546bac53';
-import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=9e9c460f546bac53';
+import {t, translateMessage} from './i18n.js?v=de2930d43f5ffcf2';
+import {answerReady, answerEmpty} from './question-input.js?v=de2930d43f5ffcf2';
+import {createLearningCache} from './learning-cache.js?v=de2930d43f5ffcf2';
+import {catalogView, catalogPath, workspaceLayout} from './catalog-workspace.js?v=de2930d43f5ffcf2';
+import {helpableContent} from './content-report.js?v=de2930d43f5ffcf2';
+import {ratingChoices} from './self-assessment.js?v=de2930d43f5ffcf2';
+import {pointAssessment} from './point-assessment.js?v=de2930d43f5ffcf2';
+import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=de2930d43f5ffcf2';
 
 const node = (tag, cls = '', text) => { const n = document.createElement(tag); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const button = (text, cls, action) => { const n = node('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
 const encode = encodeURIComponent;
 const query = fields => new URLSearchParams(fields).toString();
 const ratingKeys = ['', 'training.again', 'training.hard', 'training.good', 'training.easy', 'training.retire'];
-import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, renderReviewReader} from './learning-ui.js?v=9e9c460f546bac53';
+import {answerEditor, readerFrame, readerStepTitle, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, renderReviewReader} from './learning-ui.js?v=de2930d43f5ffcf2';
 
 export function createTrainingView(bridge) {
   const {root, request, href, formatDate, getAccess} = bridge;
@@ -123,20 +123,17 @@ export function createTrainingView(bridge) {
     const parts = path.split('/').filter(Boolean).map(decodeURIComponent);
     if (parts.length === 1) {
       const data = await request('training/catalog'); if (e !== epoch) return;
-      const grid = node('div', 'courseGrid'); root.replaceChildren(node('h1', 'portalPageTitle', t('training.banks')), grid);
-      grid.before(bridge.taskVisibilityOptions(root));
       const bankCard = (bank, rootId = null) => {
         const card = node('article', 'courseChoice');
         card.dataset.bankId = bank.id;
         card.dataset.dependencyReady = String(bank.dependency_ready !== false);
         card.append(node('h2', '', bank.title), node('p', 'courseDescription', bank.description),
-          link(t('training.train'), `/banks/${encode(bank.id)}${rootId ? '?root=' + encode(rootId) : ''}`, 'primaryButton courseLearn'));
+          link(t('training.train'), catalogPath('banks', bank.id, rootId), 'primaryButton courseLearn'));
         return card;
       };
-      for (const bank of data.banks) {
-        const card = bankCard(bank);
-        appendCatalogOutline(card, bank, bankCard, {expanded: expandedCatalog, keyPrefix: 'select:bank'}); grid.append(card);
-      }
+      const {heading, grid} = catalogView({title: t('training.banks'), entries: data.banks,
+        renderEntry: bankCard, expanded: expandedCatalog, keyPrefix: 'select:bank'});
+      root.replaceChildren(heading, grid); grid.before(bridge.taskVisibilityOptions(root));
       if (!data.banks.length) grid.append(node('p', 'portalEmpty', t('training.empty')));
     } else if (parts.length === 2) {
       const bank = await request('training/bank?' + query({bank_id: parts[1], ...(selectedRoot ? {root_id: selectedRoot} : {})})); if (e !== epoch) return;
@@ -158,12 +155,12 @@ export function createTrainingView(bridge) {
         pending_hierarchy: containers.map(g => ({...g, parent_id: containers.some(parent => parent.id === g.parent_id) ? g.parent_id : null,
           topic_ids: bank.groups.filter(child => (child.question_count || child.introduction_count)
           && (child.id === g.id || child.parent_id === g.id && !containers.some(c => c.id === child.id))).map(child => child.id)}))};
-      const layout = node('div', 'dashboardLayout'), tasks = node('div', 'dashboardTasks');
+      const {layout, tasks} = workspaceLayout(bridge.courseSidebar(data,
+        {training: true, href: bankPath(bank.id), questionCount: count}));
       const pending = node('section', 'incompleteTasks'); pending.setAttribute('aria-label', t('training.groups'));
       tasks.append(bridge.taskVisibilityOptions(tasks));
       const historyList = node('section', 'completedTasks'); historyList.setAttribute('aria-label', t('portal.completed.tasks.68'));
       tasks.append(pending, historyList);
-      layout.append(bridge.courseSidebar(data, {training: true, href: bankPath(bank.id), questionCount: count}), tasks);
       root.replaceChildren(layout);
       const view = {training: true, label: t('training.groups'), startLabel: t('training.start'),
         sourceOrder: bank.groups.map(g => g.id),

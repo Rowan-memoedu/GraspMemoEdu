@@ -57,7 +57,7 @@ export const staticMessages = {
   "nav.settings": ["设置", "Settings"],
   "nav.help": ["帮助", "Help"],
   "nav.support": ["反馈", "Feedback"],
-  "nav.backHome": ["← 返回学习主页", "← Back to learning home"],
+  "nav.backHome": ["← 返回课程", "← Back to course"],
   "account.menu": ["用户菜单", "User menu"],
   "account.test": ["测试账号", "Test account"],
   "account.logout": ["退出登录","Sign out"],

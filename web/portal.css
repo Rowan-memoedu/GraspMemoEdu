@@ -171,6 +171,14 @@ body { padding-top: 50px; }
 .courseNameLink { color: var(--ma-navy); font-size: 15px; font-weight: 700; line-height: 1.45; text-transform: uppercase; text-decoration: none; }
 .courseNameLink:hover { color: var(--link-color); }
 .coursePercent { width: 56px; height: 56px; flex: 0 0 56px; padding: 0; border: 0; border-radius: 50%; background: #f0f1f2; font-size: 15px; color: #555; }
+/* Hallmark · component critique: P4 H4 E4 S4 R5 V3; existing tokens and layout retained. */
+.courseOverviewTop:has(.workspaceReselect) { flex-wrap: wrap; }
+.courseOverviewTop:has(.workspaceReselect) .courseNameLink { flex: 1 1 90px; min-width: 0; overflow-wrap: anywhere; }
+.courseOverviewActions { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; margin-left: auto; }
+.workspaceReselect { display: inline-flex; align-items: center; min-height: 44px; white-space: nowrap; font-size: 13px; color: var(--link-color); text-decoration: none; }
+.workspaceReselect:hover { color: var(--link-hover); text-decoration: underline; }
+.workspaceReselect:focus-visible { outline: 2px solid var(--link-color); outline-offset: 3px; border-radius: 2px; }
+.workspaceReselect:active { color: var(--button-active); }
 .estimatedCompletion { border-top: 1px solid #e0e0e0; padding: 23px 15px; color: #808080; font-size: 14px; }
 .estimatedCompletion span { display: block; }
 .estimatedCompletion span + span { margin-top: 3px; }

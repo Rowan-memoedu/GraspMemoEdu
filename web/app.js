@@ -1,13 +1,13 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=9e9c460f546bac53";
-import {answerReady} from './question-input.js?v=9e9c460f546bac53';
-import {reportableContent} from './content-report.js?v=9e9c460f546bac53';
-import {createLearningCache} from './learning-cache.js?v=9e9c460f546bac53';
-import {createReadCache, createContentCache, createValidationCache, readLifetime, contentPath, contentKey} from './response-cache.js?v=9e9c460f546bac53';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=de2930d43f5ffcf2";
+import {answerReady} from './question-input.js?v=de2930d43f5ffcf2';
+import {reportableContent} from './content-report.js?v=de2930d43f5ffcf2';
+import {createLearningCache} from './learning-cache.js?v=de2930d43f5ffcf2';
+import {createReadCache, createContentCache, createValidationCache, readLifetime, contentPath, contentKey} from './response-cache.js?v=de2930d43f5ffcf2';
 
-import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, readerHistorySteps, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState, topicProgress, topicHistory} from './learning-ui.js?v=9e9c460f546bac53';
-import {selfAssessment} from './self-assessment.js?v=9e9c460f546bac53';
-import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=9e9c460f546bac53';
-import {renderSourceReader} from './learning-ui.js?v=9e9c460f546bac53';
+import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, readerHistorySteps, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState, topicProgress, topicHistory} from './learning-ui.js?v=de2930d43f5ffcf2';
+import {selfAssessment} from './self-assessment.js?v=de2930d43f5ffcf2';
+import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=de2930d43f5ffcf2';
+import {renderSourceReader} from './learning-ui.js?v=de2930d43f5ffcf2';
 
 applyStaticTranslations();
 
@@ -1286,7 +1286,7 @@ function renderStepNavigation(target, step, actions) {
     primary.setAttribute('aria-label', t('Continue，继续学习'));
   } else if (actions.includes('submit')) primary = target.querySelector('#submitButton');
   else if (step.kind === 'completion') primary = button(t(state.skipped_modules?.length ? 'nav.backHome' : 'reader.finishLearning'), 'primaryButton', () => {
-    portal?.progressChanged(); location.hash = $("topicHomeLink").hash || `/subjects/${topicSubjectId || 'math'}/learn`;
+    portal?.progressChanged(); location.hash = $("topicHomeLink").hash || `/subjects/${topicSubjectId || 'math'}/courses`;
   });
   readerNavigation(target, {previous: index > 0 ? pages[index - 1] : null, next: index >= 0 ? pages[index + 1] : null,
     onSelect: page => selectStep(page.id), canNavigate: can('review_history'), titleOf: readerStepTitle, primary});
@@ -1561,9 +1561,9 @@ async function openTopic(id, subjectId, initial = null) {
   }
 }
 
-const { initPortal } = await import("./portal.js?v=9e9c460f546bac53");
-const {startPresence} = await import('./presence.js?v=9e9c460f546bac53');
-const {visibleContentTopics} = await import('./content-report.js?v=9e9c460f546bac53');
+const { initPortal } = await import("./portal.js?v=de2930d43f5ffcf2");
+const {startPresence} = await import('./presence.js?v=de2930d43f5ffcf2');
+const {visibleContentTopics} = await import('./content-report.js?v=de2930d43f5ffcf2');
 startPresence({getAccess: () => identityProblem ? null : access, request, getTopics: visibleContentTopics});
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {

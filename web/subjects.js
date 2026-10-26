@@ -1,4 +1,4 @@
-import { getLanguage, t } from './i18n.js?v=9e9c460f546bac53';
+import { getLanguage, t } from './i18n.js?v=de2930d43f5ffcf2';
 
 const element = (tag, className, text) => {
   const node = document.createElement(tag);
@@ -87,7 +87,7 @@ const subjectMarks = {"physics":"<path d=\"M9 8h22M20 8v3l9 17M10 28a19 19 0 0 0
 
 export const subjectLabel = subject => (getLanguage() === 'en' && subject.title_en) || subject.title;
 
-export function subjectHref(subjectId, path = '/learn') {
+export function subjectHref(subjectId, path = '/courses') {
   const suffix = path.startsWith('/') ? path : '/' + path;
   return '#/subjects/' + encodeURIComponent(subjectId) + suffix;
 }
@@ -101,13 +101,13 @@ export function parsePlatformRoute(hash = '#/') {
   const match = path.match(/^\/subjects\/([^/]+)(\/.*)?$/);
   if (match) {
     const subjectId = decode(match[1]);
-    const localPath = !match[2] || match[2] === '/' ? '/learn' : match[2];
+    const localPath = !match[2] || match[2] === '/' ? '/courses' : match[2];
     if (/^\/(qa|help-requests)(\/|$)/.test(localPath)) {
       const globalPath = localPath.replace('/help-requests', '/qa');
       return {subjectId: null, path: globalPath, params, canonicalHash: '#' + globalPath + search};
     }
     return { subjectId, path: localPath, params,
-      ...(!match[2] || match[2] === '/' ? { canonicalHash: subjectHref(subjectId, '/learn') + search } : {}) };
+      ...(!match[2] || match[2] === '/' ? { canonicalHash: subjectHref(subjectId, '/courses') + search } : {}) };
   }
   if (/^\/(?:learn|courses|guide)(?:\/|$)/.test(path) || /^\/(?:topic|review)\//.test(path)) {
     return { subjectId: 'math', path, params, canonicalHash: subjectHref('math', path) + search };
@@ -189,7 +189,7 @@ export function applySubjectTheme(subject, { home = false } = {}) {
 }
 
 export function subjectLogo(subject) {
-  if (!subject) return './favicon.svg?v=9e9c460f546bac53';
+  if (!subject) return './favicon.svg?v=de2930d43f5ffcf2';
   const color = subjectPalette(subject.id)[subjectMarks[subject.id] ? '--link-color' : '--ma-navy'];
   const mark = subjectMarks[subject.id]
     ? '<g stroke="' + color + '" color="' + color + '" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + subjectMarks[subject.id] + '</g>'

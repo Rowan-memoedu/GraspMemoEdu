@@ -32,7 +32,7 @@ try {
     if (location.origin !== base) return;
     localStorage.setItem('graspmemoedu:identity:' + base, token);
     localStorage.setItem('graspmemoedu:identity-role:' + base, 'account');
-    localStorage.setItem('graspmemoedu:language', 'zh-CN');
+    localStorage.setItem('graspmemoedu:ui-language', 'zh-CN');
   }, {token, base});
   page = await context.newPage();
   page.on('pageerror', error => report.errors.push(error.message));
@@ -41,7 +41,11 @@ try {
   const hash = () => page.evaluate(() => location.hash);
   const nav = name => page.locator('.mainNavigation [data-navigation="' + name + '"]');
   async function go(route, selector) {
-    await page.evaluate(route => { location.hash = route; }, route);
+    await page.evaluate(route => new Promise(resolve => {
+      if (location.hash === route) { resolve(); return; }
+      addEventListener('hashchange', () => resolve(), {once: true}); location.hash = route;
+    }), route);
+    await page.waitForFunction(() => !document.getElementById('portalContent').inert);
     await page.locator(selector).first().waitFor({state: 'visible'});
     await page.waitForFunction(() => !document.querySelector('#portalContent:not([hidden]) > .portalLoading'));
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -49,6 +53,7 @@ try {
   async function returnToBanks(expected, selector) {
     assert.equal(await nav('banks').getAttribute('href'), expected);
     await nav('banks').click();
+    await page.waitForFunction(() => !document.getElementById('portalContent').inert);
     await page.locator(selector).first().waitFor({state: 'visible'});
     await page.waitForFunction(expected => location.hash === expected, expected);
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -78,7 +83,7 @@ try {
     await page.waitForFunction(() => location.hash.endsWith('?question=essay'));
     await page.locator('#trainingAnswer').fill('second draft ' + subject);
     const selectedHash = await hash();
-    await nav('learn').click(); await page.locator('.dashboardLayout .portalTask').first().waitFor();
+    await nav('courses').click(); await page.locator('.courseGrid .courseChoice').first().waitFor();
     await returnToBanks(selectedHash, '#trainingAnswer');
     assert.equal(await page.locator('#trainingAnswer').inputValue(), 'second draft ' + subject);
     await nav('banks').click();

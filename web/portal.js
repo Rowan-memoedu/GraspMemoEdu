@@ -1,23 +1,23 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=9e9c460f546bac53";
-import { createReviewView } from "./review.js?v=9e9c460f546bac53";
-import { renderCourseGraph } from "./course-graph.js?v=9e9c460f546bac53";
-import {questionInput, choiceTypeField} from './question-input.js?v=9e9c460f546bac53';
-import {enhanceTopicContent} from './topic-content.js?v=9e9c460f546bac53';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=9e9c460f546bac53';
-import {createCatalogPicker} from './catalog-picker.js?v=9e9c460f546bac53';
-import {appendCatalogOutline} from './catalog-outline.js?v=9e9c460f546bac53';
-import {createAtomicView} from './atomic.js?v=9e9c460f546bac53';
-import {sourceAttributions} from './memory-chunk.js?v=9e9c460f546bac53';
-import {createTrainingView} from './training.js?v=9e9c460f546bac53';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=9e9c460f546bac53";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=de2930d43f5ffcf2";
+import { createReviewView } from "./review.js?v=de2930d43f5ffcf2";
+import { renderCourseGraph } from "./course-graph.js?v=de2930d43f5ffcf2";
+import {questionInput, choiceTypeField} from './question-input.js?v=de2930d43f5ffcf2';
+import {enhanceTopicContent} from './topic-content.js?v=de2930d43f5ffcf2';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=de2930d43f5ffcf2';
+import {createCatalogPicker} from './catalog-picker.js?v=de2930d43f5ffcf2';
+import {catalogPath, courseWorkspaceId, createWorkspaceLocations, catalogView, workspaceLayout} from './catalog-workspace.js?v=de2930d43f5ffcf2';
+import {createAtomicView} from './atomic.js?v=de2930d43f5ffcf2';
+import {sourceAttributions} from './memory-chunk.js?v=de2930d43f5ffcf2';
+import {createTrainingView} from './training.js?v=de2930d43f5ffcf2';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=de2930d43f5ffcf2";
 
-import {createPaperView} from './review-papers.js?v=9e9c460f546bac53';
-import {createContextLibraryView} from './context-library.js?v=9e9c460f546bac53';
+import {createPaperView} from './review-papers.js?v=de2930d43f5ffcf2';
+import {createContextLibraryView} from './context-library.js?v=de2930d43f5ffcf2';
 
-import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=9e9c460f546bac53';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=9e9c460f546bac53';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=9e9c460f546bac53';
-import {createStudentDashboard} from './student-dashboard.js?v=9e9c460f546bac53';
+import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=de2930d43f5ffcf2';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=de2930d43f5ffcf2';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=de2930d43f5ffcf2';
+import {createStudentDashboard} from './student-dashboard.js?v=de2930d43f5ffcf2';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -37,7 +37,7 @@ const roundButton = (text, action) => control(text, "portalStart", action);
 export function initPortal(bridge) {
   let chatModule, attachChatEditor, renderChatMarkdown;
   async function loadChat() {
-    const module = await (chatModule ||= import('./vendor/chat/chat.js?v=9e9c460f546bac53').catch(error => { chatModule = null; throw error; }));
+    const module = await (chatModule ||= import('./vendor/chat/chat.js?v=de2930d43f5ffcf2').catch(error => { chatModule = null; throw error; }));
     ({attachChatEditor, renderChatMarkdown} = module);
     module.configureChatImages(ident => bridge.request('help-images?image_id=' + encode(ident)));
   }
@@ -59,16 +59,14 @@ export function initPortal(bridge) {
   }
   const replyDrafts = new Map();
   const dashboards = new Map(), scrolls = new Map(), answerCache = new Map();
-  const bankLocations = new Map(), bankSidebarScrolls = new Map();
+  const workspaceLocations = createWorkspaceLocations(parsePlatformRoute);
   const bankRoute = route => route?.subjectId && /^\/banks(?:\/|$)/.test(route.path);
   const bankReview = route => bankRoute(route) && (route.params.get('review') === '1' || route.params.get('card') === '1');
-  function rememberBankLocation(hash, leaving = false) {
-    const previous = parsePlatformRoute(hash);
-    if (!bankRoute(previous) || bankReview(previous)) return;
-    bankLocations.set(previous.subjectId, hash);
-    if (leaving) bankSidebarScrolls.set(hash, $('traininghistoryPanel')?.scrollTop || 0);
+  function rememberWorkspaceLocation(hash, leaving = false) {
+    const sidebar = $('traininghistoryPanel') || $('historyPanel');
+    workspaceLocations.remember(hash, leaving ? sidebar?.scrollTop || 0 : undefined);
   }
-  function clearBankLocations() { bankLocations.clear(); bankSidebarScrolls.clear(); currentHash = ''; }
+  function clearWorkspaceLocations() { workspaceLocations.clear(); currentHash = ''; }
   const routeKey = () => location.hash || "#/";
   const selectedDashboard = () => dashboards.get(selectedCourse);
   const timezone = () => profile?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -107,13 +105,19 @@ export function initPortal(bridge) {
     selectCourse: saveCourseSelection, getSubject: () => currentRoute?.subjectId, getSelectedRoot: savedCourseRoot,
     onSelected: (courseId, subjectId, rootId) => {
       catalog = null; selectedCourse = courseId; dashboards.clear();
-      const hash = subjectHref(subjectId, '/learn' + (rootId ? '?root=' + encode(rootId) : '')); scrolls.delete(hash);
+      const hash = subjectHref(subjectId, catalogPath('courses', courseId, rootId)); scrolls.delete(hash);
       if (location.hash === hash) void route(); else location.hash = hash;
     },
   });
-  const learnHref = () => subjectHref(currentRoute?.subjectId || "math", "/learn" + (selectedRoot ? '?root=' + encode(selectedRoot) : ''));
+  const courseHomeHref = () => subjectHref(currentRoute?.subjectId || 'math', catalogPath('courses', selectedCourse, selectedRoot));
   const localHref = (path) => {
-    const raw = path.replace(/^#/, "");
+    let raw = path.replace(/^#/, '');
+    if (/^\/(topic|review)\//.test(raw) && /^\/courses\/[^/]+(?:\/progress)?$/.test(currentRoute?.path || '')) {
+      const [pathname, search] = raw.split('?'), params = new URLSearchParams(search);
+      params.set('course', decodeURIComponent(currentRoute.path.split('/')[2]));
+      if (currentRoute.params.has('root')) params.set('root', currentRoute.params.get('root'));
+      raw = pathname + '?' + params;
+    }
     return /^\/(learn|courses|banks|guide|topic|review|reviews)(\/|\?|$)/.test(raw)
       ? subjectHref(currentRoute?.subjectId || "math", raw) : `#${raw}`;
   };
@@ -126,16 +130,17 @@ export function initPortal(bridge) {
   const dayKey = (value) => new Intl.DateTimeFormat("en-CA", { timeZone: timezone(), year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
   const clockTime = (value) => value && Number.isFinite(Date.parse(value)) ? new Intl.DateTimeFormat(locale(), { timeZone: timezone(), hour: "2-digit", minute: "2-digit" }).format(new Date(value)) : "—";
   const review = createReviewView({
-    ...bridge, request: call, root, homeHref: learnHref, formatDate: value => apiDate(value, true), showFeedback,
+    ...bridge, request: call, root, homeHref: courseHomeHref, formatDate: value => apiDate(value, true), showFeedback,
     progressChanged: () => { dashboards.clear(); answerCache.clear(); },
     setSession: id => {
-      history.replaceState(null, "", `${location.hash.split("?")[0]}?session=${encode(id)}`);
+      const params = new URLSearchParams(currentRoute.params); params.set('session', id);
+      history.replaceState(null, '', `${location.hash.split('?')[0]}?${params}`);
       currentHash = routeKey(); currentRoute = parseRoute();
     },
   });
   const topicHomeHref = () => {
     const bank = currentRoute?.params?.get('bank');
-    return bank ? localHref(`/banks/${encode(bank)}`) : learnHref();
+    return bank ? localHref(`/banks/${encode(bank)}`) : courseHomeHref();
   };
   const atomic = createAtomicView({...bridge, request: call, root, homeHref: topicHomeHref,
     resumeTopic: next => { root.hidden = true; void bridge.openTopic(next.topic_id, currentRoute?.subjectId); },
@@ -198,7 +203,7 @@ export function initPortal(bridge) {
     logo.href = subject ? subjectHref(subject.id) : '#/';
     logo.querySelector('img').src = subjectLogo(subject);
     logo.querySelector('span').textContent = subject ? t('platform.learningName', {subject: getLanguage() === 'en' && subject.id === 'math' ? 'Math' : subjectLabel(subject)}) : 'GraspMemoEdu';
-    logo.setAttribute('aria-label', subject ? subjectLabel(subject) + ' · ' + t('nav.learn') : t('nav.home'));
+    logo.setAttribute('aria-label', subject ? subjectLabel(subject) + ' · ' + t('nav.courses') : t('nav.home'));
     const context = $("subjectContext");
     context.hidden = true;
     context.textContent = subject ? subjectLabel(subject) : "";
@@ -207,8 +212,7 @@ export function initPortal(bridge) {
       const section = item.dataset.navigation;
       item.hidden = section === 'qa' ? !canUseHelp() : !subject && !currentRoute?.path.startsWith('/qa');
       const subjectId = subject?.id || navigationSubjectId;
-      item.href = section === 'qa' ? '#/qa' : section === 'banks' && bankLocations.has(subjectId)
-        ? bankLocations.get(subjectId) : subjectHref(subjectId, `/${section}`);
+      item.href = section === 'qa' ? '#/qa' : workspaceLocations.href(subjectId, section, subjectHref(subjectId, `/${section}`));
     }
     $("topicHomeLink").href = topicHomeHref();
     if (changed && subject) void refreshHelpSummary(true);
@@ -287,12 +291,11 @@ export function initPortal(bridge) {
     if (ticket !== sequence) return;
     if (!Array.isArray(nextSubjects.subjects) || (subjectId && !subjectRestricted(subject) && !Array.isArray(nextCatalog?.courses))) throw new Error(t("portal.the.course.catalog.is.temporarily.unavailable.17"));
     subjects = nextSubjects.subjects; profile = nextProfile; catalog = nextCatalog; catalogSubject = subjectId;
-    selectedCourse = catalog?.selected_course_id || null;
-    selectedRoot = savedCourseRoot(selectedCourse, subjectId);
+    const workspaceCourse = courseWorkspaceId(currentRoute);
+    const readerCourse = /^\/(topic|review)\//.test(currentRoute?.path || '') ? currentRoute.params.get('course') : null;
+    selectedCourse = workspaceCourse || readerCourse || catalog?.selected_course_id || null;
+    selectedRoot = workspaceCourse || readerCourse ? currentRoute.params.get('root') : savedCourseRoot(selectedCourse, subjectId);
     if (!catalog?.courses.find(c => c.id === selectedCourse)?.outline?.some(u => u.id === selectedRoot)) selectedRoot = null;
-    if (currentRoute?.path === '/learn' && currentRoute.params.has('root')) {
-      rememberCourseRoot(selectedCourse, subjectId, currentRoute.params.get('root'));
-    }
     if (!profile.timezone) {
       try {
         const next = await bridge.request("profile", { method: "POST", body: { timezone: timezone() } });
@@ -338,7 +341,7 @@ export function initPortal(bridge) {
     const previousHash = currentHash && (event?.oldURL ? new URL(event.oldURL).hash : currentHash);
     if (previousHash) {
       scrolls.set(previousHash, window.scrollY);
-      rememberBankLocation(previousHash, true);
+      rememberWorkspaceLocation(previousHash, true);
     }
     currentRoute = parseRoute();
     if (/^\/help-requests(?:\/|$)/.test(currentRoute.path)) {
@@ -356,7 +359,7 @@ export function initPortal(bridge) {
     root.classList.toggle("reviewShell", currentRoute.path.startsWith("/review/"));
     if (bridge.getIdentityProblem()) { root.hidden = true; root.replaceChildren(); return; }
     updateSubjectContext(subjects?.find(subject => subject.id === currentRoute.subjectId) || null);
-    setNavigation(currentRoute.path.startsWith('/qa') ? 'qa' : !currentRoute.subjectId ? "subjects" : bankReview(currentRoute) ? 'reviews' : currentRoute.path.startsWith('/banks') || currentRoute.params.has('bank') ? 'banks' : currentRoute.path.startsWith("/courses") ? "courses" : currentRoute.path === "/guide" ? "guide" : currentRoute.path === '/reading' ? 'reading' : currentRoute.path.startsWith('/reviews') ? 'reviews' : "learn");
+    setNavigation(currentRoute.path.startsWith('/qa') ? 'qa' : !currentRoute.subjectId ? "subjects" : bankReview(currentRoute) ? 'reviews' : currentRoute.path.startsWith('/banks') || currentRoute.params.has('bank') ? 'banks' : currentRoute.path === "/guide" ? "guide" : currentRoute.path === '/reading' ? 'reading' : currentRoute.path.startsWith('/reviews') ? 'reviews' : "courses");
     // Keep the existing view visible during navigation, but disable old actions.
     root.inert = true; root.setAttribute('aria-busy', 'true');
     if (!root.childElementCount) root.replaceChildren(loading());
@@ -373,18 +376,21 @@ export function initPortal(bridge) {
       if (path === "/" && !subjectId) {
         document.title = "GraspMemoEdu"; root.replaceChildren(renderSubjectHome(subjects.map(item => ({...item, available: subjectRestricted(item) ? false : item.available})), {onRestricted: item => restrictedNotice(item, true)}));
       } else if (path === "/learn") {
-        document.title = pageTitle(t("nav.learn"));
-        if (!catalog.courses.length) { root.replaceChildren(renderSubjectEmpty(subject)); await renderGraphLibrary(ticket); return; }
+        // Compatibility only: the selected course now owns its task page.
         let viewedCourse = selectedCourse;
-        if (!viewedCourse && params.get("taskId")) {
+        if (params.get("taskId")) {
           const result = await call(`tasks/${encode(params.get("taskId"))}/answers`);
           if (ticket !== sequence) return;
           answerCache.set(params.get("taskId"), result); viewedCourse = result.task?.course_id;
         }
-        if (!viewedCourse) { navigate("/courses", true); return; }
-        const data = mergeDashboard(viewedCourse, await dashboard(viewedCourse));
+        const nextParams = new URLSearchParams(params);
+        if (!nextParams.has('root') && viewedCourse === selectedCourse && selectedRoot) nextParams.set('root', selectedRoot);
+        return navigate(catalogPath('courses', viewedCourse) + (nextParams.size ? '?' + nextParams : ''), true);
+      } else if (courseWorkspaceId(currentRoute)) {
+        document.title = pageTitle(t('nav.courses'));
+        const data = await dashboard(selectedCourse);
         if (ticket !== sequence) return;
-        renderLearn(data, params.get("taskId"), ticket);
+        renderCourseWorkspace(mergeDashboard(selectedCourse, data), params.get('taskId'), ticket);
       } else if (path === "/courses") {
         document.title = pageTitle(t("nav.courses")); await renderCourses();
       } else if (path === '/reading') {
@@ -442,7 +448,7 @@ export function initPortal(bridge) {
       } else root.replaceChildren(errorBox(t("portal.this.page.does.not.exist.24"), () => navigate("/"), t("portal.page.not.found.25")));
       if (ticket !== sequence) return;
       currentHash = routeKey(); currentRoute = parseRoute();
-      rememberBankLocation(currentHash);
+      rememberWorkspaceLocation(currentHash);
       updateSubjectContext(subject || null);
       const target = params.get("unitId") || params.get("topicId");
       requestAnimationFrame(() => {
@@ -459,8 +465,8 @@ export function initPortal(bridge) {
         }
         else if (target) root.querySelector(`[data-progress-id="${CSS.escape(target)}"]`)?.scrollIntoView({ block: "start" });
         else window.scrollTo(0, scrolls.get(currentHash) || 0);
-        const sidebar = $('traininghistoryPanel');
-        if (sidebar && !bankReview(currentRoute)) sidebar.scrollTop = bankSidebarScrolls.get(currentHash) || 0;
+        const sidebar = $('traininghistoryPanel') || $('historyPanel');
+        if (sidebar && !bankReview(currentRoute)) sidebar.scrollTop = workspaceLocations.sidebarScroll(currentHash);
       });
     } catch (error) {
       if (ticket !== sequence) return;
@@ -478,10 +484,7 @@ export function initPortal(bridge) {
 
   async function renderCourses() {
     const ticket = sequence;
-    const heading = node("h1", "portalPageTitle", t("portal.courses.28")), grid = node("div", "courseGrid");
-    root.replaceChildren(heading, grid);
     if (!catalog.courses.length) { root.replaceChildren(renderSubjectEmpty(activeSubject)); await renderGraphLibrary(ticket); return; }
-    if (bridge.getAccess()?.role === "account" && !catalog.courses.some((course) => course.available)) root.insertBefore(emptyBox(t("portal.no.courses.are.enabled.for.your.account.please.contact.your.admin.29")), grid);
     function courseCard(course, rootId = null) {
       const card = node("article", "courseChoice"); card.dataset.courseId = course.id;
       card.append(node("h2", "", course.title), node("p", "courseDescription", course.description || ""));
@@ -493,8 +496,8 @@ export function initPortal(bridge) {
         try {
           await saveCourseSelection(course.id, subjectId, rootId);
           if (ticket !== sequence) return;
-          selectedCourse = course.id; catalog.selected_course_id = course.id; scrolls.delete(learnHref());
-          navigate(learnHref());
+          selectedCourse = course.id; catalog.selected_course_id = course.id; scrolls.delete(courseHomeHref());
+          navigate(courseHomeHref());
         } catch (error) {
           if (ticket !== sequence) return;
           card.append(node("p", "fieldError", translateMessage(error.message))); learn.textContent = t("portal.learn.31");
@@ -528,11 +531,10 @@ export function initPortal(bridge) {
       card.append(learn); if (!course.available) card.append(node("p", "courseAvailability", t("portal.no.learning.content.is.currently.available.33")));
       return card;
     }
-    for (const course of catalog.courses) {
-      const card = courseCard(course);
-      appendCatalogOutline(card, course, courseCard, {expanded: expandedUnits, keyPrefix: `select:course:${currentRoute.subjectId}`});
-      grid.append(card);
-    }
+    const {heading, grid} = catalogView({title: t('portal.courses.28'), entries: catalog.courses,
+      renderEntry: courseCard, expanded: expandedUnits, keyPrefix: `select:course:${currentRoute.subjectId}`});
+    root.replaceChildren(heading, grid);
+    if (bridge.getAccess()?.role === 'account' && !catalog.courses.some(course => course.available)) root.insertBefore(emptyBox(t('portal.no.courses.are.enabled.for.your.account.please.contact.your.admin.29')), grid);
     await renderGraphLibrary(ticket);
   }
 
@@ -584,9 +586,11 @@ export function initPortal(bridge) {
     const side = node("aside", "courseSidebar"), frame = node("section", "courseOverview"), top = node("div", "courseOverviewTop");
     const name = link(data.course.title, view.href || `#/courses/${encode(data.course.id)}/progress${data.course.root_id ? '?root=' + encode(data.course.root_id) : ''}`, "courseNameLink");
     const circle = control(percentLabel(data.course.progress), "coursePercent", () => view.onProgress ? view.onProgress() : openGraph(data)); circle.setAttribute("aria-label", t("portal.graphProgress", { progress: percentLabel(data.course.progress) }));
+    const actions = node('div', 'courseOverviewActions'); actions.append(circle);
+    if (!view.review) actions.append(link(t('portal.reselectTopic'), catalogPath(view.training ? 'banks' : 'courses'), 'workspaceReselect'));
+    top.append(name, actions);
     if (view.training) {
       if (view.review) { circle.textContent = String(view.questionCount); circle.setAttribute('aria-label', t(view.allMaterials ? 'paper.materialCount' : 'paper.due', {count: view.questionCount})); }
-      top.append(name, circle);
       const count = node('div', 'estimatedCompletion');
       count.append(node('span', '', t(view.review ? 'paper.title' : 'training.groups')), node('span', '', t(view.allMaterials ? 'paper.materialCount' : view.review ? 'paper.due' : 'training.count', {count: view.questionCount})));
       frame.append(top, count); side.append(frame); return side;
@@ -618,7 +622,6 @@ export function initPortal(bridge) {
       popup.addEventListener("mouseenter", holdPopover); popup.addEventListener("mouseleave", delayPopover);
       popup.addEventListener("focusin", holdPopover); popup.addEventListener("focusout", delayPopover);
     }
-    top.append(name, circle);
     const estimate = node("div", "estimatedCompletion"); estimate.append(node("span", "", t("portal.estimated.completion.39")), node("span", "", apiDate(data.course.estimated_completion)));
     frame.append(top, estimate, unitsPopup, detailsPopup); side.append(frame); return side;
   }
@@ -661,7 +664,7 @@ export function initPortal(bridge) {
     for (const item of root.querySelectorAll(".taskToggle")) item.setAttribute("aria-expanded", "false");
   }
   function incompleteTask(task, data, view = {}) {
-    if (task.bank_id) view = {...view, training: true, label: t('training.groups'),
+    if (task.bank_id && !view.review) view = {...view, training: true, label: t('training.groups'),
       startLabel: t('training.start'), target: item => item.href};
     const card = node("article", task.dependency_ready === false || task.locked || task.status === 'paused' ? "portalTask taskLocked" : "portalTask taskUnlocked"); card.dataset.taskId = task.id;
     card.dataset.dependencyReady = String(task.dependency_ready !== false);
@@ -736,7 +739,8 @@ export function initPortal(bridge) {
     if (task.bank_id) view = {...view, training: true, label: t('training.groups'),
       startLabel: t('training.start'), target: item => item.href};
     const card = node("article", "portalTask taskCompleted"); card.dataset.taskId = task.id;
-    const href = view.target ? view.target(task) : task.topic_kind === 'introduction' ? `/topic/${encode(task.topic_id)}` : `/learn?taskId=${encode(task.id)}`;
+    const home = courseHomeHref();
+    const href = view.target ? view.target(task) : task.topic_kind === 'introduction' ? `/topic/${encode(task.topic_id)}` : `${home}${home.includes('?') ? '&' : '?'}taskId=${encode(task.id)}`;
     const summary = control("", "taskToggle", () => navigate(href)); summary.append(taskSummary(task, true, view)); card.append(summary);
     if (task.point_prerequisites?.length && task.dependency_ready === false) {
       card.classList.add('taskLocked');
@@ -841,10 +845,10 @@ export function initPortal(bridge) {
     queueMicrotask(() => { apply(); syncExpansion(); });
     return bar;
   }
-  function renderLearn(data, taskId, ticket) {
+  function renderCourseWorkspace(data, taskId, ticket) {
     historyError = null;
-    const layout = node("div", "dashboardLayout"), tasks = node("div", "dashboardTasks"); tasks.id = "dashboardTasks";
-    layout.append(courseSidebar(data), tasks); root.replaceChildren(layout);
+    const {layout, tasks} = workspaceLayout(courseSidebar(data)); tasks.id = 'dashboardTasks';
+    root.replaceChildren(layout);
     if (taskId) { renderAnswers(tasks, taskId, ticket); return; }
     tasks.append(taskVisibilityOptions(tasks));
     const pending = node("section", "incompleteTasks"); pending.setAttribute("aria-label", t("portal.pending.tasks.64"));
@@ -886,7 +890,7 @@ export function initPortal(bridge) {
   }
   async function loadMore() {
     const data = selectedDashboard(), id = selectedCourse, ticket = sequence;
-    if (paging || !data?.has_more || currentRoute?.path !== "/learn" || currentRoute.params.has("taskId")) return;
+    if (paging || !data?.has_more || !courseWorkspaceId(currentRoute) || currentRoute.params.has("taskId")) return;
     paging = true; renderMore(); let failure = null;
     try {
       const next = await dashboard(id, data.history_cursor);
@@ -915,7 +919,7 @@ export function initPortal(bridge) {
         const data = mergeDashboard(selectedCourse, fresh);
         if (root.querySelector(".taskRefreshError") || JSON.stringify([previous?.tasks, previous?.history, previous?.course, previous?.pending_hierarchy, previous?.course_hierarchy_enabled]) !== JSON.stringify([data.tasks, data.history, data.course, data.pending_hierarchy, data.course_hierarchy_enabled])) {
           const y = window.scrollY, expanded = expandedTask;
-          renderLearn(data, null, ticket);
+          renderCourseWorkspace(data, null, ticket);
           if (expanded) root.querySelector(`[data-task-id="${CSS.escape(expanded)}"] .taskToggle`)?.click();
           window.scrollTo(0, y);
         } else waitForTasks(ticket, attempt + 1);
@@ -930,7 +934,7 @@ export function initPortal(bridge) {
   }
 
   async function renderAnswers(target, taskId, ticket) {
-    const back = control(t("portal.back.to.learning.records.74"), "taskBackButton", () => { if (scrolls.has(learnHref())) history.back(); else navigate("/learn"); });
+    const back = control(t("portal.back.to.learning.records.74"), "taskBackButton", () => navigate(courseHomeHref()));
     if (!allowed("review_history")) { target.replaceChildren(back, emptyBox(t("portal.review.is.not.enabled.for.your.account.please.contact.your.admini.61"))); return; }
     target.replaceChildren(back, loading(t("portal.loading.answers.75")));
     try {
@@ -987,7 +991,7 @@ export function initPortal(bridge) {
 
   function renderCourseProgress(data, params) {
     document.title = pageTitle(data.course.title);
-    const header = node("div", "progressPageHeading"); header.append(link(t("portal.back.to.learning.home.90"), learnHref(), "textButton"), node("h1", "portalPageTitle", data.course.title));
+    const header = node('div', 'progressPageHeading'); header.append(link(t('nav.backHome'), catalogPath('courses', data.course.id, data.course.root_id), 'textButton'), node('h1', 'portalPageTitle', data.course.title));
     const details = node("section", "courseProgressSummary"); details.append(infoRow(t("portal.progress.36"), percentLabel(data.course.progress)), infoRow(t("portal.start.date.37"), apiDate(data.course.start_date)), infoRow(t("portal.end.date.38"), apiDate(data.course.end_date)), infoRow(t("portal.estimated.completion.39"), apiDate(data.course.estimated_completion)), control(t("portal.view.knowledge.map.91"), "textButton", () => openGraph(data)));
     root.replaceChildren(header, details);
     const max = Math.max(0, ...(data.units || []).map((unit) => Number(unit.topic_count) || 0));
@@ -1443,7 +1447,7 @@ export function initPortal(bridge) {
     document.title = pageTitle(data.title); mathStyle(data.math_css);
     const page = node('section', 'materialBrowser');
     page.append(link(t(params.has('report') ? 'help.pageTitle' : 'nav.backHome'),
-      params.has('report') ? '/qa' : learnHref(), 'textButton'), node('p', 'inputHint', data.course_title),
+      params.has('report') ? '/qa' : courseHomeHref(), 'textButton'), node('p', 'inputHint', data.course_title),
       node('h1', 'portalPageTitle', data.title), node('p', 'inputHint', t('admin.allBlocksHint')));
     if (data.version_changed) page.append(node('p', 'fieldError', t('admin.blockVersionChanged')));
     const directory = node('nav', 'materialDirectory'); directory.setAttribute('aria-label', t('admin.allBlocks'));
@@ -1753,7 +1757,7 @@ export function initPortal(bridge) {
       await atomic.open(next.topic_id, 'learn', next);
     },
     setIdentity(next) {
-      if (identity?.learner_id !== next?.learner_id) { replyDrafts.clear(); helpSummaryAt = 0; showHelpSummary(null); clearBankLocations(); scrolls.clear(); }
+      if (identity?.learner_id !== next?.learner_id) { replyDrafts.clear(); helpSummaryAt = 0; showHelpSummary(null); clearWorkspaceLocations(); scrolls.clear(); }
       if (JSON.stringify(identity) !== JSON.stringify(next)) catalogPicker.reset();
       if (identity?.learner_id !== next?.learner_id || identity?.role !== next?.role) subjects = null;
       if (identity?.learner_id && next?.learner_id !== identity.learner_id) profile = null;
@@ -1763,7 +1767,7 @@ export function initPortal(bridge) {
       identity = next; updateUser();
     },
     suspendIdentity() {
-      clearBankLocations();
+      clearWorkspaceLocations();
       replyDrafts.clear(); showHelpSummary(null); helpSummaryAt = 0;
       catalogPicker.reset();
       contentReporting.clear();
@@ -1774,8 +1778,8 @@ export function initPortal(bridge) {
       if (feedbackDialog.open) feedbackDialog.close();
       feedbackInput.value = "";
     },
-    permissionsChanged() { catalogPicker.reset(); catalog = null; dashboards.clear(); answerCache.clear(); clearBankLocations(); },
-    async identityChanged() { review.reset(); atomic.reset(); subjects = null; catalog = null; profile = null; dashboards.clear(); answerCache.clear(); scrolls.clear(); clearBankLocations(); await route(); },
+    permissionsChanged() { catalogPicker.reset(); catalog = null; dashboards.clear(); answerCache.clear(); clearWorkspaceLocations(); },
+    async identityChanged() { review.reset(); atomic.reset(); subjects = null; catalog = null; profile = null; dashboards.clear(); answerCache.clear(); scrolls.clear(); clearWorkspaceLocations(); await route(); },
     progressChanged() { dashboards.clear(); answerCache.clear(); },
     showFeedback,
   };
