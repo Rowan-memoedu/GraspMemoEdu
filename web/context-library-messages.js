@@ -1,4 +1,4 @@
-import {getLanguage, translateMessage} from './i18n.js?v=8f6629f316cc79a6';
+import {getLanguage, translateMessage} from './i18n.js?v=51490b3e06872afe';
 
 const pairs = [
   ['旧版语境：保留原文与笔记，不定位到当前正文。', 'Earlier version: original text and notes are preserved without locating them in the current text.'],

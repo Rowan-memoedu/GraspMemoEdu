@@ -1,23 +1,23 @@
-import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=8f6629f316cc79a6";
-import { createReviewView } from "./review.js?v=8f6629f316cc79a6";
-import { renderCourseGraph } from "./course-graph.js?v=8f6629f316cc79a6";
-import {questionInput, choiceTypeField} from './question-input.js?v=8f6629f316cc79a6';
-import {enhanceTopicContent} from './topic-content.js?v=8f6629f316cc79a6';
-import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=8f6629f316cc79a6';
-import {createCatalogPicker} from './catalog-picker.js?v=8f6629f316cc79a6';
-import {catalogPath, courseWorkspaceId, createWorkspaceLocations, catalogView, workspaceLayout} from './catalog-workspace.js?v=8f6629f316cc79a6';
-import {createAtomicView} from './atomic.js?v=8f6629f316cc79a6';
-import {sourceAttributions} from './memory-chunk.js?v=8f6629f316cc79a6';
-import {createTrainingView} from './training.js?v=8f6629f316cc79a6';
-import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=8f6629f316cc79a6";
+import { t, getLanguage, setLanguage, locale, translateMessage, learningTitle } from "./i18n.js?v=51490b3e06872afe";
+import { createReviewView } from "./review.js?v=51490b3e06872afe";
+import { renderCourseGraph } from "./course-graph.js?v=51490b3e06872afe";
+import {questionInput, choiceTypeField} from './question-input.js?v=51490b3e06872afe';
+import {enhanceTopicContent} from './topic-content.js?v=51490b3e06872afe';
+import {reportableContent, installContentReporting, installHelpRequests} from './content-report.js?v=51490b3e06872afe';
+import {createCatalogPicker} from './catalog-picker.js?v=51490b3e06872afe';
+import {catalogPath, courseWorkspaceId, createWorkspaceLocations, catalogView, workspaceLayout} from './catalog-workspace.js?v=51490b3e06872afe';
+import {createAtomicView} from './atomic.js?v=51490b3e06872afe';
+import {sourceAttributions} from './memory-chunk.js?v=51490b3e06872afe';
+import {createTrainingView} from './training.js?v=51490b3e06872afe';
+import { subjectHref, parsePlatformRoute, renderSubjectHome, renderSubjectEmpty, applySubjectTheme, subjectLabel, subjectLogo } from "./subjects.js?v=51490b3e06872afe";
 
-import {createPaperView} from './review-papers.js?v=8f6629f316cc79a6';
-import {createContextLibraryView} from './context-library.js?v=8f6629f316cc79a6';
+import {createPaperView} from './review-papers.js?v=51490b3e06872afe';
+import {createContextLibraryView} from './context-library.js?v=51490b3e06872afe';
 
-import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=8f6629f316cc79a6';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=8f6629f316cc79a6';
-import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=8f6629f316cc79a6';
-import {createStudentDashboard} from './student-dashboard.js?v=8f6629f316cc79a6';
+import {renderTaskTree, enhanceMarkdownOutline} from './task-tree.js?v=51490b3e06872afe';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=51490b3e06872afe';
+import {createHelpFeedback, feedbackDetails} from './help-feedback.js?v=51490b3e06872afe';
+import {createStudentDashboard} from './student-dashboard.js?v=51490b3e06872afe';
 
 const $ = (id) => document.getElementById(id);
 const node = (tag, className = "", text) => {
@@ -37,7 +37,7 @@ const roundButton = (text, action) => control(text, "portalStart", action);
 export function initPortal(bridge) {
   let chatModule, attachChatEditor, renderChatMarkdown;
   async function loadChat() {
-    const module = await (chatModule ||= import('./vendor/chat/chat.js?v=8f6629f316cc79a6').catch(error => { chatModule = null; throw error; }));
+    const module = await (chatModule ||= import('./vendor/chat/chat.js?v=51490b3e06872afe').catch(error => { chatModule = null; throw error; }));
     ({attachChatEditor, renderChatMarkdown} = module);
     module.configureChatImages(ident => bridge.request('help-images?image_id=' + encode(ident)));
   }
@@ -279,30 +279,35 @@ export function initPortal(bridge) {
   document.addEventListener("keydown", (event) => { if (event.key === "Escape") { showMenu(false); hidePopovers(); collapseTasks(); } });
 
   async function basics(ticket, subjectId) {
-    const [nextSubjects, nextProfile] = await Promise.all([
-      subjects ? { subjects } : bridge.request("subjects"),
-      profile || bridge.request("profile"),
-    ]);
+    const subjectRequest = subjects ? Promise.resolve({subjects}) : bridge.request("subjects");
+    const profileRequest = (async () => {
+      const next = profile || await bridge.request("profile");
+      if (ticket !== sequence || next.timezone) return next;
+      try {
+        return await bridge.request("profile", {method: "POST", body: {
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+        }});
+      } catch { return next; /* Settings can retry; display uses browser time. */ }
+    })();
+    // Bank workspaces own their directory. Course choices are loaded only on
+    // course routes or by the shared picker, not on the bank's critical path.
+    const needsCatalog = subjectId && !bankRoute(currentRoute);
+    const catalogRequest = subjectRequest.then(result => {
+      if (ticket !== sequence || !needsCatalog || subjectRestricted(result.subjects?.find(item => item.id === subjectId))) return null;
+      return catalog && catalogSubject === subjectId ? catalog : scopedRequest("catalog", undefined, subjectId);
+    });
+    const [nextSubjects, nextProfile, nextCatalog] = await Promise.all([subjectRequest, profileRequest, catalogRequest]);
     if (ticket !== sequence) return;
     const subject = nextSubjects.subjects?.find(item => item.id === subjectId);
-    const nextCatalog = subjectId && !subjectRestricted(subject)
-      ? catalog && catalogSubject === subjectId ? catalog : await scopedRequest("catalog", undefined, subjectId)
-      : null;
-    if (ticket !== sequence) return;
-    if (!Array.isArray(nextSubjects.subjects) || (subjectId && !subjectRestricted(subject) && !Array.isArray(nextCatalog?.courses))) throw new Error(t("portal.the.course.catalog.is.temporarily.unavailable.17"));
-    subjects = nextSubjects.subjects; profile = nextProfile; catalog = nextCatalog; catalogSubject = subjectId;
+    if (!Array.isArray(nextSubjects.subjects) || (needsCatalog && !subjectRestricted(subject) && !Array.isArray(nextCatalog?.courses))) throw new Error(t("portal.the.course.catalog.is.temporarily.unavailable.17"));
+    subjects = nextSubjects.subjects; profile = nextProfile;
+    if (needsCatalog) { catalog = nextCatalog; catalogSubject = subjectId; }
+    else if (catalogSubject !== subjectId) { catalog = null; catalogSubject = null; }
     const workspaceCourse = courseWorkspaceId(currentRoute);
     const readerCourse = /^\/(topic|review)\//.test(currentRoute?.path || '') ? currentRoute.params.get('course') : null;
     selectedCourse = workspaceCourse || readerCourse || catalog?.selected_course_id || null;
     selectedRoot = workspaceCourse || readerCourse ? currentRoute.params.get('root') : savedCourseRoot(selectedCourse, subjectId);
     if (!catalog?.courses.find(c => c.id === selectedCourse)?.outline?.some(u => u.id === selectedRoot)) selectedRoot = null;
-    if (!profile.timezone) {
-      try {
-        const next = await bridge.request("profile", { method: "POST", body: { timezone: timezone() } });
-        if (ticket !== sequence) return;
-        profile = next;
-      } catch { /* Use browser time while a later settings save can retry. */ }
-    }
     updateUser();
   }
   function subjectRestricted(subject) {

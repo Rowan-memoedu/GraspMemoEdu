@@ -1,18 +1,18 @@
-import {t, translateMessage} from './i18n.js?v=8f6629f316cc79a6';
-import {answerEditor, readerFrame, renderReviewReader} from './learning-ui.js?v=8f6629f316cc79a6';
-import {answerReady, questionInput, choiceTypeField} from './question-input.js?v=8f6629f316cc79a6';
-import {createLearningCache} from './learning-cache.js?v=8f6629f316cc79a6';
-import {helpableContent, reportableContent} from './content-report.js?v=8f6629f316cc79a6';
+import {t, translateMessage} from './i18n.js?v=51490b3e06872afe';
+import {answerEditor, readerFrame, renderReviewReader} from './learning-ui.js?v=51490b3e06872afe';
+import {answerReady, questionInput, choiceTypeField} from './question-input.js?v=51490b3e06872afe';
+import {createLearningCache} from './learning-cache.js?v=51490b3e06872afe';
+import {helpableContent, reportableContent} from './content-report.js?v=51490b3e06872afe';
 
 const node = (tag, cls = '', text) => { const x = document.createElement(tag); x.className = cls; if (text !== undefined) x.textContent = text; return x; };
 const button = (label, cls, action) => { const x = node('button', cls, label); x.type = 'button'; x.addEventListener('click', action); return x; };
 const html = content => { const x = node('div', 'courseContent'); x.innerHTML = content || ''; return x; };
-import {createContentTimer} from './content-timer.js?v=8f6629f316cc79a6';
-import {renderReviewDirectory, paperNumber} from './review-directory.js?v=8f6629f316cc79a6';
-import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=8f6629f316cc79a6';
-import {chunkPeek} from './memory-chunk.js?v=8f6629f316cc79a6';
-import {pointAssessment} from './point-assessment.js?v=8f6629f316cc79a6';
-import {trainingAudio} from './training-audio.js?v=8f6629f316cc79a6';
+import {createContentTimer} from './content-timer.js?v=51490b3e06872afe';
+import {renderReviewDirectory, paperNumber} from './review-directory.js?v=51490b3e06872afe';
+import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=51490b3e06872afe';
+import {chunkPeek} from './memory-chunk.js?v=51490b3e06872afe';
+import {pointAssessment} from './point-assessment.js?v=51490b3e06872afe';
+import {trainingAudio} from './training-audio.js?v=51490b3e06872afe';
 
 export function createPaperView({root, request, href, getAccess, formatDate, progressChanged, courseSidebar, taskTree}) {
   const template = document.getElementById('appLayout').cloneNode(true);
