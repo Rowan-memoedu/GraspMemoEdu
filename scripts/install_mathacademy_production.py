@@ -58,7 +58,9 @@ def main():
             if database_state() != before_database:
                 raise RuntimeError('Graphics repair changed learning database rows')
             receipt['learning_database_unchanged'] = True
-        subprocess.run(['systemctl', 'start', 'graspmemoedu'], check=True)
+        # A separate host monitor may have started the service before activation.
+        # Reload the selected generation even when that process is already active.
+        subprocess.run(['systemctl', 'restart', 'graspmemoedu'], check=True)
         healthy()
         receipt.update(target='production', health='passed', pointer_sha256=hashlib.sha256(pointer.read_bytes()).hexdigest())
         record = data / 'content-activation-history' / (receipt['generation'] + '.production.json')
@@ -70,7 +72,7 @@ def main():
             pointer.unlink(missing_ok=True)
         else:
             pending = pointer.with_suffix('.rollback'); pending.write_bytes(before); os.replace(pending, pointer)
-        subprocess.run(['systemctl', 'start', 'graspmemoedu'], check=True)
+        subprocess.run(['systemctl', 'restart', 'graspmemoedu'], check=True)
         healthy()
         raise
     finally:
