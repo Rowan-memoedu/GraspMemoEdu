@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 import threading
+from urllib.parse import urlsplit
 import zipfile
 
 from .topic_install import encoded, digest, import_lock
@@ -165,7 +166,9 @@ class Assets:
             tectonic = os.environ.get('CODEX_TECTONIC_PATH') or shutil.which('tectonic')
             if not tectonic:
                 raise RuntimeError('Tectonic compiler is required for source graphics')
-            tex = self.root / (key + '.tex'); tex.write_text(source, encoding='utf-8')
+            # Preserve captured CRLF: Windows newline translation would otherwise
+            # write CRCRLF, creating spurious paragraphs inside TeX arguments.
+            tex = self.root / (key + '.tex'); tex.write_text(source, encoding='utf-8', newline='')
             print('render graphic ' + key[:12], flush=True)
             result = subprocess.run([tectonic, '--untrusted', '--keep-logs', '--outdir', str(self.root), str(tex)],
                                     capture_output=True, text=True, timeout=180)
@@ -232,8 +235,10 @@ class Assets:
         def image(url):
             if url.startswith('data:image/'):
                 return url
-            identity = next((key for key in self.graphics if key in url), None)
-            if identity:
+            # Source controls may use a bare fileId; HTML uses /graphics/<fileId>.
+            # A question image is not the image of an option sharing its prefix.
+            identity = urlsplit(html.unescape(url)).path.removeprefix('/graphics/')
+            if identity in self.graphics:
                 return self.compile(self.graphics[identity])
             if inline_graphics and url in inline_graphics:
                 return self.compile_inline(inline_graphics[url])
@@ -422,10 +427,20 @@ def question_model(q, assets, gaps, example=False):
     requirement = ('<aside class="inline-document-callout callout" data-callout="requirement"><strong>要求</strong><p>Calculator: '
                    + html.escape(str(constraints)) + '</p></aside>') if constraints is not None else ''
     source_html = q.get('questionHtml') or ''
+    render_text = text + requirement
+    # Captured Practice stems can say "the graph above" while the diagram is a
+    # separate q-<id> attachment. Choices have their own q-<id>-a-<n> identities.
+    if not example and q.get('graphic') and not re.search(
+            r'<img\b|!\[[^\]]*\]\(|\\documentclass',
+            assets.visible_markup(text) + assets.visible_markup(source_html), re.I):
+        image = '<img alt="Source diagram" src="/graphics/q-' + str(qid) + '">'
+        render_text = image + '\n\n' + render_text
+        if source_html:
+            source_html = re.sub(r'<body\b[^>]*>', lambda m: m[0] + image, source_html, count=1, flags=re.I) if re.search(r'<body\b', source_html, re.I) else image + source_html
     if source_html and requirement:
         source_html = re.sub(r'</body>', lambda m: requirement + m[0], source_html, count=1, flags=re.I) if re.search(r'</body>', source_html, re.I) else source_html + requirement
     result = {'id': f'ma-{"example" if example else "question"}-{qid}', 'title': q.get('title') or f'Practice {q.get("number", qid)}',
-              'question': text, 'html': assets.render(text + requirement, source_html, gaps),
+              'question': text, 'html': assets.render(render_text, source_html, gaps),
               'explanation_html': assets.render(explanation, q.get('explanationHtml'), gaps),
               'reference_answer': '', 'answer_type': 'source', 'constraints': str(constraints or ''),
               'source_format': 'example' if example else q.get('format'), 'difficulty': q.get('difficulty')}

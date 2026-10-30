@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from graspmemoedu.catalog import Catalog
 from graspmemoedu.config import Settings
-from graspmemoedu.mathacademy_import import Assets, SourceIndex, prepare, install, source_fingerprint
+from graspmemoedu.mathacademy_import import Assets, SourceIndex, prepare, install, source_fingerprint, question_model
 from graspmemoedu.mathacademy_graphics import prepare_repairs, install_repairs, validate_patch, repair_topic
 from graspmemoedu.site_backup import backup_site, restore_site
 from tests.test_mathacademy_import import source
@@ -38,6 +38,69 @@ class MathAcademyGraphicsTests(unittest.TestCase):
         compiler.assert_called_once_with(TEX)
         assets.render('Unrelated source', '<img src="/graphics/q-1-a-2">', gaps)
         self.assertEqual(gaps, [{'code': 'image_missing', 'reference': '/graphics/q-1-a-2'}])
+
+    def test_graphic_file_identity_is_exact_for_question_and_option(self):
+        question = TEX.replace('one', 'question')
+        option = TEX.replace('one', 'option')
+        assets = Assets(self.cache, {'q-1': question, 'q-1-a-2': option})
+        gaps = []
+        with patch.object(assets, 'compile', return_value=PNG) as compiler:
+            assets.text('<img src="/graphics/q-1"><img src="/graphics/q-1-a-2?rev=1#view">'
+                        '<img src="q-1-a-2">', gaps)
+        self.assertEqual([call.args[0] for call in compiler.call_args_list], [question, option, option])
+        self.assertEqual(gaps, [])
+
+    def test_unknown_graphic_does_not_reuse_a_known_prefix(self):
+        assets = Assets(self.cache, {'q-1': TEX})
+        gaps = []
+        with patch.object(assets, 'compile') as compiler:
+            result = assets.text('<img src="/graphics/q-10"><img src="/graphics/q-1-a-9">', gaps)
+        compiler.assert_not_called()
+        self.assertEqual(result, '<img src=""><img src="">')
+        self.assertEqual(gaps, [{'code': 'image_missing', 'reference': '/graphics/q-10'},
+                               {'code': 'image_missing', 'reference': '/graphics/q-1-a-9'}])
+
+    def test_separate_stem_graphic_is_restored_without_reusing_a_choice(self):
+        stem, choice = TEX.replace('one', 'stem'), TEX.replace('one', 'choice')
+        assets = Assets(self.cache, {'q-1': stem, 'q-1-a-1': choice})
+        original = {'id': 1, 'format': 'MC', 'text': 'Which graph above?', 'graphic': True,
+                    'choice1': '<img src="/graphics/q-1-a-1">'}
+        with patch.object(assets, 'compile', return_value=PNG) as compiler:
+            result = question_model(original, assets, [])
+        self.assertEqual([c.args[0] for c in compiler.call_args_list], [stem, choice])
+        self.assertEqual(result['html']['_render'].count(PNG), 1)
+        self.assertEqual(result['interaction']['options'][0]['html']['_render'].count(PNG), 1)
+        self.assertEqual(original['text'], 'Which graph above?')
+        self.assertEqual(result['question'], original['text'])
+        for key in ('text', 'questionHtml'):
+            question = {**original, key: '<img src="/graphics/q-1">Which graph?'}
+            with patch.object(assets, 'compile', return_value=PNG) as compiler:
+                question_model(question, assets, [])
+            self.assertEqual([c.args[0] for c in compiler.call_args_list], [stem, choice])
+
+    def test_separate_stem_without_source_remains_an_explicit_gap(self):
+        assets = Assets(self.cache, {})
+        gaps = []
+        question_model({'id': 1, 'format': 'MC', 'text': 'Graph above?', 'graphic': True,
+                        'choice1': 'A', 'choice2': 'B'}, assets, gaps)
+        self.assertIn({'code': 'image_missing', 'reference': '/graphics/q-1'}, gaps)
+
+    def test_compiler_input_preserves_source_crlf_without_inserting_paragraphs(self):
+        import base64
+        import os
+        from pathlib import Path
+        from types import SimpleNamespace
+        source = '\\begin{axis}[\r\nxlabel={$[x]$},\r\nylabel={$y$}\r\n]\r\n'
+        assets = Assets(self.cache, {})
+        def run(command, **_kwargs):
+            if command[0] == 'source-tectonic':
+                self.assertEqual(Path(command[-1]).read_bytes(), source.encode('utf-8'))
+            else:
+                Path(command[-1] + '.png').write_bytes(base64.b64decode(PNG.split(',', 1)[1]))
+            return SimpleNamespace(returncode=0, stdout='', stderr='')
+        with patch.dict(os.environ, {'CODEX_TECTONIC_PATH': 'source-tectonic'}), \
+                patch('graspmemoedu.mathacademy_import.subprocess.run', side_effect=run):
+            self.assertEqual(assets.compile(source), PNG)
 
     def old_package(self):
         import zipfile
