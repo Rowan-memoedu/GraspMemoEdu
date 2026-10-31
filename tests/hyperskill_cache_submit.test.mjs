@@ -88,3 +88,35 @@ test('sampled distractors require matching the installed variant before submitti
     assert.equal(attempts,2);assert.equal(posts,1);
   } finally {await fs.rm(dir,{recursive:true});}
 });
+test('official outer whitespace normalization is accepted but content changes are rejected',async()=>{
+  const textJob={...job,question:{...job.question,hyperskill:{step_id:1,type:'string'},hyperskill_presentation:{dataset:{},interaction:null}}};
+  const reply={files:[],text:'6 7 8 9'};
+  const s={id:10,attempt:20,step:1,user_id:30,status:'correct',time:'2026-10-31T00:00:00Z',reply};
+  const api=async(method,route)=>route.startsWith('/submissions')?{submissions:[s]}:{attempts:[{id:20,step:1,dataset:{}}]};
+  const expected={attempt_id:20,time:s.time,dataset:{},reply:{files:[],text:'6 7 8 9 '}};
+  assert.equal((await verify(textJob,10,api,30,expected)).raw_answer,'6 7 8 9');
+  expected.reply.text='6 7 8';
+  await assert.rejects(verify(textJob,10,api,30,expected),/differs/);
+});
+test('lost POST response with official whitespace normalization recovers the same submission',async()=>{
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'answer-cache-test-'));
+  const textJob={...job,raw_answer:'6 7 8 9 ',question:{...job.question,hyperskill:{step_id:1,type:'string'},
+    hyperskill_presentation:{dataset:{},interaction:null}}};
+  let posts=0,submission=null;
+  const api=async(method,route)=>{
+    if(route.startsWith('/attempts'))return {attempts:[{id:20,step:1,dataset:{}}]};
+    if(route.startsWith('/submissions?'))return {submissions:submission?[submission]:[]};
+    if(method==='POST') {
+      posts++;submission={id:10,attempt:20,step:1,user_id:30,status:'correct',time:new Date().toISOString(),
+        reply:{files:[],text:'6 7 8 9'}};
+      throw Error('lost response');
+    }
+    return {submissions:[submission]};
+  };
+  try {
+    const options={directory:dir,api,expectedUserId:30,polls:0};
+    assert.equal((await processJob(textJob,options)).status,'correct');
+    assert.equal((await processJob(textJob,options)).status,'correct');
+    assert.equal(posts,1);
+  } finally {await fs.rm(dir,{recursive:true});}
+});

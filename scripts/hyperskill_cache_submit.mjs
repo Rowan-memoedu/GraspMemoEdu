@@ -24,6 +24,25 @@ export async function save(file,value) {
 }
 class CacheBridge extends Bridge {
   async save(run) {await save(this.file(run.id),run);}
+  async reconcile(run) {
+    if(run.pending&&!run.pending.submission_id) {
+      const p=run.pending,data=await this.hyperskill('GET',`/submissions?step=${run.binding.step_id}&page_size=100&order=desc`);
+      const matches=(data.submissions||[]).filter(s=>{
+        let reply=s.reply;try {if(typeof reply==='string')reply=JSON.parse(reply);}catch{return false;}
+        return s.attempt===p.attempt_id&&s.step===run.binding.step_id&&s.user_id===this.expectedUserId&&
+          !p.before.includes(s.id)&&Date.parse(s.time)>=Date.parse(p.started_at)-5000&&
+          repliesMatch(run.binding.type,p.value.reply,reply);
+      });
+      if(matches.length!==1)return;
+      p.submission_id=matches[0].id;await this.save(run);
+    }
+    return super.reconcile(run);
+  }
+}
+export function repliesMatch(kind,submitted,returned) {
+  return Object.keys(submitted).every(k=>kind==='string'&&k==='text'&&
+    typeof submitted[k]==='string'&&typeof returned?.[k]==='string'
+    ?submitted[k].trim()===returned[k].trim():isDeepStrictEqual(submitted[k],returned?.[k]));
 }
 export function rawFromReply(type,data,reply) {
   if(type==='number')return String(reply.number);
@@ -53,7 +72,7 @@ export async function verify(job, id, api, expectedUserId, expected=null) {
   const value=answer(kind,dataset,sourceRaw);
   if(expected&&(expected.attempt_id!==a.id||expected.time!==s.time||
      !isDeepStrictEqual(expected.dataset,dataset)||
-     Object.keys(expected.reply).some(k=>!isDeepStrictEqual(expected.reply[k],reply[k]))))
+     !repliesMatch(kind,expected.reply,reply)))
     throw Error('Independent source readback differs from submitted answer');
   const current=q.hyperskill_presentation.dataset;
   const mapped=remapAnswer(kind,dataset,current,sourceRaw);
@@ -165,7 +184,7 @@ export async function processJob(job,{directory,api,expectedUserId,polls=30}) {
         const reply=typeof s?.reply==='string'?JSON.parse(s.reply):s?.reply;
         if(s?.id!==run.pending.submission_id||s.attempt!==run.pending.attempt_id||
           s.user_id!==expectedUserId||s.step!==binding.step_id||
-          Object.keys(run.pending.value.reply).some(k=>!isDeepStrictEqual(reply?.[k],run.pending.value.reply[k])))
+          !repliesMatch(kind,run.pending.value.reply,reply))
           throw Error('Pending receipt identity mismatch');
         if(s.status==='rejected') {terminalRejection=s;break;}
       }
