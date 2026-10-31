@@ -35,8 +35,11 @@ and the requested format. Check every option against the exact wording, includin
 negations. For multiple choice include all and only the required statements.
 Trace program output in execution order. Use supplied attachment data/statistics
 for file questions instead of guessing. Keep commentary out of answer values.
-Return ONLY JSON: {"answers":[{"problem_key":"exact input key","answer":VALUE,
-"reasoning":"brief derivation"}]}. Return every input key exactly once.
+Derive the solution first, then double-check that every selected index maps to the
+intended option text. Earlier rejected answers remain wrong even if they look plausible.
+Return ONLY JSON: {"answers":[{"problem_key":"exact input key",
+"reasoning":"brief derivation and index check","answer":VALUE}]}.
+Return every input key exactly once.
 VALUE formats by type:
 choice: {"selected":"index"}, or {"selected":["index",...]} for multiple choice.
 matching: [{"left":"index","right":"index"},...] using each left and right once.
@@ -102,11 +105,11 @@ def candidate_version(job, state):
     return len(wrong), wrong
 
 
-def producer_client():
+def producer_client(model=None):
     spec = importlib.util.spec_from_file_location('existing_ai_batch', PRODUCER)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module.batch_client()
+    return module.batch_client(model=model)
 
 
 def generate(jobs, state, output, client):
@@ -124,6 +127,7 @@ def generate(jobs, state, output, client):
         source = json.dumps({'problem_key': job['problem_key'][:12], 'type': q['hyperskill']['type'],
             'title': q['title'], 'question': q.get('html') or q['question'],
             'dataset': q['hyperskill_presentation']['dataset'],
+            'interaction': q['hyperskill_presentation'].get('interaction'),
             'previous_wrong': [{'answer': r['raw_answer'], 'feedback': r.get('feedback', '')} for r in wrong],
             'previous_invalid': invalid, 'attachments': attachments(q, output)}, ensure_ascii=False)
         # Send the actual image content through the maintained visual transport.
@@ -271,7 +275,7 @@ def run(args):
     history = submit(jobs, args, output / 'history', action='history')
     for ident in install(jobs, history, output / 'history'):
         remaining.pop(ident, None)
-    client = producer_client() if remaining else None
+    client = producer_client(args.model) if remaining else None
     save(output / 'producer.json', {'identity': client.identity} if client else {})
     errors = []
     for round_number in range(1, 7):
@@ -315,6 +319,7 @@ def main():
     parser.add_argument('--config', type=Path, default=Path('D:/AppData/GraspMemoEduHyperskillBridge/config.json'))
     parser.add_argument('--state', type=Path, default=STATE)
     parser.add_argument('--output', type=Path)
+    parser.add_argument('--model', help='Caller-selected Codex Exec model; otherwise preserve the existing transport default')
     parser.add_argument('--canary', action='store_true', help='Explicit one-per-type acceptance run; normal runs have no limit')
     args = parser.parse_args()
     if args.output is None:
