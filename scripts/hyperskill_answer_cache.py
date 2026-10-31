@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from graspmemoedu.hyperskill_answers import AnswerStore, key, parse_local
 from hyperskill_answer_cache_admin import validate_reference
+from hyperskill_cache_attachments import attachments
 
 HOST = 'ubuntu@124.221.144.155'
 REMOTE = '/opt/graspmemoedu/app/scripts/hyperskill_answer_cache_admin.py'
@@ -115,10 +116,12 @@ def generate(jobs, state, output, client):
             ready.append({**job, 'raw_answer': cached['raw_answer']})
             continue
         q = job['question']
+        invalid = read(state / job['problem_key'] / f'invalid-{version}.json')
         source = json.dumps({'problem_key': job['problem_key'][:12], 'type': q['hyperskill']['type'],
             'title': q['title'], 'question': q.get('html') or q['question'],
             'dataset': q['hyperskill_presentation']['dataset'],
-            'previous_wrong': [{'answer': r['raw_answer'], 'feedback': r.get('feedback', '')} for r in wrong]}, ensure_ascii=False)
+            'previous_wrong': [{'answer': r['raw_answer'], 'feedback': r.get('feedback', '')} for r in wrong],
+            'previous_invalid': invalid, 'attachments': attachments(q, output)}, ensure_ascii=False)
         # Send the actual image content through the maintained visual transport.
         sources = list(dict.fromkeys(html.unescape(v) for v in re.findall(r'<img\b[^>]*?src=\\?\"([^\"]+)\\?\"', source)))
         for image_source in sources:
@@ -159,15 +162,19 @@ def generate(jobs, state, output, client):
         value = item['answer']
         raw = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
         try:
-            canonical = parse_local(job['question'], raw)
+            parse_local(job['question'], raw)
             _, previous = candidate_version(job, state)
-            if any(parse_local(job['question'], row['raw_answer']) == canonical for row in previous):
+            # Local equivalence is deliberately broader than the official checker.
+            # A different spelling may fix a source rejection even if locally equivalent.
+            if any(row['raw_answer'] == raw for row in previous):
                 raise ValueError('Producer repeated a previously wrong answer')
             save(file, {'raw_answer': raw, 'reasoning': item.get('reasoning'), 'production': str(call),
                         'provider': response['provider'], 'model': response['model']})
             ready.append({**job, 'raw_answer': raw})
         except Exception as error:
             errors.append({'problem_key': job['problem_key'], 'error': str(error)})
+            version, _ = candidate_version(job, state)
+            save(state / job['problem_key'] / f'invalid-{version}.json', {'raw_answer': raw, 'error': str(error)})
     save(call.with_suffix('.validation.json'), {'valid': len(ready), 'errors': errors})
     emit(candidates_ready=len(ready), candidate_errors=len(errors), model=response['model'])
     return ready
@@ -237,6 +244,8 @@ def install(jobs, results, output):
 def run(args):
     output = args.output or ARTIFACTS / datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S-%f')
     output.mkdir(parents=True, exist_ok=True)
+    if args.command == 'run':
+        save(output / 'receipt.json', {'status': 'running'})
     before = remote('inventory')
     save(output / 'inventory-before.json', before)
     jobs = before['pending']
@@ -302,8 +311,16 @@ def main():
     parser.add_argument('--output', type=Path)
     parser.add_argument('--canary', action='store_true', help='Explicit one-per-type acceptance run; normal runs have no limit')
     args = parser.parse_args()
+    if args.output is None:
+        args.output = ARTIFACTS / datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S-%f')
     with exclusive(args.state):
-        return run(args)
+        try:
+            return run(args)
+        except Exception as error:
+            if args.command == 'run':
+                save(args.output / 'receipt.json', {'status': 'incomplete', 'error': str(error),
+                                                  'checkpoint_retained': True})
+            raise
 
 
 if __name__ == '__main__':

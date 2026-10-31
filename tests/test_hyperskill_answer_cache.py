@@ -7,10 +7,13 @@ import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
+import io
+from zipfile import ZipFile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 import hyperskill_answer_cache_admin as admin
 import hyperskill_answer_cache as workflow
+from hyperskill_cache_attachments import numeric_summary, zip_summary
 from graspmemoedu.hyperskill_answers import AnswerStore, key
 
 
@@ -108,6 +111,41 @@ class CacheWorkflowTests(unittest.TestCase):
         result = workflow.generate(jobs, self.data / 'state', self.data / 'run', SimpleNamespace(identity=['fixture'], raw=raw))
         self.assertEqual([row['problem_key'] for row in result], [jobs[0]['problem_key']])
         self.assertFalse((self.data / 'state' / jobs[1]['problem_key'] / 'candidate-0.json').exists())
+
+    def test_official_retry_may_change_spelling_even_when_website_normalizes_it(self):
+        q = question()
+        q['hyperskill']['type'] = 'string'
+        q['hyperskill_presentation'].update(dataset={}, interaction=None)
+        job = {'problem_key': key(q), 'question': q}
+        state = self.data / 'state'
+        workflow.save(state / job['problem_key'] / 'state.json', {'attempts': [
+            {'status': 'wrong', 'raw_answer': 'A &amp; B', 'feedback': ''}]})
+        def raw(messages, **kwargs):
+            return {'provider': 'codex_exec', 'model': 'fixture', 'choices': [{'message': {'content': json.dumps({
+                'answers': [{'problem_key': job['problem_key'][:12], 'answer': 'A & B'}]})}}]}
+        result = workflow.generate([job], state, self.data / 'run', SimpleNamespace(identity=['fixture'], raw=raw))
+        self.assertEqual(result[0]['raw_answer'], 'A & B')
+
+    def test_public_data_summaries_preserve_order_stop_points_and_archive_structure(self):
+        stats = numeric_summary('3\n8\n2\n0\n12\n', 'Count values greater than 5')
+        column = stats['columns_in_source_order'][0]
+        self.assertEqual(column['before_first_zero']['even_count'], 2)
+        self.assertEqual(column['threshold_counts']['5']['greater'], 2)
+        inline = numeric_summary('3 8 2 0 12', 'Count values greater than 5')['sequence_in_file_order']
+        self.assertEqual(inline['before_first_zero']['even_count'], 2)
+        self.assertEqual(inline['sum'], '25')
+        self.assertIsNone(numeric_summary('1,2\n3,4', 'CSV data'))
+        self.assertEqual(numeric_summary('1,234\n2,000', 'Sum')['sequence_in_file_order']['sum'], '3234')
+        stream = io.BytesIO()
+        with ZipFile(stream, 'w') as archive:
+            archive.writestr('root/a/file.txt', '')
+            archive.writestr('root/empty/', '')
+        tree = zip_summary(stream.getvalue())
+        self.assertEqual(tree['file_count'], 1)
+        self.assertEqual(next(d for d in tree['directories'] if d['path']=='root/empty')['direct_children'], 0)
+        stream = io.BytesIO()
+        with ZipFile(stream, 'w') as archive: archive.writestr('../outside', '')
+        with self.assertRaises(ValueError): zip_summary(stream.getvalue())
 
 
 if __name__ == '__main__': unittest.main()
