@@ -107,6 +107,7 @@ class CacheWorkflowTests(unittest.TestCase):
         def raw(messages, **kwargs):
             return {'provider': 'codex_exec', 'model': 'fixture', 'choices': [{'message': {'content': json.dumps({
                 'answers': [{'problem_key': jobs[0]['problem_key'][:12], 'answer': {'selected': '0'}},
+                            {'problem_key': jobs[1]['problem_key'][:12], 'reasoning': 'Incomplete output'},
                             {'problem_key': 'invented', 'answer': {'selected': '0'}}]})}}]}
         result = workflow.generate(jobs, self.data / 'state', self.data / 'run', SimpleNamespace(identity=['fixture'], raw=raw))
         self.assertEqual([row['problem_key'] for row in result], [jobs[0]['problem_key']])
