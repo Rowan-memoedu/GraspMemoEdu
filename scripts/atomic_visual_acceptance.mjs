@@ -77,6 +77,9 @@ try {
   pass('Whole Topic counters, wider source, vertical highlight centering, prose reflow or canvas scroll, right history and separate mnemonic; four responsive widths');
   await page.setViewportSize({width: 1440, height: 1050});
   await start(); await page.locator('#atomicAnswer').fill('尚未提交的答案草稿');
+  assert.equal(await page.locator('.atomicPeekButton, .memoryChunkDialog').count(), 0);
+  await page.locator('#atomicAnswerForm button[type="submit"]').click();
+  await page.locator('.atomicFeedback').waitFor({timeout: 120000});
   const before = await state(), writes = mutations;
   await page.getByRole('button', {name: '查看记忆组块', exact: true}).click();
   await page.locator('dialog[open] .atomicMnemonic').waitFor();
@@ -89,7 +92,11 @@ try {
   await page.keyboard.press('Escape');
   assert.equal(await page.locator('dialog[open]').count(), 0);
   assert.equal(await page.getByRole('button', {name: '查看记忆组块', exact: true}).evaluate(el => el === document.activeElement), true);
-  pass('Chunk dialog preserves answer, revision and active step; no learning POST; Escape and focus restoration');
+  pass('Chunk access stays absent before submission; feedback dialog preserves answer, revision and active step; Escape restores focus');
+  await page.locator('.atomicQuestion > .primaryButton').click();
+  await page.locator('.atomicFeedback').waitFor({state: 'hidden'});
+  assert.equal(await page.locator('.atomicPeekButton:visible, .memoryChunkDialog:visible').count(), 0);
+  pass('Continuing past feedback leaves no accessible chunk controls');
   const advanced = await api('/__qa/advanced', {});
   token = advanced.identity_token;
   await page.evaluate(({base, token}) => {
@@ -97,7 +104,12 @@ try {
     localStorage.setItem('graspmemoedu:identity-role:' + base, 'account');
   }, {base, token});
   await go(); await next(); await start();
+  assert.equal(await page.locator('.atomicPeekButton, .memoryChunkDialog').count(), 0);
   await page.locator('.showAnswer').click(); await page.locator('.trainingRating[data-rating="5"]').waitFor();
+  await page.locator('.atomicPeekButton').click();
+  await page.locator('.memoryChunkDialog[open]').waitFor();
+  await page.keyboard.press('Escape');
+  pass('Show Answer unlocks chunk access before self-rating');
   assert.equal(await page.locator('.trainingRating').count(), 5);
   for (const width of [1440, 320, 375, 414, 768]) {
     await page.setViewportSize({width, height: 1050});

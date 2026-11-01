@@ -1,8 +1,8 @@
-import {t, learningTitle} from './i18n.js?v=51490b3e06872afe';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=51490b3e06872afe';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=51490b3e06872afe';
-import {enhanceTopicContent} from './topic-content.js?v=51490b3e06872afe';
-import {sourceAttributions} from './memory-chunk.js?v=51490b3e06872afe';
+import {t, learningTitle} from './i18n.js?v=96ce6f48293f091f';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=96ce6f48293f091f';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=96ce6f48293f091f';
+import {enhanceTopicContent} from './topic-content.js?v=96ce6f48293f091f';
+import {sourceAttributions} from './memory-chunk.js?v=96ce6f48293f091f';
 
 const node = (tag, cls = '', text) => {
   const item = document.createElement(tag); item.className = cls;
