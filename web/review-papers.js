@@ -1,18 +1,18 @@
-import {t, translateMessage} from './i18n.js?v=51490b3e06872afe';
-import {answerEditor, readerFrame, renderReviewReader} from './learning-ui.js?v=51490b3e06872afe';
-import {answerReady, questionInput, choiceTypeField} from './question-input.js?v=51490b3e06872afe';
-import {createLearningCache} from './learning-cache.js?v=51490b3e06872afe';
-import {helpableContent, reportableContent} from './content-report.js?v=51490b3e06872afe';
+import {t, translateMessage} from './i18n.js?v=96ce6f48293f091f';
+import {answerEditor, readerFrame, renderReviewReader} from './learning-ui.js?v=96ce6f48293f091f';
+import {answerReady, questionInput, choiceTypeField} from './question-input.js?v=96ce6f48293f091f';
+import {createLearningCache} from './learning-cache.js?v=96ce6f48293f091f';
+import {helpableContent, reportableContent} from './content-report.js?v=96ce6f48293f091f';
 
 const node = (tag, cls = '', text) => { const x = document.createElement(tag); x.className = cls; if (text !== undefined) x.textContent = text; return x; };
 const button = (label, cls, action) => { const x = node('button', cls, label); x.type = 'button'; x.addEventListener('click', action); return x; };
 const html = content => { const x = node('div', 'courseContent'); x.innerHTML = content || ''; return x; };
-import {createContentTimer} from './content-timer.js?v=51490b3e06872afe';
-import {renderReviewDirectory, paperNumber} from './review-directory.js?v=51490b3e06872afe';
-import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=51490b3e06872afe';
-import {chunkPeek} from './memory-chunk.js?v=51490b3e06872afe';
-import {pointAssessment} from './point-assessment.js?v=51490b3e06872afe';
-import {trainingAudio} from './training-audio.js?v=51490b3e06872afe';
+import {createContentTimer} from './content-timer.js?v=96ce6f48293f091f';
+import {renderReviewDirectory, paperNumber} from './review-directory.js?v=96ce6f48293f091f';
+import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=96ce6f48293f091f';
+import {chunkPeek} from './memory-chunk.js?v=96ce6f48293f091f';
+import {pointAssessment} from './point-assessment.js?v=96ce6f48293f091f';
+import {trainingAudio} from './training-audio.js?v=96ce6f48293f091f';
 
 export function createPaperView({root, request, href, getAccess, formatDate, progressChanged, courseSidebar, taskTree}) {
   const template = document.getElementById('appLayout').cloneNode(true);
@@ -314,8 +314,10 @@ export function createPaperView({root, request, href, getAccess, formatDate, pro
       try { remember(); await flush(); state = await post('cancel', {paper_id: state.id}); render(); } catch (failure) { error(failure); }
     }));
     main.append(navigation);
-    const peek = chunkPeek(item.memory_chunks, {topicId: item.content_context?.topic_id, version: item.content_version});
-    if (peek) main.append(peek);
+    if (item.result || item.revealed) {
+      const peek = chunkPeek(item.memory_chunks, {topicId: item.content_context?.topic_id, version: item.content_version});
+      if (peek) main.append(peek);
+    }
   }
   return {inbox, open, stop};
 }
