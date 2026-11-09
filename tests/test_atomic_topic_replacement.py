@@ -71,6 +71,12 @@ class AtomicTopicReplacementTests(unittest.TestCase):
             self.assertEqual(len(list((root/'migration-backups/atomic-replacement').glob('*.json'))),1)
 
     def test_compiled_atomic_package_replaces_old_atomic_content_idempotently(self):
+        self._verify_compiled_replacement()
+
+    def test_reading_only_topic_upgrades_with_explicit_full_progress_reset(self):
+        self._verify_compiled_replacement(reading=True)
+
+    def _verify_compiled_replacement(self, reading=False):
         from argparse import Namespace
         from tests.test_structured_atomic import StructuredAtomicTests
         from tests.atomic_fixtures import atomic_topic
@@ -82,6 +88,12 @@ class AtomicTopicReplacementTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary); data=root/'data'; data.mkdir()
             old=atomic_topic('cs','atomic-new'); old['title']='Independent fact'
+            if reading:
+                old={**old,'topic_format_version':2,'topic_kind':'introduction','training_mode':'paradigm',
+                     'content_version':'fixture-reading-content',
+                     'modules':[],'flashcards':[], 'memory_chunks':[],
+                     'introductions':[{'id':'intro','title':'Read','html':'<p>A label.</p>'}],
+                     'content_order':[{'kind':'introduction','id':'intro'}]}
             (data/'old.json').write_text(json.dumps(old),encoding='utf-8')
             (data/'catalog.json').write_text(json.dumps({'courses':[{'id':'course','title':'Course','description':'',
                 'topics':[{'id':'atomic-new','path':'old.json','prerequisites':[]}],

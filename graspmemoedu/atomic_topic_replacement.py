@@ -7,6 +7,7 @@ import sqlite3
 from .atomic_reading_upgrade import AtomicReadingUpgrade
 from .content_bundle import POINTER
 from .topic_install import encoded, digest
+from .topic_runtime import is_introduction
 
 PROGRESS = {'topics', 'actions', 'submissions', 'events', 'unlocks', 'practice_queues',
             'review_cards', 'review_ratings', 'review_sessions', 'review_actions',
@@ -86,8 +87,8 @@ class AtomicTopicReplacement(AtomicReadingUpgrade):
             old = catalog.topics.get(incoming['id'])
             if old is None or old == incoming:
                 continue
-            if old.get('modules') or not old.get('flashcards') or not incoming.get('flashcards') or old['title'] != incoming['title']:
-                raise ValueError('Replacement requires same-title atomic Topics without paradigm modules')
+            if old.get('modules') or not (old.get('flashcards') or is_introduction(old)) or not incoming.get('flashcards') or old['title'] != incoming['title']:
+                raise ValueError('Replacement requires same-title atomic or reading-only Topics without paradigm modules')
             self.replacements.add(incoming['id'])
         self.previous = {tid:catalog.topics[tid]['version'] for tid in self.replacements}
 
