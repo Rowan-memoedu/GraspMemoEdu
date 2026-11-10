@@ -18,7 +18,7 @@ Topic 支持既有综合范式训练，以及面向英语、语文、生物、�
 
 顶部复习页共用原子点、可变设问和组卷机制，覆盖原子提取训练与独立题库；两类初学评分保持原规则，综合范式的课程 Review 不变。默认整卷完成后交卷，高阶学习者可在设置中改为逐题提交。数学五种初始卷型及后续学科卷型在 [卷型配置](config/review-paper-types.md) 维护；点归属、重叠集合、草稿和异常恢复见 [统一复习设计](docs/unified-review.md)。
 
-当前正式后端位于腾讯云 `https://124.221.144.155`，GitHub Pages 前端为 `https://rowan-memoedu.github.io/GraspMemoEdu-Pages/`。部署、证书续期、备份和回滚边界见 [腾讯云部署](docs/tencent-deployment.md)。下文 Windows 命令仅作隔离开发示例，必须显式指定隔离数据目录；正式管理在服务器执行，不要对本机回滚快照或旧维护任务执行它们。
+当前正式后端位于腾讯云 `https://124.221.144.155`，GitHub Pages 前端为 `https://memoedu.github.io/GraspMemoEdu-Pages/`。部署、证书续期、备份和回滚边界见 [腾讯云部署](docs/tencent-deployment.md)。下文 Windows 命令仅作隔离开发示例，必须显式指定隔离数据目录；正式管理在服务器执行，不要对本机回滚快照或旧维护任务执行它们。
 
 课程图谱使用独立的 `Import-Graph.ps1` / `graph-import`，支持先于 Topic 导入、差异预览、重复更新、历史恢复及离线可视化。Topic 导入不覆盖图谱，图谱更新不改正文和学习进度。标准格式和工作流见 [独立课程图谱](docs/course-graph.md)。
 
@@ -35,7 +35,7 @@ Topic 支持既有综合范式训练，以及面向英语、语文、生物、�
 界面默认中文，可在设置切换英文。统一译法与内容边界见 [界面语言规范](docs/ui-language.md)，完整文案见 [中英对照表](docs/ui-language-table.md)。
 课程支持不等深的多级归属，高阶学习者可在课程任务页展开待学习分组，默认开启并可在设置关闭；目录格式与权限规则见 [课程层级](docs/course-hierarchy.md)。
 
-公开入口：[GraspMemoEdu](https://rowan-memoedu.github.io/GraspMemoEdu-Pages/)。其他电脑、手机可直接打开，自动进入游客模式，无需填写服务地址、配对码或授予本地网络权限。后端、课程和学习记录运行并保存在腾讯云；原始邀请码管理文件仍留在本机私密目录，服务器保存认证所需哈希。源码仓库为私有 `Rowan-memoedu/GraspMemoEdu`，本机源码目录为 `D:/Projects/GraspMemoEdu`，Python 命令入口为 `python -m graspmemoedu`。
+公开入口：[GraspMemoEdu](https://memoedu.github.io/GraspMemoEdu-Pages/)。其他电脑、手机可直接打开，自动进入游客模式，无需填写服务地址、配对码或授予本地网络权限。后端、课程和学习记录运行并保存在腾讯云；原始邀请码管理文件仍留在本机私密目录，服务器保存认证所需哈希。源码仓库为公开的 `memoedu/GraspMemoEdu`，本机源码目录为 `D:/Projects/GraspMemoEdu`，Python 命令入口为 `python -m graspmemoedu`。
 
 游客可进入全部六科学习、提交答案和回看已发布内容；点击「跳过此模块」提示「该功能仅对学员开放」。全站不再提供主动暂停。邀请码账号在全部学科通用，默认开放具备资格的 Topic 和功能并自动继承新增内容；管理员明确设置的 Topic 或功能列表分别覆盖默认权限，见 [账号管理](docs/accounts.md)。
 
@@ -43,7 +43,7 @@ Topic 支持既有综合范式训练，以及面向英语、语文、生物、�
 
 ## 打开与启动
 
-正式网址：[GraspMemoEdu](https://rowan-memoedu.github.io/GraspMemoEdu-Pages/)。腾讯云上的 systemd 持续托管后端，个人电脑关闭、休眠或退出 ChatGPT 桌面端中的 Codex 均不影响网站运行。运维命令见 [腾讯云部署](docs/tencent-deployment.md)。
+正式网址：[GraspMemoEdu](https://memoedu.github.io/GraspMemoEdu-Pages/)。腾讯云上的 systemd 持续托管后端，个人电脑关闭、休眠或退出 ChatGPT 桌面端中的 Codex 均不影响网站运行。运维命令见 [腾讯云部署](docs/tencent-deployment.md)。
 
 `D:/AppData/GraspMemoEdu` 已标为迁移回滚快照，旧启动、维护和默认管理入口会拒绝使用它，不能与云端同时写入。开发时必须显式指定独立数据目录；本机 8765 属于 AnkiConnect，不要占用。示例（先向隔离目录导入测试数据）：
 
@@ -205,7 +205,7 @@ node scripts/inspect_page.mjs
 
 ## 安装到手机和 Windows
 
-[发布与安装页](https://rowan-memoedu.github.io/GraspMemoEdu-Pages/download.html) 提供 iPhone / iPad、安卓和 Windows 的 PWA 安装说明，现有网站用户菜单也可进入。使用同一云端账号与进度，保持联网学习；网页更新无需重新安装。维护及独立安装验收边界见 [PWA 说明](docs/pwa.md)。
+[发布与安装页](https://memoedu.github.io/GraspMemoEdu-Pages/download.html) 提供 iPhone / iPad、安卓和 Windows 的 PWA 安装说明，现有网站用户菜单也可进入。使用同一云端账号与进度，保持联网学习；网页更新无需重新安装。维护及独立安装验收边界见 [PWA 说明](docs/pwa.md)。
 
 ## 打开公开页面
 
@@ -213,7 +213,7 @@ node scripts/inspect_page.mjs
 
 公开页面仅含 HTML、JS、CSS、图标、`.nojekyll` 和只含 `api_origin` 的 `deployment.json`。连接配置由发布时写入，网页没有配置入口。服务不可用时只显示提示和重试。游客身份在切换后端网址时会先到新后端验证，成功后迁移；连接错误不会清除旧身份或悄悄创建替代身份。
 
-前端发布仓库为 `Rowan-memoedu/GraspMemoEdu-Pages`，与私有源码仓库独立。正式服务只允许已配置网页来源及自身公开来源。`settings.json` 的 `public_api_origin` 指定精确公开 HTTPS 地址；nginx 保留公开 Host，后端据此识别公开请求。云端后端只监听 `127.0.0.1:18768`，由 nginx 提供公网 HTTPS。
+前端发布仓库为 `memoedu/GraspMemoEdu-Pages`，与业务源码仓库独立。正式服务只允许已配置网页来源及自身公开来源。`settings.json` 的 `public_api_origin` 指定精确公开 HTTPS 地址；nginx 保留公开 Host，后端据此识别公开请求。云端后端只监听 `127.0.0.1:18768`，由 nginx 提供公网 HTTPS。
 
 修改前端后，先应用 `python scripts/version_web_assets.py --patch` 输出的补丁，为 HTML、CSS 和整套模块引用生成同一内容版本号；再导出到新的构建目录。脚本验证版本号和源码、导出一致，并检查远端完整文件清单，遇到额外文件会停止：
 

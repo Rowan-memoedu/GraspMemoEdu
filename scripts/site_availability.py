@@ -7,9 +7,9 @@ import time
 import urllib.error
 import urllib.request
 
-PAGES = 'repos/Rowan-memoedu/GraspMemoEdu-Pages'
-WORKFLOW = 'repos/Rowan-memoedu/GraspMemoEdu/actions/workflows/public-health.yml'
-URL = 'https://rowan-memoedu.github.io/GraspMemoEdu-Pages/'
+PAGES = 'repos/memoedu/GraspMemoEdu-Pages'
+WORKFLOW = 'repos/memoedu/GraspMemoEdu/actions/workflows/public-health.yml'
+URL = 'https://memoedu.github.io/GraspMemoEdu-Pages/'
 API = 'https://124.221.144.155'
 STATE = Path('D:/AppData/GraspMemoEduOperations/availability.json')
 FLAG = '/etc/nginx/graspmemoedu.offline'
@@ -51,7 +51,7 @@ def save(state):
 
 def status_code(url):
     request = urllib.request.Request(url, headers={'Cache-Control': 'no-cache',
-        'Origin': 'https://rowan-memoedu.github.io'})
+        'Origin': 'https://memoedu.github.io'})
     try:
         with urllib.request.urlopen(request, timeout=20) as response:
             return response.status
