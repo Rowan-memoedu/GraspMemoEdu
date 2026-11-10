@@ -1,7 +1,8 @@
-import {t} from './i18n.js?v=51490b3e06872afe';
+import {t} from './i18n.js?v=460c32ec9479f538';
 
 const blocks = new WeakMap();
 const helpBlocks = new WeakMap();
+const actionHosts = new WeakMap();
 let helpPolicy = null, showHelp = null;
 export function visibleContentTopics() {
   return [...new Set([...document.querySelectorAll('[data-help-block]')]
@@ -15,8 +16,13 @@ export function helpableContent(element, context, contentBlockId, contentVersion
   updateHelpButton(element);
   return element;
 }
+export function placeContentActions(element, host) {
+  actionHosts.set(element, host);
+  for (const actions of element.querySelectorAll(':scope > .contentReportActions, :scope > .trainingNotebookActions')) host.append(actions);
+}
 function updateHelpButton(element) {
-  let actions = element.querySelector(':scope > [data-content-actions]');
+  const host = actionHosts.get(element) || element;
+  let actions = host.querySelector(':scope > [data-content-actions]');
   if (!helpPolicy?.()?.features?.includes('request_help')) { actions?.remove(); return; }
   if (actions) return;
   actions = document.createElement('div'); actions.className = 'contentReportActions'; actions.dataset.contentActions = 'true';
@@ -27,7 +33,7 @@ function updateHelpButton(element) {
     action.addEventListener('click', () => showHelp?.({...helpBlocks.get(element), kind}));
     actions.append(action);
   }
-  element.prepend(actions);
+  if (host === element) element.prepend(actions); else host.append(actions);
 }
 export function installHelpRequests(getAccess, open) {
   helpPolicy = getAccess; showHelp = open;

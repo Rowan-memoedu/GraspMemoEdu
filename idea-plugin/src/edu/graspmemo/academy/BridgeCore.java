@@ -57,6 +57,7 @@ public final class BridgeCore {
             || text.contains("编译失败") || text.contains("编译错误") || text.contains("找不到符号")) return "compile";
         if (text.contains("time limit") || text.contains("memory limit") || text.contains("timed out")
             || text.contains("超时") || text.contains("内存限制")) return "limit";
+        if (text.contains("答案未通过测试")) return "wrong";
         if (text.contains("exception in thread") || text.contains("runtime error") || text.contains("运行时异常")
             || text.matches("(?s).*(nullpointer|arithmetic|arrayindexoutofbounds|nosuchelement)exception.*")) return "runtime";
         return "wrong";

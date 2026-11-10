@@ -59,6 +59,16 @@ def main():
             if target.is_symlink():
                 raise ValueError('Bank must not be a symbolic link')
             bank_before[target] = target.read_bytes() if target.exists() else None
+        if package_manifest.get('adapter') == 'reading-book':
+            for name in package_manifest['files']:
+                if not name.startswith('training-banks/'):
+                    continue
+                if not re.fullmatch(r'training-banks/[A-Za-z0-9][A-Za-z0-9._-]*\.json',name):
+                    raise ValueError('Invalid reading bank path')
+                target = bank_root / Path(name).name
+                if target.is_symlink():
+                    raise ValueError('Reading bank must not be a symbolic link')
+                bank_before[target] = target.read_bytes() if target.exists() else None
     timer = subprocess.run(['systemctl', 'is-active', '--quiet', 'graspmemoedu-healthcheck.timer']).returncode == 0
     variant_worker = (atomic_reading or atomic_revision) and subprocess.run(['systemctl', 'is-active', '--quiet', 'graspmemoedu-variants.service']).returncode == 0
     if timer: subprocess.run(['systemctl', 'stop', 'graspmemoedu-healthcheck.timer'], check=True)

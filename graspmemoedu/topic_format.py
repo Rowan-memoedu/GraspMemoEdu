@@ -27,8 +27,9 @@ PRACTICE = re.compile(r'^Practice\s+([1-9][0-9]*)(?:\.([1-9][0-9]*))?$', re.I)
 CALLOUTS = {'hint': 'hint', 'aside': '题外话', 'requirement': '要求', 'source': '题源'}
 CALLOUT_ALIASES = {**{k: k for k in CALLOUTS}, **{v: k for k, v in CALLOUTS.items()}}
 SOURCE_FIELDS = ('name', 'year', 'edition', 'volume', 'page', 'item', 'location', 'adaptation')
-NODE_FIELDS = {'id', 'text', 'children', 'source_rem_id', 'source_tags', 'callout', 'source'}
-ROOT_FIELDS = {'topic_format_version', 'id', 'title', 'topic_kind', 'source_rem_id', 'nodes'}
+NODE_FIELDS = {'id', 'text', 'children', 'source_rem_id', 'source_tags', 'callout', 'source', 'body_layout', 'presentation',
+               'kind', 'reference', 'section_id', 'example', 'footnotes'}
+ROOT_FIELDS = {'topic_format_version', 'id', 'title', 'topic_kind', 'source_rem_id', 'nodes', 'sections', 'reading_lineage'}
 
 
 def require(condition, message):
@@ -78,6 +79,8 @@ def _without_fences(text):
 
 def references_in_text(text):
     prose = _without_fences(text)
+    # Nested brackets in a formula are mathematical notation, not Rem links.
+    prose = re.sub(r'\$\$[\s\S]*?\$\$|\$[^$\n]+\$', '', prose)
     rows = [{'target_rem_id': m[1], 'label': m[2]} for m in REFERENCE.finditer(prose)]
     require('[[' not in REFERENCE.sub('', prose) and ']]' not in REFERENCE.sub('', prose),
             'Internal references require [[id:<exact Rem ID>|display text]]; titles are not identities')
@@ -169,6 +172,8 @@ def normalize_document(value, *, markdown=False):
     require(isinstance(value.get('nodes'), list) and value['nodes'], 'Topic needs ordered sections')
     document = {k: value[k] for k in ROOT_FIELDS - {'nodes'} if k in value}
     document['title'] = document['title'].strip()
+    from .topic_composition import validate_sections, validate_reference
+    sections = validate_sections(value['sections']) if 'sections' in value else {}
     if 'source_rem_id' in value:
         _rem_id(value['source_rem_id'])
     seen, source_ids, ignored = set(), set(), []
@@ -188,6 +193,13 @@ def normalize_document(value, *, markdown=False):
         text = text.rstrip()
         result = {k: copy.deepcopy(v) for k, v in node.items() if k not in {'children', '_line'}}
         result['text'] = text
+        if 'section_id' in node:
+            require(depth == 1 and node['section_id'] in sections, 'Unknown containing Topic section')
+        if 'kind' in node or 'reference' in node:
+            require(depth == 1 and node.get('kind') == 'bank_question' and not text.strip()
+                    and not node.get('children') and not node.get('example') and not node.get('footnotes'),
+                    'Bank questions must reference their source without copied content')
+            validate_reference(node.get('reference'))
         if 'source_rem_id' in node:
             rem = _rem_id(node['source_rem_id'])
             require(rem not in source_ids, 'Ambiguous duplicate source Rem ID: ' + rem)
@@ -211,6 +223,22 @@ def normalize_document(value, *, markdown=False):
             require(result['callout'] in CALLOUTS, 'Unknown Callout type: ' + ident)
             require(not node.get('source_rem_id') or bool(classified),
                     'RemNote Callout needs its real identifying source tag: ' + ident)
+        if 'body_layout' in result:
+            require(result['body_layout'] == 'prose', 'Unknown body layout: ' + ident)
+        if 'presentation' in result:
+            style = result['presentation']
+            require(isinstance(style, dict) and not set(style) - {'role', 'level', 'lead', 'indent', 'figure_group'}, 'Invalid source presentation')
+            require(style.get('role', 'paragraph') in {'paragraph', 'heading', 'run-in', 'list', 'footnote'}, 'Invalid source role')
+            require(style.get('indent', 0) in (0, 2), 'Invalid source indent')
+            if 'level' in style:
+                require(style.get('role') == 'heading' and type(style['level']) is int and 2 <= style['level'] <= 6, 'Invalid source heading level')
+            if 'lead' in style:
+                lead = style['lead']
+                require(style.get('role') == 'run-in' and isinstance(lead, str) and 0 < len(lead) <= 140
+                        and text.startswith(lead) and not re.search(r'[$`*\n<>\[\]{}\\]', lead), 'Invalid literal source lead')
+            require(style.get('role') != 'run-in' or bool(style.get('lead')), 'Source lead is required')
+            if 'figure_group' in style:
+                identifier(style['figure_group'], 'source figure group')
         if text.strip().rstrip('：:') in {'待转化参考资料', '**待转化参考资料**'}:
             ignored.append({'node_id': ident, 'reason': 'pending-reference-subtree'})
             return None
@@ -245,27 +273,40 @@ def normalize_document(value, *, markdown=False):
             result['text'] = '**idea**：' + result['text'].strip()
         result['children'] = [converted for child in node.get('children', [])
                               if (converted := normalize(child, depth + 1, answer)) is not None]
-        require(result['text'].strip() or result['children'], 'Empty content node: ' + ident)
+        for field in ('example', 'footnotes'):
+            if field in node:
+                require(depth == 1 and INTRODUCTION.fullmatch(text) and isinstance(node[field], list),
+                        'Reading example and footnotes belong to an Introduction subblock')
+                result[field] = [converted for child in node[field]
+                                 if (converted := normalize(child, depth + 1, answer)) is not None]
+        require(result['text'].strip() or result['children'] or node.get('kind') == 'bank_question', 'Empty content node: ' + ident)
         if markdown:
             result['_line'] = node.get('_line', 1)
         return result
 
     document['nodes'] = [result for node in value['nodes'] if (result := normalize(node)) is not None]
+    if sections:
+        require(all(n.get('section_id') in sections for n in document['nodes']), 'Every subblock needs its authored Topic section')
     introductions, modules = [], []
     for node in document['nodes']:
+        if node.get('kind') == 'bank_question':
+            continue
         require('\n' not in node['text'] and not node.get('callout'), 'Top-level section must be Introduction or Example')
         if INTRODUCTION.fullmatch(node['text']):
             introductions.append(node)
-            require(node['children'], 'Empty Introduction: ' + node['id'])
+            require(node['children'] or node.get('example') or node.get('footnotes'), 'Empty Introduction: ' + node['id'])
         else:
             found = EXAMPLE.fullmatch(node['text'])
             require(found and int(found[1]) == len(modules) + 1, 'Example numbers must be consecutive')
             require(introductions, 'Every Example must follow its Introduction')
             require(node['id'] == f'example-{found[1]}', 'Example section ID must equal its module ID')
             modules.append(node)
-    require(introductions, 'Topic needs at least one Introduction')
+    require(introductions or any(n.get('kind') == 'bank_question' for n in document['nodes']), 'Topic needs reading or a bank question')
     require((bool(modules) and document['topic_kind'] == 'lesson')
             or (not modules and document['topic_kind'] == 'introduction'), 'Topic kind disagrees with its sections')
+    if 'reading_lineage' in document:
+        from .topic_composition import validate_reading_lineage
+        validate_reading_lineage(document['reading_lineage'], {n['id'] for n in introductions})
     return document, ignored
 
 
@@ -299,8 +340,9 @@ def validate_field_placement(document):
             field = 'idea'
         if field in destinations:
             require(area == destinations[field], f"Field {field} belongs to {destinations[field]}: {node['id']}")
-        for child in node['children']:
-            walk(child, area, in_idea or field == 'idea')
+        for key in ('children', 'example', 'footnotes'):
+            for child in node.get(key, []):
+                walk(child, area, in_idea or field == 'idea')
 
     for section in document['nodes']:
         walk(section, None)
@@ -315,8 +357,12 @@ def to_outline(document):
         parts = node['text'].split('\n')
         # Structural headings are kept compatible with existing question collection.
         head = 'Introduction' if INTRODUCTION.fullmatch(parts[0]) else parts[0]
+        meta = _metadata(node)
+        for field in ('example', 'footnotes'):
+            if field in node:
+                meta[field] = [convert(n, indent + 2) for n in node[field]]
         return {'head': head, 'lines': parts[1:], 'line': node.get('_line', 1), 'indent': indent,
-                'meta': _metadata(node), 'children': [convert(n, indent + 2) for n in node['children']]}
+                'meta': meta, 'children': [convert(n, indent + 2) for n in node['children']]}
     return {'head': document['title'], 'lines': [], 'line': 1, 'indent': 0,
             'meta': {k: v for k, v in document.items() if k not in {'title', 'nodes'}},
             'children': [convert(n, 2) for n in document['nodes']]}
@@ -328,8 +374,10 @@ def source_text(source):
         return source
     document, _ = parse_source(source)
     def visit(node):
-        return [node['text'], *(text for child in node['children'] for text in visit(child))]
-    return '\n'.join(text for node in document['nodes'] for text in visit(node))
+        return [node['text'], *(text for field in ('children', 'example', 'footnotes')
+                               for child in node.get(field, []) for text in visit(child))]
+    return '\n'.join([*(s['title'] for s in document.get('sections', [])),
+                      *(text for node in document['nodes'] for text in visit(node))])
 
 
 def content_metadata(document):
@@ -350,12 +398,18 @@ def content_metadata(document):
 
     for section in document['nodes']:
         section_id = section['id']
+        if section.get('kind') == 'bank_question':
+            order.append({'kind': 'bank_question', 'id': section_id})
+            continue
         if INTRODUCTION.fullmatch(section['text']):
             order.append({'kind': 'introduction', 'id': section_id})
             owner = {'kind': 'introduction', 'id': section_id, 'field': 'html'}
             add(section, section_id, None, owner, True)
             for child in section['children']:
                 add(child, section_id, section_id, owner)
+            for field in ('example', 'footnotes'):
+                for child in section.get(field, []):
+                    add(child, section_id, section_id, {**owner, 'field': field})
             continue
         order.append({'kind': 'example', 'id': section_id})
         practices = [n for n in section['children'] if PRACTICE.fullmatch(n['text'])]
@@ -382,9 +436,17 @@ def semantic_payload(document, assets=()):
         text = node['text']
         if by_path:
             text = IMAGE.sub(lambda m: f'![{m[1]}](sha256:{by_path[m[2]]})', text)
-        return {'id': node['id'], 'text': text, 'callout': node.get('callout'),
-                'children': [node_payload(child) for child in node['children']]}
-    return {'topic_kind': document['topic_kind'], 'title': document['title'],
+        result = {'id': node['id'], 'text': text, 'callout': node.get('callout'),
+                  'children': [node_payload(child) for child in node['children']]}
+        for field in ('example', 'footnotes'):
+            if field in node:
+                result[field] = [node_payload(child) for child in node[field]]
+        for key in ('kind', 'reference', 'section_id'):
+            if key in node:
+                result[key] = node[key]
+        return result
+    return {**({'sections': document['sections']} if 'sections' in document else {}),
+            'topic_kind': document['topic_kind'], 'title': document['title'],
             'nodes': [node_payload(node) for node in document['nodes']]}
 
 

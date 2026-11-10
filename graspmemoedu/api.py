@@ -234,6 +234,9 @@ def create_app(settings: Settings | None = None, service: LearningService | None
         subjects.authorize_subject(access, request.query_params.get('subject_id'))
         topic_id = requested_topic(request)
         access_store.authorize(access, topic_id, feature)
+        from .topic_composition import question_references
+        for item in question_references(catalog.topic(topic_id)):
+            access_store.authorize(access, 'training.' + item['reference']['bank_id'], feature)
         if topic_id in training.topic_redirects and request.method != 'GET':
             raise DomainError('topic_moved_to_bank', '本题已移入题库，请从题库继续训练。', 409)
         if not trainable(catalog.topic(topic_id)) and request.url.path != '/api/state':

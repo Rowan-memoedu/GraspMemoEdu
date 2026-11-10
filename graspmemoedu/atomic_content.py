@@ -124,6 +124,7 @@ def learning_presentation(topic, state, read_introductions):
             {'id': s['id'], 'title': s['introduction'].get('title') or 'Introduction',
              'read': s['id'] in read, 'point_ids': s['point_ids'],
              'module_ids': [m['id'] for m in s['modules']],
+             **({'bank_question_ids': [q['id'] for q in s['bank_questions']]} if s['bank_questions'] else {}),
              'chunks': [{'id': c['id'], 'title': c['title'], 'seen': c['id'] in seen,
                          'point_ids': [p['id'] for p in c['points']]} for c in s['chunks']]}
             for s in groups]}

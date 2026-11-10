@@ -1,3 +1,49 @@
+@import url('./vendor/book-font/font.css?v=460c32ec9479f538');
+/* Hallmark · component: answers · existing book typography and semantic colours
+ * pre-emit critique: P4 H5 E4 S5 R5 V4 */
+:root {
+  --answer-font: "Noto Serif SC", "Source Han Serif SC", "Songti SC", SimSun, serif;
+  --answer-true: var(--green);
+  --answer-false: #b42328;
+  --answer-true-background: #f0f7f2;
+  --answer-false-background: #fff3f2;
+  --english-reading-font: Georgia, "Noto Serif SC", "Source Han Serif SC", serif;
+}
+.answerContent {
+  font-family: var(--answer-font); font-size: 19px; line-height: 1.9;
+  max-width: 38em; min-width: 0; margin-inline: auto;
+  white-space: normal; word-break: normal; line-break: strict; overflow-wrap: break-word;
+}
+.courseContent.answerContent p, .answerContent .outlineNode > p { margin-block: .8em; line-height: inherit; }
+.answerContent :is(ul,ol) { padding-left: 1.5em; }
+.answerContent li + li { margin-top: .85em; }
+.answerContent .mathDisplay, .answerContent .answerMatrix {
+  display: block; max-width: 100%; margin-block: .9em; padding-block: .25em;
+  text-align: center; overflow-x: auto; overflow-y: hidden; letter-spacing: normal;
+}
+.answerContent .answerMatrix mjx-container { display: inline-block; }
+.answerContent :is(.mathDisplay,.answerMatrix) mjx-container[jax="SVG"] > svg { max-width: none; }
+.answerContent .mathInline:not(.answerMatrix) { display: inline-block; max-width: 100%; vertical-align: middle; overflow-x: auto; }
+.answerContent.explanationContent .explanationItem + .explanationItem { margin-top: 1.1em; }
+.choiceOption[data-answer-truth] { flex-wrap: wrap; align-items: flex-start; }
+.choiceOption[data-answer-truth] .choiceBody { flex: 1; }
+.choiceOption[data-answer-truth="true"]:has(input) { color: var(--answer-true); border-color: var(--answer-true); background: var(--answer-true-background); }
+.choiceOption[data-answer-truth="false"]:has(input) { color: var(--answer-false); border-color: var(--answer-false); background: var(--answer-false-background); }
+.choiceOption[data-answer-truth] input { accent-color: currentColor; }
+.choiceFeedbackLabels { display: flex; flex-basis: 100%; gap: .7em; padding-left: 2em; font-size: .8rem; }
+.choiceFeedbackLabel { white-space: nowrap; font-weight: 600; }
+@media (max-width: 480px) { .answerContent { font-size: 18px; line-height: 1.95; } }
+.multiStepQuestion { min-width: 0; }
+.multiStepProgress { color: var(--muted); font-size: .9rem; }
+.multiStepPart { min-width: 0; margin-block: 1.3rem; padding-block: .25rem .9rem; border-bottom: 1px solid var(--ma-border); }
+.multiStepLabel { color: var(--ma-navy); margin: .4rem 0 1rem; font-size: 1rem; font-style: normal; }
+.multiStepPassed { color: var(--answer-true); }
+.multiStepFailed { color: var(--answer-false); }
+.multiStepPart > pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+.multiStepBlank { white-space: nowrap; color: var(--muted); }
+.multiStepAnswer, .multiStepCurrent > .selfAssessment { margin-top: 1rem; min-width: 0; }
+.multiStepAnswer .answerContent, .multiStepCurrent > .selfAssessment .answerContent { margin-inline: 0; }
+.multiStepAnswer .exampleExplanationHeader, .multiStepCurrent > .selfAssessment .exampleExplanationHeader { margin-block: 1rem .5rem; }
 .courseContent.reading-outline { --article-font-size: 18px; --article-line-height: 1.75; }
 .courseContent [id^="node-"] { scroll-margin-block: 6rem; }
 .courseContent [id^="node-"]:focus { outline: 2px solid var(--accent, #806449); outline-offset: 4px; }
@@ -73,11 +119,81 @@
 .sourceReading img { max-width: 100%; height: auto; object-fit: contain; vertical-align: middle; }
 .sourceReading figure { max-width: 100%; margin: 1rem 0; }
 .sourceReading figcaption { margin-top: .5rem; color: var(--muted); font-size: .9em; }
+/* Hallmark · component: source figures · existing site tokens and typography
+ * pre-emit critique: P4 H4 E4 S4 R5 V3 */
+.sourceReading .outlineNode { min-width: 0; }
+.sourceReading .outlineNode > p { margin-block: .85rem; }
+.sourceReading .sourceFigure { margin: 1.4rem auto; text-align: center; min-width: 0; }
+.sourceReading .sourceFigure > p { margin: 0; line-height: 1; }
+.sourceReading .sourceFigure img { display: inline-block; max-width: 100%; height: auto; }
+.sourceReading .sourceFigure figcaption { max-width: 100%; line-height: 1.65; text-align: center; }
+.sourceReading .sourceFigure figcaption p { margin: .3rem 0 0; font-size: inherit; line-height: inherit; }
 .sourceReading .alert {
   border-left: 3px solid var(--muted-accent-border);
   background: var(--answer-help-background); padding: .25rem 1rem; margin-block: 1rem;
 }
 .sourceReading .sourceImageError { display: block; color: var(--amber); padding-block: .5rem; }
+/* Hallmark · book reader component · P4 H5 E4 S5 R5 V4 */
+.courseContent.sourceBook {
+  --book-serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC", SimSun, serif;
+  --book-heading: var(--book-serif);
+  --book-figure-gap: 1.5rem;
+  font-family: var(--book-serif); font-size: 19px; font-weight: 400;
+  line-height: 1.9; width: 100%; max-width: 38em; margin-inline: auto;
+  letter-spacing: .015em; word-break: normal; line-break: strict;
+  overflow-wrap: break-word; font-kerning: normal;
+}
+.materialBlock .courseContent.sourceBook { overflow-wrap: break-word; }
+.courseContent.sourceBook p {
+  margin-block: .65em; line-height: inherit;
+  text-align: justify; text-align-last: start;
+}
+.courseContent.sourceBook [data-source-indent="2"] > p { text-indent: 2em; }
+.courseContent.sourceBook [data-source-indent="0"] > p { text-indent: 0; }
+.courseContent.sourceBook [data-source-role="heading"] { margin-block: 1.8em .65em; }
+.courseContent.sourceBook [data-source-role="heading"] > :is(h2,h3,h4,h5,h6) {
+  margin: 0; font-family: var(--book-heading); font-size: 1.12em;
+  font-weight: 700; font-style: normal; line-height: 1.6; letter-spacing: .025em;
+  color: inherit; text-wrap: pretty;
+}
+.courseContent.sourceBook .sourceLead { font-weight: 700; }
+.courseContent.sourceBook [data-source-role="run-in"] { margin-top: 1.15em; }
+.courseContent.sourceBook [data-source-role="footnote"] { font-size: .82em; line-height: 1.75; }
+.courseContent.sourceBook [data-source-role="list"] > p { white-space: pre-line; text-indent: 0; }
+.courseContent.sourceBook .mathDisplay {
+  margin-block: 1em; max-width: 100%; overflow-x: auto; overflow-y: hidden;
+  text-indent: 0; letter-spacing: normal; padding-block: .2em;
+}
+.courseContent.sourceBook .mathInline { letter-spacing: normal; text-indent: 0; }
+.readingSectionHeading { width: 100%; max-width: 722px; margin: .3em auto 1.2em; font-family: var(--book-font-family, "Noto Serif SC", "Source Han Serif SC", serif); line-height: 1.6; text-wrap: pretty; }
+.readingSectionHeading[data-level="1"] { font-size: 1.35rem; }
+.readingSectionHeading[data-level="2"] { font-size: 1.2rem; }
+.readingFootnotes { width: 100%; max-width: 722px; margin: 2em auto .5em; padding-top: .85em; border-top: 1px solid var(--border, #d8d5cd); }
+.readingFootnotes .courseContent { font-size: .9rem; line-height: 1.85; }
+.readingFootnotes .courseContent [data-source-role="footnote"] { font-size: inherit; line-height: inherit; }
+.readingExample { margin-block: 1.2em; }
+.topicBankQuestion, .embeddedBankQuestion { width: 100%; min-width: 0; }
+.courseContent.sourceBook .sourceFigure { margin-block: 1.6em; }
+.courseContent.sourceBook .sourceFigure :is(p,figcaption) { text-align: center; text-align-last: center; text-indent: 0; }
+.courseContent.sourceBook .sourceFigure img { max-height: 70vh; width: auto; object-fit: contain; }
+.courseContent.sourceBook .sourceFigureRow { display: flex; align-items: center; gap: var(--book-figure-gap); margin-block: 1.4em; }
+.courseContent.sourceBook .sourceFigureRow > .outlineNode { flex: 1; min-width: 0; }
+.courseContent.sourceBook .sourceFigureRow .sourceFigure { margin: 0; }
+.courseContent.sourceBook .sourceFigureRow .sourceGroupCaption {
+  width: calc(100% * var(--source-figure-count) + var(--book-figure-gap) * (var(--source-figure-count) - 1));
+  margin-left: calc((100% + var(--book-figure-gap)) * (1 - var(--source-figure-count)));
+}
+.courseContent.sourceBook :is(ul,ol) { padding-left: 1.6em; }
+@media (max-width: 480px) {
+  .courseContent.sourceBook { font-size: 18px; line-height: 1.95; letter-spacing: 0; }
+  .courseContent.sourceBook .sourceFigureRow { flex-direction: column; align-items: stretch; gap: 1.2em; }
+  .courseContent.sourceBook .sourceFigureRow .sourceGroupCaption { width: auto; margin-left: 0; }
+}
+@media print {
+  .courseContent.sourceBook { font-size: 11pt; line-height: 1.7; max-width: none; }
+  .courseContent.sourceBook [data-source-role="heading"] { break-after: avoid; }
+  .courseContent.sourceBook .sourceFigure { break-inside: avoid; }
+}
 .sourceReading :is(summary,pre,.sourceTable):focus-visible {
   outline: 2px solid var(--ma-blue); outline-offset: 3px;
 }

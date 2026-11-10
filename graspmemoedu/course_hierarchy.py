@@ -38,7 +38,7 @@ def pending_hierarchy(units, tasks, root_id=None):
     return project_hierarchy(units, pending, course_ids | {root_id})
 
 
-def project_hierarchy(units, topic_ids, course_ids):
+def project_hierarchy(units, topic_ids, course_ids, *, retain_empty=False):
     """One course-tree projection for learning, reports and other course views."""
     # The selected course already contains this page. Legacy catalogs use its
     # ID for a storage root; showing that root repeats the course as a chapter.
@@ -48,7 +48,7 @@ def project_hierarchy(units, topic_ids, course_ids):
     parents = {unit['id']: unit.get('parent_id') for unit in units}
     retained = set()
     for unit in units:
-        current = unit['id'] if members[unit['id']] else None
+        current = unit['id'] if members[unit['id']] or retain_empty and not unit['topic_ids'] else None
         while current is not None and current not in retained:
             retained.add(current)
             current = parents[current]

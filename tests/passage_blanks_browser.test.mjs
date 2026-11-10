@@ -25,7 +25,7 @@ beforeEach(async () => {
   page = await browser.newPage();
   await page.route('http://passage.test/**', async route => {
     const pathname = new URL(route.request().url()).pathname;
-    if (pathname === '/') return route.fulfill({contentType: 'text/html', body: '<!doctype html><div id="stem"></div><form id="answer-form"></form>'});
+    if (pathname === '/') return route.fulfill({contentType: 'text/html', body: '<!doctype html><body data-subject="english"><div id="stem"></div><form id="answer-form"></form></body>'});
     if (!/^\/web\/(?:[a-z0-9_.-]+\/)*[a-z0-9_.-]+\.m?js$/i.test(pathname)) return route.abort();
     return route.fulfill({contentType: 'text/javascript', body: await readFile(new URL('..' + pathname, import.meta.url), 'utf8')});
   });
@@ -55,7 +55,7 @@ test('legacy bracket gaps bind unique prose occurrences and leave repeated instr
   await mount(spec, '<p>The guide [1] the visitors while the driver [2] the door.</p><p>为 [1] 和 [2] 各选一项，使句意完整。</p>');
   assert.equal(await page.locator('#stem select').count(), 2);
   assert.equal(await page.locator('#answer-form fieldset').count(), 3);
-  assert.equal(await page.locator('#stem p').last().textContent(), '为 [1] 和 [2] 各选一项，使句意完整。');
+  assert.equal(await page.locator('#stem > p').last().textContent(), '为 [1] 和 [2] 各选一项，使句意完整。');
   await inline('first').selectOption('b');
   assert.equal(await page.locator('fieldset[data-control-id="first"] input:checked').inputValue(), 'b');
   assert.equal((await draft()).values.first, 'b');
@@ -125,7 +125,9 @@ test('matching passage gaps are static, exclude ranges and keep the existing pai
     left: [{id: 'x', text: '(1)'}, {id: 'y', text: '(2)'}], right: [{id: 'r', text: 'A new sentence.'}, {id: 's', text: 'Another sentence.'}, {id: 't', text: 'Unused sentence.'}]};
   await mount(spec, '<p>Choose a sentence for each gap (1)-(2).</p><p>We opened the gate. (1) Everyone came inside.</p><p>The meeting finished. (2) We walked home.</p>');
   assert.equal(await page.locator('#stem .passageBlankStatic').count(), 2);
-  assert.equal(await page.locator('#stem input,#stem select,#stem button,#stem [tabindex]').count(), 0);
+  assert.deepEqual(await page.locator('#stem .passageBlankValue').allTextContents(), ['', '']);
+  assert.equal(await page.locator('#stem input,#stem select').count(), 0);
+  assert.equal(await page.locator('#stem .passageNumberLink').count(), 2);
   assert.equal(await page.locator('#stem p').first().textContent(), 'Choose a sentence for each gap (1)-(2).');
   await page.locator('.matchingOption[data-side="right"][data-option-id="r"]').click();
   await page.locator('.matchingSlot[data-side="right"][data-row="0"]').click();
@@ -133,20 +135,20 @@ test('matching passage gaps are static, exclude ranges and keep the existing pai
 });
 
 test('explicit grammar blanks keep opaque IDs, shared values and read-only history', async () => {
-  const spec = {version: 1, type: 'fill_blank', blanks: [{id: 'opaque9999'}]};
+  const spec = {version: 1, type: 'fill_blank', blanks: [{id: 'opaque9999', label: '61'}]};
   await mount(spec, '<p>First: {{blank:opaque9999}}. Again: {{blank:opaque9999}}.</p><pre>{{blank:opaque9999}}</pre>');
-  assert.equal(await page.locator('#stem input').count(), 2);
-  assert.deepEqual(await page.locator('.passageBlankNumber').allTextContents(), ['1', '1']);
-  await page.locator('#stem input').first().fill('saved wording');
+  assert.equal(await page.locator('#stem textarea').count(), 2);
+  assert.deepEqual(await page.locator('.passageBlankNumber').allTextContents(), ['61', '61']);
+  await page.locator('#stem textarea').first().fill('saved wording');
   assert.deepEqual(await draft(), {opaque9999: 'saved wording'});
-  assert.equal(await page.locator('#stem input').last().inputValue(), 'saved wording');
+  assert.equal(await page.locator('#stem textarea').last().inputValue(), 'saved wording');
   assert.equal(await page.locator('pre').textContent(), '{{blank:opaque9999}}');
   await page.evaluate(() => widget.input.questionControl.setDisabled(true));
-  await page.evaluate(() => { const field = document.querySelector('#stem input'); field.value = 'changed'; field.dispatchEvent(new Event('input', {bubbles: true})); });
+  await page.evaluate(() => { const field = document.querySelector('#stem textarea'); field.value = 'changed'; field.dispatchEvent(new Event('input', {bubbles: true})); });
   assert.deepEqual(await draft(), {opaque9999: 'saved wording'});
   await page.evaluate(() => widget.input.value = JSON.stringify({opaque9999: 'restored'}));
   await page.evaluate(() => widget.input.dispatchEvent(new Event('input', {bubbles: true})));
-  assert.deepEqual(await page.locator('#stem input').evaluateAll(fields => fields.map(field => [field.value, field.disabled])), [['restored', true], ['restored', true]]);
+  assert.deepEqual(await page.locator('#stem textarea').evaluateAll(fields => fields.map(field => [field.value, field.disabled])), [['restored', true], ['restored', true]]);
 });
 
 test('single-choice unique underlines synchronize both ways, including an instruction and prose in one paragraph', async () => {
@@ -180,7 +182,7 @@ test('keyboard submission is once for external and nested blanks; native keys an
   spec.sections[0].html = '<p>The second expression goes <span data-control="inner"></span>.</p>';
   await mount(spec, '<p>The first expression goes [1].</p>');
   const result = await page.evaluate(() => {
-    const fields = [document.querySelector('#stem select'), document.querySelector('#answer-form select')];
+    const fields = [document.querySelector('select[data-control-id="outer"]'), document.querySelector('select[data-control-id="inner"]')];
     const handled = [];
     for (const field of fields) {
       for (const options of [{key: 'ArrowDown'}, {key: 'Enter'}, {key: 'Enter', ctrlKey: true, isComposing: true}, {key: 'Enter', ctrlKey: true}]) {
@@ -197,9 +199,9 @@ test('an explicit marker hidden by an outer replacement keeps its ordinary text 
   const spec = composite(controls);
   spec.sections[0].html = '<p>The first response is <span data-control="outer"><span data-control="inner"></span></span>.</p>';
   await mount(spec, '<p>Provide both responses.</p>');
-  assert.equal(await page.locator('input[data-control-id="outer"]').count(), 1);
+  assert.equal(await page.locator('textarea[data-control-id="outer"]').count(), 1);
   assert.equal(await page.locator('input[data-control-id="inner"]').count(), 1);
-  await page.locator('input[data-control-id="outer"]').fill('first');
+  await page.locator('textarea[data-control-id="outer"]').fill('first');
   await page.locator('input[data-control-id="inner"]').fill('second');
   assert(await page.evaluate(() => widget.input.questionControl.complete()));
   assert.deepEqual((await draft()).values, {outer: 'first', inner: 'second'});
@@ -207,8 +209,8 @@ test('an explicit marker hidden by an outer replacement keeps its ordinary text 
 
 test('explicit heading markers remain answerable while heading numbers are not inferred as blanks', async () => {
   await mount({version: 1, type: 'fill_blank', blanks: [{id: 'heading'}]}, '<h2>Complete {{blank:heading}}</h2>');
-  assert.equal(await page.locator('h2 input[data-blank-id="heading"]').count(), 1);
-  await page.locator('h2 input').fill('complete');
+  assert.equal(await page.locator('h2 textarea[data-blank-id="heading"]').count(), 1);
+  await page.locator('h2 textarea').fill('complete');
   assert.deepEqual(await draft(), {heading: 'complete'});
   assert(await page.evaluate(() => widget.input.questionControl.complete()));
   await page.reload();

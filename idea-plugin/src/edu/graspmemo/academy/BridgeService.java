@@ -31,7 +31,7 @@ public final class BridgeService implements Disposable {
         Thread t = new Thread(r, "GraspMemoEdu-Academy"); t.setDaemon(true); return t;
     });
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build();
-    private record CheckCapture(String roundId, String codeHash) {}
+    private record CheckCapture(String roundId, String codeHash, JsonObject codeJudge) {}
     private final Map<String, CheckCapture> checking = new ConcurrentHashMap<>();
     private JsonObject rounds = new JsonObject();
     private Path data;
@@ -78,6 +78,9 @@ public final class BridgeService implements Disposable {
                 String key = remote.get("task_key").getAsString(), roundId = remote.get("round_id").getAsString();
                 JsonObject local = bindings().getAsJsonObject(key);
                 if (local == null || !remote.get("version").equals(local.get("version"))) throw new IOException("本机课程与网站版本不匹配，请更新课程连接配置。");
+                if (remote.has("code_judge") != local.has("code_judge")
+                    || remote.has("code_judge") && !remote.get("code_judge").equals(local.get("code_judge")))
+                    throw new IOException("本机测试包与当前作答轮次不一致，未重置代码。");
                 JsonObject run;
                 synchronized (this) {
                     run = rounds.getAsJsonObject(key);
@@ -228,7 +231,8 @@ public final class BridgeService implements Disposable {
                     Document doc = vf == null ? null : FileDocumentManager.getInstance().getCachedDocument(vf);
                     if (doc != null) FileDocumentManager.getInstance().saveDocument(doc);
                 }
-                checking.put(key, new CheckCapture(run.get("round_id").getAsString(), BridgeCore.fingerprint(local)));
+                checking.put(key, new CheckCapture(run.get("round_id").getAsString(), BridgeCore.fingerprint(local),
+                    local.has("code_judge") ? local.getAsJsonObject("code_judge").deepCopy() : null));
             }
         } catch (Exception error) { notifyFailure("未开始记录此次检查：" + error.getMessage()); }
     }
@@ -246,6 +250,13 @@ public final class BridgeService implements Disposable {
                 e.addProperty("occurred_at", Instant.now().toString());
                 e.addProperty("category", BridgeCore.category(result.getStatus() == CheckStatus.Solved,
                     result.getStatus() == CheckStatus.Unchecked, result.getFullMessage() + " " + result.getDetails()));
+                if (capture.codeJudge() != null) {
+                    JsonObject receipt = capture.codeJudge().deepCopy();
+                    // Compiler/test details can contain learner source. Keep them in IDEA.
+                    String message = Objects.toString(result.getMessage(), "");
+                    receipt.addProperty("feedback", message.substring(0, Math.min(message.length(), 4000)));
+                    e.add("local_code", receipt);
+                }
                 events.add(e); if (result.getStatus() == CheckStatus.Solved) run.addProperty("closed", true);
                 save();
             }

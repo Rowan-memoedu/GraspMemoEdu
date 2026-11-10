@@ -31,11 +31,16 @@ class AttemptAction(BaseModel):
 class Answer(AttemptAction):
     request_id: str = Field(min_length=1, max_length=128)
     answer: str = Field(min_length=1, max_length=16384)
+    step_id: str | None = Field(default=None, min_length=1, max_length=64)
     elapsed_ms: int | None = Field(default=None, strict=True, ge=0, le=86400000)
 
 
-class Rating(AttemptAction):
-    rating: int = Field(strict=True, ge=1, le=4)
+class StepAction(AttemptAction):
+    step_id: str | None = Field(default=None, min_length=1, max_length=64)
+
+
+class Rating(StepAction):
+    rating: int = Field(strict=True, ge=1, le=5)
     elapsed_ms: int | None = Field(default=None, strict=True, ge=0, le=86400000)
 
 
@@ -217,15 +222,15 @@ def register_training_routes(app, training, access_store, subjects, service_for,
         return access, backend
 
     @app.post('/api/training/reveal')
-    def reveal(payload: AttemptAction, request: Request):
+    def reveal(payload: StepAction, request: Request):
         access, backend = self_context(request, payload.attempt_id)
-        backend.reveal(payload.attempt_id)
+        backend.reveal(payload.attempt_id, payload.step_id)
         return state(request, access, backend, payload.attempt_id)
 
     @app.post('/api/training/rate')
     def rate(payload: Rating, request: Request):
         access, backend = self_context(request, payload.attempt_id)
-        backend.rate(payload.attempt_id, payload.rating, payload.elapsed_ms)
+        backend.rate(payload.attempt_id, payload.rating, payload.elapsed_ms, payload.step_id)
         return state(request, access, backend, payload.attempt_id)
 
     @app.post('/api/training/stop')

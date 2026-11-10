@@ -30,7 +30,7 @@ def install_course(settings, plan):
     def validate_graph_target(topic_id):
         store = GraphStore(settings, catalog, subjects)
         store.validate_topic_target(topic_id, subject_id, course_id)
-        if topic_id in introduction_ids and any(node['topic_id'] == topic_id for graph in store.all() for node in graph['nodes']):
+        if topic_id in introduction_ids and any(node.get('topic_id') == topic_id for graph in store.all() for node in graph['nodes']):
             raise ValueError('Introduction Topic ID is already declared in the knowledge graph')
     for entry in plan['topics']:
         _, _, topic = read_package(entry['package'])
@@ -40,7 +40,7 @@ def install_course(settings, plan):
             introduction_ids.add(topic['id'])
         validate_graph_target(topic['id'])
         topic_ids.append(topic['id'])
-    subjects_path = settings.data_dir / 'subjects.json'
+    subjects_path = settings.content_dir / 'subjects.json'
     before_catalog, before_subjects = settings.catalog_path.read_bytes(), subjects_path.read_bytes()
     proposed = json.loads(before_catalog)
     for course in proposed['courses']:
@@ -58,6 +58,10 @@ def install_course(settings, plan):
             install_topic(staged, entry['package'], subject_id=subject_id, course_id=course_id)
             print(json.dumps({'validated_topic': entry['topic_id']}, ensure_ascii=False), flush=True)
         installed = json.loads((stage / 'catalog.json').read_bytes())['courses'][-1]
+        if 'units' in plan:
+            # Keep one source hierarchy for book reading and its native bank.
+            # Catalog.load below validates ownership, parent IDs and cycles.
+            installed['units'] = json.loads(json.dumps(plan['units']))
         # Retain exact existing declarations, including relative paths.
         final_catalog = json.loads(before_catalog)
         final_catalog['courses'].append(installed)

@@ -7,6 +7,36 @@ from tests.training_fixtures import training_bank
 
 
 class ReferenceAnswerTests(unittest.TestCase):
+    def test_composite_feedback_is_only_released_on_the_answer_side(self):
+        q = {'interaction': {'type': 'composite', 'grading': 'exact',
+            'controls': [{'id': 'gap', 'label': '41', 'type': 'select', 'answers': ['b'],
+                          'options': [{'id': 'a', 'text': 'first'}, {'id': 'b', 'text': 'second'}]}],
+            'sections': [{'id': 's', 'complete': True, 'control_ids': ['gap'], 'html': ''}]}}
+        original = deepcopy(q)
+        self.assertEqual(reference_fields(q), {})
+        shown = reference_fields(q, True)
+        self.assertEqual(shown['choice_feedback']['items'], [{'id': 'gap', 'answer': 'b', 'correct_ids': ['b']}])
+        for selected, correct in [('b', True), ('a', False)]:
+            answer = '{"section":0,"values":{"gap":"' + selected + '"}}'
+            self.assertEqual(reference_fields(q, answer=answer), {})
+            self.assertEqual(reference_fields(q, True, answer=answer)['choice_feedback']['items'][0]['correct'], correct)
+        hidden = {'phase': 'answer', **presentation(q, {'revealed': True})}
+        protect(hidden, False)
+        self.assertNotIn('choice_feedback', hidden)
+        self.assertEqual(q, original)
+
+    def test_blank_and_fixed_matching_reference_metadata_preserves_stable_ids(self):
+        q = self.questions()['blank']
+        self.assertEqual(reference_fields(q, True)['choice_feedback']['items'][0]['id'], q['interaction']['blanks'][0]['id'])
+        q = self.questions()['match']; q['interaction']['fixed_side'] = 'left'
+        self.assertEqual(reference_fields(q, True)['choice_feedback'], {'items': [{'id': 'a', 'correct_ids': ['b']}]})
+
+    def test_semantic_references_do_not_invent_per_blank_results(self):
+        q = self.questions()['blank']; q['interaction']['grading'] = 'semantic'
+        fields = reference_fields(q, True, answer='{"x":"anything"}')
+        self.assertTrue(fields['choice_feedback']['items'])
+        self.assertNotIn('correct', fields['choice_feedback']['items'][0])
+
     def questions(self):
         rows = {q['id']: q for q in training_bank()['groups'][1]['questions']}
         rows['match'] = {**deepcopy(rows['essay']), 'interaction': {

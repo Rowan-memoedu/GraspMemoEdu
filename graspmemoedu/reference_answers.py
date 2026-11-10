@@ -7,6 +7,32 @@ import re
 from .question_types import demo_answer, display_answer
 
 
+def choice_feedback(question):
+    """Answer-side metadata identifying the expected choices."""
+    spec = question.get('interaction') or {}
+    kind = spec.get('type')
+    if kind in ('composite', 'fill_blank'):
+        rows = spec['controls' if kind == 'composite' else 'blanks']
+        items = []
+        for row in rows:
+            if not row.get('answers'):
+                continue
+            item = {'id': row['id'], 'answer': row['answers'][0]}
+            if row.get('type') == 'select':
+                item['correct_ids'] = list(row['answers'])
+            items.append(item)
+        return {'items': items} if items else None
+    if kind == 'matching':
+        side = spec.get('fixed_side')
+        if side not in ('left', 'right'):
+            return None
+        other = 'right' if side == 'left' else 'left'
+        return {'items': [{'id': pair[side], 'correct_ids': [pair[other]]} for pair in spec['pairs']]}
+    if spec.get('type') != 'choice' or not (spec.get('correct_id') or spec.get('correct_ids')):
+        return None
+    return {'correct_ids': list(spec['correct_ids']) if spec.get('multiple') else [spec['correct_id']]}
+
+
 @lru_cache(maxsize=256)
 def _render(text):
     if re.search(r'\$[^$]+\$', text):
@@ -18,10 +44,11 @@ def _render(text):
     return '<p>' + escape(text).replace('\n', '<br>') + '</p>', ''
 
 
-def reference_fields(question, visible=False):
+def reference_fields(question, visible=False, *, answer=None):
     spec = question.get('interaction') or {}
     if not visible or spec.get('type', 'text') == 'text':
         return {}
+    submitted = answer
     answer = display_answer(question, demo_answer(question))
     if spec['type'] == 'choice':
         ids = set(spec['correct_ids']) if spec.get('multiple') else {spec['correct_id']}
@@ -42,4 +69,16 @@ def reference_fields(question, visible=False):
         html, css = ''.join(html), '\n'.join(styles)
     else:
         html, css = _render(answer)
-    return {'reference_answer': answer, 'reference_answer_html': html, 'reference_math_css': css}
+    fields = {'reference_answer': answer, 'reference_answer_html': html, 'reference_math_css': css}
+    feedback = choice_feedback(question)
+    if feedback:
+        if submitted and feedback.get('items') and spec.get('grading') not in ('semantic', 'unavailable'):
+            from .point_assessment import item_results
+            results = item_results(question, submitted)
+            if spec['type'] == 'matching' and spec.get('fixed_side') == 'right':
+                results = {pair['right']: results[pair['left']] for pair in spec['pairs']}
+            for item in feedback['items']:
+                if item['id'] in results:
+                    item['correct'] = results[item['id']]
+        fields['choice_feedback'] = feedback
+    return fields

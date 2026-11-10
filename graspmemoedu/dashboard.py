@@ -141,7 +141,9 @@ class DashboardStore:
         scope = 'math' if self.subjects and subject_id is None and access['role'] == 'guest' else subject_id
         ids = self.subjects.course_ids(scope) if scope is not None and self.subjects else set(self.catalog.courses)
         return {'courses': [{'id': course['id'], 'title': course['title'], 'description': course['description'],
-                             'outline': project_hierarchy(course['units'], allowed, {course['id']}),
+                             'outline': project_hierarchy(course['units'], allowed, {course['id']},
+                                 retain_empty=bool(course['topics']) and all(
+                                     is_introduction(self.catalog.topic(t['id'])) for t in course['topics'])),
                              'available': bool(allowed.intersection(topic['id'] for topic in course['topics'])),
                              'topic_count': sum(self.access_store.test_materials.topic_visible(t['id'], access) for t in course['topics'])}
                             for course in self.catalog.courses.values() if course['id'] in ids
@@ -176,15 +178,22 @@ class DashboardStore:
             if state and state.get('topic_kind') != 'introduction':
                 raise DomainError('course_version_mismatch', 'Topic 类型已变化，原进度已保留。')
             done = bool(state and state.get('completed_at'))
+            from .topic_composition import completion
+            bank_done = completion(con, learner_id, topic)
+            if bank_done:
+                done = done and all(bank_done.values())
             status = 'completed' if done else ('paused' if state and state.get('pause') else
                      'in_progress' if state and state.get('started_at') else 'not_started')
             current = bool(state and state.get('content_version') == topic['content_version'])
             read = len(state.get('read_introductions', [])) if current else 0
+            lineage = topic.get('reading_lineage', {})
+            if state and not current and lineage.get('content_version') == state.get('content_version'):
+                read = len({n for old in state.get('read_introductions', []) for n in lineage['introductions'].get(old, [])})
             return {'state': state, 'status': status, 'started_at': (state or {}).get('started_at'),
                     'completed_at': (state or {}).get('completed_at'), 'mastery': None,
                     'completed_modules': int(done), 'module_count': 1, 'progress': 100 if done else 0,
                     'reread_pending': reread_pending(topic, state),
-                    'reading_progress': round(100 * read / len(topic['introductions']), 2)}
+                    'reading_progress': round(100 * (read + sum(bank_done.values())) / (len(topic['introductions']) + len(bank_done)), 2)}
         if has_atomic(topic) and not sectioned_training(topic):
             from .atomic_content import memory_points
             count = len(memory_points(topic))

@@ -13,9 +13,10 @@ from .question_bank import QuestionBank
 from .reference_answers import reference_fields
 from .topic_structure import has_atomic, sectioned_training, sections
 from .atomic_content import public_source_attributions
+from .topic_composition import question_references, section_for
 
 
-def topic_blocks(topic):
+def topic_blocks(topic, training=None):
     """All authored blocks, independent of queues, mastery or spare-practice gates."""
     blocks = []
     def add(kind, item, ident=None, field='html'):
@@ -24,10 +25,25 @@ def topic_blocks(topic):
                        'title': item.get('title', item.get('id', '')), 'html': item.get(field, ''),
                        **({'source_attributions': attributions} if attributions else {}),
                        **({'interaction': public_interaction(item)} if kind == 'question' else {})})
+        if kind == 'introduction':
+            blocks[-1].update({k: item[k] for k in ('example', 'footnotes') if k in item})
+        section = section_for(topic, item)
+        if section:
+            blocks[-1]['section'] = section
     def question(item):
         add('question', item)
         add('explanation', item, field='explanation_html')
         blocks[-1].update(reference_fields(item, True))
+    def bank_question(item):
+        if training is None:
+            raise ValueError('Canonical training catalog is required for bank references')
+        ref = item['reference']
+        _, _, q = training.question(ref['bank_id'], ref['group_id'], ref['question_id'])
+        question(q)
+        for block in blocks[-2:]:
+            block['bank_reference'] = ref
+            if section_for(topic, item):
+                block['section'] = section_for(topic, item)
     if sectioned_training(topic):
         shown = set()
         for section in sections(topic):
@@ -38,9 +54,13 @@ def topic_blocks(topic):
                 if card['id'] not in shown and set(card['point_ids']).intersection(section['point_ids']):
                     question(card)
                     shown.add(card['id'])
-            for module in section['modules']:
-                for q in [module['example'], *module['practices']]:
-                    question(q)
+            for entry in section['activities']:
+                if entry['kind'] == 'bank_question':
+                    bank_question(next(q for q in section['bank_questions'] if q['id'] == entry['id']))
+                else:
+                    module = next(m for m in section['modules'] if m['id'] == entry['id'])
+                    for q in [module['example'], *module['practices']]:
+                        question(q)
         return blocks
     if topic.get('topic_format_version') == 2:
         introductions = {item['id']: item for item in topic['introductions']}
@@ -57,6 +77,8 @@ def topic_blocks(topic):
                 module = modules[item['id']]
                 for q in [module['example'], *module['practices']]:
                     question(q)
+            elif item['kind'] == 'bank_question':
+                bank_question(next(q for q in topic['bank_questions'] if q['id'] == item['id']))
         for ident, intro in introductions.items():
             if ('introduction', ident) not in seen:
                 add('introduction', intro)
@@ -151,9 +173,13 @@ def register_material_routes(app, catalog, access_store, subjects, identity, pub
             access_store.authorize(access, topic_id)
             subjects.authorize_topic(subject_id, topic_id)
             topic = catalog.topic(topic_id)
+            for item in question_references(topic):
+                access_store.authorize(access, permission_id(item['reference']['bank_id']))
             course = catalog.course_context(topic_id)
             result = {'title': topic['title'], 'course_title': course['title'], 'version': topic['version'],
-                      'math_css': topic.get('math_css', ''), 'blocks': topic_blocks(topic)}
+                      'math_css': topic.get('math_css', '') + ''.join(helper.training.bank(bank_id).get('math_css', '')
+                          for bank_id in sorted({q['reference']['bank_id'] for q in question_references(topic)})),
+                      'blocks': topic_blocks(topic, helper.training)}
         result['version_changed'] = bool(version and version != result['version'])
         # A converted practice can be pinned to an immutable question-bank revision.
         if block and result['version_changed']:

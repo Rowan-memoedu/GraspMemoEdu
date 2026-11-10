@@ -1,14 +1,19 @@
-import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=51490b3e06872afe";
-import {answerReady} from './question-input.js?v=51490b3e06872afe';
-import {reportableContent, visibleContentTopics} from './content-report.js?v=51490b3e06872afe';
-import {startPresence} from './presence.js?v=51490b3e06872afe';
-import {createLearningCache} from './learning-cache.js?v=51490b3e06872afe';
-import {createReadCache, createContentCache, createValidationCache, readLifetime, contentPath, contentKey} from './response-cache.js?v=51490b3e06872afe';
+import { t, translateMessage, applyStaticTranslations, learningTitle } from "./i18n.js?v=460c32ec9479f538";
+import {answerReady} from './question-input.js?v=460c32ec9479f538';
+import {reportableContent, visibleContentTopics} from './content-report.js?v=460c32ec9479f538';
+import {startPresence} from './presence.js?v=460c32ec9479f538';
+import {createLearningCache} from './learning-cache.js?v=460c32ec9479f538';
+import {createReadCache, createContentCache, createValidationCache, readLifetime, contentPath, contentKey} from './response-cache.js?v=460c32ec9479f538';
 
-import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, readerHistorySteps, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState, topicProgress, topicHistory} from './learning-ui.js?v=51490b3e06872afe';
-import {selfAssessment} from './self-assessment.js?v=51490b3e06872afe';
-import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=51490b3e06872afe';
-import {renderSourceReader} from './learning-ui.js?v=51490b3e06872afe';
+import {answerEditor, readerContent, readerStepTitle as sharedReaderStepTitle, readerHistorySteps, renderReaderStep, readerHistoryGroup, readerProgress, readerNavigation, readerDrawerState, topicProgress, topicHistory} from './learning-ui.js?v=460c32ec9479f538';
+import {selfAssessment} from './self-assessment.js?v=460c32ec9479f538';
+import {mountTopicBacklinks, focusContentNode} from './topic-content.js?v=460c32ec9479f538';
+import {renderSourceReader} from './learning-ui.js?v=460c32ec9479f538';
+import {readingSectionHeading} from './learning-ui.js?v=460c32ec9479f538';
+import {createTrainingView} from './training.js?v=460c32ec9479f538';
+
+let topicTraining = null, topicTrainingKey = null;
+function stopTopicTraining() { topicTraining?.stop(); topicTraining = null; topicTrainingKey = null; }
 
 applyStaticTranslations();
 
@@ -563,6 +568,7 @@ async function syncExternalIdentity() {
 }
 
 function clearLearningView() {
+  stopTopicTraining();
   localStep = null;
   stopPolling();
   state = null;
@@ -767,7 +773,7 @@ function applyState(next, { force = false, announceChange = false } = {}) {
   if (force || next.course_version !== state?.course_version || !can('review_history')
       || !next.steps.some(step => step.id === localStep)) localStep = null;
   if (localStep) next = {...next, current_step_id: localStep};
-  const changed = accessChanged || !state || next.course_version !== state.course_version || next.revision !== state.revision || next.current_step_id !== state.current_step_id || next.dependency_ready !== state.dependency_ready || JSON.stringify(next.content_references) !== JSON.stringify(state.content_references);
+  const changed = accessChanged || !state || next.course_version !== state.course_version || next.revision !== state.revision || next.current_step_id !== state.current_step_id || next.dependency_ready !== state.dependency_ready || JSON.stringify(next.content_references) !== JSON.stringify(state.content_references) || JSON.stringify(next.steps.map(s => s.bank_completed)) !== JSON.stringify(state.steps.map(s => s.bank_completed));
   const previousStep = state?.current_step_id;
   state = next;
   connectionIssue = null;
@@ -1110,6 +1116,17 @@ function renderHistory() {
   }
   const nodes = [];
   const visited = readingSteps();
+  if (state.sections && !state.learning_sections) {
+    for (const section of state.sections) {
+      const steps = visited.filter(step => step.section?.id === section.id);
+      if (!steps.length) continue;
+      const group = historyGroup(section.title || t('Introduction'), '', steps);
+      group.dataset.sectionId = section.id; group.dataset.level = String(section.level); nodes.push(group);
+    }
+    const completion = visited.filter(step => step.kind === 'completion');
+    if (completion.length) nodes.push(historyGroup(t('Topic 完成'), t('已完成'), completion, 'completed'));
+    target.replaceChildren(...nodes); return;
+  }
   if (state.learning_sections) {
     const recordRow = record => {
       const step = visited.find(item => item.id === record.id);
@@ -1129,11 +1146,12 @@ function renderHistory() {
         row.dataset.historyAvailable = String(Boolean(step));
         return row;
       },
-      modules: section => state.modules.filter(module => section.module_ids.includes(module.id)).flatMap(module => {
+      modules: section => [...state.modules.filter(module => section.module_ids.includes(module.id)).flatMap(module => {
         const steps = visited.filter(step => step.module_id === module.id && !['introduction', 'completion'].includes(step.kind));
         return steps.length ? [historyGroup(learningTitle(module.title), module.status === 'completed' ? t('已完成') : t('学习中'),
           steps, module.status, module.attempt_id)] : [];
-      })
+      }), ...visited.filter(step => step.kind === 'bank_question' && section.bank_question_ids?.includes(step.module_id))
+        .map(step => historyGroup(readerStepTitle(step), step.bank_completed ? t('已完成') : t('学习中'), [step]))]
     }));
     const completion = visited.filter(step => step.kind === 'completion');
     if (completion.length) nodes.push(historyGroup(t('Topic 完成'), t('已完成'), completion, 'completed'));
@@ -1142,6 +1160,7 @@ function renderHistory() {
   if (state.topic_format_version === 2) {
     for (const step of visited) {
       if (step.kind === 'introduction') nodes.push(historyGroup(readerStepTitle(step), step.phase === 'completed' ? t('已读') : t('阅读中'), [step]));
+      else if (step.kind === 'bank_question') nodes.push(historyGroup(readerStepTitle(step), step.bank_completed ? t('已完成') : t('学习中'), [step]));
       else if (step.kind === 'atomic_card') nodes.push(historyGroup(t('atomic.title'), t('atomic.mastered'), [step]));
       else if (step.kind === 'completion') nodes.push(historyGroup(t('Topic 完成'), t('已完成'), [step], 'completed'));
       else if (!visited.slice(0, visited.indexOf(step)).some(item => item.module_id === step.module_id && item.kind !== 'introduction')) {
@@ -1213,10 +1232,30 @@ function renderStep(step) {
     show(Number(storageRead(sessionStorage, key, '0')) || 0);
     return;
   }
-  const key = JSON.stringify([state.course_version, state.revision, state.current_step_id, state.pending_submission_id, state.dependency_ready, state.content_references, submissionError?.request_id, submissionError?.reason, access?.features]);
+  const key = JSON.stringify([state.course_version, state.revision, state.current_step_id, state.pending_submission_id, state.dependency_ready, state.content_references, step?.bank_completed, submissionError?.request_id, submissionError?.reason, access?.features]);
   if (key === renderedKey) return;
   renderedKey = key;
   const target = $("stepCard");
+  if (step?.kind === 'bank_question') {
+    const bankKey = JSON.stringify([state.course_version, step.id, access?.learner_id, access?.features]);
+    if (topicTrainingKey !== bankKey) {
+      stopTopicTraining(); target.replaceChildren(); target.dataset.stepId = step.id;
+      const heading = readingSectionHeading(step.section); if (heading) target.append(heading);
+      const host = el('div', 'topicBankQuestion'); target.append(host);
+      topicTrainingKey = bankKey;
+      topicTraining = createTrainingView({root: host, request: (path, options) => request(path +
+        (path.includes('?') ? '&' : '?') + new URLSearchParams({subject_id: topicSubjectId}), options),
+        getAccess: () => access, href: path => '#/subjects/' + topicSubjectId + path,
+        formatDate: value => new Date(value).toLocaleString(), progressChanged: () => portal?.progressChanged()});
+      void topicTraining.mount(step.bank_reference, host, () => refreshState({force: true}));
+    }
+    for (const nav of [...target.children].filter(n => n.classList.contains('stepNavigation'))) nav.remove();
+    target.querySelector(':scope > .bankRequiredNotice')?.remove();
+    if (!step.bank_completed) target.append(el('p', 'inputHint bankRequiredNotice', '完成这道例题后可继续学习。'));
+    renderStepNavigation(target, step, step.actions || []);
+    return;
+  }
+  stopTopicTraining();
   const oldInput = $("answerInput");
   const focus = oldInput && document.activeElement === oldInput ? { start: oldInput.selectionStart, end: oldInput.selectionEnd, scroll: oldInput.scrollTop } : null;
   const previousId = target.dataset.stepId;
@@ -1539,6 +1578,7 @@ $("skipContent").addEventListener("click", (event) => { event.preventDefault(); 
 $("topicFeedbackButton").addEventListener("click", () => portal?.showFeedback({ topic_id: topicId, question_id: selectedStep()?.question_id }));
 
 function leaveTopic() {
+  stopTopicTraining();
   syncAnswerClock(true);
   connectionGeneration += 1;
   topicId = null;
@@ -1570,7 +1610,7 @@ async function openTopic(id, subjectId, initial = null) {
 // Discover the API while the portal's modules load. Requests still await the
 // same validated deployment and identity; failure uses the normal retry UI.
 void ensureDeployment().catch(() => {});
-const { initPortal } = await import("./portal.js?v=51490b3e06872afe");
+const { initPortal } = await import("./portal.js?v=460c32ec9479f538");
 startPresence({getAccess: () => identityProblem ? null : access, request, getTopics: visibleContentTopics});
 portal = initPortal({
   fetchGuideAsset: async (url, subjectId) => {

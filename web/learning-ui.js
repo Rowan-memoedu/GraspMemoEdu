@@ -1,8 +1,11 @@
-import {t, learningTitle} from './i18n.js?v=51490b3e06872afe';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=51490b3e06872afe';
-import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=51490b3e06872afe';
-import {enhanceTopicContent} from './topic-content.js?v=51490b3e06872afe';
-import {sourceAttributions} from './memory-chunk.js?v=51490b3e06872afe';
+import {t, learningTitle} from './i18n.js?v=460c32ec9479f538';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=460c32ec9479f538';
+import {referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=460c32ec9479f538';
+import {enhanceTopicContent} from './topic-content.js?v=460c32ec9479f538';
+import {sourceAttributions} from './memory-chunk.js?v=460c32ec9479f538';
+import {mountPassageBlanks} from './composite-input.js?v=460c32ec9479f538';
+import {placeContentActions} from './content-report.js?v=460c32ec9479f538';
+import {answerAssessment, pointAssessment} from './point-assessment.js?v=460c32ec9479f538';
 
 const node = (tag, cls = '', text) => {
   const item = document.createElement(tag); item.className = cls;
@@ -31,6 +34,7 @@ export function readerHistorySteps(state) {
     const position = step => step.kind === 'completion' ? state.content_order.length + 1
       : step.kind === 'atomic_card' ? (positions.get(`introduction:${step.introduction_id}`) ?? 0) + .5
       : positions.get(step.kind === 'introduction' ? `introduction:${step.introduction_id || step.module_id}`
+        : step.kind === 'bank_question' ? `bank_question:${step.module_id}`
         : `example:${step.module_id}`) ?? state.content_order.length;
     return visited.slice().sort((a, b) => position(a) - position(b));
   }
@@ -43,6 +47,71 @@ export function readerHistorySteps(state) {
 export function readerContent(html, references) {
   const body = node('div', 'courseContent'); body.innerHTML = html || '';
   enhanceTopicContent(body, references); return body;
+}
+
+// Revealed, self-rated and unattempted steps keep their source gaps without
+// manufacturing an empty submitted-answer form or an isolated blank number.
+export function staticStepBlanks(stem, interaction) {
+  if (interaction?.type !== 'fill_blank') return;
+  const fields = mountPassageBlanks(stem, interaction.blanks, () => node('span', 'multiStepBlank', '______'));
+  for (const {wrapper, field} of fields) wrapper.replaceWith(field);
+}
+
+function stepAnswer(panel, part, references) {
+  const box = node('div', 'multiStepAnswer');
+  const reference = referenceAnswer(part); if (reference) box.append(reference);
+  if (part.explanation_html) box.append(node('h3', 'exampleExplanationHeader', t('Explanation · 解析')),
+    prepareAnswerContent(readerContent(part.explanation_html, references), {explanation: true}));
+  if (box.childElementCount) panel.append(box);
+}
+
+export function renderMultiStep(target, view, {references, decorate = body => body} = {}) {
+  const group = node('div', 'multiStepQuestion');
+  group.append(node('p', 'multiStepProgress', t('question.multiStepProgress', {
+    current: Math.min(view.current_index + 1, view.total), total: view.total})));
+  let currentStem;
+  for (const part of view.steps) {
+    const panel = node('section', 'multiStepPart'); panel.dataset.stepId = part.id;
+    panel.append(node('h3', 'multiStepLabel', part.label));
+    const body = decorate(readerContent(part.html, references), `step:${part.id}`); panel.append(body);
+    if (part.id === view.current_step_id) { currentStem = body; panel.classList.add('multiStepCurrent'); }
+    if (part.result) {
+      panel.append(node('p', part.result.correct ? 'multiStepPassed' : 'multiStepFailed',
+        t(part.result.correct ? 'question.stepPassed' : 'question.stepFailed')));
+      if (part.result.self_rating != null) {
+        staticStepBlanks(body, part.interaction); stepAnswer(panel, part, references);
+      } else if (part.interaction?.type !== 'text') panel.append(questionInput(part.interaction, {
+        id: `step-answer-${part.id}`, value: part.result.answer, stem: body, disabled: true}).element);
+      else panel.append(submittedAnswer(part, part.result.answer, part.result.answer_display));
+    } else if (view.finished) staticStepBlanks(body, part.interaction);
+    group.append(panel);
+  }
+  target.append(group); return currentStem;
+}
+
+export function readingFields(target, step, {references, decorate = body => body} = {}) {
+  if (step.example) {
+    const example = decorate(readerContent(step.example, references), 'example');
+    example.classList.add('readingExample'); example.dataset.field = 'example';
+    target.append(example);
+  }
+  if (step.footnotes?.length) {
+    const notes = node('aside', 'readingFootnotes'); notes.dataset.field = 'footnotes';
+    notes.setAttribute('role', 'doc-endnotes'); notes.setAttribute('aria-label', '脚注');
+    for (const note of step.footnotes) {
+      const body = decorate(readerContent(note.html, references), 'footnotes');
+      body.dataset.footnoteId = note.id; notes.append(body);
+    }
+    target.append(notes);
+  }
+}
+
+export function readingSectionHeading(section) {
+  if (!section?.title) return null;
+  const heading = node('h' + Math.min(6, section.level + 1), 'readingSectionHeading', section.title);
+  if (section.title_html) heading.innerHTML = section.title_html;
+  heading.dataset.sectionId = section.id; heading.dataset.level = String(section.level);
+  return heading;
 }
 
 export function renderSourceReader(target, state, index = 0, onNavigate = () => {}) {
@@ -84,14 +153,24 @@ export function renderReaderStep(target, step, {titleId = 'stepTitle', title = r
   const heading = node('div', 'stepHeader'), titleNode = node('h2', 'stepTitle', title);
   titleNode.id = titleId; titleNode.tabIndex = -1; heading.append(titleNode);
   if (counter) heading.append(node('span', 'stepCounter', counter));
-  const stem = decorate(readerContent(step.html, references), 'question');
+  let stem = decorate(readerContent(step.html, references), 'question');
+  const actions = node('div', 'questionActions');
+  placeContentActions(stem, actions); heading.append(actions);
   target.setAttribute('aria-labelledby', titleId); target.replaceChildren(heading, stem);
+  const sectionHeading = readingSectionHeading(step.section); if (sectionHeading) target.prepend(sectionHeading);
+  readingFields(target, step, {references, decorate});
   const attributions = sourceAttributions(step.source_attributions); if (attributions) target.append(attributions);
   const typeField = choiceTypeField(step.interaction); if (typeField) heading.after(typeField);
   if (notice) heading.after(node('p', 'introductionUpdateNotice', notice));
-  if (showSubmittedInteraction && step.interaction && step.interaction.type !== 'text')
-    target.append(questionInput(step.interaction, {id: submittedId, stem, value: submittedValue, disabled: true}).element);
-  if (showAnswer) {
+  if (step.multi_step) stem = renderMultiStep(target, step.multi_step, {references, decorate}) || stem;
+  const showingStepAnswer = step.multi_step && !step.multi_step.finished && showExplanation && step.explanation_html;
+  const assessment = answerAssessment(referenceSource);
+  if (showingStepAnswer) staticStepBlanks(stem, step.interaction);
+  else if (showSubmittedInteraction && step.interaction && step.interaction.type !== 'text')
+    target.append(questionInput(step.interaction, {id: submittedId, stem, value: submittedValue, disabled: true,
+      feedback: showExplanation ? referenceSource.choice_feedback : null,
+      assessment}).element);
+  if (showAnswer && !step.multi_step) {
     const answer = node('details', 'submittedAnswer');
     answer.append(node('summary', '', t('查看已提交答案')), submittedAnswer(step, step.answer, step.answer_display ?? step.answer)); target.append(answer);
   }
@@ -100,13 +179,21 @@ export function renderReaderStep(target, step, {titleId = 'stepTitle', title = r
     verdict.setAttribute('role', 'status');
     const body = node('div');
     body.append(node('span', 'feedbackTitle', feedback.title || t(feedback.correct ? '回答正确' : '本题回答有误')));
-    for (const reason of [feedback.reason, ...(feedback.details || [])].filter(Boolean)) body.append(node('div', 'feedbackReason', reason));
+    for (const reason of [feedback.reason, ...(feedback.details || [])].filter(Boolean)) {
+      if (assessment?.items?.length && /^\d+ [✓✗](?: · \d+ [✓✗])*$/.test(reason)) continue;
+      body.append(node('div', 'feedbackReason', reason));
+    }
     verdict.append(node('span', 'feedbackIcon', feedback.correct ? '✓' : '!'), body); target.append(verdict);
   }
-  if (showExplanation) {
+  if (showExplanation && !referenceSource.result?.assessment_result && !referenceSource.assessment_result && assessment?.items?.length) {
+    const assessed = pointAssessment(assessment, step.interaction); if (assessed) target.append(assessed);
+  }
+  if (showingStepAnswer) {
+    stepAnswer(stem.closest('.multiStepPart'), {...referenceSource, explanation_html: step.explanation_html}, references);
+  } else if (showExplanation) {
     const reference = referenceAnswer(referenceSource); if (reference) target.append(reference);
     if (step.explanation_html) target.append(node('h3', 'exampleExplanationHeader', t('Explanation · 解析')),
-      prepareAnswerContent(decorate(readerContent(step.explanation_html, references), 'explanation')));
+      prepareAnswerContent(decorate(readerContent(step.explanation_html, references), 'explanation'), {explanation: true}));
   }
   return {heading, title: titleNode, stem};
 }
@@ -217,7 +304,10 @@ export function answerEditor(step, stem, value, {formId = 'answerForm', inputId 
   const form = node('form', 'learningActions answerForm'); form.id = formId;
   const structured = step.interaction && step.interaction.type !== 'text';
   const control = structured ? questionInput(step.interaction, {id: inputId, stem, value, formId}) : null;
-  const label = node(structured ? 'p' : 'label', '', t('你的答案')); label.htmlFor = inputId;
+  if (stem?.classList.contains('passageQuestionPane')) {
+    form.setAttribute('role', 'region'); form.setAttribute('aria-label', '选择答案'); form.tabIndex = 0;
+  }
+  const label = node(structured ? 'p' : 'label', 'answerLabel', t('你的答案')); label.htmlFor = inputId;
   const input = control?.input || node('textarea', 'answerInput');
   input.id = inputId; input.name = 'answer'; input.rows = 3; input.maxLength = step.interaction?.version === 2 ? 16384 : 2000;
   input.spellcheck = false; input.autocomplete = 'off'; input.value = value;

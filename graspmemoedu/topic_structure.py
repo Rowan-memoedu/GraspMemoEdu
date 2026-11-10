@@ -38,11 +38,15 @@ def sections(topic):
     for entry in order:
         if entry['kind'] == 'introduction':
             result.append({'id': entry['id'], 'introduction': intros[entry['id']],
-                           'modules': [], 'chunks': [], 'point_ids': []})
+                           'modules': [], 'bank_questions': [], 'activities': [], 'chunks': [], 'point_ids': []})
         elif not result:
             raise ValueError('Every Example must follow an Introduction')
+        elif entry['kind'] == 'bank_question':
+            result[-1]['bank_questions'].append(next(q for q in topic['bank_questions'] if q['id'] == entry['id']))
+            result[-1]['activities'].append(entry)
         else:
             result[-1]['modules'].append(modules[entry['id']])
+            result[-1]['activities'].append(entry)
     by_id = {section['id']: section for section in result}
     default = result[0]['id'] if len(result) == 1 else None
     for chunk in topic.get('memory_chunks', []):

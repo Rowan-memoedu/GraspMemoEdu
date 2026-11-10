@@ -8,6 +8,39 @@ from tests.topic_format_fixtures import introduction_document, lesson_document, 
 
 
 class TopicFormatTests(unittest.TestCase):
+    def test_presentation_keeps_source_semantics_and_rejects_nonliteral_leads(self):
+        document=introduction_document();document['nodes'][0]['children']=[node('p','定理 2.1 原文。')]
+        original,_=normalize_document(document)
+        document['nodes'][0]['children'][0]['presentation']={'role':'run-in','lead':'定理 2.1','indent':0}
+        formatted,_=normalize_document(document)
+        self.assertEqual(content_version(original),content_version(formatted))
+        restored,_=parse_source(dump_markdown(formatted))
+        self.assertEqual(dump_json(restored),dump_json(formatted))
+        document['nodes'][0]['children'][0]['presentation']['lead']='新增标题'
+        with self.assertRaisesRegex(ValueError,'literal source lead'):normalize_document(document)
+
+    def test_math_nested_brackets_are_not_internal_reference_syntax(self):
+        document = introduction_document()
+        document['nodes'][1]['children'][0]['text'] = r'$[A,[B,C]]$ and $$[[A,B],C]$$'
+        value, _ = normalize_document(document)
+        self.assertEqual(value['nodes'][1]['children'][0]['text'], document['nodes'][1]['children'][0]['text'])
+        document['nodes'][1]['children'][0]['text'] = 'Text [[unresolved]]'
+        with self.assertRaisesRegex(ValueError, 'Internal references'):
+            normalize_document(document)
+
+    def test_prose_layout_is_roundtripped_without_changing_learning_content(self):
+        original, _ = normalize_document(introduction_document())
+        value = copy.deepcopy(original)
+        value['nodes'][0]['body_layout'] = 'prose'
+        formatted, _ = normalize_document(value)
+        restored, _ = parse_source(dump_markdown(formatted))
+        self.assertEqual(dump_json(restored), dump_json(formatted))
+        self.assertEqual(content_version(original), content_version(formatted))
+        self.assertEqual(content_metadata(original), content_metadata(formatted))
+        value['nodes'][0]['body_layout'] = 'invented'
+        with self.assertRaisesRegex(ValueError, 'body layout'):
+            normalize_document(value)
+
     def test_new_author_field_validation_rejects_wrong_owners(self):
         document = {'nodes':[node('i','Introduction',[node('d','**定义**：定义正文')]),
             node('example-1','Example 1',[node('q','**要求**：完整作答'),

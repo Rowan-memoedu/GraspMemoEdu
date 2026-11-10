@@ -17,7 +17,8 @@ from .service import DomainError, LearningService, create_learning_service
 from .subjects import Subjects
 from scripts.verify_content import collect_questions, parse_outline, sha256
 
-MAX_ARCHIVE_BYTES = 1_500_000_000
+MAX_ARCHIVE_BYTES = 3_000_000_000
+MAX_MANIFEST_BYTES = 4_000_000
 
 
 def _json(value):
@@ -147,7 +148,7 @@ def _read_archive(backup):
                 or not required <= set(names) or not all(_safe_name(name) for name in names)
                 or any(info.file_size > 100_000_000 for info in infos)
                 or sum(info.file_size for info in infos) > MAX_ARCHIVE_BYTES
-                or archive.getinfo('manifest.json').file_size > 1_000_000):
+                or archive.getinfo('manifest.json').file_size > MAX_MANIFEST_BYTES):
             raise ValueError('Invalid archive structure')
         files = {name.casefold() for name in names}
         if any(any(str(parent).casefold() in files for parent in PurePosixPath(name).parents if str(parent) != '.') for name in names):
@@ -234,10 +235,18 @@ def _validate_payload(manifest, blobs):
     expected_files.update(validate_graph_archive(blobs))
     for name, raw in blobs.items():
         if name.startswith('mathacademy-sources/'):
-            if not re.fullmatch(r'mathacademy-sources/(?:topics/ma-topic-\d+|graphs/course-\d+)\.json', name):
+            # The native importer preserves source JSON together with its scope
+            # and nested review receipts. They are private data, never runtime
+            # paths; the archive-wide path/checksum checks also apply here.
+            if not re.fullmatch(r'mathacademy-sources/(?:[A-Za-z0-9][A-Za-z0-9_.-]*/)*[A-Za-z0-9][A-Za-z0-9_.-]*\.json', name):
                 raise ValueError('Invalid private source snapshot path')
             json.loads(raw)
             expected_files.add(name)
+    if 'code-judges.json' in blobs:
+        from .code_judges import valid_registry
+        if len(blobs['code-judges.json']) > 4 * 1024 * 1024 or not valid_registry(json.loads(blobs['code-judges.json'])):
+            raise ValueError('Invalid local code judge registry')
+        expected_files.add('code-judges.json')
     guide_roots = {'guide': 'guide/guide.md'}
     if 'subjects.json' in blobs:
         if len(blobs['subjects.json']) > 1024 * 1024:
@@ -281,6 +290,11 @@ def backup_site(settings, destination=None):
     if not (settings.data_dir / 'learning.sqlite3').exists():
         create_learning_service(catalog.topic(catalog.default_topic_id), settings.data_dir)
     blobs = {}
+    code_judges = settings.data_dir / 'code-judges.json'
+    if code_judges.exists():
+        from .code_judges import registry
+        registry(settings.data_dir)
+        blobs['code-judges.json'] = code_judges.read_bytes()
     with tempfile.TemporaryDirectory(prefix='backup-', dir=settings.data_dir) as folder:
         snapshot_path = Path(folder) / 'learning.sqlite3'
         with closing(sqlite3.connect(settings.data_dir / 'learning.sqlite3')) as source:
@@ -437,7 +451,7 @@ def backup_site(settings, destination=None):
     manifest_bytes = _json(manifest)
     if (not all(_safe_name(name) for name in blobs)
             or any(len(data) > 100_000_000 for data in blobs.values())
-            or len(manifest_bytes) > 1_000_000
+            or len(manifest_bytes) > MAX_MANIFEST_BYTES
             or sum(map(len, blobs.values())) + len(manifest_bytes) > MAX_ARCHIVE_BYTES):
         raise DomainError('invalid_backup', '备份路径或体积超出可恢复范围。', 422)
     _validate_payload(manifest, blobs)

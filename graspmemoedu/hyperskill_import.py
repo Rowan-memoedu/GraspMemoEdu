@@ -65,6 +65,7 @@ def verify_database_transition(before_path, after_path, topic_ids, bank):
     rounds = {r['attempt']: json.loads(r['body']) for r in after.get('training_external_rounds', [])}
     allowed_new = {'hyperskill_topic_archives', 'training_memory', 'training_attempts', 'training_submissions',
                    'training_ratings', 'training_suspensions', 'training_external_rounds',
+                   'training_multi_step', 'training_step_submissions',
                    'training_preferences', 'review_points', 'review_variants'}
     if set(after) - set(before) - allowed_new or set(before) - set(after):
         raise ValueError('Unexpected database schema change during Hyperskill migration')

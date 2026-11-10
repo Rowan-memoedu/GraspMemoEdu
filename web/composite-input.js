@@ -24,9 +24,126 @@ const taskParagraph = text => /^(?:(?:read|choose|select|fill|complete|match|ans
   && /\b(?:gap|blank|option|sentence|question|answer|passage|paragraph)\b|空|缺口|选|選|题|題|填/i.test(text);
 const ignoredPassageText = element => element?.closest?.('code,pre,kbd,samp,script,style,textarea,input,select,button,label,legend,svg,math,mjx-container,.MathJax,.passageBlank');
 
+// This is a presentation policy only: answer IDs, grading and scheduling stay shared.
+export function passagePresentation(spec) {
+  const english = document.body?.dataset?.subject === 'english';
+  const controls = spec?.controls || spec?.blanks || (spec?.fixed_side ? spec[spec.fixed_side] : []) || [];
+  return {
+    numbered: english && controls.some(control => numberLabel(control.label || control.text)),
+    split: english && (spec?.type === 'composite' && spec.controls.some(control => control.type === 'select')
+      || spec?.type === 'matching' && ['left', 'right'].includes(spec.fixed_side)),
+  };
+}
+
+export function preparePassageWorkspace(stem, spec) {
+  if (!passagePresentation(spec).split || !stem?.parentElement) return false;
+  stem.parentElement.classList.add('passageWorkspace');
+  stem.classList.add('passageQuestionPane');
+  stem.setAttribute('role', 'region'); stem.setAttribute('aria-label', '题目正文'); stem.tabIndex = 0;
+  return true;
+}
+
+export function centerPassageControl(root, controlId) {
+  const target = [...root.querySelectorAll('[data-answer-control]')].find(item => item.dataset.answerControl === controlId);
+  const workspace = root.closest('.passageWorkspace');
+  const pane = workspace && [...workspace.children].find(item => item === root || item.contains(root));
+  if (!target || !pane) return;
+  const position = () => pane.scrollTop + target.getBoundingClientRect().top - pane.getBoundingClientRect().top
+    - pane.clientTop - (pane.clientHeight - target.getBoundingClientRect().height) / 2;
+  // Give the first and last answer enough scroll space to center as well.
+  const top = position(), style = getComputedStyle(pane);
+  if (top < 0) pane.style.paddingTop = `${parseFloat(style.paddingTop) - top}px`;
+  const excess = position() - (pane.scrollHeight - pane.clientHeight);
+  if (excess > 0) pane.style.paddingBottom = `${parseFloat(style.paddingBottom) + excess}px`;
+  root.querySelectorAll('.passageAnswerCurrent').forEach(item => item.classList.remove('passageAnswerCurrent'));
+  target.classList.add('passageAnswerCurrent'); target.tabIndex = -1; target.focus({preventScroll: true});
+  pane.scrollTo({top: position(), behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'});
+}
+
+const passageNumberButton = (number, controlId, navigate) => {
+  const button = node('button', 'passageBlankNumber passageNumberLink', number); button.type = 'button';
+  button.dataset.passageTarget = controlId; button.setAttribute('aria-label', `定位第 ${number} 题`);
+  button.addEventListener('click', () => navigate(controlId)); return button;
+};
+
+// Reading prompts belong beside their options. Move only uniquely matched
+// numbered paragraphs/list items; preserve the source's inline Markdown HTML.
+function takePassageQuestions(container, controls, mounted) {
+  if (!container) return new Map();
+  const byNumber = new Map(), candidates = new Map(), prompts = new Map();
+  for (const control of controls) {
+    const number = numberLabel(control.label) || String(control.label || '').match(/^\s*(\d+)[.．、]/)?.[1];
+    if (number && !mounted.some(field => field.id === control.id))
+      byNumber.set(number, [...(byNumber.get(number) || []), control]);
+  }
+  for (const block of container.querySelectorAll('p')) {
+    if (ignoredPassageText(block) || block.closest('li') || block.querySelector('.passageBlank')) continue;
+    const match = block.textContent.match(/^\s*(?:[(（\[]([0-9]{1,3})[)）\]]|(\d{1,3})[.．、])\s*/);
+    const choices = byNumber.get(match?.[1] || match?.[2]); if (choices?.length !== 1) continue;
+    candidates.set(choices[0].id, [...(candidates.get(choices[0].id) || []), {item:block}]);
+  }
+  for (const list of container.querySelectorAll('ol')) {
+    let number = list.start || 1;
+    for (const item of [...list.children].filter(child => child.tagName === 'LI')) {
+      if (item.hasAttribute('value')) number = item.value;
+      const choices = byNumber.get(String(number));
+      if (choices?.length === 1 && !ignoredPassageText(item) && !item.querySelector('.passageBlank')) candidates.set(choices[0].id,
+        [...(candidates.get(choices[0].id) || []), {item,number:String(number)}]);
+      number += list.reversed ? -1 : 1;
+    }
+  }
+  for (const [id, matches] of candidates) {
+    if (matches.length !== 1) continue;
+    const {item,number} = matches[0], prompt = node('span', 'passageQuestionPrompt');
+    if (number) prompt.append(document.createTextNode(number + '. '));
+    const body = item.firstElementChild?.tagName === 'P' ? item.firstElementChild : item;
+    while (body.firstChild) prompt.append(body.firstChild);
+    const list = item.parentElement; item.remove();
+    if (list?.tagName === 'OL' && !list.children.length) list.remove();
+    prompts.set(id, prompt);
+  }
+  return prompts;
+}
+
+// The visible text can wrap through a passage while the native select retains
+// its keyboard, option menu and form semantics.
+export function syncPassageField(field, correct) {
+  const wrapper = field.closest?.('.passageBlank');
+  if (!wrapper || document.body?.dataset?.subject !== 'english') return;
+  const text = field.tagName === 'SELECT' ? field.selectedOptions[0]?.dataset.text || ''
+    : field.value ?? field.textContent;
+  wrapper.dataset.filled = String(Boolean(text));
+  if (typeof correct === 'boolean') wrapper.dataset.answerTruth = String(correct);
+  if (field.tagName === 'SELECT') {
+    let display = wrapper.querySelector('.passageBlankDisplay');
+    if (!display) {
+      display = node('span', 'passageBlankDisplay'); display.setAttribute('aria-hidden', 'true');
+      display.addEventListener('click', () => {
+        if (field.disabled) return;
+        field.focus({preventScroll: true});
+        try { field.showPicker?.(); } catch { /* Keyboard selection remains available. */ }
+      });
+      wrapper.append(display); wrapper.classList.add('passageSelectWrap');
+    }
+    display.textContent = text;
+  }
+  if (field.tagName === 'TEXTAREA' && !CSS.supports('field-sizing', 'content')) {
+    field.style.width = `${Math.max(3, text.length + 1)}ch`;
+    field.style.height = 'auto'; field.style.height = `${field.scrollHeight}px`;
+  }
+}
+
+export function passageTextField(className) {
+  const growing = document.body?.dataset?.subject === 'english';
+  const field = node(growing ? 'textarea' : 'input', className);
+  if (growing) { field.rows = 1; field.classList.add('passageGrowingText'); }
+  else field.type = 'text';
+  return field;
+}
+
 // Only presentation metadata participates in linking. Explicit IDs win; legacy
 // numbers must have an unambiguous label and one non-instruction occurrence.
-export function mountPassageBlanks(container, controls, createField, {numbered = true, bare = false} = {}) {
+export function mountPassageBlanks(container, controls, createField, {numbered = true, bare = false, showNumbers = false, navigate} = {}) {
   if (!container) return [];
   const byId = new Map(controls.map(control => [control.id, control])), mounted = [], explicit = new Set(), targets = [];
   const inside = element => {
@@ -36,9 +153,13 @@ export function mountPassageBlanks(container, controls, createField, {numbered =
   const make = (control, number = null) => {
     number ||= numberLabel(control.label) || String(controls.indexOf(control) + 1);
     const wrapper = node('span', 'passageBlank'); wrapper.dataset.passageId = control.id;
-    const badge = node('span', 'passageBlankNumber', number); badge.setAttribute('aria-hidden', 'true');
     const field = createField(control, number);
-    wrapper.append(badge, field); mounted.push({id: control.id, wrapper, field, number}); return wrapper;
+    if (showNumbers) {
+      const badge = navigate ? passageNumberButton(number, control.id, navigate) : node('span', 'passageBlankNumber', number);
+      if (!navigate) badge.setAttribute('aria-hidden', 'true');
+      wrapper.append(badge);
+    }
+    wrapper.append(field); mounted.push({id: control.id, wrapper, field, number}); return wrapper;
   };
   const elementTargets = [...container.querySelectorAll('[data-control]')].filter(marker => byId.has(marker.dataset.control) && !ignoredPassageText(marker));
   for (const marker of elementTargets) explicit.add(marker.dataset.control);
@@ -111,10 +232,11 @@ export function passageSelect(control, number, {formId, disabled = false} = {}) 
   const field = node('select', 'passageBlankField passageBlankSelect'); field.dataset.controlId = control.id;
   field.setAttribute('aria-label', control.label || `第 ${number} 空`); field.disabled = disabled;
   if (formId) field.setAttribute('form', formId);
-  const empty = node('option', '', '—'); empty.value = ''; field.append(empty);
   control.options.forEach((option, index) => {
-    const item = node('option', '', `${String.fromCharCode(65 + index)} · ${option.text}`); item.value = option.id; field.append(item);
+    const item = node('option', '', `${String.fromCharCode(65 + index)} · ${option.text}`);
+    item.value = option.id; item.dataset.text = option.text; field.append(item);
   });
+  field.selectedIndex = -1;
   return field;
 }
 
@@ -124,10 +246,18 @@ export function answerShortcut(event, formId, disabled = false) {
   }
 }
 
-export function compositeInput(spec, {id, value = '', stem, disabled = false, formId} = {}) {
+export function compositeInput(spec, {id, value = '', stem, disabled = false, formId, feedback, assessment} = {}) {
   const root = node('div', 'questionInteraction compositeInteraction');
   const input = node('textarea', 'structuredAnswer'); input.id = id; input.name = 'answer';
   input.hidden = true; input.disabled = disabled; root.append(input);
+  const presentation = passagePresentation(spec);
+  const expected = new Map((feedback?.items || []).map(item => [item.id, item]));
+  const results = new Map((assessment?.items || []).map(item => [item.id, item.correct]));
+  const split = preparePassageWorkspace(stem, spec);
+  const navigate = split ? controlId => centerPassageControl(root, controlId) : undefined;
+  const gapOptions = {numbered: presentation.numbered, showNumbers: presentation.numbered, navigate};
+  const sourceSections = split ? node('div', 'passageSourceSections') : null;
+  if (sourceSections) stem.append(sourceSections);
   let draft; try { draft = JSON.parse(value); } catch { draft = {}; }
   let section = Math.max(0, Math.min(spec.sections.length - 1, Number.isInteger(draft?.section) ? draft.section : 0));
   let values = Object.fromEntries(spec.controls.map(c => [c.id, typeof draft?.values?.[c.id] === 'string' ? draft.values[c.id] : '']));
@@ -145,6 +275,7 @@ export function compositeInput(spec, {id, value = '', stem, disabled = false, fo
   const sync = () => {
     for (const {id: controlId, field} of [...stemFields, ...sectionFields]) {
       field.value = values[controlId]; field.disabled = !enabled(controlId);
+      syncPassageField(field, disabled ? results.get(controlId) : undefined);
     }
     for (const field of root.querySelectorAll('input')) {
       if (field.type === 'radio') field.checked = values[field.dataset.controlId] === field.value;
@@ -160,10 +291,10 @@ export function compositeInput(spec, {id, value = '', stem, disabled = false, fo
   };
   const inlineField = (control, number) => {
     const field = control.type === 'select' ? passageSelect(control, number, {formId})
-      : node('input', 'compositeField passageBlankField passageBlankText');
+      : passageTextField('compositeField passageBlankField passageBlankText');
     field.dataset.controlId = control.id;
     if (control.type !== 'select') {
-      field.type = 'text'; field.autocomplete = 'off'; field.maxLength = 2000;
+      field.autocomplete = 'off'; field.maxLength = 2000;
       field.setAttribute('aria-label', control.label || `第 ${number} 空`);
       if (formId) field.setAttribute('form', formId);
       if (control.input_type === 'number') field.inputMode = 'decimal';
@@ -172,30 +303,43 @@ export function compositeInput(spec, {id, value = '', stem, disabled = false, fo
     field.addEventListener('keydown', event => answerShortcut(event, formId, field.disabled));
     return field;
   };
-  const stemFields = mountPassageBlanks(stem, spec.controls, inlineField);
+  const stemFields = mountPassageBlanks(stem, spec.controls, inlineField, gapOptions);
+  const stemPrompts = split ? takePassageQuestions(stem, spec.controls, stemFields) : new Map();
   root.addEventListener('keydown', event => answerShortcut(event, formId, disabled));
   function render() {
     root.querySelector('.compositeBody')?.remove();
+    sourceSections?.replaceChildren();
     sectionFields = [];
     const body = node('div', 'compositeBody');
     const indexes = disabled ? spec.sections.map((_, i) => i) : [section];
     for (const index of indexes) {
       const part = spec.sections[index], panel = node('section', 'compositeSection');
       if (spec.sections.length > 1) panel.append(node('p', 'stepCounter', `${index + 1} / ${spec.sections.length}`));
-      const text = node('div', 'courseContent'); text.innerHTML = part.html; panel.append(text);
-      const localFields = mountPassageBlanks(text, spec.controls.filter(c => part.control_ids.includes(c.id)), inlineField);
+      const text = node('div', 'courseContent'); text.innerHTML = part.html; (sourceSections || panel).append(text);
+      const localFields = mountPassageBlanks(text, spec.controls.filter(c => part.control_ids.includes(c.id)), inlineField, gapOptions);
+      const localPrompts = split ? takePassageQuestions(text, spec.controls, localFields) : new Map();
       sectionFields.push(...localFields);
       for (const control of spec.controls.filter(c => part.control_ids.includes(c.id))) {
         if (control.type === 'select') {
           const group = node('fieldset', 'compositeControl compositeChoiceControl');
           group.id = `${id}-${control.id}`; group.dataset.controlId = control.id; group.disabled = disabled;
+          group.dataset.answerControl = control.id;
           const label = node('legend', 'compositeLabel', control.label || control.id); label.id = `${group.id}-label`;
+          const prompt = localPrompts.get(control.id) || stemPrompts.get(control.id);
+          if (prompt) label.replaceChildren(prompt);
           const list = node('div', 'choiceList'); list.setAttribute('role', 'radiogroup'); list.setAttribute('aria-labelledby', label.id);
+          // Content length and the answer pane's actual width both govern density.
+          const longest = Math.max(...control.options.map(option => option.text.length));
+          list.dataset.optionLength = longest > 46 ? 'long' : longest > 10 ? 'medium' : longest > 6 ? 'short' : 'compact';
           control.options.forEach((option, optionIndex) => {
             const choice = node('label', 'choiceOption'), radio = node('input', '');
             radio.type = 'radio'; radio.name = group.id; radio.value = option.id;
             radio.dataset.controlId = control.id;
             radio.disabled = disabled; radio.checked = values[control.id] === option.id;
+            choice.dataset.optionId = option.id;
+            const answerIds = expected.get(control.id)?.correct_ids;
+            if (disabled && answerIds && (answerIds.includes(option.id) || radio.checked))
+              choice.dataset.answerTruth = String(answerIds.includes(option.id));
             if (formId) radio.setAttribute('form', formId);
             const content = node('span', 'choiceBody');
             // Rich option HTML uses the same compiled, sanitized source as the question.
@@ -206,6 +350,7 @@ export function compositeInput(spec, {id, value = '', stem, disabled = false, fo
           group.append(label, list); panel.append(group);
         } else if (![...stemFields, ...localFields].some(field => field.id === control.id)) {
           const wrap = node('label', 'compositeControl compositeTextControl');
+          wrap.dataset.answerControl = control.id;
           const label = node('span', 'compositeLabel', control.label || control.id), field = node('input', 'compositeField');
           field.id = `${id}-${control.id}`; field.disabled = disabled; field.dataset.controlId = control.id;
           field.setAttribute('aria-label', control.label || control.id); if (formId) field.setAttribute('form', formId);

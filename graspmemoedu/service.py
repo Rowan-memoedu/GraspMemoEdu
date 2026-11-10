@@ -316,6 +316,10 @@ class LearningService:
             question = self.question_for_step(saved) if saved['question_id'] else None
             if question:
                 step.update(title=question['title'], html=question['html'], explanation_html=None)
+                from .topic_composition import section_for
+                module = next((m for m in self.course['modules'] if m['id'] == saved['module_id']), {})
+                if section := section_for(self.course, module):
+                    step['section'] = section
                 from .self_assessment import presentation
                 step.update(presentation(question, saved, visible=saved['phase'] == 'reading'
                     or saved['kind'] == 'practice' and saved['phase'] == 'feedback'))
@@ -329,6 +333,13 @@ class LearningService:
                 intro = (next(i for i in self.course['introductions'] if i['id'] == saved['introduction_id'])
                          if saved.get('introduction_id') else self.course['introduction'])
                 step.update(title=intro.get('title', 'Introduction'), html=intro['html'], explanation_html=None)
+                for field in ('example', 'footnotes'):
+                    if field in intro:
+                        step[field] = intro[field]
+                from .topic_composition import section_for
+                section = section_for(self.course, intro)
+                if section:
+                    step['section'] = section
                 from .atomic_content import public_source_attributions
                 attributions = public_source_attributions(intro.get('source_attributions'))
                 if attributions:

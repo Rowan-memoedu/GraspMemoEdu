@@ -75,11 +75,13 @@ def validate(bank):
                         + (() if external else ('reference_answer',))),
                     'Question needs a stem, reference answer and explanation')
             # Offline SVG formulae and embedded PNGs are larger than source prose.
-            # The complete bank still has the existing 32 MB file limit.
+            # The complete bank has a 64 MB file limit.
             require(all(text(q.get(key), 1000000) for key in (('html',) if external else ('html', 'explanation_html'))),
                     'Missing or oversized rendered question or explanation')
             require(text(q.get('title', q['id']), 200), 'Invalid question title')
             validate_interaction(q.get('interaction'), q['question'])
+            from .multi_step import validate as validate_multi_step
+            validate_multi_step(q)
             if 'point_ids' in q:
                 from .linked_points import validate_references
                 from .point_assessment import validate_assessment
@@ -129,7 +131,7 @@ class TrainingCatalog:
         if self.root.is_symlink():
             raise ValueError('Training bank directory must not be a symlink')
         for path in sorted(self.root.glob('*.json')):
-            if path.is_symlink() or path.stat().st_size > 32000000:
+            if path.is_symlink() or path.stat().st_size > 64000000:
                 raise ValueError('Invalid training bank file')
             bank = validate(json.loads(path.read_text(encoding='utf-8-sig')))
             if path.name != bank['id'] + '.json' or bank['id'] in self.banks:
@@ -159,6 +161,15 @@ class TrainingCatalog:
     def validate_ownership(self, catalog, subjects):
         """A bank owns its questions and may reference existing atomic points."""
         from .linked_points import resolve
+        from .topic_composition import question_references
+        for topic in catalog.topics.values():
+            for item in question_references(topic):
+                ref = item['reference']
+                bank, _, _ = self.question(ref['bank_id'], ref['group_id'], ref['question_id'])
+                if bank['version'] != ref['version']:
+                    raise ValueError('A Topic question reference has a stale bank version')
+                if subjects.topic_subject(topic['id']) != bank['subject_id']:
+                    raise ValueError('A Topic question reference belongs to another subject')
         for bank in self.banks.values():
             for group in bank['groups']:
                 refs = set(group.get('unlock_policy', {}).get('point_ids', []))
@@ -215,6 +226,8 @@ def validate_archive(blobs):
     names, banks = set(), {}
     for name, blob in blobs.items():
         if name.startswith(DIRECTORY + '/'):
+            if len(blob) > 64000000:
+                raise ValueError('Training bank exceeds file limit')
             bank = validate(json.loads(blob))
             if name != f'{DIRECTORY}/{bank["id"]}.json':
                 raise ValueError('Invalid training bank archive path')
@@ -237,7 +250,13 @@ def validate_saved(con, catalog):
 
 
 def install(compiled, data_dir):
-    bank = validate(json.loads(Path(compiled).read_text(encoding='utf-8-sig')))
+    raw = Path(compiled).read_bytes()
+    if len(raw) > 64000000:
+        raise ValueError('Training bank exceeds file limit')
+    bank = validate(json.loads(raw.decode('utf-8-sig')))
+    content = json.dumps(bank, ensure_ascii=False, indent=2) + '\n'
+    if len(content.encode('utf-8')) > 64000000:
+        raise ValueError('Training bank exceeds file limit')
     if any(g.get('unlock_policy') or any(q.get('point_ids') for q in g.get('questions', [])) for g in bank['groups']):
         from .config import Settings
         from .subjects import Subjects
@@ -258,8 +277,7 @@ def install(compiled, data_dir):
     target = root / (bank['id'] + '.json')
     # Immutable IDs: an import must never overwrite content backing learner cards.
     with target.open('x', encoding='utf-8') as handle:
-        json.dump(bank, handle, ensure_ascii=False, indent=2)
-        handle.write('\n')
+        handle.write(content)
     return target
 
 

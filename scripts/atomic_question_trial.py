@@ -1,4 +1,4 @@
-"""Independent, local API trials for point-bound Flashcards; no site writes."""
+"""Independent local Codex Exec trials for point-bound Flashcards; no site writes."""
 from __future__ import annotations
 
 import argparse
@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from graspmemoedu.author_import import CompatibleClient, _object
+from graspmemoedu.author_import import _object
 from graspmemoedu.question_types import is_reproduction, validate_interaction
 from graspmemoedu.subject_registry import DEFAULTS
 
@@ -127,7 +127,7 @@ def validate_pair(candidate, source):
             raise ValueError('Flashcard changed its point bindings')
         for key in ('question', 'reference_answer', 'explanation'):
             value = card[key]
-            if not isinstance(value, str) or not value.strip() or len(value) > 15000 or '\x00' in value:
+            if not isinstance(value, str) or (key != 'explanation' and not value.strip()) or len(value) > 15000 or '\x00' in value:
                 raise ValueError('Missing or oversized Flashcard text')
             if re.search(r'''https?://|<!--|<\s*/?\s*[A-Za-z][A-Za-z0-9]*(?:\s+[A-Za-z_:][-A-Za-z0-9_:.]*(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s<>]+))?)*\s*/?>''',
                          re.sub(r'\$\$[\s\S]*?\$\$|\$[^$\n]+\$', '', value)):
@@ -173,19 +173,25 @@ def configuration():
     spec = importlib.util.spec_from_file_location('configured_ai_producer', path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    module.load_env_file()
-    key = os.environ.get('DEEPSEEK_CODEX_API_KEY')
-    base = os.environ.get('AI_PRODUCER_BASE_URL', 'https://api.deepseek.com')
-    model = os.environ.get('AI_PRODUCER_MODEL', 'deepseek-flash')
-    if not key or model != 'deepseek-flash':
-        raise ValueError('Configure the Codex production credential and deepseek-flash')
-    return base, key, model
+    client = module.batch_client()
+    return 'codex_exec', None, client.model
+
+
+def CompatibleClient(base_url, api_key, model, timeout=630):
+    # Script-local compatibility only. The website CompatibleClient is untouched.
+    sys.path.insert(0, 'D:/Projects/渐进阅读工作流/standard-preprocessing')
+    from batch_transport import BatchClient
+    return BatchClient(model=model, timeout=timeout)
 
 
 def call(client, folder, phase, prompt, payload):
     response_path = folder / (phase + '.response.json')
     if response_path.exists():
-        return read(response_path)
+        cached = read(response_path)
+        if (cached.get('provider') != 'codex_exec'
+                or cached.get('producer_identity') != client.identity):
+            raise ValueError('Prior API response retained; choose a new batch directory for Codex')
+        return cached
     started = folder / (phase + '.started.json')
     if started.exists():
         raise ValueError('Previous request outcome unknown; do not blindly rebill')
@@ -239,12 +245,13 @@ def run(args):
     catalog = load_few_shots(args.few_shots)
     for case in cases:
         generation_payload(source_for(case), catalog)
+    config = configuration()
     metadata = {'input_sha256': hashlib.sha256(args.input.read_bytes()).hexdigest(),
                 'generation_sha256': hashlib.sha256(generation.encode()).hexdigest(),
                 'review_sha256': hashlib.sha256(review.encode()).hexdigest(),
                 'few_shots_sha256': hashlib.sha256(args.few_shots.read_bytes()).hexdigest(),
                 'ids': [case['id'] for case in cases], 'messages_per_request': 2,
-                'chat_history_included': False}
+                'chat_history_included': False, 'backend':'codex_exec', 'model':config[2]}
     path = args.run_root / 'run.json'
     if path.exists():
         if read(path) != metadata:
@@ -255,7 +262,6 @@ def run(args):
         save(args.run_root / 'few-shots-snapshot.json', {'version': 1, 'subjects': catalog})
         (args.run_root / 'generation-prompt.md').write_text(generation, encoding='utf-8')
         (args.run_root / 'review-prompt.md').write_text(review, encoding='utf-8')
-    config = configuration()
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = [pool.submit(run_one, case, args.run_root, config, generation, review, catalog) for case in cases]
         results = [future.result() for future in as_completed(futures)]
@@ -273,7 +279,9 @@ def question_lines(card):
         if side in spec:
             lines += ['', title + '：', '']
             lines += ['- ' + item['text'] for item in spec[side]]
-    lines += ['', '**答案**：' + card['reference_answer'], '', '**解析**：' + card['explanation'], '']
+    lines += ['', '**答案**：', '', card['reference_answer'], '']
+    if card['explanation'].strip():
+        lines += ['**解析**：', '', card['explanation'], '']
     return lines
 
 

@@ -72,6 +72,17 @@ class AcademyImportTests(unittest.TestCase):
         self.assertEqual(raw.decode(), '😀TODO尾巴')
         self.assertEqual(positions, [{'offset': 2, 'length': 4}])
 
+    def test_windows_template_uses_document_line_endings_and_offsets(self):
+        from scripts.prepare_academy import template
+        raw, positions = template('😀\r\n答案尾巴\r\n'.encode(),
+                                  [{'offset': 3, 'length': 2, 'placeholder_text': 'TODO'}])
+        self.assertEqual(raw.decode(), '😀\nTODO尾巴\n')
+        self.assertEqual(positions, [{'offset': 3, 'length': 4}])
+        raw, positions = template('😀\r\n答案尾巴\r\n'.encode(),
+                                  [{'offset': 3, 'length': 2, 'placeholder_text': 'TODO\r\nnext'}])
+        self.assertEqual(raw.decode(), '😀\nTODO\nnext尾巴\n')
+        self.assertEqual(positions, [{'offset': 3, 'length': 9}])
+
     def test_extension_keeps_existing_topics_and_is_idempotent(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary); data = root / 'data'; package = root / 'package'

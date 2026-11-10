@@ -102,6 +102,35 @@ class TestMaterialTests(unittest.TestCase):
             self.assertEqual(self.client.get(path, headers=self.headers).status_code, 200)
         self.assertEqual(hashlib.sha256((self.root / 'training-banks/isolated-bank.json').read_bytes()).hexdigest(), before)
 
+    def test_named_formal_account_grant_uses_real_api_without_role_change(self):
+        store=self.app.state.access_store
+        created=store.create_account('Selected formal learner',purpose='learner',is_student=True,is_advanced_learner=True)
+        learner_id=created['account']['learner_id']
+        other=store.create_account('Unrelated formal learner',purpose='learner')
+        policy=dict(self.policy,account_grants={learner_id:{'courses':['english-course'],'banks':['isolated-bank']}})
+        (self.root/'test-materials.json').write_text(json.dumps(policy),encoding='utf-8')
+        app=create_app(self.settings,AtomicLearningService(atomic_topic('english','atomic-english'),self.root))
+        with TestClient(app,base_url='https://training.test') as client:
+            headers={'Origin':'https://site.test'}
+            login=client.post('/api/access/login',headers=headers,json={'invitation_code':created['invitation_code']}).json()
+            self.assertEqual(login['access']['purpose'],'learner')
+            self.assertFalse(login['access'].get('is_admin'))
+            headers['X-Learning-Identity']=login['identity_token']
+            courses=client.get('/api/catalog?subject_id=english',headers=headers).json()['courses']
+            self.assertEqual([c['id'] for c in courses],['english-course'])
+            self.assertEqual(client.get('/api/training/bank?bank_id=isolated-bank',headers=headers).status_code,200)
+            self.assertEqual(client.get('/api/state?topic_id=atomic-chemistry&subject_id=chemistry',headers=headers).status_code,403)
+            self.assertEqual(client.get('/api/guide?subject_id=math',headers=headers).status_code,404)
+            _,parameters=app.state.help_requests.visible_scope('',(),login['access'])
+            self.assertNotIn('training.isolated-bank',json.loads(parameters[-1]))
+            self.assertIn('atomic-chemistry',json.loads(parameters[-1]))
+            app.state.access_store.set_permissions(learner_id,topic_ids=[])
+            self.assertEqual(client.get('/api/training/bank?bank_id=isolated-bank',headers=headers).status_code,403)
+            login=client.post('/api/access/login',headers={'Origin':'https://site.test'},json={'invitation_code':other['invitation_code']}).json()
+            headers['X-Learning-Identity']=login['identity_token']
+            self.assertEqual(client.get('/api/catalog?subject_id=english',headers=headers).json()['courses'],[])
+            self.assertEqual(client.get('/api/training/bank?bank_id=isolated-bank',headers=headers).status_code,403)
+
     def test_formal_admin_cannot_bypass_material_inventory_or_bank_content(self):
         self.account(is_admin=True, purpose='learner')
         self.denied()

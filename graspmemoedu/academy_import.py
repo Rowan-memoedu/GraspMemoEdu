@@ -40,7 +40,7 @@ def _install(package, data_dir, *, extend_course=False, migration=None):
     if (data_dir / 'cloud-authoritative.json').exists():
         raise ValueError('Do not install into the local production rollback snapshot')
     manifest = json.loads((package / 'manifest.json').read_bytes())
-    if manifest.get('adapter') not in ('jetbrains-academy', 'hyperskill', 'structured-atomic') or manifest.get('schema') != 1:
+    if manifest.get('adapter') not in ('jetbrains-academy', 'hyperskill', 'structured-atomic', 'reading-book') or manifest.get('schema') != 1:
         raise ValueError('Invalid Academy package')
     for name, expected in manifest['files'].items():
         path = package / name
@@ -166,7 +166,22 @@ def _install(package, data_dir, *, extend_course=False, migration=None):
 
 def install(package, data_dir, *, extend_course=False):
     manifest = json.loads((Path(package) / 'manifest.json').read_bytes())
+    reading_banks = None
     migration = None
+    if manifest['adapter'] == 'reading-book':
+        from .reading_book_import import preflight
+        if extend_course and not any(manifest.get(key) is True for key in ('preserve_reading_presentation', 'preserve_reading_composition')):
+            raise ValueError('Reading book installation adds complete courses; it does not merge changed editions')
+        if manifest.get('preserve_reading_presentation') is True:
+            if not extend_course:raise ValueError('Presentation updates require an explicit course update')
+            from .reading_book_import import ReadingPresentationRevision
+            migration = ReadingPresentationRevision(package, data_dir)
+        if manifest.get('preserve_reading_composition') is True:
+            if not extend_course or migration:
+                raise ValueError('Composition updates require one explicit course update strategy')
+            from .reading_book_import import ReadingCompositionRevision
+            migration = ReadingCompositionRevision(package, data_dir)
+        reading_banks = preflight(package, manifest, data_dir)
     if sum(manifest.get(key) is True for key in
            ('replace_atomic_and_reset_progress', 'reset_reading_progress', 'preserve_atomic_progress')) > 1:
         raise ValueError('Choose one explicit atomic update strategy')
@@ -183,6 +198,9 @@ def install(package, data_dir, *, extend_course=False):
         from .hyperskill_import import HyperskillImport
         migration = HyperskillImport(package, data_dir)
     result = _install(package, data_dir, extend_course=extend_course, migration=migration)
+    if reading_banks is not None:
+        from .reading_book_import import install_banks
+        result['banks'] = install_banks(package, data_dir, reading_banks)
     if manifest['adapter'] == 'jetbrains-academy':
         from .academy_training_import import install as install_bank
         courses = json.loads((Path(package) / 'catalog.json').read_bytes())['courses']

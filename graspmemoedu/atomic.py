@@ -268,7 +268,8 @@ class AtomicLearningService(LearningService):
         active, when = state['active'], self._time()
         ratings = {}
         assessment = active.get('self_assessment') or {}
-        stop = assessment.get('submission_id') == item['id'] and assessment.get('rating') == 5
+        whole_success = active.get('whole_question_rating') == 5
+        stop = whole_success or assessment.get('submission_id') == item['id'] and assessment.get('rating') == 5
         from .point_assessment import assess_points
         card = active.get('snapshot') or self.questions[active['card_id']]
         point_correct, details = assess_points(card, item['answer'], correct, self_assessed=bool(assessment))
@@ -287,7 +288,7 @@ class AtomicLearningService(LearningService):
                 # FSRS rating. Retain any existing card state for audit/history.
                 memory.update(mastered=True, first_passed_at=memory.get('first_passed_at') or when.isoformat(),
                               stopped_at=when.isoformat(), due_at=None)
-                ratings[point_id] = None
+                ratings[point_id] = 5 if whole_success else None
                 self._event(con, state, 'atomic_reviews_stopped', point_id=point_id, card_id=active['card_id'],
                             submission_id=item['id'])
                 continue
@@ -311,7 +312,9 @@ class AtomicLearningService(LearningService):
                     memory['card_json'] = card.to_json()
         active.update(phase='feedback', answer=item['answer'], correct=correct, reason=reason,
                       ratings=ratings, answered_at=when.isoformat())
-        if stop:
+        if whole_success:
+            active['stopped'] = True
+        elif stop:
             active['stop_requested'] = True
         state['history'].append(dict(active))
         state['phase'] = 'feedback'

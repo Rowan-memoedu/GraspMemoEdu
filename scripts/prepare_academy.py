@@ -33,13 +33,14 @@ def within(root, name):
 
 def template(raw, placeholders):
     """Academy offsets are JVM UTF-16 code units, not Python code points."""
-    data = raw.decode('utf-8-sig').encode('utf-16-le')
+    # IntelliJ Documents and their placeholder offsets use LF even when disk files use CRLF.
+    data = raw.decode('utf-8-sig').replace('\r\n', '\n').replace('\r', '\n').encode('utf-16-le')
     patches, metadata, shift, previous = [], [], 0, 0
     for item in sorted(placeholders, key=lambda p: p['offset']):
         start, end = item['offset'], item['offset'] + item['length']
         if start < previous or end * 2 > len(data):
             raise ValueError('Invalid/overlapping Academy placeholder')
-        value = item['placeholder_text'].encode('utf-16-le')
+        value = item['placeholder_text'].replace('\r\n', '\n').replace('\r', '\n').encode('utf-16-le')
         patches.append((start, end, value))
         metadata.append({'offset': start + shift, 'length': len(value) // 2})
         shift += len(value) // 2 - (end - start)

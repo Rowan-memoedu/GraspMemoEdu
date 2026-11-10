@@ -10,6 +10,7 @@ from .service import DomainError
 from .hyperskill_answers import AnswerStore, enrich, parse_local, packed, display_local
 from decimal import InvalidOperation
 from .fsrs_engine import utc_time
+from . import code_judges
 
 
 class HyperskillTraining(AcademyTraining):
@@ -61,10 +62,12 @@ class HyperskillTraining(AcademyTraining):
             raise DomainError('idempotency_conflict', '该 Hyperskill 提交已属于另一条记录。', 409)
 
 
-def public_binding(question, run, training=None):
+def public_binding(question, run, training=None, bank_id=None):
     events = (run or {}).get('events', [])
     receipts = [e['receipt'] for e in events if 'receipt' in e]
     local = [e['local'] for e in events if 'local' in e]
+    code = [e['local_code'] for e in events if 'local_code' in e]
+    definition = code_judges.selected(training, bank_id, question, run) if training and bank_id else None
     prepared = question.get('hyperskill_presentation')
     return {**question['hyperskill'], 'round_id': run['id'] if run else None,
             'prepared': bool(prepared), 'interaction': prepared['interaction'] if prepared else None,
@@ -74,7 +77,46 @@ def public_binding(question, run, training=None):
                             for r in receipts],
             'last_answer': receipts[-1]['answer_display'] if receipts else '',
             'local_checks': len(local),
-            'local_last': local[-1] if local and 'local' in events[-1] else None}
+            'local_last': local[-1] if local and 'local' in events[-1] else None,
+            **({'local_ide': code_judges.local_binding(question, definition, run)} if definition else {}),
+            **({'code_checks': code} if code else {})}
+
+
+class HyperskillCodeTraining(HyperskillTraining):
+    """Native Academy Check, sharing the original Hyperskill attempt and FSRS card."""
+    native_ide = True
+    event_fields = AcademyTraining.event_fields | {'local_code'}
+
+    def round_metadata(self):
+        definition = code_judges.selected(self.training, self.bank_id, self.question)
+        code_judges.require_active(self.training, self.question, definition)
+        return {'code_judge': definition}
+
+    def claim(self, round_id):
+        with self.training.transaction() as con:
+            attempt, run = self._read(con, round_id)
+            if attempt['phase'] != 'answer':
+                raise DomainError('academy_round_closed', '本次作答已经完成。', 409)
+        definition = run.get('code_judge')
+        code_judges.require_active(self.training, self.question, definition)
+        return {**code_judges.local_binding(self.question, definition, run), 'provider': 'hyperskill',
+                'next_sequence': len(run['events']) + 1, 'mode': attempt['mode'],
+                'reset_policy': 'archive_then_template'}
+
+    def check_event(self, round_id, step_id, event):
+        return AcademyTraining.check_event(self, round_id, step_id, event)
+
+    def validate_check(self, con, run, event):
+        definition = run.get('code_judge')
+        code_judges.require_active(self.training, self.question, definition)
+        receipt = event['local_code']
+        if (not isinstance(receipt, dict) or set(receipt) != code_judges.FIELDS | {'feedback'}
+                or {k: receipt.get(k) for k in code_judges.FIELDS} != definition
+                or not isinstance(receipt['feedback'], str) or len(receipt['feedback']) > 4000):
+            raise DomainError('invalid_code_receipt', '本地检查回执与本轮测试包不一致。', 409)
+
+    def answer_summary(self, run, rating):
+        return f"IDEA：{len(run['events'])} 次本地代码检查"
 
 
 class HyperskillLocalTraining(HyperskillTraining):
@@ -130,6 +172,13 @@ class HyperskillLocalTraining(HyperskillTraining):
 
 def external_training(training, attempt_id):
     with training.transaction() as con:
-        question = json.loads(training._attempt(con, attempt_id)['snapshot'])
+        attempt = training._attempt(con, attempt_id)
+        question = json.loads(attempt['snapshot'])
+        saved = con.execute('SELECT body FROM training_external_rounds WHERE attempt=?', (attempt_id,)).fetchone()
+        run = json.loads(saved['body']) if saved else None
     adapter = HyperskillTraining if question.get('hyperskill') else AcademyTraining
+    if adapter is HyperskillTraining:
+        question = enrich(training, attempt['bank'], question)
+        if code_judges.selected(training, attempt['bank'], question, run):
+            adapter = HyperskillCodeTraining
     return adapter(training, attempt_id)

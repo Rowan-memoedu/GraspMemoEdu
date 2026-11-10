@@ -1,18 +1,18 @@
-import {t, translateMessage} from './i18n.js?v=51490b3e06872afe';
-import {answerEditor, readerFrame, renderReviewReader} from './learning-ui.js?v=51490b3e06872afe';
-import {answerReady, questionInput, choiceTypeField} from './question-input.js?v=51490b3e06872afe';
-import {createLearningCache} from './learning-cache.js?v=51490b3e06872afe';
-import {helpableContent, reportableContent} from './content-report.js?v=51490b3e06872afe';
+import {t, translateMessage} from './i18n.js?v=460c32ec9479f538';
+import {answerEditor, readerFrame, renderReviewReader, renderMultiStep, staticStepBlanks} from './learning-ui.js?v=460c32ec9479f538';
+import {answerReady, questionInput, choiceTypeField} from './question-input.js?v=460c32ec9479f538';
+import {createLearningCache} from './learning-cache.js?v=460c32ec9479f538';
+import {helpableContent, reportableContent} from './content-report.js?v=460c32ec9479f538';
 
 const node = (tag, cls = '', text) => { const x = document.createElement(tag); x.className = cls; if (text !== undefined) x.textContent = text; return x; };
 const button = (label, cls, action) => { const x = node('button', cls, label); x.type = 'button'; x.addEventListener('click', action); return x; };
 const html = content => { const x = node('div', 'courseContent'); x.innerHTML = content || ''; return x; };
-import {createContentTimer} from './content-timer.js?v=51490b3e06872afe';
-import {renderReviewDirectory, paperNumber} from './review-directory.js?v=51490b3e06872afe';
-import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=51490b3e06872afe';
-import {chunkPeek} from './memory-chunk.js?v=51490b3e06872afe';
-import {pointAssessment} from './point-assessment.js?v=51490b3e06872afe';
-import {trainingAudio} from './training-audio.js?v=51490b3e06872afe';
+import {createContentTimer} from './content-timer.js?v=460c32ec9479f538';
+import {renderReviewDirectory, paperNumber} from './review-directory.js?v=460c32ec9479f538';
+import {selfAssessment, referenceAnswer, prepareAnswerContent} from './self-assessment.js?v=460c32ec9479f538';
+import {chunkPeek} from './memory-chunk.js?v=460c32ec9479f538';
+import {pointAssessment} from './point-assessment.js?v=460c32ec9479f538';
+import {trainingAudio} from './training-audio.js?v=460c32ec9479f538';
 
 export function createPaperView({root, request, href, getAccess, formatDate, progressChanged, courseSidebar, taskTree}) {
   const template = document.getElementById('appLayout').cloneNode(true);
@@ -54,7 +54,7 @@ export function createPaperView({root, request, href, getAccess, formatDate, pro
     const element = html(value), context = item.content_context;
     if (!context) return element;
     return (item.source_kind === 'atomic' ? reportableContent : helpableContent)(element, context,
-      `${kind}:${context.question_id}`, item.content_version);
+      `${item.multi_step && kind === 'question' ? 'context' : kind}:${context.question_id}`, item.content_version);
   }
   function clock() {
     if (since !== null && state?.items[selected]) {
@@ -66,7 +66,8 @@ export function createPaperView({root, request, href, getAccess, formatDate, pro
     if (!input || !state || state.phase !== 'answer' || state.can_edit === false || state.items[selected].completed) return;
     if (state.items[selected].revealed) return;
     clock(); const item = state.items[selected]; item.answer = input.value;
-    const draft = {index: selected, answer: item.answer, elapsed_ms: item.elapsed_ms};
+    const draft = {index: selected, answer: item.answer, elapsed_ms: item.elapsed_ms,
+      ...(item.multi_step ? {step_id: item.multi_step.current_step_id} : {})};
     dirty.set(selected, draft); save('draft', selected, JSON.stringify(draft));
     if (!document.hidden) since = performance.now();
   }
@@ -129,7 +130,7 @@ export function createPaperView({root, request, href, getAccess, formatDate, pro
     if (!document.hidden) await activity(true);
     if (e !== epoch) return;
     for (const item of state.items) if (!item.completed && state.phase === 'answer' && state.can_edit !== false) {
-      try { const draft = JSON.parse(read('draft', item.index)); if (draft) { Object.assign(item, draft); dirty.set(item.index, draft); } } catch {}
+      try { const draft = JSON.parse(read('draft', item.index)); if (draft && (!item.multi_step || draft.step_id === item.multi_step.current_step_id)) { Object.assign(item, draft); dirty.set(item.index, draft); } } catch {}
     }
     selected = state.items.findIndex(item => !item.completed); if (selected < 0) selected = 0;
     reader = readerFrame(template, 'paper');
@@ -209,7 +210,8 @@ export function createPaperView({root, request, href, getAccess, formatDate, pro
     try {
       await flush();
       let payload = retry ? state.retry_submission || JSON.parse(read('submission', 'pending') || 'null') : null;
-      if (!payload) payload = {paper_id: state.id, request_id: crypto.randomUUID(), expected_revision: state.revision, ...(index === null ? {} : {index})};
+      if (!payload) payload = {paper_id: state.id, request_id: crypto.randomUUID(), expected_revision: state.revision,
+        ...(index === null ? {} : {index, ...(state.items[index].multi_step ? {step_id: state.items[index].multi_step.current_step_id} : {})})};
       save('submission', 'pending', JSON.stringify(payload));
       const next = await post('submit', payload); if (e !== epoch) return;
       state = next; render(); poll(e);
@@ -221,7 +223,8 @@ export function createPaperView({root, request, href, getAccess, formatDate, pro
     const e = epoch; busy = true; remember(); clock();
     try {
       await flush();
-      const next = await post('reveal', {paper_id: state.id, index: selected, expected_revision: state.revision});
+      const next = await post('reveal', {paper_id: state.id, index: selected, expected_revision: state.revision,
+        ...(state.items[selected].multi_step ? {step_id: state.items[selected].multi_step.current_step_id} : {})});
       if (e !== epoch) return;
       state = next; render();
     } catch (failure) { if (e === epoch) error(failure); }
@@ -232,12 +235,13 @@ export function createPaperView({root, request, href, getAccess, formatDate, pro
     const e = epoch; busy = true; clock();
     try {
       const item = state.items[selected];
-      item.self_rating = rating; item.answer = `自主评分：${rating}`;
-      const draft = {index: selected, answer: item.answer, elapsed_ms: item.elapsed_ms, self_rating: rating};
+      item.self_rating = rating; item.answer = item.multi_step ? (rating === 5 ? '自主判定：做对' : '自主判定：做错') : `自主评分：${rating}`;
+      const draft = {index: selected, answer: item.answer, elapsed_ms: item.elapsed_ms, self_rating: rating,
+        ...(item.multi_step ? {step_id: item.multi_step.current_step_id} : {})};
       dirty.set(selected, draft); save('draft', selected, JSON.stringify(draft));
       await flush(); if (e !== epoch) return;
       busy = false;
-      if (state.mode === 'question') await submit(selected);
+      if (item.multi_step || state.mode === 'question') await submit(selected);
       else if (selected + 1 < state.items.length) await select(selected + 1);
       else await submit();
     } catch (failure) { if (e === epoch) error(failure); }
@@ -264,18 +268,27 @@ export function createPaperView({root, request, href, getAccess, formatDate, pro
     const item = state.items[selected], refs = reader.refs, main = refs.stepCard;
     renderReviewReader(refs, {...state, selected, onSelect: select});
     const heading = node('div', 'stepHeader'); heading.append(node('h2', 'stepTitle', t('training.exercise', {number: selected + 1})), node('span', 'stepCounter', t(state.mode === 'paper' ? 'paper.paperMode' : 'paper.questionMode')));
-    const stem = content(item, 'question', item.html); main.replaceChildren(heading);
+    let stem = content(item, 'question', item.html); main.replaceChildren(heading);
     if (state.phase === 'done') main.append(node('p', 'completionBanner', t('paper.finished')), node('p', '', t('paper.summary', {correct: state.items.filter(q => q.result?.correct).length, count: state.items.length})));
     main.append(node('p', 'inputHint', t(state.mode === 'paper' ? 'paper.paperHint' : 'paper.questionHint')));
     const type = choiceTypeField(item.interaction); if (type) main.append(type); main.append(stem);
-    if (state.phase === 'answer' && state.can_edit !== false && !item.completed) {
+    if (item.multi_step) stem = renderMultiStep(main, item.multi_step, {decorate:(body,kind) => {
+      if (item.content_context) helpableContent(body, item.content_context, `${kind}:${item.content_context.question_id}`, item.content_version);
+      return body;
+    }}) || stem;
+    if (state.phase === 'answer' && state.can_edit !== false && !item.completed && item.multi_step && item.revealed) {
+      staticStepBlanks(stem, item.interaction);
+      const controls = selfAssessment(item, null, {disabled: !state.can_submit, reveal: revealCurrent, rate: rateCurrent,
+        explanation: html(item.explanation_html)});
+      if (controls) stem.closest('.multiStepPart').append(controls);
+    } else if (state.phase === 'answer' && state.can_edit !== false && !item.completed) {
       const editor = answerEditor(item, stem, item.answer, {formId: 'paperAnswerForm', inputId: 'paperAnswer', submitId: 'paperSubmit'}); input = editor.input;
-      const label = state.mode === 'question' ? 'paper.submitOne' : selected < state.items.length - 1 ? 'paper.next' : 'paper.submitAll'; editor.submit.textContent = t(label);
+      const label = item.multi_step ? 'question.submitStep' : state.mode === 'question' ? 'paper.submitOne' : selected < state.items.length - 1 ? 'paper.next' : 'paper.submitAll'; editor.submit.textContent = t(label);
       editor.form.append(editor.bottom); main.append(editor.form);
       const refresh = () => { editor.submit.disabled = !state.can_submit || !answerReady(input); };
       input.addEventListener('input', () => { remember(); refresh(); clearTimeout(saveTimer); saveTimer = setTimeout(() => { void flush().catch(failure => { if (reader) reader.refs.saveStatus.textContent = t('paper.savedLocal'); error(failure); }); }, 650); });
       input.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && !event.isComposing) { event.preventDefault(); editor.form.requestSubmit(); } });
-      editor.form.addEventListener('submit', event => { event.preventDefault(); if (editor.submit.disabled) return; if (state.mode === 'question') void submit(selected); else if (selected < state.items.length - 1) void select(selected + 1); else void submit(); });
+      editor.form.addEventListener('submit', event => { event.preventDefault(); if (editor.submit.disabled) return; if (item.multi_step || state.mode === 'question') void submit(selected); else if (selected < state.items.length - 1) void select(selected + 1); else void submit(); });
       if (!state.can_submit) { if (input.questionControl) input.questionControl.setDisabled(true); else input.disabled = true; }
       refresh(); if (!document.hidden) since = performance.now();
       const controls = selfAssessment(item, input, {disabled: !state.can_submit,
@@ -283,9 +296,9 @@ export function createPaperView({root, request, href, getAccess, formatDate, pro
         explanation: item.revealed ? content(item, 'explanation', item.explanation_html) : null});
       if (controls) main.append(controls);
       if (item.revealed) { editor.submit.hidden = true; if (input.questionControl) input.questionControl.setDisabled(true); else input.disabled = true; }
-    } else if (item.interaction && item.interaction.type !== 'text') {
-      main.append(questionInput(item.interaction, {id: 'paperReadAnswer', stem, value: item.answer, disabled: true}).element);
-    } else {
+    } else if (!item.multi_step && item.interaction && item.interaction.type !== 'text') {
+      main.append(questionInput(item.interaction, {id: 'paperReadAnswer', stem, value: item.answer, disabled: true, feedback: item.choice_feedback}).element);
+    } else if (!item.multi_step) {
       const answer = node('textarea', 'answerInput'); answer.value = item.answer; answer.disabled = true;
       answer.rows = 3; answer.setAttribute('aria-label', t('你的答案')); main.append(answer);
     }
@@ -295,11 +308,11 @@ export function createPaperView({root, request, href, getAccess, formatDate, pro
       ...(audioTarget && (!item.interaction || item.interaction.type === 'text') ? {
         onTranscript: text => { audioTarget.value = text; audioTarget.dispatchEvent(new Event('input', {bubbles: true})); },
       } : {})});
-    if (audioControl) main.insertBefore(audioControl, stem.nextSibling);
+    if (audioControl) stem.after(audioControl);
     if (item.result) {
       const points = pointAssessment(item.result.assessment_result, item.interaction); if (points) main.append(points);
       const reference = referenceAnswer(item); if (reference) main.append(reference);
-      main.append(node('p', item.result.correct ? 'correctResult' : 'fieldError', t(item.result.correct ? 'training.correct' : 'training.incorrect')), node('p', '', item.result.reason === '限时已到，本题未完成作答。' ? t('paper.unansweredTimeout') : item.result.reason), prepareAnswerContent(content(item, 'explanation', item.explanation_html)));
+      main.append(node('p', item.result.correct ? 'correctResult' : 'fieldError', t(item.result.correct ? 'training.correct' : 'training.incorrect')), node('p', '', item.result.reason === '限时已到，本题未完成作答。' ? t('paper.unansweredTimeout') : item.result.reason), prepareAnswerContent(content(item, 'explanation', item.explanation_html), {explanation: true}));
       if (item.result.due_at) main.append(node('p', 'inputHint', t('atomic.availableAt', {time: formatDate(item.result.due_at)})));
     }
     if (state.error) { main.append(node('p', 'fieldError', translateMessage(state.error))); if (state.phase === 'grading') main.append(button(t('training.retry'), 'primaryButton', () => submit(null, true))); }
@@ -314,8 +327,10 @@ export function createPaperView({root, request, href, getAccess, formatDate, pro
       try { remember(); await flush(); state = await post('cancel', {paper_id: state.id}); render(); } catch (failure) { error(failure); }
     }));
     main.append(navigation);
-    const peek = chunkPeek(item.memory_chunks, {topicId: item.content_context?.topic_id, version: item.content_version});
-    if (peek) main.append(peek);
+    if (item.result || item.revealed) {
+      const peek = chunkPeek(item.memory_chunks, {topicId: item.content_context?.topic_id, version: item.content_version});
+      if (peek) main.append(peek);
+    }
   }
   return {inbox, open, stop};
 }

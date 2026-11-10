@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from graspmemoedu.catalog import Catalog
+from graspmemoedu.service import DomainError
 from graspmemoedu.course_graph import import_graph
 from graspmemoedu.subjects import Subjects
 from scripts.install_author_course import install_course
@@ -55,6 +56,44 @@ class AuthorCourseTests(unittest.TestCase):
             with self.subTest(mode=mode), self.assertRaisesRegex(ValueError, 'identity'):
                 install_course(self.settings, plan)
             self.assert_unchanged(original)
+
+    def test_original_hierarchy_is_installed_without_progress_changes(self):
+        plan = self.plan()
+        plan['units'] = [
+            {'id': 'chapter-a', 'title': '原章', 'parent_id': None, 'topic_ids': []},
+            {'id': 'section-a', 'title': '原节', 'parent_id': 'chapter-a', 'topic_ids': ['imported-physics']}]
+        install_course(self.settings, plan)
+        current = json.loads(self.settings.catalog_path.read_bytes())['courses'][-1]
+        self.assertEqual(current['units'], plan['units'])
+        self.assertEqual((self.data / 'learning.sqlite3').read_bytes(), self.database_before)
+
+    def test_invalid_hierarchy_never_activates(self):
+        original = (self.data / 'subjects.json').read_bytes()
+        plan = self.plan()
+        plan['units'] = [{'id': 'section-a', 'title': '原节', 'parent_id': 'missing',
+                          'topic_ids': ['imported-physics']}]
+        with self.assertRaises(DomainError):
+            install_course(self.settings, plan)
+        self.assert_unchanged(original)
+
+    def test_active_content_subject_configuration_is_the_install_target(self):
+        from graspmemoedu.config import Settings
+        generation = 'a' * 64
+        active = self.data / 'content-batches' / generation
+        active.mkdir(parents=True)
+        declared = json.loads(self.catalog_before)
+        for course in declared['courses']:
+            for entry in course['topics']:
+                entry['path'] = str((self.data / entry['path']).resolve())
+        write(active / 'catalog.json', declared)
+        original_subjects = (self.data / 'subjects.json').read_bytes()
+        (active / 'subjects.json').write_bytes(original_subjects)
+        write(self.data / 'active-content.json', {'schema':1,'generation':generation})
+        self.settings = Settings.load(self.data)
+        install_course(self.settings, self.plan())
+        Subjects(self.settings, Catalog.load(self.settings)).authorize_course('physics','new-physics')
+        self.assertEqual((self.data / 'subjects.json').read_bytes(), original_subjects)
+        self.assertEqual((self.data / 'learning.sqlite3').read_bytes(), self.database_before)
 
     def test_existing_graph_binding_cannot_move_topic_to_new_course(self):
         graph = self.root / 'graph.json'

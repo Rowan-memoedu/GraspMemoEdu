@@ -75,8 +75,18 @@ export function renderTaskTree(pending, data, {renderTask, expanded, keyPrefix =
   for (const unit of units.values()) if ((unit.topic_ids || []).some(id => tasks.has(id))) {
     for (let parent = unit; parent && !needed.has(parent.id); parent = units.get(parent.parent_id)) needed.add(parent.id);
   }
+  const parents = new Set([...units.values()].filter(unit => needed.has(unit.id)).map(unit => unit.parent_id));
   for (const unit of data.pending_hierarchy || []) {
     if (!needed.has(unit.id)) continue;
+    // Collapse only an actual terminal singleton, never a multi-item chapter
+    // temporarily reduced by a progress/filter view. Identity stays on the card.
+    if (!parents.has(unit.id) && unit.topic_ids?.length === 1 && tasks.has(unit.topic_ids[0])) {
+      const id = unit.topic_ids[0], task = tasks.get(id);
+      const card = renderTask({...task, outline_title: unit.title});
+      card.dataset.unitId = unit.id;
+      containers.set(unit.id, {group: card, body: null}); rendered.add(id);
+      continue;
+    }
     const key = `${keyPrefix}:${data.course.id}:${unit.id}`;
     const {group, body} = createOutlineGroup(unit.title, {expanded, key, open: defaultOpen || !unit.parent_id});
     group.dataset.unitId = unit.id;
@@ -93,7 +103,7 @@ export function renderTaskTree(pending, data, {renderTask, expanded, keyPrefix =
   const order = new Map(sourceOrder.map((id, index) => [id, index]));
   if (order.size) {
     const position = element => order.get(element.dataset.unitId || element.dataset.taskId) ?? Number.MAX_SAFE_INTEGER;
-    for (const body of [pending, ...[...containers.values()].map(item => item.body)]) {
+    for (const body of [pending, ...[...containers.values()].map(item => item.body).filter(Boolean)]) {
       body.append(...[...body.children].sort((a, b) => position(a) - position(b)));
     }
   }

@@ -17,6 +17,7 @@ from .content_timing import active_limit, limit_state, update_activity
 from .review_hierarchy import source_trees, public_source
 from .self_assessment import enabled as self_rating_enabled, presentation, reveal as reveal_question
 from .reference_answers import reference_fields
+from . import multi_step
 
 
 class PaperService:
@@ -237,7 +238,13 @@ class PaperService:
         if item.get('revealed'):
             return False
         try:
-            parse_answer(item['question'], item['answer'])
+            question = item['question']
+            if question.get('multi_step'):
+                progress = item.get('multi_step_progress', [])
+                if multi_step.complete(question, progress):
+                    return True
+                question = multi_step.step_question(question, len(progress), progress)
+            parse_answer(question, item['answer'])
             return True
         except (ValueError, TypeError):
             return False
@@ -313,8 +320,10 @@ class PaperService:
             self_rating = self_rating_enabled(self.access, con)
         items = []
         for index, item in enumerate(paper['items']):
-            shown = item.get('result') is not None and (self._mode(paper) == 'question' or paper['phase'] in ('done', 'cancelled', 'expired', 'conflict'))
+            shown = item.get('result') is not None and (item['question'].get('multi_step') or self._mode(paper) == 'question' or paper['phase'] in ('done', 'cancelled', 'expired', 'conflict'))
             question = item['question']
+            answer_question = (multi_step.step_question(question, len(item.get('multi_step_progress', [])))
+                               if question.get('multi_step') and not shown else question)
             source = item['source']
             context = ({'topic_id': permission_id(source['container']), 'bank_id': source['container'],
                         'group_id': source['group_id'], 'question_id': source['local_points'][0]}
@@ -330,13 +339,18 @@ class PaperService:
                           'explanation_html': question.get('explanation_html', '') if shown else None,
                           'answer_display': display_answer(question, item['answer']) if shown else '',
                           'completed': item.get('result') is not None,
-                          'can_self_rate': self_rating and presentation(question, item)['reproduction'],
+                          'can_self_rate': self_rating and presentation(answer_question, item)['reproduction'],
                           'can_stop_reviews': self_rating and (source['kind'] == 'atomic' or bool(source.get('linked_points'))) and presentation(question, item)['reproduction'],
                           'revealed': self_rating and bool(item.get('revealed')),
-                          **reference_fields(question, shown or self_rating and bool(item.get('revealed'))),
+                          **reference_fields(answer_question, shown or self_rating and bool(item.get('revealed'))),
                           'self_rating': item.get('self_rating')})
+            if question.get('multi_step'):
+                view = multi_step.public_state(question, item.get('multi_step_progress', []), revealed=shown)
+                items[-1].update(multi_step=view, html=view['context_html'], can_stop_reviews=False)
+                items[-1]['interaction'] = (public_interaction(question['multi_step']['steps'][view['current_index']])
+                                           if not view['finished'] else None)
             if self_rating and item.get('revealed'):
-                items[-1]['explanation_html'] = question.get('explanation_html', '')
+                items[-1]['explanation_html'] = answer_question.get('explanation_html', '')
             if source['kind'] == 'atomic':
                 from .atomic_content import card_chunks
                 topic = self.catalog.topic(source['container'])
@@ -377,11 +391,16 @@ class PaperService:
                 item = paper['items'][index]
                 if item.get('result'):
                     raise DomainError('already_answered', '已完成的题目不能更改。', 409)
+                question = item['question']
+                if item['question'].get('multi_step'):
+                    question = multi_step.require_step(question, item.get('multi_step_progress', []), draft.get('step_id'))
                 item['answer'], item['elapsed_ms'] = draft['answer'], draft.get('elapsed_ms', 0)
                 rating = draft.get('self_rating')
                 if rating is not None:
-                    choices = (1, 2, 3, 4, 5) if item['source']['kind'] == 'atomic' or item['source'].get('linked_points') else (1, 2, 3, 4)
-                    if not self_rating_enabled(self.access, con) or not item.get('revealed') or type(rating) is not int or rating not in choices:
+                    allow_stop = not item['question'].get('multi_step') and (item['source']['kind'] == 'atomic' or item['source'].get('linked_points'))
+                    choices = (1, 5) if item['question'].get('multi_step') else (1, 2, 3, 4, 5) if allow_stop else (1, 2, 3, 4)
+                    if (not self_rating_enabled(self.access, con) or not item.get('revealed') or type(rating) is not int
+                            or rating not in choices or not presentation(question, item)['reproduction']):
                         raise DomainError('self_rating_forbidden', '请先显示复现题答案，再选择自主评分。', 403)
                     item['self_rating'] = rating
                 elif item.get('revealed'):
@@ -394,7 +413,7 @@ class PaperService:
         if paper['phase'] != 'answer' or paper['revision'] != revision:
             raise DomainError('stale_revision', '复习状态已变化，请重新同步；草稿仍保留。', 409)
 
-    def reveal(self, paper_id, index, revision, subject=None):
+    def reveal(self, paper_id, index, revision, subject=None, step_id=None):
         with self.transaction() as con:
             paper = self._row(con, paper_id, subject)
             self._editable(paper, revision)
@@ -405,7 +424,12 @@ class PaperService:
             if not 0 <= index < len(paper['items']) or paper['items'][index].get('result'):
                 raise DomainError('already_answered', '此题已完成或不存在。', 409)
             item = paper['items'][index]
-            reveal_question(item['question'], item)
+            question = item['question']
+            if question.get('multi_step'):
+                question = multi_step.require_step(question, item.get('multi_step_progress', []), step_id)
+            elif step_id is not None:
+                raise DomainError('invalid_step', '此题不是多步题。', 422)
+            reveal_question(question, item)
             con.execute('UPDATE review_papers SET items=?,revision=revision+1 WHERE id=?', (packed(paper['items']), paper_id))
 
     def submission_size(self, data):
@@ -424,7 +448,7 @@ class PaperService:
         with self.transaction() as con:
             self._expire(con)
             paper = self._row(con, data['paper_id'], subject)
-            if data.get('index') is not None and self._mode(paper) != 'question':
+            if data.get('index') is not None and self._mode(paper) != 'question' and not data.get('step_id'):
                 raise DomainError('review_mode_forbidden', '当前模式需要完成整卷后交卷。', 403)
             old = con.execute('SELECT * FROM paper_submissions WHERE id=?', (data['request_id'],)).fetchone()
             if old:
@@ -440,7 +464,7 @@ class PaperService:
             self._editable(paper, data['expected_revision'])
             timed_out = self._hard_expired(paper)
             index = None if timed_out else data.get('index')
-            if index is not None and self._mode(paper) != 'question':
+            if index is not None and self._mode(paper) != 'question' and not data.get('step_id'):
                 raise DomainError('review_mode_forbidden', '当前模式需要完成整卷后交卷。', 403)
             indices = [index] if index is not None else [i for i, item in enumerate(paper['items']) if not item.get('result')]
             if not indices or any(not 0 <= i < len(paper['items']) or paper['items'][i].get('result') for i in indices):
@@ -448,10 +472,22 @@ class PaperService:
             verdicts = {}
             for i in indices:
                 item = paper['items'][i]
+                if item['question'].get('multi_step') and timed_out:
+                    verdicts[str(i)] = [False, '限时已到，本题未完成作答。']
+                    continue
+                if item['question'].get('multi_step') and not timed_out:
+                    position = len(item.get('multi_step_progress', []))
+                    if data.get('step_id') != item['question']['multi_step']['steps'][position]['id'] or index != i:
+                        raise DomainError('step_required', '多步题需逐步检查后才能完成。', 422)
+                    if item.get('revealed') and item.get('self_rating') is None:
+                        raise DomainError('invalid_rating', '显示答案后请选择自主评分。', 422)
+                elif data.get('step_id'):
+                    raise DomainError('invalid_step', '此题不是多步题。', 422)
                 if item.get('self_rating') is not None:
                     if not self_rating_enabled(self.access, con):
                         raise DomainError('feature_forbidden', '自主评分权限已变化。', 403)
-                    verdicts[str(i)] = [item['self_rating'] > 1, '已停止后续推送' if item['self_rating'] == 5 else '自主评分：' + str(item['self_rating'])]
+                    reason = ('自主判定：做对' if item['self_rating'] == 5 else '自主判定：做错') if item['question'].get('multi_step') else '已停止后续推送' if item['self_rating'] == 5 else '自主评分：' + str(item['self_rating'])
+                    verdicts[str(i)] = [item['self_rating'] > 1, reason]
                     continue
                 if not self._answered(paper['items'][i]):
                     if timed_out:
@@ -459,8 +495,9 @@ class PaperService:
                         continue
                     raise DomainError('incomplete_paper', f'请先完成第 {i + 1} 题。', 422)
             con.execute('INSERT INTO paper_submissions VALUES (?,?,?,?,?,?,?,?,?)',
-                        (data['request_id'], self.learner_id, paper['id'], fingerprint(data), 'pending', packed(indices), packed(verdicts), '', packed(data)))
-            if set(indices) == {i for i, item in enumerate(paper['items']) if not item.get('result')}:
+                        (data['request_id'], self.learner_id, paper['id'], fingerprint(data), 'pending', packed(indices), packed(verdicts), '',
+                         packed({**data, 'step_id': None} if timed_out else data)))
+            if not data.get('step_id') and set(indices) == {i for i, item in enumerate(paper['items']) if not item.get('result')}:
                 paper['metadata']['submitted_at'] = paper['metadata']['timing']['deadline_at'] if timed_out else self._now().isoformat()
             con.execute("UPDATE review_papers SET phase='grading',revision=revision+1,job=?,metadata=? WHERE id=?",
                         (data['request_id'], packed(paper['metadata']), paper['id']))
@@ -475,7 +512,11 @@ class PaperService:
                 return False
             paper = self._row(con, job['paper'])
             verdicts = json.loads(job['verdicts'])
-            return all(str(i) in verdicts or instant_question(paper['items'][i]['question'])
+            request = json.loads(job['request_data'])
+            def projected(item):
+                progress = item.get('multi_step_progress', [])
+                return multi_step.step_question(item['question'], len(progress), progress) if request.get('step_id') else item['question']
+            return all(str(i) in verdicts or instant_question(projected(paper['items'][i]))
                        for i in json.loads(job['items']))
 
     def process_submission(self, submission_id):
@@ -487,11 +528,14 @@ class PaperService:
             con.execute("UPDATE paper_submissions SET status='running' WHERE id=?", (submission_id,))
         try:
             verdicts = json.loads(job['verdicts'])
+            request = json.loads(job['request_data'])
             for index in json.loads(job['items']):
                 if str(index) in verdicts:
                     continue
                 item = paper['items'][index]
-                correct, reason = judge_answer(self.training.judge, item['question'], item['answer'])
+                progress = item.get('multi_step_progress', [])
+                question = multi_step.step_question(item['question'], len(progress), progress) if request.get('step_id') else item['question']
+                correct, reason = judge_answer(self.training.judge, question, item['answer'])
                 if correct is None:
                     raise DomainError('judge_error', reason, 503)
                 verdicts[str(index)] = [correct, reason]
@@ -503,7 +547,7 @@ class PaperService:
             with self.transaction() as con:
                 paper = self._row(con, job['paper'])
                 indices = json.loads(job['items'])
-                if ('submit_answer' not in self.access['features'] or (self._mode(paper) == 'paper'
+                if ('submit_answer' not in self.access['features'] or (self._mode(paper) == 'paper' and not request.get('step_id')
                         and set(indices) != {i for i, item in enumerate(paper['items']) if not item.get('result')})):
                     raise DomainError('feature_forbidden', '提交权限已变化，请重新进入复习。', 403)
                 if any(paper['items'][i].get('self_rating') is not None for i in indices) and not self_rating_enabled(self.access, con):
@@ -517,7 +561,22 @@ class PaperService:
                     return
                 for i in indices:
                     item = paper['items'][i]
+                    if item['question'].get('multi_step'):
+                        progress = item.get('multi_step_progress', [])
+                        item['multi_step_progress'] = multi_step.append_result(item['question'], progress, len(progress),
+                            item['answer'], *verdicts[str(i)], max(0, item['elapsed_ms'] - sum(p['elapsed_ms'] for p in progress)),
+                            self_rating=item.get('self_rating') if request.get('step_id') else None)
+                        item.pop('revealed', None)
+                        item.pop('self_rating', None)
+                        if not multi_step.complete(item['question'], item['multi_step_progress']):
+                            item['answer'] = ''
+                            continue
+                        if any(p.get('self_rating') is not None for p in item['multi_step_progress']):
+                            item['self_rating'] = multi_step.completion_rating(item['multi_step_progress'])
+                        item['answer'] = '\n'.join(p['answer_display'] for p in item['multi_step_progress'])
                     item['result'] = self.sources.apply(con, paper, i, item, verdicts[str(i)], self._now().isoformat())
+                    if item['question'].get('multi_step'):
+                        item['result']['multi_step'] = multi_step.review_interface(item['question'], item.get('multi_step_progress', []))
                     for point in item['point_ids']:
                         con.execute('DELETE FROM review_reservations WHERE learner=? AND point=? AND paper=?', (self.learner_id, point, paper['id']))
                 phase = 'done' if all(i.get('result') for i in paper['items']) else 'answer'

@@ -171,8 +171,12 @@ class UnifiedLearningService(OrderedLearningService):
         section = self._current_section(state)
         completed = {a['module_id'] for a in state['attempts'] if a['status'] == 'completed'}
         skipped = state.get('skipped_modules', {})
-        pending = next((m for m in section['modules'] if m['id'] not in completed and m['id'] not in skipped), None)
+        pending = next((m for m in section['activities'] if m['id'] not in completed and m['id'] not in skipped), None)
         if pending:
+            if pending['kind'] == 'bank_question':
+                state['display'] = 'paradigm'
+                self._start_order(state, self.course['content_order'].index(pending))
+                return
             self._new_attempt(state, next(i for i, m in enumerate(self.course['modules']) if m['id'] == pending['id']))
             return
         if section['id'] not in state['sections_finished']:
@@ -202,7 +206,10 @@ class UnifiedLearningService(OrderedLearningService):
 
     def _advance_step(self, con, state):
         step = self._step(state)
-        if step['kind'] == 'introduction':
+        if step['kind'] == 'bank_question':
+            self._finish_bank_question(con, state)
+            self._next_module(state)
+        elif step['kind'] == 'introduction':
             step['phase'] = 'completed'
             self._attempt(state).update(status='completed', completed_at=now())
             ident = step['introduction_id']
@@ -239,6 +246,8 @@ class UnifiedLearningService(OrderedLearningService):
                 else:
                     self._guard(state, payload)
                     step = self._step(state)
+                    if step['kind'] == 'bank_question':
+                        self._require_bank_question(con, state)
                     if step['phase'] in ('choice', 'answer'):
                         raise DomainError('answer_required', '请先完成当前步骤。')
                     if step['kind'] != 'introduction' and self._atomic_next(state):
@@ -347,14 +356,16 @@ class UnifiedLearningService(OrderedLearningService):
         for step in result['steps']:
             ident = step.get('introduction_id')
             if step['kind'] == 'introduction' and not self._intro_open(state, ident):
-                step.update(html='', unlocked=False, visible=False, actions=[])
+                step.update(html='', example='', footnotes=[], unlocked=False, visible=False, actions=[])
         atomic = AtomicLearningService._public(self.atomic, PointState(state))
         result['steps'].extend(self._point_history(state, atomic['history']))
         result['atomic_history'] = atomic['history']
         if state['display'] == 'atomic':
-            atomic['introduction'] = section['introduction'] if self._intro_open(state, section['id']) else None
+            from .topic_composition import section_for
+            intro = section['introduction']
+            atomic['introduction'] = {**intro, 'section': section_for(self.course, intro)} if self._intro_open(state, section['id']) else None
             atomic['unified_history'] = [
-                {**{key: step.get(key) for key in ('id', 'introduction_id', 'title', 'html', 'explanation_html')},
+                {**{key: step.get(key) for key in ('id', 'introduction_id', 'title', 'html', 'explanation_html', 'example', 'footnotes', 'section')},
                  **({'source_attributions': step['source_attributions']} if step.get('source_attributions') else {})}
                 for step in result['steps'] if step['kind'] == 'introduction' and step['unlocked']
                 and step['introduction_id'] != section['id']]

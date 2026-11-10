@@ -47,9 +47,12 @@ class AcademyTraining:
                 raise DomainError('academy_round_closed', '本次作答已完成，请开始新一次训练。', 409)
             if run is None:
                 run = {'id': str(uuid.uuid4()), 'started_at': utc_time(self.training.clock()).isoformat(),
-                       'events': [], 'policy': POLICY}
+                       'events': [], 'policy': POLICY, **self.round_metadata()}
                 self._save(con, run)
         return {'round_id': run['id'], 'step_id': self.attempt_id, 'version': self.version}
+
+    def round_metadata(self):
+        return {}
 
     def claim(self, round_id):
         with self.training.transaction() as con:
