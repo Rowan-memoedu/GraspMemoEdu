@@ -1,5 +1,8 @@
 # GraspMemoEdu
 
+协作开发、Agent 提交与合并规则见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+
 数学题库复习的同组变式由服务器按需补充：学习者未见变式为零时，每批生成两题，经一次 AI 审核及离线编译后自动入库；课程生产保持原流程。配置、运行和故障恢复见 [变式补题](docs/review-variant-production.md)。
 
 全学科原子记忆点的可变设问使用[本地生产与机械导入](docs/atomic-question-production.md)，默认每点新增两张，可指定批量数量；新增卡只用于复习。内容可导入网站，服务器自动补充原子设问尚未接入。
