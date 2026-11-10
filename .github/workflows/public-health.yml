@@ -16,6 +16,7 @@ jobs:
     env:
       GH_REPO: ${{ github.repository }}
       GH_TOKEN: ${{ github.token }}
+      MONITOR_ASSIGNEE: ${{ vars.MONITOR_ASSIGNEE || 'Rowan-memoedu' }}
     steps:
       - uses: actions/checkout@v4
       - name: Check and record availability
@@ -34,7 +35,7 @@ jobs:
               created=$(gh issue create --title "$title" \
                 --body '定时公网检查失败；请查看此工作流运行日志以及云端 nginx 和 graspmemoedu 服务。仅记录公开健康状态，不含学生数据。'
               )
-              gh issue edit "$created" --add-assignee "$GITHUB_REPOSITORY_OWNER" || \
+              gh issue edit "$created" --add-assignee "$MONITOR_ASSIGNEE" || \
                 echo 'Failed to assign monitoring issue; issue remains open.' >&2
             fi
             exit 1
