@@ -288,6 +288,78 @@ mjx-container[jax="SVG"] text { font-family: "Microsoft YaHei", sans-serif; }
   .lesson { margin: 0; }
   .step { border: 0; padding: 0; }
 }
+
+/* Hallmark · component: passage answers · existing learning palette
+ * pre-emit critique: P4 H5 E4 S5 R5 V4 */
+.stepHeader:has(.questionActions:not(:empty)) { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 4px 16px; align-items: start; }
+.stepHeader:has(.questionActions:not(:empty)) > .stepCounter { grid-column: 1; }
+.questionActions { grid-column: 2; grid-row: 1 / span 2; display: flex; flex-direction: column; align-items: flex-end; gap: 7px; }
+.questionActions:empty { display: none; }
+.questionActions :is(.contentReportActions,.trainingNotebookActions) { margin: 0; gap: 7px; }
+.questionActions button { white-space: nowrap; }
+.passageWorkspace > :is(form,.questionInteraction) { container-type: inline-size; container-name: passage-answers; }
+.passageWorkspace .compositeChoiceControl { margin: 0 0 8px; }
+.passageWorkspace .compositeChoiceControl > .compositeLabel { margin-bottom: 4px; font-size: 16px; line-height: 1.4; }
+.passageWorkspace .compositeChoiceControl .choiceList { display: grid; grid-template-columns: minmax(0,1fr); gap: 5px; }
+.passageWorkspace .compositeChoiceControl .choiceOption { display: flex; flex-wrap: nowrap; align-items: baseline; min-height: 32px; padding: 4px 6px; margin: 0; gap: 5px; font-size: 16px; font-weight: 400; line-height: 1.4; }
+.passageWorkspace .choiceOption input { flex: 0 0 auto; width: 14px; height: 14px; margin: 0; }
+.passageWorkspace .choiceBody { flex: 1 1 auto; min-width: 0; }
+.passageWorkspace .choiceBody p { margin: 0; }
+.passageWorkspace .choiceOption[data-answer-truth]:has(input:disabled) { opacity: 1; }
+@container passage-answers (min-width: 250px) {
+  .passageWorkspace .choiceList:is([data-option-length="compact"],[data-option-length="short"]) { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@container passage-answers (min-width: 420px) {
+  .passageWorkspace .choiceList[data-option-length="compact"] { grid-template-columns: repeat(4,minmax(0,1fr)); }
+}
+@container passage-answers (min-width: 640px) {
+  .passageWorkspace .choiceList[data-option-length="short"] { grid-template-columns: repeat(4,minmax(0,1fr)); }
+}
+@container passage-answers (min-width: 360px) {
+  .passageWorkspace .choiceList[data-option-length="medium"] { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+body[data-subject="english"] :is(.courseContent,.questionInteraction,.compositeLabel,.choiceOption,.inlineBlank,.lessonTitle) { font-family: var(--english-reading-font); }
+body[data-subject="english"] .courseContent { font-size: 19px; line-height: 1.85; letter-spacing: .005em; word-break: normal; overflow-wrap: break-word; tab-size: 4; }
+body[data-subject="english"] .courseContent :is(p,li,td,th,blockquote) { white-space: pre-wrap; }
+body[data-subject="english"] .courseContent :is(ul,ol) { padding-inline-start: 1.65em; }
+body[data-subject="english"] .courseContent li::marker { font-variant-numeric: lining-nums tabular-nums; }
+body[data-subject="english"] .courseContent .questionActions { font-family: inherit; }
+body[data-subject="english"] .passageBlank { line-height: inherit; padding-inline: .15em; margin-inline: .12em; min-height: 1.6em; }
+body[data-subject="english"] .passageBlank[data-filled="true"] > .passageBlankNumber { display: none; }
+body[data-subject="english"] .passageBlank.passageSelectWrap { display: inline; position: relative; white-space: normal; padding-block: .12em; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+body[data-subject="english"] .passageBlank.passageSelectWrap[data-filled="false"] { display: inline-flex; white-space: nowrap; padding-block: 0; }
+body[data-subject="english"] .passageSelectWrap .passageBlankSelect { position: absolute; inset: 0 auto auto 0; opacity: 0; width: 1px; height: 1px; min-height: 0; padding: 0; }
+.passageBlankDisplay { cursor: pointer; white-space: pre-wrap; overflow-wrap: anywhere; }
+.passageBlankDisplay:empty { display: inline-block; width: 2.4em; min-height: 1em; }
+.passageSelectWrap:focus-within { outline: 2px solid var(--link-color); outline-offset: 2px; }
+.passageSelectWrap:has(select:disabled) .passageBlankDisplay { cursor: default; }
+body[data-subject="english"] .passageBlank .passageGrowingText { field-sizing: content; flex: 0 1 auto; width: auto; min-width: 3ch; max-width: 100%; min-height: 1.5em; height: auto; padding: .08em .12em; resize: none; overflow: hidden; white-space: pre-wrap; line-height: 1.65; vertical-align: baseline; }
+body[data-subject="english"] .passageBlank:has(.passageGrowingText) { vertical-align: middle; }
+body[data-subject="english"] .passageBlankField:disabled { opacity: 1; }
+.passageBlank[data-answer-truth="true"], .matchingSlot[data-answer-truth="true"] { color: var(--answer-true); border-color: var(--answer-true); }
+.passageBlank[data-answer-truth="false"], .matchingSlot[data-answer-truth="false"] { color: var(--answer-false); border-color: var(--answer-false); }
+.pointAssessment .itemAssessmentList { display: grid; grid-template-columns: repeat(auto-fit,minmax(8rem,1fr)); gap: 8px 20px; }
+.itemAssessmentList .assessmentItemLabel { color: var(--ma-ink); }
+.itemAssessmentList .assessmentCorrect { color: var(--answer-true); }
+.itemAssessmentList .assessmentIncorrect { color: var(--answer-false); }
+.referenceItems { max-width: none; display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,14rem),1fr)); gap: 12px 24px; }
+.referenceItem { display: flex; align-items: baseline; gap: .65em; min-width: 0; }
+.referenceItemNumber { color: var(--ma-ink); flex: 0 0 auto; font-variant-numeric: lining-nums tabular-nums; }
+.referenceItemAnswer { min-width: 0; overflow-wrap: anywhere; }
+.referenceItemAnswer[data-answer-truth="true"] { color: var(--answer-true); }
+.referenceItemAnswer[data-answer-truth="false"] { color: var(--answer-false); }
+.referenceOptionText p { display: inline; margin: 0; }
+.passageWorkspace .answerForm > .answerLabel { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (min-width: 1001px) {
+  .lesson:has(.passageWorkspace) { margin-top: 20px; }
+  .passageWorkspace .questionActions, .passageWorkspace .questionActions .contentReportActions { flex-direction: row; align-items: center; gap: 16px; }
+}
+@media (max-width: 600px) {
+  .passageWorkspace .compositeChoiceControl .choiceOption { font-size: 14px; gap: 3px; padding: 4px 2px; }
+  .passageWorkspace .compositeLabel { font-size: 14px; }
+  body[data-subject="english"] .passageQuestionPane { font-size: 17px; }
+  .questionActions button { font-size: 11px; }
+}
 /* Shared question interactions inherit each subject's existing theme. */
 .questionInteraction { margin: 16px 0; }
 .judgmentItem { border: 1px solid #d6dce1; border-radius: 6px; padding: 12px 16px; margin: 14px 0; }
@@ -411,4 +483,59 @@ mjx-container[jax="SVG"] text { font-family: "Microsoft YaHei", sans-serif; }
   .passageBlank:has(.passageBlankField:not(:disabled)):hover, .passageBlank.is-hover {
     background: var(--soft-blue); border-color: var(--control-hover-border); border-bottom-color: var(--link-color);
   }
+}
+/* Hallmark · component: passage workspace · existing learning tokens.
+ * Pre-emit critique: P4 H4 E4 S5 R5 V4. Native controls retain all answer states. */
+.pageShell:has(.passageWorkspace > .passageQuestionPane) { max-width: 1480px; }
+.passageWorkspace:has(> .passageQuestionPane) {
+  --passage-pane-height: clamp(30rem, 78dvh, 64rem);
+  display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px;
+}
+.passageWorkspace:has(> .passageQuestionPane) > * { grid-column: 1 / -1; min-width: 0; }
+.passageWorkspace:has(> .passageQuestionPane) > .stepHeader { grid-row: 1; margin-bottom: 0; }
+.passageWorkspace:has(> .passageQuestionPane) > .passageQuestionPane,
+.passageWorkspace:has(> .passageQuestionPane) > :is(form, .questionInteraction) {
+  grid-row: 2; height: var(--passage-pane-height); min-height: 0; margin: 0;
+  padding: 16px; border: 1px solid var(--ma-border); border-radius: 3px;
+  overflow-y: scroll; overflow-x: clip; overscroll-behavior-y: contain; scrollbar-gutter: stable;
+  scrollbar-width: auto;
+}
+.passageWorkspace > *::-webkit-scrollbar { display: block; width: 10px; }
+.passageWorkspace > *::-webkit-scrollbar-track { background: var(--answer-background); }
+.passageWorkspace > *::-webkit-scrollbar-thumb {
+  border: 2px solid var(--answer-background); border-radius: 8px; background: var(--muted-accent-border);
+}
+.passageWorkspace:has(> .passageQuestionPane) > .passageQuestionPane { grid-column: 1; }
+.passageWorkspace:has(> .passageQuestionPane) > :is(form, .questionInteraction) { grid-column: 2; }
+.passageWorkspace:has(> .passageQuestionPane) > form > .questionInteraction { margin-top: 0; }
+.passageWorkspace .passageBlank { max-width: calc(100% - .5em); }
+.passageWorkspace .passageBlankSelect { width: 8em; }
+.passageNumberLink {
+  min-width: 44px; min-height: 44px; padding: 4px; border: 0; border-radius: 3px;
+  background: transparent; color: var(--link-color); font: inherit; font-size: .85em;
+  text-decoration: underline; text-underline-offset: .2em; cursor: pointer;
+}
+.passageNumberLink:focus-visible { outline: 2px solid var(--link-color); outline-offset: 1px; }
+.passageNumberLink:active { color: var(--button-active); background: var(--soft-blue); }
+.passageQuestionNav { display: flex; flex-wrap: wrap; gap: 4px; margin: 12px 0; }
+.passageAnswerCurrent { outline: 2px solid var(--selection-border); outline-offset: 4px; }
+.passageWorkspace .choiceOption { padding: 10px; }
+.passageWorkspace .matchingRow { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.passageWorkspace .matchingArrow { transform: rotate(90deg); }
+.passageWorkspace .matchingBanks { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.passageWorkspace .answerBottom { flex-wrap: wrap; gap: 12px; }
+@media (hover: hover) {
+  .passageNumberLink:hover { background: var(--soft-blue); color: var(--link-hover); }
+}
+@media (max-width: 600px) {
+  .passageWorkspace:has(> .passageQuestionPane) { gap: 8px; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
+  .passageWorkspace:has(> .passageQuestionPane) > :is(.passageQuestionPane, form, .questionInteraction) { padding: 8px; scrollbar-gutter: auto; }
+  .passageWorkspace .choiceOption { padding: 8px 4px; gap: 4px; flex-wrap: wrap; }
+  .passageWorkspace .choiceBody { flex-basis: 100%; }
+  .passageWorkspace .passageBlank { padding-inline: 0; margin-inline: 0; gap: 0; }
+  .passageWorkspace .passageBlankSelect { width: 5em; }
+}
+@media print {
+  .passageWorkspace:has(> .passageQuestionPane) { display: block; }
+  .passageWorkspace:has(> .passageQuestionPane) > :is(.passageQuestionPane, .questionInteraction) { height: auto; overflow: visible; border: 0; }
 }

@@ -32,6 +32,7 @@ class Paper(Model):
 class Draft(Model):
     index: int = Field(strict=True, ge=0, le=59)
     answer: str = Field(max_length=16384)
+    step_id: str | None = Field(default=None, min_length=1, max_length=64)
     elapsed_ms: int = Field(default=0, strict=True, ge=0, le=86400000)
     self_rating: int | None = Field(default=None, strict=True, ge=1, le=5)
 
@@ -39,6 +40,7 @@ class Draft(Model):
 class Reveal(Paper):
     index: int = Field(strict=True, ge=0, le=59)
     expected_revision: int = Field(strict=True, ge=0)
+    step_id: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class Activity(Paper):
@@ -56,6 +58,7 @@ class SubmitPaper(Paper):
     request_id: str = Field(min_length=1, max_length=100)
     expected_revision: int = Field(strict=True, ge=0)
     index: int | None = Field(default=None, strict=True, ge=0, le=59)
+    step_id: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class Preference(Model):
@@ -188,7 +191,7 @@ def register_paper_routes(app, training, catalog, dependencies, access_store, su
     @app.post('/api/review-papers/reveal')
     def reveal(payload: Reveal, request: Request):
         backend, subject = context(request, 'submit_answer')
-        backend.reveal(payload.paper_id, payload.index, payload.expected_revision, subject)
+        backend.reveal(payload.paper_id, payload.index, payload.expected_revision, subject, payload.step_id)
         return current_state(request, backend, payload.paper_id, subject)
 
     @app.post('/api/review-papers/submit')

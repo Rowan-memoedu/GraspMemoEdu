@@ -9,6 +9,28 @@ from tests import test_dashboard as fixture
 
 
 class CourseHierarchyTests(unittest.TestCase):
+    def test_public_reading_catalog_includes_empty_exercise_unit(self):
+        from tests.test_ordered_learning import ordered_topic
+        topic=ordered_topic(intro_only=True);topic['id']='topic-c'
+        (self.root/'topic-c.json').write_text(json.dumps(topic),encoding='utf-8')
+        self.catalog_data['courses'][1]['units']=[
+            {'id':'reading-c','title':'Reading','topic_ids':['topic-c']},
+            {'id':'exercise-c','title':'Exercises','topic_ids':[]}]
+        self._write();self._restart()
+        course=next(c for c in self._get('/api/catalog',self.guest)['courses'] if c['id']=='course-b')
+        self.assertEqual([u['id'] for u in course['outline']],['reading-c','exercise-c'])
+
+    def test_reading_catalog_retains_empty_directories_but_filters_forbidden_topics(self):
+        from graspmemoedu.course_hierarchy import project_hierarchy
+        units=[{'id':'chapter','title':'Chapter','topic_ids':[]},
+               {'id':'reading','title':'Reading','parent_id':'chapter','topic_ids':['allowed']},
+               {'id':'exercises','title':'Exercises','parent_id':'chapter','topic_ids':[]},
+               {'id':'restricted','title':'Restricted','parent_id':'chapter','topic_ids':['hidden']}]
+        self.assertEqual([u['id'] for u in project_hierarchy(units,{'allowed'},set())],['chapter','reading'])
+        visible=project_hierarchy(units,{'allowed'},set(),retain_empty=True)
+        self.assertEqual([u['id'] for u in visible],['chapter','reading','exercises'])
+        self.assertNotIn('hidden',json.dumps(visible))
+
     setUp = fixture.DashboardAcceptanceTests.setUp
     _open = fixture.DashboardAcceptanceTests._open
     _close = fixture.DashboardAcceptanceTests._close

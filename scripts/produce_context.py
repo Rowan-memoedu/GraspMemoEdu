@@ -108,7 +108,7 @@ def retained_candidate(source, candidate_runs, backend='api'):
 
 def make_client(config, work, backend, codex_options):
     if backend == 'api':
-        return CompatibleClient(*config, timeout=300)
+        raise ValueError('Local batch production requires --backend codex-exec; software API clients are unchanged')
     if backend != 'codex-exec':
         raise ValueError('Unknown generation backend')
     from graspmemoedu.codex_exec_client import CodexExecClient
@@ -449,7 +449,7 @@ def run(args):
     selected = set(args.only or [t['id'] for t in document['tasks']])
     if selected - {t['id'] for t in document['tasks']}:
         raise ValueError('Unknown selected task')
-    backend = getattr(args, 'backend', 'api')
+    backend = getattr(args, 'backend', 'codex-exec')
     reuse_learner_runs = getattr(args, 'reuse_learner_runs', ())
     tasks = [cp.task_source(document, t) for t in document['tasks'] if t['id'] in selected]
     if reuse_learner_runs:
@@ -667,8 +667,8 @@ def main():
         p = sub.add_parser(name)
         p.add_argument('--input', type=Path, required=True)
         p.add_argument('--library', type=Path, required=True)
-        p.add_argument('--backend', choices=('api', 'codex-exec'), default='api',
-                       help='Keep API compatibility, or run every new generation/review through Codex Exec')
+        p.add_argument('--backend', choices=('codex-exec',), default='codex-exec',
+                       help='Run every new local generation/review through Codex Exec; software API clients stay unchanged')
         if name == 'run':
             p.add_argument('--run-root', type=Path, required=True)
             p.add_argument('--workers', type=int, choices=range(1, 9), default=2)

@@ -1,14 +1,14 @@
-import {t, translateMessage} from './i18n.js?v=51490b3e06872afe';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=51490b3e06872afe';
-import {selfAssessment, referenceAnswer, prepareAnswerContent, ratingChoices} from './self-assessment.js?v=51490b3e06872afe';
-import {reportableContent} from './content-report.js?v=51490b3e06872afe';
-import {createLearningCache} from './learning-cache.js?v=51490b3e06872afe';
-import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=51490b3e06872afe';
-import {enhanceSourceContent} from './topic-content.js?v=51490b3e06872afe';
-import {memoryChunk, chunkPeek, sourceAttributions} from './memory-chunk.js?v=51490b3e06872afe';
-import {topicProgress, topicHistory} from './learning-ui.js?v=51490b3e06872afe';
-import {pointAssessment} from './point-assessment.js?v=51490b3e06872afe';
-import {trainingAudio} from './training-audio.js?v=51490b3e06872afe';
+import {t, translateMessage} from './i18n.js?v=460c32ec9479f538';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=460c32ec9479f538';
+import {selfAssessment, referenceAnswer, prepareAnswerContent, ratingChoices} from './self-assessment.js?v=460c32ec9479f538';
+import {reportableContent} from './content-report.js?v=460c32ec9479f538';
+import {createLearningCache} from './learning-cache.js?v=460c32ec9479f538';
+import {hyperskillQuestion,localHyperskill} from './hyperskill.js?v=460c32ec9479f538';
+import {enhanceSourceContent} from './topic-content.js?v=460c32ec9479f538';
+import {memoryChunk, chunkPeek, sourceAttributions} from './memory-chunk.js?v=460c32ec9479f538';
+import {topicProgress, topicHistory, readingFields, readingSectionHeading} from './learning-ui.js?v=460c32ec9479f538';
+import {pointAssessment} from './point-assessment.js?v=460c32ec9479f538';
+import {trainingAudio} from './training-audio.js?v=460c32ec9479f538';
 
 const node = (tag, cls = '', text) => {
   const el = document.createElement(tag); el.className = cls;
@@ -126,7 +126,10 @@ export function createAtomicView(bridge) {
   }
   function introductionContent(intro, report = true) {
     const attributions = sourceAttributions(intro.source_attributions);
-    return [report ? marked(intro.html, 'introduction') : content(intro.html), ...(attributions ? [attributions] : [])];
+    const extra = node('div'), heading = readingSectionHeading(intro.section);
+    readingFields(extra, intro);
+    return [...(heading ? [heading] : []), report ? marked(intro.html, 'introduction') : content(intro.html),
+      ...extra.children, ...(attributions ? [attributions] : [])];
   }
   async function launchAcademy() {
     if (busy) return;
@@ -223,7 +226,7 @@ export function createAtomicView(bridge) {
     let input;
     const value = history || question.phase === 'feedback' ? question.answer || '' : read(draftKey()) || '';
     if (question.interaction && question.interaction.type !== 'text') {
-      const widget = questionInput(question.interaction, {id: 'atomicAnswer', value, stem, disabled, formId: form.id});
+      const widget = questionInput(question.interaction, {id: 'atomicAnswer', value, stem, disabled, formId: form.id, feedback: question.choice_feedback});
       input = widget.input; form.append(widget.element);
     } else {
       const label = node('label', '', t('atomic.answer')); label.htmlFor = 'atomicAnswer';
@@ -264,11 +267,11 @@ export function createAtomicView(bridge) {
       if (question.reason) feedback.append(node('p', '', question.reason));
       const points = pointAssessment(question.assessment_result, question.interaction); if (points) feedback.append(points);
       const reference = referenceAnswer(question); if (reference) feedback.append(reference);
-      feedback.append(prepareAnswerContent(marked(question.explanation_html, `explanation:${question.card_id}`, question.card_id)));
+      feedback.append(prepareAnswerContent(marked(question.explanation_html, `explanation:${question.card_id}`, question.card_id), {explanation: true}));
       box.append(feedback);
       if (!history && !state.pause) box.append(button(t('atomic.continue'), () => mutate('continue'), 'primaryButton'));
     }
-    if (!history) {
+    if (!history && (question.phase === 'feedback' || question.revealed)) {
       const peek = chunkPeek(question.memory_chunks, {topicId: topic, version: state.course_version});
       if (peek) box.append(peek);
     }

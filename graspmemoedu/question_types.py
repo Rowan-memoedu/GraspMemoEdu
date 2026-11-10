@@ -13,6 +13,8 @@ ID = re.compile(r'[A-Za-z][A-Za-z0-9_-]{0,39}\Z')
 
 
 def is_reproduction(question):
+    if question.get('multi_step'):
+        return False  # Each step uses its own judge; whole-answer self-rating is disabled.
     spec = question.get('interaction') or {}
     return spec.get('type', 'text') in ('text', 'fill_blank') and spec.get('grading', 'semantic') == 'semantic'
 

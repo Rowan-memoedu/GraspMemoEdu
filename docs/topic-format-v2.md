@@ -1,5 +1,15 @@
 # Topic 格式 v2：共用作者与运行接口
 
+## 原书小标题、说明例子、脚注与共享题目
+
+Topic 可用 `sections` 保存原书小标题树，每项有 `id`、原文 `title`、`level`（1–6）、`parent_id`；正文或题目节点通过 `section_id` 归属。小标题显示在指导内容上方，不添加课程目录层级。
+
+Introduction 的 `children` 是普通正文，`example` 是不评分的说明性例子节点数组，`footnotes` 是该子块的脚注节点数组。三个字段均使用原有来源节点、公式和图片渲染；脚注在子块底部单独显示。小写 `example` 阅读字段与已有 `Example N` 范式训练保持各自语义。
+
+顶层节点还可为 `kind: "bank_question"`，只含稳定 `id`、空 `text` / `children`、可选 `section_id` 和 `reference`。引用必须精确指定 `bank_id`、`group_id`、`question_id`、64 位 `version`；不复制题干、解答或排程。它按作者顺序嵌入原生题库控件，复用同一来源、作答、评分及复习记录。完成该版本的题库题目后才能继续并学完 Topic；在题库先完成也可计入。只有 Topic 权限而没有对应题库权限不能通过引用访问。
+
+引论 Topic 可包含这些必做题库引用，正文仍不进入前置图谱。普通 Topic、原子训练和范式训练维持原有行为。已安装书籍只能用带来源覆盖证明的 `preserve_reading_composition` 更新：保留旧来源、题库版本、历史进度与目录，按 `reading_lineage` 携带已读字段，新加入的必做题仍须完成。
+
 本文件是 MathTopicPipeline、RemNote 转换流程与 GraspMemoEdu 的共用格式定义。适用于显式声明 `topic_format_version: 2` 的范式 Topic；旧 Markdown、原子训练 JSON、独立题库 JSON 继续沿用原协议。导入只解析、按字段映射、渲染与验证，不生成、改写或逐题审核教学内容。
 
 运行接口现允许在同一 Topic 中同时提供原子记忆点、卡片和 Example 模块。章节归属、可选字段及旧 Topic 的执行兼容见 [统一 Topic](unified-topic.md)。本文件中的 Example 优先流程适用于纯范式内容。
@@ -8,11 +18,11 @@
 
 - `id` 是稳定 Topic ID，显示编号（如 2.1）、标题、文件名变化不重编 ID。根 `source_rem_id` 保存原 RemNote Document 身份，可省略，不能按同名标题匹配。
 - `topic_kind` 为 `lesson` 或 `introduction`，不替换既有 `training_mode`。
-- 至少一个非空 Introduction（网站显示为“指导”）。Introduction 可有多个，可与 Example 穿插；严格保留源顺序，不合并、不前移。每个 Example 及其 Practice 归属前面最近的 Introduction。
-- 内容顺序描述归属，不替换原有学习流程：普通 Topic 先显示 Example 的掌握选择；已掌握直接作答，未掌握或答错后沿用“继续学习 → 对应指导 → 例题解析 → 练习”。同一指导已读后按原机制跳过重复阅读。
+- 至少一个非空 Introduction（网站显示为“指导”），或一个有效的题库引用；只有题库引用的 Topic 也可运行。Introduction 可有多个，可与 Example 或题库引用穿插；严格保留源顺序，不合并、不前移。每个传统 Example 及其 Practice 归属前面最近的 Introduction。
+- 没有显式内部模块或新增阅读字段的旧范式 Topic 沿用 Example 优先流程：先显示掌握选择；已掌握直接作答，未掌握或答错后沿用“继续学习 → 对应指导 → 例题解析 → 练习”。显式 `sections`、题库引用或新增阅读字段按作者顺序推进，已读字段和原有范式评分规则继续保留。
 - 课程学习记录及上一页／下一页按 `content_order` 固定排列已开放内容：晚读的指导仍位于对应例题组之前，不按步骤创建时间移动位置。状态响应只补充章节种类与 ID，未读内容不因此解锁；保存的步骤、作答顺序和学习进度保持不变。题库原有排列不受影响。
 - 普通 Topic 保留连续 Example、Explanation、Interaction 和 Practice 规则。每个 Example 至少七道 Practice；5×3 编号仍展平显示，`source_practice` 保留原分组。
-- 引论是特殊 Topic，只能含自己的 Introduction，`modules=[]`，没有 Example；点开后阅读内部“指导”。“引论”是 Topic 类型，不是 Introduction 的通用名称。母节点下、子 Topic 前的 intro 导出为该母节点的独立引论；编号由上游安排，不由导入器重排其他 Topic。
+- 引论是特殊 Topic，`modules=[]`，不含传统 Example / Practice；可包含自己的 Introduction 及题库引用。阅读字段不评分，题库引用须完成对应原生题目。“引论”是 Topic 类型，不是 Introduction 的通用名称。母节点下、子 Topic 前的 intro 导出为该母节点的独立引论；编号由上游安排，不由导入器重排其他 Topic。
 - 引论保留在课程目录中，但不属于课程知识图谱，不接受或产生前置边。导入遇到旧图谱冲突时报错，不修改图谱、账号或学习记录。
 - 网站负责首次学习、完成记录及重读推送：完成后保留进度；已学过且教学内容版本变化时推送重读；未学过时更新首次内容；不产生定时复习或 FSRS 排期。
 
@@ -43,7 +53,9 @@ JSON 是作者源文件，不是已编译的 `topic.json`。结构定义见 [JSO
 
 `nodes` 与每个 `children` 都是有序数组。节点有稳定 `id`、原正文 `text`、可选 `source_rem_id`、真实 `source_tags`、`callout`、`source`，不接受未知字段后静默丢弃。正文换行使用 LF；统一标题外侧与节点末尾的空白分隔。字段按下文固定归属整理，保留文字、身份、引用、字段内部层级与顺序；其他正文保持原层级与顺序，原稿字节完整保存。节点 ID 在一个 Topic 内唯一；全局定位用 `(topic_id, node_id)`。重复来源 Rem ID 或无法确定的映射报冲突。
 
-顶层节点文字为 `Introduction`（可加 `: 标题`）或 `Example N`（可加标题）。Example 节点 ID 必须是 `example-N`，其题目 ID 仍为 `example-N-question`，Practice 仍为 `example-N-practice-M`。Introduction、正文、Explanation、Practice 及 Interaction 节点的来源身份由显式节点元数据保存，不能用当前行号推测身份。
+传统顶层节点文字为 `Introduction`（可加 `: 标题`）或 `Example N`（可加标题）；题库引用通过 `kind: "bank_question"` 声明。Example 节点 ID 必须是 `example-N`，其题目 ID 仍为 `example-N-question`，Practice 仍为 `example-N-practice-M`。Introduction、正文、Explanation、Practice 及 Interaction 节点的来源身份由显式节点元数据保存，不能用当前行号推测身份。
+
+连续书籍正文可在 Introduction 或正文父节点指定 `body_layout: "prose"`，将直属子节点显示为连续段落，保留节点身份、源顺序及更深层的真实列表。默认仍为原大纲。该属性只控制 HTML 排版，不参与教学内容版本，也不改变学习流程。
 
 ## 作者 Markdown 与 JSON 的对应
 
@@ -98,6 +110,10 @@ v2 只把已识别 Mermaid 源码交给网站的受控准备器，允许其中�
 - `references: [{source_node_id,target_rem_id,label}]` 只保存作者事实。网站根据当前已安装目录生成权限过滤的目标 Topic／节点和解析状态，不维护第二份可变反链真相源。
 - `content_version` 是规范化教学内容哈希：包含标题、正文、顺序、节点身份、Callout、引用目标和显示文字、附件字节；排除来源行号、来源标签身份、难度/外链元数据、源文件路径、导入时间、HTML/CSS、渲染器版本和引用解析状态。相同图片字节与说明只改相对文件名不改变此哈希。
 - `version` 仍标识完整导入产物。引论接续比较 `content_version`；普通 Topic 的原有版本保护不放宽。v2 的 `introduction` 兼容摘要不参与学习顺序，网站使用 `introductions/content_order`。
+
+书籍节点可带只影响显示的 `presentation`：`role` 为 `paragraph / heading / run-in / list / footnote`，独立标题使用 `level`（2–6），段首标签使用逐字匹配正文开头的 `lead`，`indent` 为 0 或 2，`figure_group` 关联原 PDF 中并排的插图。标签不能携带 HTML、公式或改写文字。编译为语义标题、加粗标签和受控数据属性；原文及节点身份保留，这些标记不改变 `content_version`。
+
+整本纯阅读书籍的排版更新通过原生 `reading-book` 安装器的 `preserve_reading_presentation` 路径进行，必须绑定所有旧版本并保持完整目录、原来源、附件、题库和学习内容版本一致。独立比较渲染后的文字、公式与图片序列后，使用原有内容指针原子切换；不迁移或重置学习数据库。
 
 ## 导入、更新与验证
 

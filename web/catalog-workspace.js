@@ -1,4 +1,4 @@
-import {appendCatalogOutline} from './catalog-outline.js?v=51490b3e06872afe';
+import {appendCatalogOutline} from './catalog-outline.js?v=460c32ec9479f538';
 
 const node = (tag, className) => {
   const element = document.createElement(tag); element.className = className; return element;
@@ -58,4 +58,26 @@ export function workspaceLayout(sidebar) {
   const layout = node('div', 'dashboardLayout'), tasks = node('div', 'dashboardTasks');
   layout.append(sidebar, tasks);
   return {layout, tasks};
+}
+
+// Draft cards are navigation entries only. Keep the server's learning tasks,
+// progress and dependency state intact while placing drafts in the same outline.
+export function courseDisplayEntries(data, outline = []) {
+  const drafts = (data.topics || []).filter(topic => topic.status === 'read_only').map(topic => ({
+    id: `draft:${topic.id}`, topic_id: topic.id, title: topic.title, presentation: 'draft',
+  }));
+  if (!drafts.length) return {entries: data.tasks, drafts, hierarchy: data.pending_hierarchy, sourceOrder: []};
+  const units = outline.length ? outline : data.units || [];
+  const root = data.course.root_id;
+  const visible = new Set((data.topics || []).map(topic => topic.id));
+  const hierarchy = units.filter(unit => unit.id !== root).map(unit => ({
+    ...unit, parent_id: unit.parent_id === root ? null : unit.parent_id,
+    topic_ids: (unit.topic_ids || []).filter(id => visible.has(id)),
+  }));
+  const lessons = [...data.tasks.filter(task => task.type === 'Lesson'), ...drafts];
+  const byTopic = new Map(lessons.map(task => [task.topic_id, task]));
+  const sourceOrder = units.flatMap(unit => [unit.id, ...(unit.topic_ids || []).map(id => byTopic.get(id)?.id || id)]);
+  const positions = new Map(sourceOrder.map((id, index) => [id, index]));
+  lessons.sort((a, b) => (positions.get(a.id) ?? Infinity) - (positions.get(b.id) ?? Infinity));
+  return {entries: [...data.tasks.filter(task => task.type !== 'Lesson'), ...lessons], drafts, hierarchy, sourceOrder};
 }

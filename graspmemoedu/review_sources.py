@@ -218,9 +218,14 @@ class ReviewSources:
                         (request_id, self.learner, request_id, fingerprint(item['answer']), item['answer'],
                          item.get('elapsed_ms'), 'judged', reason))
             row = con.execute('SELECT * FROM training_attempts WHERE id=?', (request_id,)).fetchone()
-            self.training._complete(con, row, correct=correct, reason=reason, elapsed_ms=item.get('elapsed_ms'),
-                                    rating=item.get('self_rating') if source.get('linked_points') else None,
-                                    stop=bool(source.get('linked_points') and item.get('self_rating') == 5))
+            if item['question'].get('multi_step'):
+                from .multi_step import save_progress
+                save_progress(con, request_id, item.get('multi_step_progress', []))
+                self.training._complete_steps(con, row, item['question'], item['multi_step_progress'])
+            else:
+                self.training._complete(con, row, correct=correct, reason=reason, elapsed_ms=item.get('elapsed_ms'),
+                                        rating=item.get('self_rating') if source.get('linked_points') else None,
+                                        stop=bool(source.get('linked_points') and item.get('self_rating') == 5))
             result = json.loads(con.execute('SELECT result FROM training_attempts WHERE id=?', (request_id,)).fetchone()[0])
             if source.get('linked_points'):
                 return {**result, 'ratings': {p: result['ratings'].get(ref) for p, ref in zip(item['point_ids'], source['local_points'])}}

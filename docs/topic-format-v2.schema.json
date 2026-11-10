@@ -10,9 +10,34 @@
     "title": {"type": "string", "minLength": 1, "maxLength": 200},
     "topic_kind": {"enum": ["lesson", "introduction"]},
     "source_rem_id": {"$ref": "#/$defs/remId"},
+    "sections": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/section"}},
+    "reading_lineage": {
+      "type": "object", "additionalProperties": false, "required": ["content_version", "introductions"],
+      "properties": {
+        "content_version": {"type": "string", "minLength": 1},
+        "introductions": {"type": "object", "additionalProperties": {"type": "array", "items": {"$ref": "#/$defs/id"}}}
+      }
+    },
     "nodes": {"type": "array", "minItems": 1, "maxItems": 10000, "items": {"$ref": "#/$defs/node"}}
   },
   "$defs": {
+    "section": {
+      "type": "object", "additionalProperties": false, "required": ["id", "title", "level", "parent_id"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"}, "title": {"type": "string", "maxLength": 300},
+        "level": {"type": "integer", "minimum": 1, "maximum": 6},
+        "parent_id": {"anyOf": [{"$ref": "#/$defs/id"}, {"type": "null"}]}
+      }
+    },
+    "bankReference": {
+      "type": "object", "additionalProperties": false, "required": ["bank_id", "group_id", "question_id", "version"],
+      "properties": {
+        "bank_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$"},
+        "group_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$"},
+        "question_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$"},
+        "version": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    },
     "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"},
     "remId": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$"},
     "source": {
@@ -30,9 +55,25 @@
       "properties": {
         "id": {"$ref": "#/$defs/id"},
         "text": {"type": "string", "maxLength": 1000000},
+        "section_id": {"$ref": "#/$defs/id"},
+        "kind": {"const": "bank_question"},
+        "reference": {"$ref": "#/$defs/bankReference"},
+        "example": {"type": "array", "items": {"$ref": "#/$defs/node"}},
+        "footnotes": {"type": "array", "items": {"$ref": "#/$defs/node"}},
         "source_rem_id": {"$ref": "#/$defs/remId"},
         "children": {"type": "array", "items": {"$ref": "#/$defs/node"}},
         "callout": {"enum": ["hint", "aside", "requirement", "source"]},
+        "body_layout": {"enum": ["prose"]},
+        "presentation": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "role": {"enum": ["paragraph", "heading", "run-in", "list", "footnote"]},
+            "level": {"type": "integer", "minimum": 2, "maximum": 6},
+            "lead": {"type": "string", "minLength": 1, "maxLength": 140},
+            "indent": {"enum": [0, 2]},
+            "figure_group": {"$ref": "#/$defs/id"}
+          }
+        },
         "source": {"$ref": "#/$defs/source"},
         "source_tags": {
           "type": "array", "items": {

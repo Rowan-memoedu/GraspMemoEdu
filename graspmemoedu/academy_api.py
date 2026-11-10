@@ -94,7 +94,7 @@ def register_academy_routes(app, settings, access_store, service_for, identity, 
         access, training = app.state.training_attempt_context(request, payload.attempt_id, 'submit_answer')
         backend = external_training(training, payload.attempt_id)
         token = grant(request, access, permission_id(backend.bank_id), backend.launch())
-        return {**({'ticket': token} if backend.provider == 'hyperskill'
+        return {**({'ticket': token} if backend.provider == 'hyperskill' and not getattr(backend, 'native_ide', False)
                    else {'url': 'graspmemoedu://academy/open?ticket=' + token}),
                 'state': app.state.training_public_state(request, access, training, payload.attempt_id)}
 

@@ -1,9 +1,9 @@
-import { t, translateMessage, learningTitle } from './i18n.js?v=51490b3e06872afe';
-import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=51490b3e06872afe';
-import {selfAssessment, referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=51490b3e06872afe';
-import {reportableContent} from './content-report.js?v=51490b3e06872afe';
-import {createLearningCache} from './learning-cache.js?v=51490b3e06872afe';
-import {enhanceTopicContent} from './topic-content.js?v=51490b3e06872afe';
+import { t, translateMessage, learningTitle } from './i18n.js?v=460c32ec9479f538';
+import {questionInput, answerReady, choiceTypeField} from './question-input.js?v=460c32ec9479f538';
+import {selfAssessment, referenceAnswer, prepareAnswerContent, submittedAnswer} from './self-assessment.js?v=460c32ec9479f538';
+import {reportableContent} from './content-report.js?v=460c32ec9479f538';
+import {createLearningCache} from './learning-cache.js?v=460c32ec9479f538';
+import {enhanceTopicContent} from './topic-content.js?v=460c32ec9479f538';
 
 const node = (tag, cls = '', text) => {
   const item = document.createElement(tag); item.className = cls;
@@ -210,7 +210,7 @@ export function createReviewView(bridge) {
     card.append(node('h2', 'stepTitle', t('review.questionNumber', {number: index + 1})), stem);
     const typeField = choiceTypeField(question.interaction); if (typeField) stem.before(typeField);
     if (structured && !editable) card.append(questionInput(question.interaction, {id: 'reviewSubmittedInteraction',
-      stem, value: answer?.answer || (isCurrent ? read(draftKey()) || '' : ''), disabled: true}).element);
+      stem, value: answer?.answer || (isCurrent ? read(draftKey()) || '' : ''), disabled: true, feedback: question.choice_feedback}).element);
     if (answer) {
       const submitted = node('details', 'submittedAnswer'); submitted.append(node('summary', '', t('查看已提交答案')), submittedAnswer(question, answer.answer, answer.answer_display ?? answer.answer)); card.append(submitted);
     }
@@ -222,7 +222,7 @@ export function createReviewView(bridge) {
       box.append(node('span', 'feedbackIcon', feedback.correct ? '✓' : '!'), detail); card.append(box);
       const reference = referenceAnswer(question); if (reference) card.append(reference);
       if (question.explanation_html) card.append(node('h3', 'exampleExplanationHeader', t('Explanation · 解析')),
-        prepareAnswerContent(reportableContent(content(question.explanation_html, state.content_references), reportContext, `explanation:${questionId}`, question.content_version || state.course_version)));
+        prepareAnswerContent(reportableContent(content(question.explanation_html, state.content_references), reportContext, `explanation:${questionId}`, question.content_version || state.course_version), {explanation: true}));
     }
     if (editable) {
       const form = node('form', 'learningActions answerForm'); form.id = 'reviewAnswerForm'; form.addEventListener('submit', submit);

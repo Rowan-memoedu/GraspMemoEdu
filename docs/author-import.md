@@ -1,6 +1,10 @@
 # 作者导入：Markdown / JSON → Topic
 
+带多个编号小问、需要逐步判题的本地习题，先走 `GraspMemoEduSourcePrep/bank_import.py` 编译为同一题库大题的 Multi step，再以 v2 `bank_question` 引用放入课程。不要把小问拆成独立复习卡，或只向传统 Example 写入未接入执行的步骤字段。普通讲解内容保持原层级；原题、原解、选择题解析和排版统一遵循共用题库导入流程。
+
 Math Academy 的两个 ZIP 使用独立[来源适配与批次安装入口](mathacademy-import.md)，允许保存和阅读不满足训练条件的原材料。本文普通作者稿的审核、题量与答案要求保持。
+
+层级 PDF 书籍使用 `D:/Projects/GraspMemoEduSourcePrep/Run-ReadingBook.ps1`；完整步骤以同仓库的 `STRUCTURED_READING_WORKFLOW.md` 为准。该工作流生成一门纯阅读课程和同层级题库，只收录有完整原解的题目，经原生 `reading-book` 适配器安装。正文不参与前置关系，连续段落可使用 v2 的 `body_layout: "prose"`。
 
 正式后端已迁至腾讯云。本文本机命令用于准备来源包与隔离验收；正式安装必须将已验收包传到服务器，并在 `/opt/graspmemoedu/app` 使用 CLI 指定 `/var/lib/graspmemoedu`。本机原数据目录已是回滚快照，修改它不会更新正式网站。见 [腾讯云运维](tencent-deployment.md)。
 

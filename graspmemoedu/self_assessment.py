@@ -28,7 +28,8 @@ def presentation(question, target, *, visible=False):
     result = {'reproduction': is_reproduction(question), 'revealed': bool(target.get('revealed'))}
     if result['revealed']:
         result.update(explanation_html=question.get('explanation_html', ''))
-    result.update(reference_fields(question, visible or result['revealed']))
+    result.update(reference_fields(question, visible or result['revealed'],
+                                   answer=target.get('answer') if visible and target.get('self_rating') is None else None))
     return result
 
 
@@ -36,7 +37,7 @@ def protect(item, allowed):
     item['can_self_rate'] = bool(allowed and item.pop('reproduction', False))
     if item.get('revealed') and not item['can_self_rate']:
         if item.get('phase', 'answer') == 'answer':
-            for key in ('reference_answer', 'reference_answer_html', 'reference_math_css'):
+            for key in ('reference_answer', 'reference_answer_html', 'reference_math_css', 'choice_feedback'):
                 item.pop(key, None)
         if item.get('phase', 'answer') == 'answer':
             item['explanation_html'] = None

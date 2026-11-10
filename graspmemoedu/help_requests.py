@@ -219,9 +219,11 @@ class HelpRequestStore:
             elif revision != bank['version']:
                 raise DomainError('content_version_mismatch', '正文版本已变化，请刷新后重新提交答疑请求。', 409)
             field = {f'question:{question_id}': 'html', f'explanation:{question_id}': 'explanation_html'}.get(block)
-            if field is None:
+            from .multi_step import source_block_html
+            html = question[field] if field else source_block_html(question, block)
+            if html is None:
                 raise DomainError('invalid_help_context', '未找到此答疑请求对应的内容。', 422)
-            return question[field], {'course_id': bank['id'], 'course_title': bank['title'],
+            return html, {'course_id': bank['id'], 'course_title': bank['title'],
                 'topic_title': group['title'], 'subject_id': bank['subject_id'],
                 'math_css': bank.get('math_css', ''),
                 'content_block_type': block_type, 'content_block_title': question.get('title', question_id)}
@@ -254,7 +256,8 @@ class HelpRequestStore:
         elif block.startswith('introduction:') and topic.get('topic_format_version') == 2:
             intro = next((i for i in topic['introductions'] if 'introduction:' + i['id'] == block), None)
             if intro:
-                html, block_title = intro['html'], intro.get('title', intro['id'])
+                from .topic_composition import introduction_html
+                html, block_title = introduction_html(intro), intro.get('title', intro['id'])
         elif block.startswith('chunk:') and topic.get('memory_chunks'):
             chunk = next((c for c in topic['memory_chunks'] if 'chunk:' + c['id'] == block), None)
             if chunk:
@@ -269,8 +272,8 @@ class HelpRequestStore:
 
     def visible_scope(self, scope, parameters, access):
         restricted = self.access_store.test_materials.permission_ids
-        if self.access_store.test_materials.allowed(access):
-            restricted = restricted - {t['id'] for t in access['topics']}
+        restricted = restricted - {t['id'] for t in access['topics']
+            if self.access_store.test_materials.topic_visible(t['id'], access)}
         if restricted:
             scope += ''' AND NOT EXISTS (SELECT 1 FROM json_each(?) blocked
                 WHERE blocked.value=json_extract(r.body,'$.request.topic_id'))'''

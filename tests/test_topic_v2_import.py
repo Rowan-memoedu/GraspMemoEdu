@@ -28,6 +28,30 @@ def write_json(path, value):
 
 
 class TopicV2ImportTests(unittest.TestCase):
+    def test_original_heading_and_run_in_labels_render_without_content_revision(self):
+        value=introduction_document();value['nodes'][0]['body_layout']='prose'
+        value['nodes'][0]['children']=[node('h','Independent heading'),node('p','Theorem 3.1. Original $x=1$ text.')]
+        _,before=self.prepare(value)
+        value['nodes'][0]['children'][0]['presentation']={'role':'heading','level':3}
+        value['nodes'][0]['children'][1]['presentation']={'role':'run-in','lead':'Theorem 3.1.','indent':0}
+        _,after=self.prepare(value)
+        self.assertEqual(before['content_version'],after['content_version'])
+        self.assertIn('<h3>Independent heading</h3>',after['introductions'][0]['html'])
+        self.assertIn('<strong class="sourceLead">Theorem 3.1.</strong>',after['introductions'][0]['html'])
+        self.assertIn('data-body-layout="prose"',after['introductions'][0]['html'])
+
+    def test_reading_prose_uses_paragraphs_and_keeps_real_nested_lists(self):
+        value = introduction_document()
+        value['nodes'][0]['body_layout'] = 'prose'
+        value['nodes'][0]['children'] = [node('paragraph','Original paragraph',[
+            node('nested','Original nested item')])]
+        _, topic = self.prepare(value)
+        html = topic['introductions'][0]['html']
+        self.assertRegex(html, r'<div class="outlineNode"[^>]*><div id="node-paragraph"')
+        self.assertIn('<ul><li class="outlineNode"', html)
+        self.assertIn('Original paragraph', html)
+        self.assertIn('Original nested item', html)
+
     def setUp(self):
         self.temp = temporary_test_directory()
         self.addCleanup(self.temp.cleanup)

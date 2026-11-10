@@ -179,15 +179,21 @@ class StudentReport:
                     result.append(event)
         if 'training_attempts' in self.tables:
             answers = {r['id']: r for r in self.select('training_submissions')} if 'training_submissions' in self.tables else {}
+            steps = {r['attempt']: unpack(r['body'], []) for r in self.con.execute(
+                'SELECT s.* FROM training_multi_step s JOIN training_attempts a ON a.id=s.attempt WHERE a.learner=?',
+                (self.learner,))} if 'training_multi_step' in self.tables else {}
             for row in self.select('training_attempts'):
                 outcome = unpack(row['result'])
                 if not row['completed_at'] or outcome.get('stop_requested') or (outcome.get('correct') is None and outcome.get('self_rating') is None):
                     continue
                 answer = answers.get(row['submission_id'])
+                progress = steps.get(row['id'], [])
+                answer_text = '\n\n'.join(f"{p['index']+1}. {p['answer_display']}" for p in progress) if progress else answer['answer'] if answer else None
+                elapsed = sum(p['elapsed_ms'] for p in progress) if progress else answer['elapsed_ms'] if answer else None
                 paper = self.paper_items.get(row['id'], {})
                 event = self._event('training:' + row['id'], 'training', row['bank'], row['version'], row['question'],
-                    row['completed_at'], answer['answer'] if answer else None, outcome.get('correct'), outcome.get('reason'),
-                    mode=row['mode'], elapsed=answer['elapsed_ms'] if answer else None,
+                    row['completed_at'], answer_text, outcome.get('correct'), outcome.get('reason'),
+                    mode=row['mode'], elapsed=elapsed,
                     self_rating=outcome.get('self_rating') if outcome.get('self_rating') is not None else paper.get('self_rating'),
                     snapshot=unpack(row['snapshot']), module=row['group_id'])
                 if event:

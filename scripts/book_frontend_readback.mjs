@@ -56,6 +56,8 @@ try {
   token = login.identity_token;
   assert.equal(login.access.purpose, 'test');
   assert.equal(login.access.learner_id, account.learner_id);
+  const subjects = (await request('/api/subjects')).subjects.map(subject => subject.id);
+  assert.ok(subjects.length > 0, 'The public subject registry is empty');
   const require = createRequire(path.join(os.homedir(), '.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/_entry.cjs'));
   const {chromium} = require('playwright');
   browser = await chromium.launch({headless: true, executablePath: path.join(os.homedir(), 'AppData/Local/Google/Chrome/Application/chrome.exe')});
@@ -76,7 +78,7 @@ try {
   const version = expected.get('index.html').slice(0, 16);
   await page.goto(base + '?v=' + version + '#/', {waitUntil: 'networkidle'});
   await page.locator('.subjectCard').first().waitFor();
-  assert.equal(await page.locator('.subjectCard').count(), 6);
+  assert.deepEqual(await page.locator('.subjectCard').evaluateAll(cards => cards.map(card => card.dataset.subjectId)), subjects);
   await page.screenshot({path: path.join(output, 'public-homepage.png'), fullPage: true});
   await page.goto(base + '?v=' + version + '#/subjects/math/banks', {waitUntil: 'networkidle'});
   await page.locator('.portalPageTitle').waitFor();
@@ -104,7 +106,7 @@ try {
   assert.deepEqual(mutations, []);
   await fs.writeFile(path.join(output, 'public-frontend-validation.json'), JSON.stringify({passed: true,
     assets_verified: [...expected].map(([name, sha256]) => ({name, sha256})), browser_errors: errors,
-    learning_mutations: mutations, existing_test_account: true, homepage_subjects: 6, book}, null, 2));
+    learning_mutations: mutations, existing_test_account: true, homepage_subjects: subjects.length, subject_ids: subjects, book}, null, 2));
   console.log('PASS all public asset hashes, homepage, question-bank page and zero learning writes');
 } finally {
   if (browser) await browser.close();

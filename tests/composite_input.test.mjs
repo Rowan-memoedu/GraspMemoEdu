@@ -137,7 +137,7 @@ test('explicit passage choices retain lower radios and synchronize with the inli
   assert.equal(text.querySelector('fieldset'), null);
   const dropdown = text.querySelector('.passageBlankSelect');
   assert.equal(dropdown.dataset.controlId, 'reading');
-  assert.equal(text.querySelector('.passageBlankNumber').textContent, '1');
+  assert.equal(text.querySelector('.passageBlankNumber'), null);
   assert.equal(text.querySelector('.compositeField').dataset.controlId, 'number');
   assert.equal(widget.element.querySelector('fieldset').parentElement.className, 'compositeSection');
   dropdown.value = 'b'; dropdown.dispatchEvent(event('change'));

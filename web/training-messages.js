@@ -1,4 +1,6 @@
 export const trainingMessages = {
+  'training.ojAccepted': ['OJ 已 AC', 'Accepted on OJ'],
+  'training.ojSubmitted': ['OJ 已提交，尚未 AC', 'Submitted on OJ, not yet accepted'],
   'training.finishLearning': ['完成学习', 'Finish learning'],
   'training.banks': ['题库', 'Question banks'],
   'training.train': ['训练', 'Train'],

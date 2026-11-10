@@ -45,6 +45,8 @@ class ContentReferenceIndex:
                         continue
                 owner = ('introduction', step.get('introduction_id', 'introduction'), 'html')
                 result[owner] = step['id']
+                for field in ('example', 'footnotes'):
+                    result[('introduction', owner[1], field)] = step['id']
             elif kind in ('example', 'practice'):
                 if not step.get('question_bank_revision'):
                     result[(kind, step['question_id'], 'html')] = step['id']

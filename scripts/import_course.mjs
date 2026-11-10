@@ -109,7 +109,8 @@ export function parseOutline(source) {
 
 function text(node) {
   const body = [node.head, ...node.lines].join('\n').trim();
-  return body + (node.children.length ? '\n' + node.children.map(text).join('\n') : '');
+  const children = [...node.children, ...(node.meta?.example || []), ...(node.meta?.footnotes || [])];
+  return body + (children.length ? '\n' + children.map(text).join('\n') : '');
 }
 
 const practiceHead = /^Practice\s+(\d+)(?:\.(\d+))?$/i;
@@ -131,9 +132,10 @@ function practiceNodes(module) {
 
 export function sourceQuestions(topic) {
   const introduction = topic.children.filter(node => /^Introduction$/i.test(node.head));
-  if (!introduction.length || (topic.meta?.topic_format_version !== 2 && introduction.length !== 1)) throw new Error('Expected one Introduction');
+  if ((!introduction.length && !topic.children.some(n => n.meta?.kind === 'bank_question')) || (topic.meta?.topic_format_version !== 2 && introduction.length !== 1)) throw new Error('Expected one Introduction');
   const modules = topic.children.filter(node => /^Example\s+\d+/i.test(node.head));
-  if (modules.length + introduction.length !== topic.children.length) throw new Error('Unknown top-level sections');
+  const references = topic.children.filter(node => node.meta?.kind === 'bank_question');
+  if (modules.length + introduction.length + references.length !== topic.children.length) throw new Error('Unknown top-level sections');
   const questions = [];
   for (const [index, module] of modules.entries()) {
     const moduleId = `example-${index + 1}`;
@@ -161,7 +163,7 @@ export function sourceQuestions(topic) {
         explanationNode:explanation[0], explanationNodes:explanation[0].children, question:question.map(text).join('\n')});
     }
   }
-  return {introduction:introduction[0], introductions:introduction, modules, questions};
+  return {introduction:introduction[0], introductions:introduction, modules, questions, references};
 }
 
 function applyErrata(nodes, errata) {
@@ -207,7 +209,14 @@ export async function renderer(assets = new Map(), {v2 = false, cacheGlyphs = fa
   let bodyCount = 0;
   const mermaidPattern = /^(`{3,}|~{3,})mermaid[ \t]*\n([\s\S]*?)^\1[ \t]*(?=\n|$)/gm;
   const withoutMermaid = raw => raw.replace(mermaidPattern, '');
-  const wrap = (node, html) => v2 && node.meta?.id ? `<div id="node-${escape(node.meta.id)}">${html}</div>` : html;
+  const wrap = (node, html) => {
+    if (!v2 || !node.meta?.id) return html;
+    const style = node.meta.presentation || {};
+    const attrs = {'body-layout':node.meta.body_layout, 'source-role':style.role,
+      'source-indent':style.indent, 'figure-group':style.figure_group};
+    return `<div id="node-${escape(node.meta.id)}"${Object.entries(attrs).filter(([,v]) => v != null)
+      .map(([key,value]) => ` data-${key}="${escape(String(value))}"`).join('')}>${html}</div>`;
+  };
   function body(node) {
     let raw = [node.head, ...node.lines].join('\n').trim().replace(diagramComment, '');
     // Each fragment owns its glyph definitions, so it also renders in isolation.
@@ -248,8 +257,9 @@ export async function renderer(assets = new Map(), {v2 = false, cacheGlyphs = fa
     raw = raw.replace(imagePattern, (_all, alt, relative) => {
       const asset = assets.get(relative);
       if (!asset) throw new Error('Image was not validated');
+      if (!['image/png', 'image/webp'].includes(asset.mime)) throw new Error('Unsupported rendered image MIME');
       const token = `IMAGEIMPORTTOKEN${images.length}END`;
-      images.push({token, html:`<img class="topicDiagram" alt="${escape(alt)}" src="data:image/png;base64,${asset.data.toString('base64')}" width="${asset.width}" height="${asset.height}" style="max-width:100%;height:auto" loading="lazy">`});
+      images.push({token, html:`<img class="topicDiagram" alt="${escape(alt)}" src="data:${asset.mime};base64,${asset.data.toString('base64')}" width="${asset.width}" height="${asset.height}" style="max-width:100%;height:auto" loading="lazy">`});
       return token;
     });
     const safe = raw.replace(/\$\$([\s\S]*?)\$\$|\$([^$\n]+)\$/g, (_whole, block, inline) => {
@@ -279,6 +289,15 @@ export async function renderer(assets = new Map(), {v2 = false, cacheGlyphs = fa
     for (const item of images) html = html.replace(item.token, item.html);
     for (const item of generated) html = item.block ? html.replace(`<p>${item.token}</p>`, item.html) : html.replace(item.token, item.html);
     if (/MATHIMPORTTOKEN\d+END/.test(html)) throw new Error('A formula placeholder was not rendered');
+    if (v2 && node.meta?.presentation?.role === 'heading') {
+      const level = node.meta.presentation.level || 3;
+      if (!/^<p>[\s\S]*<\/p>\s*$/.test(html) || (html.match(/<p>/g) || []).length !== 1) throw new Error('Source heading must be one paragraph');
+      html = html.replace(/^<p>/, `<h${level}>`).replace(/<\/p>\s*$/, `</h${level}>\n`);
+    } else if (v2 && node.meta?.presentation?.role === 'run-in') {
+      const lead = marked.parseInline(node.meta.presentation.lead);
+      if (!html.startsWith(`<p>${lead}`)) throw new Error('Source lead did not retain its literal prefix');
+      html = `<p><strong class="sourceLead">${lead}</strong>${html.slice(3 + lead.length)}`;
+    }
     if (cacheGlyphs && replacements.length) {
       html = adaptor.outerHTML(svg.svg('svg', {xmlns:'http://www.w3.org/2000/svg',
         'aria-hidden':'true', style:'display:none'}, [svg.fontCache.getCache()])) + html;
@@ -288,7 +307,7 @@ export async function renderer(assets = new Map(), {v2 = false, cacheGlyphs = fa
   function nodes(list, asList=false) {
     if (v2) {
       const item = node => {
-        let html = body(node) + (node.children.length ? nodes(node.children, true) : '');
+        let html = body(node) + (node.children.length ? nodes(node.children, node.meta?.body_layout !== 'prose') : '');
         if (node.meta?.callout) html = presentation.renderCallout({type:node.meta.callout, html});
         return `<${asList ? 'li' : 'div'} class="outlineNode" data-source-line="${node.line}">${wrap(node, html)}</${asList ? 'li' : 'div'}>`;
       };
@@ -297,7 +316,7 @@ export async function renderer(assets = new Map(), {v2 = false, cacheGlyphs = fa
     if (asList) return `<ul>${list.map(node => `<li data-source-line="${node.line}">${body(node)}${node.children.length ? nodes(node.children, true) : ''}</li>`).join('')}</ul>`;
     return list.map(node => `<div class="outlineNode" data-source-line="${node.line}">${body(node)}${node.children.length ? nodes(node.children, true) : ''}</div>`).join('');
   }
-  return {nodes, wrap, withoutMermaid, diagnostics, formulas, prose, css:adaptor.textContent(svg.styleSheet(document)),
+  return {nodes, wrap, heading:text => body({head:text, lines:[], children:[], meta:{}}).replace(/<\/?p>/g, ''), withoutMermaid, diagnostics, formulas, prose, css:adaptor.textContent(svg.styleSheet(document)),
     versions:{marked:br('marked/package.json').version, mathjax:mr('mathjax-full/package.json').version}};
 }
 
@@ -318,7 +337,8 @@ export async function inspectCourse(sourcePath) {
   for (const [index] of content.modules.entries()) {
     if (content.questions.filter(q => q.moduleId === `example-${index + 1}`).length < 8) throw new Error('At least seven Practices per module required');
   }
-  const introText = content.introductions.flatMap(i => i.children.map(text)).join('\n');
+  const introText = [...(author?.document.sections || []).map(s => s.title),
+    ...content.introductions.flatMap(i => [...i.children, ...(i.meta?.example || []), ...(i.meta?.footnotes || [])].map(text))].join('\n');
   return {title:topic.head, source_sha256:digest(raw), introduction:introText,
     ...(author ? {topic_format_version:2, topic_kind:author.document.topic_kind, id:author.document.id,
       ignored_nodes:author.ignored_nodes, content_order:author.content_order} : {}),
@@ -373,10 +393,19 @@ export async function importCourse(sourcePath, sidecarPath, outputPath, auditPat
     Object.assign(course, {topic_format_version:2, topic_kind:author.document.topic_kind, content_version:author.content_version,
       ...(author.document.source_rem_id ? {source_rem_id:author.document.source_rem_id} : {}),
       content_order:author.content_order, content_nodes:author.content_nodes, references:author.references});
+    if (author.document.sections) course.sections = author.document.sections.map(s => ({...s, title_html:render.heading(s.title)}));
+    if (author.document.reading_lineage) course.reading_lineage = author.document.reading_lineage;
+    if (content.references.length) course.bank_questions = content.references.map(node => ({id:node.meta.id,
+      reference:node.meta.reference, ...(node.meta.section_id ? {section_id:node.meta.section_id} : {})}));
     course.introductions = content.introductions.map(node => ({id:node.meta.id,
       title:author.document.nodes.find(item => item.id === node.meta.id).text.replace(/^Introduction/i, '引论'),
-      html:render.wrap(node, render.nodes(node.children, true))}));
-    course.introduction = {id:'introduction', title:'引论', html:course.introductions.map(i => i.html).join('')};
+      html:node.children.length ? render.wrap(node, render.nodes(node.children, node.meta?.body_layout !== 'prose')) : '',
+      ...(node.meta.section_id ? {section_id:node.meta.section_id} : {}),
+      ...(node.meta.example?.length ? {example:render.wrap({...node,meta:{...node.meta,id:node.meta.id+'-example'}}, render.nodes(node.meta.example, node.meta?.body_layout !== 'prose'))} : {}),
+      ...(node.meta.footnotes?.length ? {footnotes:node.meta.footnotes.map(note => ({id:note.meta.id,
+        html:render.nodes([note], false)}))} : {})}));
+    course.introduction = {id:'introduction', title:'引论', html:course.introductions.map(i => i.html + (i.example || '')
+      + (i.footnotes || []).map(note => note.html).join('')).join('')};
   }
   const formulaChanges = [];
   const interactionTexts = spec => spec?.type === 'choice' ? spec.options : spec?.type === 'true_false' ? spec.statements : spec?.type === 'matching' ? [...spec.left, ...spec.right] : [];
@@ -401,10 +430,11 @@ export async function importCourse(sourcePath, sidecarPath, outputPath, auditPat
         source_line:question.line, ...(question.source_practice ? {source_practice:question.source_practice} : {}),
         ...(corrections.length ? {errata:corrections.map(c => ({original:c.original, replacement:c.replacement, reason:c.reason}))} : {})};
     });
-    course.modules.push({id:moduleId, title:module.head, example:built[0], practices:built.slice(1)});
+    course.modules.push({id:moduleId, title:module.head, example:built[0], practices:built.slice(1),
+      ...(module.meta?.section_id ? {section_id:module.meta.section_id} : {})});
   }
   let formulaSource = author || content.questions.some(q => q.interaction)
-    ? [...content.introductions.map(text), ...content.questions.flatMap(q => [q.question, ...interactionTexts(q.interaction).map(i => i.text), ...q.explanationNodes.map(text)])].join('\n') : source;
+    ? [...(author?.document.sections || []).map(s => s.title), ...content.introductions.map(text), ...content.questions.flatMap(q => [q.question, ...interactionTexts(q.interaction).map(i => i.text), ...q.explanationNodes.map(text)])].join('\n') : source;
   if (author) formulaSource = render.withoutMermaid(formulaSource).replace(/\[\[id:[A-Za-z0-9_-]+\|[^\]\n|]+\]\]/g, '');
   const originalFormulas = [...formulaSource.matchAll(/\$\$([\s\S]*?)\$\$|\$([^$\n]+)\$/g)].map(match => (match[1] ?? match[2]).replace(/^ +/gm, '').trim());
   if (originalFormulas.length !== render.formulas.length) throw new Error('Formula count changed');

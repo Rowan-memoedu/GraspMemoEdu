@@ -829,6 +829,7 @@ export const portalMessages = {
     "学习任务",
     "Lesson"
   ],
+  'portal.draft': ['教研草稿', 'Teaching draft'],
   "portal.review": [
     "复习",
     "Review"

@@ -36,7 +36,7 @@ Windows 安装器只登记当前用户的 `graspmemoedu` 协议，直接交给�
 
 ## 准备和安装
 
-准备工具：`scripts/prepare_academy.py`。输入学生课程、作者课程、稳定 Course ID 和 theory 分类清单；作者占位区使用 Java UTF-16 偏移恢复模板。分类只有 automated、manual、reading，无法识别的题型会停止，不静默丢弃。
+准备工具：`scripts/prepare_academy.py`。输入学生课程、作者课程、稳定 Course ID 和 theory 分类清单；作者模板先统一为 IDEA 文档使用的 LF 换行，再按 Java UTF-16 偏移恢复占位区，磁盘上的 CRLF 不进入恢复模板。分类只有 automated、manual、reading，无法识别的题型会停止，不静默丢弃。
 
 转换使用网站现有的安全 Markdown、MathJax 和图片渲染器。包的 manifest 只列目录和 Topic；带本机路径的中间文件、模板清单和旧答案不属于上传包。安装由 `python -m graspmemoedu.academy_import --package <package> --data-dir <data>` 完成，通过现有 `active-content.json` 原子切换。已有课程和 Topic 不覆盖，重复安装返回 unchanged。
 
@@ -47,6 +47,38 @@ Windows 安装器只登记当前用户的 `graspmemoedu` 协议，直接交给�
 源码参考：[JetBrains Academy 导航](https://github.com/JetBrains/educational-plugin/blob/2026.9-release/intellij-plugin/educational-core/src/com/jetbrains/edu/learning/navigation/NavigationUtils.kt)、[检查回调](https://github.com/JetBrains/educational-plugin/blob/2026.9-release/intellij-plugin/educational-core/src/com/jetbrains/edu/learning/checker/CheckListener.kt)、[IDEA 协议扩展](https://github.com/JetBrains/intellij-community/blob/master/platform/platform-impl/src/com/intellij/openapi/application/JBProtocolCommand.kt)。
 
 ## 验证
+
+### Hyperskill 自建代码检查
+
+已经审核的 Java 代码测试包可以接入同一个 Academy 插件。网页仍打开原题库中的同一道题，使用相同的 attempt、检查轮次、作答历史、错题本和 FSRS Card；只把本轮的判题适配器换成本地 Java 检查。未配置测试包的题和已经开始的官方判题轮次继续沿用 Hyperskill。
+
+网页的“在 IDEA 中打开”、Task 导航、代码存档、首开恢复模板、同轮继续和原生 Check 均复用上述入口。Check 通过现有 `RemoteTaskChecker` 扩展调用 `scripts/code_check.py`，后者复用代码试验的 Java runner，在 WSL 中隔离编译和运行。源码不上传网站；现有 `AcademyListener` 回传版本、代码指纹、类别和反馈，并由共享后端评分。
+
+`scripts/prepare_code_ide.py` 接收当前题库、逐题审核说明、原模板、测试包及正反例程序。它校验模板与题面版本、执行正反例，再将内容寻址测试包写入本机包目录，生成追加的 manifest 和网站 `code-judges.json`。未通过准入的包不会加入清单；已有学习代码不覆盖。参考解只用于准入，不写入学生项目或发布包。批量试验通过不等于题目测试充分，必须保留逐题的来源与覆盖审核。
+
+IDEA 原有 `graspmemoedu-academy.json` 增加 `code_checker` 配置：`python`、`helper`、`packages`、WSL `distribution` 和 Linux `jdk`。现有 `manifest`、`api_origin` 和 `data_dir` 不变。包绑定题面 SHA-256、测试包 SHA-256、语言、引擎及 runner 版本；旧轮次锁定原包。包缺失、校验不符、JDK/隔离环境故障返回 Unchecked，不产生错误负担。网站可在 `revoked` 中撤销有误的包；旧轮次随后停止评分，保留原代码与记录。
+
+网站使用 `python -m graspmemoedu.code_judges --data-dir <data> --input <registry>` 安装绑定。此命令只合并判题元数据，不导入题库、不改题目 ID 或题库版本、不修改学习表。网站备份/恢复包含这些绑定；本机不可变测试包和 manifest 仍需要本机保留，缺包时按环境故障处理。更新包时先准备本机，再安装网站绑定，避免尚未可用的包被选为新轮次。
+
+`tests/test_code_ide.py` 验证同题记录复用、旧官方轮次兼容、版本锁定、包撤销、重复回传、环境故障、授权失效和备份恢复。实机验收必须从原生 Check 进入；直接调用检查回调不能代替完整联动证据。
+
+### Hydro OJ 判题
+
+Windows 定期同步由 `Install-HydroSync.ps1` 注册原生任务 `SUSTech-CS109-OJ-Sync`，默认每小时及当前用户登录时运行 `Sync-Hydro.ps1`。本机配置与回执在 `D:/AppData/GraspMemoEduHydro/sync`；`state.json` 的 `last_success` 和 `counts` 表示最近成功运行，`last-error.json` 保留最近失败，需按时间区分。校园网或登录态不可用时保留上次成功状态，Windows 最多自动重试两次。
+
+同步沿用原 `academy-sustech-cs109` 题库和 `OJ → 题号 → 单题` 结构。仅为新增题目建立源码骨架，不覆盖已有 Java 文件；提交类与含 main 的普通题按原题要求分别处理。中文题面直接保留，英文新题通过既有 Codex Exec 翻译流程处理，并校验原代码与样例块逐字不变。
+
+OJ 历史状态作为指定网站账号的外部事实保存，显示“已提交，尚未 AC”或“已 AC”；AC 同时更新 IDEA 原生题目状态。它不伪造 Academy Check 回调、不创建学习作答或 FSRS 评分，不改写已有卡片或复习时间。当前明确绑定测试管理员 01，Cookie 只用于本机访问 OJ，不上传网站。题库追加引起版本变化时，先备份并校验恢复，再迁移版本和复习点引用；原记录的作答、卡片、时间等值保持不变。
+
+可手动执行 `pwsh -NoProfile -File D:/Projects/GraspMemoEdu/Sync-Hydro.ps1`，或在 Windows 任务计划程序运行上述任务。同步不主动打开已关闭的 IDEA；关闭期间更新课程 YAML，下次打开加载状态，IDEA 运行时通过原生脚本刷新，正在 Check 的轮次延后重试。
+
+插件的 `Educational.remoteTaskChecker` 可以为本机明确绑定的题目调用 Hydro；现有检查回调继续将最终结果交给共用题库评分。配置位于 IDEA config 下的 `graspmemoedu-hydro.json`，包含固定 OJ origin/domain、预期账号、题目到学生源码的映射、Node 与 `scripts/hydro_check.mjs` 路径，以及本机私密运行目录。Cookie 从已有 LiveCookieSnapshot 读取，只发往配置的 OJ，不上传网站。
+
+OJ 题不需要本地标准答案和对照测试数据。转换时不生成其本地 `test` 目录和测试文件登记；其他 Lab/Assignment 保留本地测试。原生 Check 在无本地测试时仍会进入远程判题，并采用 OJ 返回的最终结果。配置只匹配学生项目及明确的任务路径，不接管其他课程。
+
+适配器在提交前核对当前账号及允许语言，持久化提交身份后只发送一次 POST。相同题目、语言、账号、上下文和代码复用原提交并重新查询结果；响应不确定时按本人记录中的唯一注释标记恢复，不盲目重新提交。比赛和作业必须显式绑定 `tid`。判题未结束、系统错误、登录过期和连接失败返回 Unchecked，不记为作答错误。
+
+`scripts/test_hydro_check.mjs <D盘隔离目录>` 验证终态映射、待判轮询、重复检查、响应丢失后的恢复、匹配不唯一时停止，以及账号变化阻断。部署后必须再通过真实 IDEA Check 和真实 OJ 提交验收，合成测试不代替实机结果。
 
 `tests/test_academy_training.py` 验证共用题库契约、首次直接作答、评分映射、重复回传、同一 FSRS 身份、提前练习、迁移与在途轮次接续、复习去重和权限隔离。既有数学题库测试继续验证原行为。`tests/test_academy.py` 保留旧适配器兼容验证，`tests/test_academy_import.py` 验证幂等安装和 UTF-16 占位区。`idea-plugin/test/BridgeCoreTest.java` 检查存档、指纹、路径边界与结果分类。
 

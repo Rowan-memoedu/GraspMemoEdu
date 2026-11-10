@@ -17,6 +17,7 @@ from .review_cards import register_point, require_unreserved
 from .reference_answers import reference_fields
 from .dependency_nodes import group_key
 from .linked_points import bypass_mastery
+from . import multi_step
 
 
 def packed(value):
@@ -61,6 +62,10 @@ class TrainingService:
                     stopped_at TEXT NOT NULL, PRIMARY KEY(learner,bank,question,version));
                 CREATE TABLE IF NOT EXISTS training_external_rounds (
                     attempt TEXT PRIMARY KEY, body TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS training_multi_step (
+                    attempt TEXT PRIMARY KEY, body TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS training_step_submissions (
+                    submission TEXT PRIMARY KEY, step_index INTEGER NOT NULL);
             ''')
 
     def _connect(self):
@@ -172,7 +177,7 @@ class TrainingService:
                     raise DomainError('linked_points_unavailable', '关联知识服务不可用。', 409)
                 self.atoms[tid] = atomic_backend(self.atomic_for(tid))
 
-    def _complete_linked(self, con, row, question, correct, reason, elapsed_ms, stop=False, self_rating=None):
+    def _complete_linked(self, con, row, question, correct, reason, elapsed_ms, stop=False, self_rating=None, whole_rating=None):
         from .linked_points import unchanged, require_available, split_reference
         from .atomic_review import apply_review
         from .point_assessment import assess_points
@@ -180,7 +185,8 @@ class TrainingService:
         rows = self._point_rows(con, question)
         allow_unlearned = bypass_mastery(self.access)
         valid = unchanged(rows, question['_linked_points'], allow_unlearned=allow_unlearned)
-        eligible = valid and (row['mode'] != 'practice' or stop)
+        retire = stop or whole_rating == 5
+        eligible = valid and (row['mode'] != 'practice' or retire)
         submission = con.execute('SELECT answer FROM training_submissions WHERE id=?', (row['submission_id'],)).fetchone()
         answer = submission['answer'] if submission else ''
         ratings, dates = {}, []
@@ -189,7 +195,7 @@ class TrainingService:
                               allow_unlearned=allow_unlearned)
             for tid in dict.fromkeys(r['topic_id'] for r in rows):
                 own = [r for r in rows if r['topic_id'] == tid]
-                if row['mode'] == 'initial' and not stop:
+                if row['mode'] == 'initial' and not retire:
                     own = [r for r in own if not r['learned'] or r['memory'].get('due_at')
                            and utc_time(r['memory']['due_at']) <= utc_time(current)]
                 if not own:
@@ -209,7 +215,7 @@ class TrainingService:
                         projected.pop('assessment')
                 result = apply_review(con, self.atoms[tid], projected, projected['point_ids'], row['id'],
                     answer, correct, reason, row['created_at'], elapsed_ms, 5 if stop else self_rating,
-                    learning_points=[r['local_id'] for r in own if not r['learned']])
+                    learning_points=[r['local_id'] for r in own if not r['learned']], whole_rating=whole_rating)
                 ratings.update({tid + '/' + p: rating for p, rating in result['ratings'].items()})
                 if result['due_at']:
                     dates.append(result['due_at'])
@@ -218,9 +224,9 @@ class TrainingService:
             labels = {r['reference']: r['text'] for r in rows}
             for point in details['points']:
                 point['text'] = labels[point['id']]
-        result = {'correct': correct, 'reason': reason, 'rating': None, 'ratings': ratings, 'self_rating': self_rating,
-            'scheduled': eligible and not stop, 'practice_only': not eligible,
-            'due_at': min(dates, default=None), 'stopped': eligible and stop,
+        result = {'correct': correct, 'reason': reason, 'rating': whole_rating if eligible else None, 'ratings': ratings, 'self_rating': self_rating,
+            'scheduled': eligible and not retire, 'practice_only': not eligible,
+            'due_at': min(dates, default=None), 'stopped': eligible and retire,
             'stop_requested': stop, 'assessment_result': details,
             'state_changed': not valid}
         con.execute('INSERT INTO training_ratings VALUES (?,?,?,?,?,?,?,?)',
@@ -259,6 +265,7 @@ class TrainingService:
                 if latest['id'] != attempt_id:
                     raise DomainError('feature_forbidden', '当前账号没有查看历史记录的权限。', 403)
             question = json.loads(row['snapshot'])
+            progress = multi_step.progress_from(con, attempt_id) if question.get('multi_step') else []
             if question.get('hyperskill'):
                 from .hyperskill_answers import enrich
                 question = enrich(self, row['bank'], question)
@@ -276,19 +283,20 @@ class TrainingService:
                 stopped = all(r['memory'].get('stopped_at') for r in linked)
             external = con.execute('SELECT body FROM training_external_rounds WHERE attempt=?', (attempt_id,)).fetchone()
             run = json.loads(external['body']) if external else None
-        revealed = row['phase'] in ('shown', 'done')
-        return {'attempt_id': row['id'], 'bank_id': row['bank'], 'group_id': row['group_id'],
+        revealed = row['phase'] == 'done' or row['phase'] == 'shown' and not question.get('multi_step')
+        value = {'attempt_id': row['id'], 'bank_id': row['bank'], 'group_id': row['group_id'],
                 'question_id': row['question'], 'version': row['version'], 'phase': row['phase'],
                 'mode': row['mode'], 'created_at': row['created_at'], 'completed_at': row['completed_at'],
                 'question': {'id': question['id'], 'title': question.get('title', question['id']),
                              'html': question['html'], 'interaction': public_interaction(question)},
                 'explanation_html': question['explanation_html'] if revealed else None,
-                **reference_fields(question, revealed),
+                **reference_fields(question, revealed, answer=submission['answer'] if submission and result
+                                   and result.get('self_rating') is None and not result.get('stop_requested') else None),
                 'can_self_rate': self_rating and is_reproduction(question) and not (question.get('academy') or question.get('hyperskill')),
                 **({'academy': {**question['academy'], 'round_id': run['id'] if run else None,
                                'checks': len(run['events']) if run else 0,
                                'opened': bool(run and run.get('opened_at'))}} if question.get('academy') else {}),
-                **self._hyperskill_state(question, run),
+                **self._hyperskill_state(question, run, row['bank']),
                 'submission_id': row['submission_id'], 'submission_status': submission['status'] if submission else None,
                 'answer': submission['answer'] if submission else '',
                 'answer_display': display_answer(question, submission['answer']) if submission else '',
@@ -299,16 +307,32 @@ class TrainingService:
                 'awaiting_first_learning': bool(memory and memory['card_json'] is None and not stopped),
                 'due_at': (min((r['memory']['due_at'] for r in linked if r['memory'].get('due_at')), default=None)
                            if linked and not stopped else memory['due_at'] if memory and not stopped else None)}
+        if question.get('multi_step'):
+            view = multi_step.public_state(question, progress, revealed=revealed)
+            value['multi_step'] = view
+            value['question']['html'] = view['context_html']
+            current = question['multi_step']['steps'][view['current_index']]
+            value['can_self_rate'] = self_rating and not view['finished'] and is_reproduction(current)
+            value['question']['interaction'] = public_interaction(current) if not view['finished'] else None
+            if row['phase'] == 'shown' and value['can_self_rate']:
+                value.update(reference_fields(current, True), explanation_html=current['explanation_html'])
+            if view['finished']:
+                value['answer_display'] = '\n'.join(p['answer_display'] for p in progress)
+                value['answer'] = value['answer_display']
+        return value
 
-    def _hyperskill_state(self, question, run):
+    def _hyperskill_state(self, question, run, bank_id=None):
         if not question.get('hyperskill'):
             return {}
         from .hyperskill_training import public_binding
-        return {'hyperskill': public_binding(question, run, self)}
+        return {'hyperskill': public_binding(question, run, self, bank_id)}
 
     @staticmethod
     def submission_fingerprint(data):
-        return hashlib.sha256(packed({k: data.get(k) for k in ('attempt_id', 'answer', 'elapsed_ms')}).encode()).hexdigest()
+        fields = {k: data.get(k) for k in ('attempt_id', 'answer', 'elapsed_ms')}
+        if data.get('step_id') is not None:
+            fields['step_id'] = data['step_id']
+        return hashlib.sha256(packed(fields).encode()).hexdigest()
 
     def submit(self, data):
         with self.transaction() as con:
@@ -325,6 +349,23 @@ class TrainingService:
                 raise DomainError('hyperskill_check_required', '请连接 Hyperskill 后提交此题。', 409)
             if question.get('academy'):
                 raise DomainError('academy_check_required', '请在 IDEA 中检查此题。', 409)
+            fp = self.submission_fingerprint(data)
+            old = con.execute('SELECT * FROM training_submissions WHERE id=?', (data['request_id'],)).fetchone()
+            if old:
+                if old['learner'] != self.learner_id or old['fingerprint'] != fp:
+                    raise DomainError('request_conflict', '请求标识已用于另一项作答。', 409)
+                if old['status'] != 'error':
+                    return old['id']
+            step_index = None
+            if question.get('multi_step'):
+                progress = multi_step.progress_from(con, row['id'])
+                step_index = len(progress)
+                if (multi_step.complete(question, progress) or
+                        data.get('step_id') != question['multi_step']['steps'][step_index]['id']):
+                    raise DomainError('stale_step', '当前小问已变化，请刷新后继续。', 409)
+                question = multi_step.step_question(question, step_index, progress)
+            elif data.get('step_id') is not None:
+                raise DomainError('invalid_step', '此题不是多步题。', 422)
             answer = data['answer']
             try:
                 if not answer.strip():
@@ -345,6 +386,8 @@ class TrainingService:
                 ON CONFLICT(id) DO UPDATE SET status='pending',reason=NULL''',
                 (data['request_id'], self.learner_id, row['id'], fp, answer, data.get('elapsed_ms')))
             con.execute('UPDATE training_attempts SET submission_id=? WHERE id=?', (data['request_id'], row['id']))
+            if step_index is not None:
+                con.execute('INSERT OR IGNORE INTO training_step_submissions VALUES (?,?)', (data['request_id'], step_index))
         return data['request_id']
 
     def submission_attempt(self, submission_id):
@@ -360,7 +403,8 @@ class TrainingService:
         question = json.loads(row['snapshot'])
         if question.get('point_ids'):
             return self._complete_linked(con, row, question, correct if rating is None else rating > 1,
-                                         reason, elapsed_ms, stop, rating)
+                                         reason, elapsed_ms, stop, rating if self_rating else None,
+                                         rating if question.get('multi_step') else None)
         memory = self._memory(con, row['bank'], row['question'], row['version'])
         revision = memory['revision'] if memory else 0
         now = utc_time(completed_at or self.clock())
@@ -371,7 +415,8 @@ class TrainingService:
         stopped = self._stopped(con, row['bank'], row['question'], row['version'])
         register_point(con, 'training', row['bank'], row['version'], row['question'],
                        self.catalog.bank(row['bank'])['subject_id'], now.isoformat())
-        eligible = not stopped and row['mode'] != 'practice' and row['memory_revision'] == revision
+        whole_success = bool(question.get('multi_step') and correct and rating == 5)
+        eligible = not stopped and (row['mode'] != 'practice' or whole_success) and row['memory_revision'] == revision
         scheduled, fsrs, mastery = False, None, None
         due = memory['due_at'] if memory else None
         if eligible:
@@ -402,6 +447,8 @@ class TrainingService:
                 revision=excluded.revision,card_json=excluded.card_json,due_at=excluded.due_at''',
                 (self.learner_id, row['bank'], row['question'], row['version'], int(mastered), revision + 1, card_json, due))
             scheduled = not stopped
+        if whole_success and stopped:
+            mastery = 5
         result = {'correct': correct, 'reason': reason, 'rating': mastery,
                   'self_rating': rating if self_rating else None, 'scheduled': scheduled, 'due_at': None if stopped else due,
                   'stopped': stopped, 'stop_requested': stop,
@@ -413,12 +460,28 @@ class TrainingService:
                     (now.isoformat(), packed(result), row['id']))
         return result
 
+    def _complete_steps(self, con, row, question, progress):
+        last = progress[-1]
+        result = self._complete(con, row, correct=last['correct'], reason=last['reason'],
+                                rating=multi_step.completion_rating(progress),
+                                self_rating=any(p.get('self_rating') is not None for p in progress),
+                                elapsed_ms=sum(p['elapsed_ms'] for p in progress))
+        result['multi_step'] = multi_step.review_interface(question, progress)
+        con.execute('UPDATE training_attempts SET result=? WHERE id=?', (packed(result), row['id']))
+        return result
+
     def instant_submission(self, submission_id):
         from .judging import instant_question
         with closing(self._connect()) as con:
             row = con.execute('SELECT attempt FROM training_submissions WHERE id=? AND learner=?',
                               (submission_id, self.learner_id)).fetchone()
-            return bool(row and instant_question(json.loads(self._attempt(con, row['attempt'])['snapshot'])))
+            if not row:
+                return False
+            question = json.loads(self._attempt(con, row['attempt'])['snapshot'])
+            step = con.execute('SELECT step_index FROM training_step_submissions WHERE submission=?', (submission_id,)).fetchone()
+            if step:
+                question = multi_step.step_question(question, step[0], multi_step.progress_from(con, row['attempt']))
+            return instant_question(question)
 
     def process_submission(self, submission_id):
         with closing(self._connect()) as con:
@@ -436,7 +499,10 @@ class TrainingService:
             row = self._attempt(con, submission['attempt'])
             con.execute("UPDATE training_submissions SET status='running' WHERE id=?", (submission_id,))
             question = json.loads(row['snapshot'])
-        correct, reason = judge_answer(self.judge, question, submission['answer'])
+            step = con.execute('SELECT step_index FROM training_step_submissions WHERE submission=?', (submission_id,)).fetchone()
+            progress = multi_step.progress_from(con, row['id']) if step else []
+            judged_question = multi_step.step_question(question, step[0], progress) if step else question
+        correct, reason = judge_answer(self.judge, judged_question, submission['answer'])
         try:
             with self.transaction() as con:
                 current = con.execute('SELECT status FROM training_submissions WHERE id=?', (submission_id,)).fetchone()
@@ -446,46 +512,86 @@ class TrainingService:
                 if correct is None:
                     con.execute("UPDATE training_submissions SET status='error',reason=? WHERE id=?", (reason, submission_id))
                 else:
-                    self._complete(con, row, correct=correct, reason=reason, elapsed_ms=submission['elapsed_ms'])
+                    if step:
+                        progress = multi_step.append_result(question, multi_step.progress_from(con, row['id']), step[0],
+                            submission['answer'], correct, reason, submission['elapsed_ms'])
+                        multi_step.save_progress(con, row['id'], progress)
+                        if multi_step.complete(question, progress):
+                            self._complete_steps(con, row, question, progress)
+                        else:
+                            con.execute('UPDATE training_attempts SET submission_id=NULL WHERE id=?', (row['id'],))
+                    else:
+                        self._complete(con, row, correct=correct, reason=reason, elapsed_ms=submission['elapsed_ms'])
                     con.execute("UPDATE training_submissions SET status='judged',reason=? WHERE id=?", (reason, submission_id))
         except Exception:
             with self.transaction() as con:
                 con.execute("UPDATE training_submissions SET status='error',reason=? WHERE id=? AND status='running'",
                             ('作答结果暂未保存，请重试；本次未计入作答。', submission_id))
 
-    def reveal(self, attempt_id):
+    def reveal(self, attempt_id, step_id=None):
         with self.transaction() as con:
             row = self._attempt(con, attempt_id)
             if json.loads(row['snapshot']).get('hyperskill'):
                 raise DomainError('hyperskill_check_required', '本题由 Hyperskill 判题。', 409)
             if json.loads(row['snapshot']).get('academy'):
                 raise DomainError('academy_check_required', '请在 IDEA 中完成本题后记录结果。', 409)
-            if not is_reproduction(json.loads(row['snapshot'])):
+            question = json.loads(row['snapshot'])
+            if question.get('multi_step'):
+                question = multi_step.require_step(question, multi_step.progress_from(con, attempt_id), step_id)
+            elif step_id is not None:
+                raise DomainError('invalid_step', '此题不是多步题。', 422)
+            if not is_reproduction(question):
                 raise DomainError('self_rating_forbidden', '只有复现题支持高阶学习者自主评分。', 403)
             if row['submission_id']:
                 raise DomainError('training_already_answered', '本次作答已提交。', 409)
             if row['phase'] == 'answer':
                 con.execute("UPDATE training_attempts SET phase='shown' WHERE id=?", (attempt_id,))
 
-    def rate(self, attempt_id, rating, elapsed_ms=None):
+    def rate(self, attempt_id, rating, elapsed_ms=None, step_id=None):
         with closing(self._connect()) as con:
             self._bind_points(json.loads(self._attempt(con, attempt_id)['snapshot']))
         with self.transaction() as con:
             row = self._attempt(con, attempt_id)
+            question = json.loads(row['snapshot'])
+            if question.get('multi_step'):
+                progress = multi_step.progress_from(con, attempt_id)
+                previous = next((p for p in progress if p['step_id'] == step_id), None)
+                if previous:
+                    if type(rating) is not int or previous.get('self_rating') != rating:
+                        raise DomainError('rating_conflict', '本次作答已记录另一项评分。', 409)
+                    return
+                current = multi_step.require_step(question, progress, step_id)
+                if not is_reproduction(current):
+                    raise DomainError('self_rating_forbidden', '只有复现题支持高阶学习者自主评分。', 403)
+            elif step_id is not None:
+                raise DomainError('invalid_step', '此题不是多步题。', 422)
             if row['phase'] == 'done':
                 if json.loads(row['result']).get('self_rating') != rating:
                     raise DomainError('rating_conflict', '本次作答已记录另一项评分。', 409)
                 return
-            if row['phase'] != 'shown' or type(rating) is not int or rating not in (1, 2, 3, 4):
+            choices = (1, 5) if question.get('multi_step') else (1, 2, 3, 4)
+            if row['phase'] != 'shown' or type(rating) is not int or rating not in choices:
                 raise DomainError('invalid_rating', '请先显示答案，再选择熟练度。', 422)
             require_unreserved(con, self.learner_id, 'training', row['bank'], row['version'], row['question'], now=utc_time(self.clock()).isoformat())
-            self._complete(con, row, rating=rating, elapsed_ms=elapsed_ms)
+            if question.get('multi_step'):
+                reason = '自主判定：做对' if rating == 5 else '自主判定：做错'
+                progress = multi_step.append_result(question, progress, len(progress), reason, rating > 1, reason,
+                                                    elapsed_ms, self_rating=rating)
+                multi_step.save_progress(con, attempt_id, progress)
+                if multi_step.complete(question, progress):
+                    self._complete_steps(con, row, question, progress)
+                else:
+                    con.execute("UPDATE training_attempts SET phase='answer',submission_id=NULL WHERE id=?", (attempt_id,))
+            else:
+                self._complete(con, row, rating=rating, elapsed_ms=elapsed_ms)
 
     def stop_reviews(self, attempt_id):
         with closing(self._connect()) as con:
             self._bind_points(json.loads(self._attempt(con, attempt_id)['snapshot']))
         with self.transaction() as con:
             row = self._attempt(con, attempt_id)
+            if json.loads(row['snapshot']).get('multi_step'):
+                raise DomainError('invalid_rating', '请先完成当前小问；多步题按整题安排复习。', 422)
             if row['phase'] == 'done':
                 if not json.loads(row['result']).get('stop_requested'):
                     raise DomainError('rating_conflict', '本次作答已记录另一项评分。', 409)
@@ -510,6 +616,8 @@ class TrainingService:
 
     def bank(self, bank_id, *, history=True, root_id=None):
         bank = self.catalog.bank(bank_id)
+        from .oj_progress import load as oj_load, group_status as oj_group_status
+        oj_facts = oj_load(self.db_path.parent, self.learner_id, bank_id)
         from .course_hierarchy import select_subtree
         groups = select_subtree(bank['groups'], root_id)
         with closing(self._connect()) as con:
@@ -523,9 +631,14 @@ class TrainingService:
         progress = {}
         for group in bank['groups']:
             questions = group.get('questions', [])
+            for q in questions:
+                fact = oj_facts.get(q['id'], {})
+                if fact.get('accepted'):
+                    first.setdefault((group['id'], q['id']), fact.get('accepted_at'))
             dates = [first[(group['id'], q['id'])] for q in questions if (group['id'], q['id']) in first]
             completed = bool(questions) and len(dates) == len(questions)
             progress[group['id']] = {'completed': completed,
+                **({'oj_status': oj_group_status(questions, oj_facts)} if any(q['id'] in oj_facts for q in questions) else {}),
                 'completed_count': len(dates) if history else None,
                 'completed_at': max(filter(None, dates), default=None) if completed and history else None}
         return {**{k: bank.get(k, '') for k in ('id', 'title', 'subject_id', 'description', 'version')},
@@ -552,7 +665,7 @@ class TrainingService:
                 (self.learner_id, bank_id, q['id'], bank['version'])).fetchone() for q in group.get('questions', [])}
             status = self.group_status(con, bank_id, group_id)
         counts = {r['question']: r['count'] for r in rows}
-        return {'id': group_id, 'title': group['title'], 'bank_id': bank_id, 'bank_title': bank['title'],
+        result = {'id': group_id, 'title': group['title'], 'bank_id': bank_id, 'bank_title': bank['title'],
                 'version': bank['version'], 'math_css': bank.get('math_css', ''), **status,
                 'external_providers': sorted({p for q in group.get('questions', [])
                                               for p in ('hyperskill', 'academy') if q.get(p)}),
@@ -565,6 +678,8 @@ class TrainingService:
                                'latest_attempt_mode': recent[q['id']]['mode'] if recent[q['id']] else None,
                                'latest_attempt_phase': recent[q['id']]['phase'] if recent[q['id']] else None}
                               for q in group.get('questions', [])]}
+        from .oj_progress import load as oj_load, project_group
+        return project_group(result, oj_load(self.db_path.parent, self.learner_id, bank_id))
 
     def reader(self, bank_id, group_id, *, history=True, self_rating=False):
         """Read the whole group without opening attempts or changing learning data.
@@ -599,7 +714,12 @@ class TrainingService:
                          **reference_fields(question, False),
                          **({'academy': {**question['academy'], 'round_id': None, 'checks': 0, 'opened': False}}
                             if question.get('academy') else {}),
-                         **self._hyperskill_state(question, None)}
+                         **self._hyperskill_state(question, None, bank_id)}
+                if question.get('multi_step'):
+                    value['multi_step'] = multi_step.public_state(question)
+                    value['question']['html'] = question['multi_step']['context_html']
+                    value['question']['interaction'] = public_interaction(question['multi_step']['steps'][0])
+                    value['can_self_rate'] = self_rating and is_reproduction(question['multi_step']['steps'][0])
             states[qid] = value
             if history:
                 histories[qid] = self.history(bank_id, qid)

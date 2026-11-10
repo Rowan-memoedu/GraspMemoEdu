@@ -11,7 +11,7 @@ const source=readFileSync(new URL('../web/training.js',import.meta.url),'utf8')
   .replace('function renderSidebar() {','function renderSidebar() { observed.sidebar++; return;')
   .replace('function renderQuestion() {','function renderQuestion() { clearTimeout(timer); observed.question++; if(observed.renderAnswer)hyperskillAnswer(current,epoch,selection); return;')
   .replace('function error(container, failure, retry) {','function error(container, failure, retry) { observed.errors.push(failure); return;')
-  .replace('return {open, stop, renderReviews};',`return {stop,
+  .replace(/return \{open, (?:mount, )?stop, renderReviews\};/,`return {stop,
     probe: force=>probeHyperskill(epoch,force),refresh:()=>refreshHyperskill(epoch),
     warm: force=>warmHyperskill(current,epoch,force),resume:()=>resumeHyperskill(epoch),
     invoke:action=>requestHyperskill(action,{}),answer:()=>hyperskillAnswer(current,epoch,selection),
@@ -74,6 +74,14 @@ test('connection knowledge stays cached until an explicit check or scheduled rec
   assert.equal(await f.driver.probe(true),true);
   f.healthy(false);assert.equal(await f.driver.probe(true),false);
   f.healthy(true);assert.equal(await f.driver.probe(true),true);
+});
+
+test('native local code rounds never prepare an upstream attempt or require the Hyperskill relay',async()=>{
+  const f=fixture();f.driver.current().hyperskill={type:'code',local_ide:{kind:'automated',checks:0}};
+  assert.equal(await f.driver.warm(),null);
+  await f.driver.refresh();
+  f.driver.resume();
+  assert.equal(f.calls.length,0);
 });
 
 test('simultaneous connection probes share one request and release it after failure',async()=>{

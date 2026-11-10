@@ -28,6 +28,7 @@ public final class BridgeCoreTest {
         check(BridgeCore.category(false, false, "java.lang.ArrayIndexOutOfBoundsException").equals("runtime"), "runtime category");
         check(BridgeCore.category(false, false, "Time limit exceeded").equals("limit"), "limit category");
         check(BridgeCore.category(false, false, "Wrong answer").equals("wrong"), "wrong category");
+        check(BridgeCore.category(false, false, "答案未通过测试。 Exception in thread: java.lang.AssertionError").equals("wrong"), "harness assertion is an answer failure");
         check(BridgeCore.category(false, false, "Could not download dependency").equals("environment"), "infra category");
         check(BridgeCore.category(true, false, "").equals("passed"), "passed category");
         JsonObject oldRound = new JsonObject(); oldRound.addProperty("round_id", UUID.randomUUID().toString());
@@ -38,6 +39,6 @@ public final class BridgeCoreTest {
         oldRound.addProperty("acked", 1);
         try { BridgeCore.retainRound(data, "synthetic", oldRound); throw new AssertionError("retained evidence cannot change"); }
         catch (java.io.IOException expected) {}
-        System.out.println("PASS 14 local archive, path, fingerprint, category and pending-result checks");
+        System.out.println("PASS local archive, path, fingerprint, category and pending-result checks");
     }
 }

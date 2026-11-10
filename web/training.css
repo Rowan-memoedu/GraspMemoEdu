@@ -37,6 +37,10 @@
 .trainingRating:disabled { cursor: default; opacity: .5; }
 .trainingRating[aria-busy="true"] { opacity: .8; cursor: progress; }
 .trainingRating[aria-busy="true"] > span { opacity: .5; }
+.trainingRating.stepOutcome { min-height: 52px; }
+.trainingRating.stepOutcome > span { font-size: 16px; white-space: nowrap; }
+.trainingRating.outcomeCorrect { background: var(--answer-true); }
+.trainingRating.outcomeIncorrect { background: var(--answer-false); }
 @media (max-width: 700px) {
   .trainingRatings, .selfAssessment .trainingRatings { gap: 5px; }
   .trainingRating { padding: 12px 2px; min-height: 74px; border-radius: 8px; }

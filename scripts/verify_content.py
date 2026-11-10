@@ -89,11 +89,11 @@ def practice_nodes(module: Node) -> list[Node]:
 def collect_questions(topic: Node) -> list[dict]:
     result = []
     intro = [n for n in topic.children if n.head.lower() == "introduction"]
-    if not intro or (topic.meta.get('topic_format_version') != 2 and len(intro) != 1):
+    if (not intro and not any(n.meta.get('kind') == 'bank_question' for n in topic.children)) or (topic.meta.get('topic_format_version') != 2 and len(intro) != 1):
         raise ValueError("Expected exactly one Introduction")
     module_numbers = []
     for module in topic.children:
-        if module in intro:
+        if module in intro or module.meta.get('kind') == 'bank_question':
             continue
         found = re.match(r"^Example\s+(\d+)(?:[：:]|$)", module.head, re.I)
         if not found:

@@ -3,6 +3,7 @@ import argparse
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 import json
+import os
 import hashlib
 from pathlib import Path
 import socket
@@ -24,6 +25,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--port', type=int, default=18849)
+    parser.add_argument('--multi-step', action='store_true')
     args = parser.parse_args()
     root = args.output.resolve()
     if root.exists() or not root.is_relative_to(Path('D:/Artifacts/GraspMemoEdu').resolve()) or args.port in (8765, 8767, 18768):
@@ -45,9 +47,16 @@ def main():
                         'interaction': {'version': 1, 'type': 'true_false', 'statements': [{'id': 'a', 'text': '$2+3=5$', 'correct': True}]}}]},
                    {'id': 'group-b', 'parent_id': 'chapter', 'title': '另一题组', 'questions': [
                        {'id': 'other', 'title': '认识数字', 'question': '写出数字一。', 'explanation': '数字一写作 $1$。', 'reference_answer': '1'}]}]}
+    if args.multi_step:
+        source['groups'][1]['questions'].extend([
+            {'id': 'multi', 'title': '分步计算与说明', 'question': '给定两个整数 2 与 3。\n(1) 求两数之和。\n(2) 说明交换两数的位置后和是否改变。\n(3) 求两数之积。',
+             'explanation': '(1) 和为 5。\n(2) 和不变，加法满足交换律。\n(3) 积为 6。'},
+            {'id': 'negative', 'title': '选择错误的说法', 'question': '下列说法错误的是？', 'explanation': 'A 正确，两个数相加得到 5；B 错误，两个数相乘得到 6。',
+             'interaction': {'version': 1, 'type': 'choice', 'options': [{'id': 'a', 'text': '$2+3=5$'}, {'id': 'b', 'text': '$2\\times3=5$'}], 'correct_id': 'b'}}])
     source_path = root / 'training-source.json'; source_path.write_text(json.dumps(source, ensure_ascii=False), encoding='utf-8')
     compiled = root / 'training-bank.json'
-    subprocess.run(['node', str(Path(__file__).with_name('import_training_bank.mjs')), str(source_path), str(compiled)], check=True)
+    subprocess.run(['node', str(Path(__file__).with_name('import_training_bank.mjs')), str(source_path), str(compiled)],
+                   check=True, env={**os.environ, 'GRASPMEMOEDU_PYTHON': sys.executable})
     install(compiled, data)
     course = synthetic_course(1)
     for module in course['modules']:
@@ -62,10 +71,13 @@ def main():
     app = create_app(Settings(data_dir=data, course_path=path, port=args.port),
                      LearningService(course, data, ExistingJudge(Path('D:/Projects/MathAnswerJudge'))), atomic_clock=lambda: when[0])
     store = app.state.access_store
+    if args.multi_step:
+        app.state.review_paper_types = [{'id': 'multi-step-pair', 'title': '分步题隔离卷',
+            'subject': 'math', 'enabled': True, 'requirements': {'text': 1, 'choice': 1}}]
     accounts = {}
     with store._transaction() as con:
         for name, properties in [('standard', {}), ('advanced', {'is_advanced_learner': True}), ('admin', {'is_admin': True})]:
-            accounts[name] = store._insert_account(con, '隔离 ' + name, purpose='test', **properties)['invitation_code']
+            accounts[name] = store._insert_account(con, '隔离 ' + name, purpose='test', is_student=True, **properties)['invitation_code']
     # Only synthetic credentials for this disposable loopback fixture.
     (root / 'identities.json').write_text(json.dumps(accounts), encoding='utf-8')
 
@@ -80,7 +92,7 @@ def main():
     async def advance(request: Request):
         if request.client.host != '127.0.0.1' or request.headers.get('origin') != f'http://127.0.0.1:{args.port}':
             raise HTTPException(403)
-        when[0] += timedelta(hours=7)
+        when[0] += timedelta(days=30) if args.multi_step else timedelta(hours=7)
         return {'clock_advanced': True}
 
     harness.mount('/', app)

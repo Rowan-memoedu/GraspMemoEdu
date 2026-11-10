@@ -32,6 +32,42 @@ def write_json(path, value):
 
 
 class SiteBackupAcceptanceTests(unittest.TestCase):
+    def test_private_source_scope_and_nested_review_receipts_survive_restore(self):
+        records = {'scope.json': {'topics': ['synthetic-topic']},
+                   'mc-role-audit/runs/batch-02/attempt-01/review.json': {'passed': True}}
+        for name, value in records.items():
+            write_json(self.data / 'mathacademy-sources' / name, value)
+        archive = self._backup()
+        destination = self.root / 'private-evidence-restored'
+        restore_site(archive, destination)
+        for name, value in records.items():
+            self.assertEqual(json.loads((destination / 'mathacademy-sources' / name).read_bytes()), value)
+
+    def test_large_valid_manifest_and_oversized_manifest_use_the_same_bound(self):
+        from graspmemoedu.site_backup import MAX_MANIFEST_BYTES
+        original=self._backup()
+        def padded(target,size):
+            with zipfile.ZipFile(original) as source, zipfile.ZipFile(target,'x',compression=zipfile.ZIP_DEFLATED) as out:
+                for entry in source.infolist():
+                    raw=source.read(entry.filename)
+                    if entry.filename=='manifest.json':raw=b' '*(size-len(raw))+raw
+                    out.writestr(entry.filename,raw)
+        larger=self.root/'large-manifest.zip';padded(larger,1_100_000)
+        restore_site(larger,self.root/'large-manifest-restored')
+        oversized=self.root/'oversized-manifest.zip';padded(oversized,MAX_MANIFEST_BYTES+1)
+        destination=self.root/'oversized-not-restored'
+        with self.assertRaises(DomainError):restore_site(oversized,destination)
+        self.assertFalse(destination.exists())
+
+    def test_manifest_writer_and_reader_share_exact_capacity(self):
+        original=self._backup()
+        with zipfile.ZipFile(original) as archive:size=archive.getinfo('manifest.json').file_size
+        with patch('graspmemoedu.site_backup.MAX_MANIFEST_BYTES',size-1):
+            target=self.root/'manifest-too-large.zip'
+            with self.assertRaises(DomainError):backup_site(self.settings,target)
+            self.assertFalse(target.exists())
+            with self.assertRaises(DomainError):restore_site(original,self.root/'manifest-rejected')
+
     def test_permission_guide_assets_survive_backup_and_restore(self):
         guide = self.settings.guide_path
         guide.write_text('# Public\n<!-- guide:student -->\n![Private](assets/student.txt)\n'

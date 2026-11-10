@@ -7,6 +7,7 @@ import {pointAssessment, assessmentItemLabels} from '../web/point-assessment.js'
 class Element {
   constructor(tag) { this.tagName = tag; this.children = []; this.className = ''; this.value = ''; }
   append(...children) { this.children.push(...children); }
+  setAttribute(name, value) { (this.attributes ||= {})[name] = String(value); }
   set textContent(value) { this.children = []; this.value = String(value); }
   get textContent() { return this.value + this.children.map(child => typeof child === 'string' ? child : child.textContent).join(''); }
   set innerHTML(_) { throw new Error('Feedback labels must be inserted as text'); }
@@ -22,7 +23,9 @@ test.beforeEach(() => setLanguage('zh-CN'));
 test('fill blanks use authored question numbers in question order, not evidence key order', () => {
   const spec = {type: 'fill_blank', blanks: [{id: 'b56', label: '56'}, {id: 'b57', label: '57'}]};
   const root = pointAssessment({items: [{id: 'b57', correct: false}, {id: 'b56', correct: true}], points}, spec);
-  assert.deepEqual(itemRows(root), ['第 56 题正确', '第 57 题错误']);
+  assert.deepEqual(itemRows(root), ['第 56 题✓', '第 57 题✗']);
+  assert.equal(find(root, 'assessmentCorrect').attributes['aria-label'], '正确');
+  assert.equal(find(root, 'assessmentIncorrect').attributes['aria-label'], '错误');
   assert.match(root.textContent, /需复习 · Past tense/);
   assert.match(root.textContent, /依据：第 56 题, 第 57 题/);
   assert.doesNotMatch(root.textContent, /b56|b57|private-point-key/);
@@ -34,7 +37,7 @@ test('composite feedback preserves the whole-answer fallback without inventing a
     {id: 'evidence', text: 'Use evidence', correct: true, basis: 'items', item_ids: ['q1']},
     {id: 'cohesion', text: 'Cohesion', correct: false, basis: 'whole', item_ids: []},
   ]}, spec);
-  assert.deepEqual(itemRows(root), ['第 1 题正确', '第 2 题错误']);
+  assert.deepEqual(itemRows(root), ['第 1 题✓', '第 2 题✗']);
   assert.match(root.textContent, /依据整题结果/);
   assert.doesNotMatch(root.textContent, /第 3 题|q1|q2|q3/);
   assert.equal(find(root, 'pointAssessmentList').children.length, 2);
@@ -45,7 +48,7 @@ test('one item can support several points without duplicating the item result', 
     {id: 'p1', text: 'Evidence', correct: false, basis: 'items', item_ids: ['shared']},
     {id: 'p2', text: 'Meaning', correct: false, basis: 'items', item_ids: ['shared']},
   ]}, {type: 'composite', controls: [{id: 'shared', label: 'Question 6(a)'}]});
-  assert.deepEqual(itemRows(root), ['Question 6(a)错误']);
+  assert.deepEqual(itemRows(root), ['Question 6(a)✗']);
   assert.equal(find(root, 'pointAssessmentList').children.length, 2);
 });
 
@@ -76,7 +79,8 @@ test('English localizes structural feedback but preserves authored labels and po
   setLanguage('en');
   const root = pointAssessment({items: [{id: 'x', correct: false}, {id: 'y', correct: true}], points},
     {type: 'composite', controls: [{id: 'x', label: '8'}, {id: 'y', label: '作者给定的标签'}]});
-  assert.deepEqual(itemRows(root), ['Question 8Incorrect', '作者给定的标签Correct']);
+  assert.deepEqual(itemRows(root), ['Question 8✗', '作者给定的标签✓']);
+  assert.equal(find(root, 'assessmentCorrect').attributes['aria-label'], 'Correct');
   assert.match(root.textContent, /Item results/);
   assert.match(root.textContent, /Memory-point feedback/);
   assert.match(root.textContent, /Review again · Past tense/);
@@ -89,5 +93,5 @@ test('authored labels and point descriptions are plain text, including markup-lo
   ]}, {type: 'composite', controls: [{id: 'safe', label}]});
   assert.equal(find(root, 'assessmentItemLabel').textContent, label);
   assert.match(root.textContent, /<script>unsafe\(\)<\/script>/);
-  assert.deepEqual(itemRows(root), [label + '正确']);
+  assert.deepEqual(itemRows(root), [label + '✓']);
 });
